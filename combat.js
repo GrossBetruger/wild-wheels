@@ -25,13 +25,13 @@ export function createBattle(driver=0,arena=0,random=Math.random){
   const r=createRace(driver,0,random);r.mode='combat';r.arena=arena;r.duration=180;r.targetScore=10;r.id=0;r.color=drivers[driver].color;r.killFeed=[];r.driftParticles=[];r.chaffClouds=[];r.chaffSequence=0;
   const actors=[r,...r.bots];for(const [id,actor] of actors.entries())Object.assign(actor,{id,wx:0,wz:0,heading:0,kills:0,deaths:0,health:3,destroyed:0,shield:0,celebrate:0,fireCooldown:0,reload:0,brain:0,path:[]});
   for(const actor of actors)spawn(r,actor,true);
-  r.supplies=[[-70,-65,'missile'],[70,65,'missile'],[-65,70,'hedgehog'],[65,-70,'hedgehog'],[-12,48,'boost'],[12,-48,'boost'],[-70,0,'health'],[70,0,'health']].map(([wx,wz,kind])=>({wx,wz,kind,cooldown:0}));
+  r.supplies=[[-70,-65,'missile'],[70,65,'missile'],[-65,70,'hedgehog'],[65,-70,'hedgehog'],[-12,48,'boost'],[12,-48,'boost'],[-70,0,'health'],[70,0,'health']].map(([wx,wz,kind],id)=>({id,version:0,wx,wz,kind,cooldown:0}));
   return r;
 }
 export function standings(r){return [r,...r.bots].filter(actor=>!actor.inactive).sort((a,b)=>b.kills-a.kills||a.deaths-b.deaths||a.id-b.id);}
 function voice(r,actor,cue){if((actor.voiceCooldown??0)>0&&cue!=='win')return;actor.voiceCooldown=1.5;r.voices.push({driver:actor.driver,cue,pan:actor===r?0:clamp((actor.wx-r.wx)/70,-.8,.8),volume:actor===r?1:.6});}
-function sound(r,type,actor){r.events.push(r.multiplayer?{type,owner:actor.owner??actor.id,wx:actor.wx,wz:actor.wz,id:`${r.soundEpoch}:${r.soundSequence=(r.soundSequence??0)+1}`} :type);}
-function fx(r,type,actor){sound(r,type,actor);r.effects.push({type,wx:actor.wx,wz:actor.wz,age:0,life:type==='explosion'?2.5:.65});}
+function sound(r,type,actor,key){r.events.push(r.multiplayer?{type,owner:actor.owner??actor.id,wx:actor.wx,wz:actor.wz,id:`${r.soundEpoch}:${r.soundSequence=(r.soundSequence??0)+1}`,...(key?{key}:{})} :type);}
+function fx(r,type,actor,key){sound(r,type,actor,key);r.effects.push({type,wx:actor.wx,wz:actor.wz,age:0,life:type==='explosion'?2.5:.65});}
 function divertMissiles(r,cloud){
   let diverted=0;
   for(const shot of r.projectiles){
@@ -51,20 +51,58 @@ export function releaseChaff(r,actor=r){
   actor.notice=diverted?`CHAFF · ${diverted} MISSILE${diverted===1?'':'S'} DIVERTED`:'CHAFF RELEASED';actor.noticeTime=2;
   return true;
 }
-export function fireBattle(r,actor=r){
+export function makeProjectile(r,actor){
+  const kind=actor.item==='missile'&&actor.missiles>0?'missile':'hedgehog',vulcan=kind==='hedgehog'&&actor.vulcan>0;
+  const candidates=[r,...r.bots].filter(k=>k.id!==actor.id&&!k.destroyed&&k.shield<=0&&distance(k,actor)<100&&Math.abs(angleDelta(Math.atan2(k.wx-actor.wx,k.wz-actor.wz),actor.heading))<.65&&clearShot(arenas[r.arena],actor,k)).sort((a,b)=>distance(actor,a)-distance(actor,b));
+  return {kind,vulcan,owner:actor.id,target:candidates[0]?.id??null,wx:actor.wx+Math.sin(actor.heading)*3.5,wz:actor.wz+Math.cos(actor.heading)*3.5,heading:actor.heading,speed:kind==='missile'?70:vulcan?125:90,height:1.3,vy:3,life:kind==='missile'?3:vulcan?1.3:2.5,age:0,trail:[],bounces:0};
+}
+export function fireBattle(r,actor=r,actionId){
   if(r.phase!=='racing'||r.finishCountdown!==null||actor.destroyed>0||actor.fireCooldown>0)return;
-  if(actor.item==='boost'&&actor.turbos>0){actor.turbos--;actor.boost=2.5;actor.fireCooldown=.2;fx(r,'boost',actor);actor.item=actor.missiles>0?'missile':'hedgehog';return;}
+  const cueKey=actionId==null?undefined:`action:${actionId}`;
+  if(actor.item==='boost'&&actor.turbos>0){actor.turbos--;actor.boost=2.5;actor.fireCooldown=.2;fx(r,'boost',actor,cueKey);actor.item=actor.missiles>0?'missile':'hedgehog';return true;}
   const kind=actor.item==='missile'&&actor.missiles>0?'missile':'hedgehog';
   const vulcan=kind==='hedgehog'&&actor.vulcan>0;
   if(kind==='hedgehog'&&!vulcan&&actor.ammo<=0)return;
-  const candidates=[r,...r.bots].filter(k=>k!==actor&&!k.destroyed&&k.shield<=0&&distance(actor,k)<100&&Math.abs(angleDelta(Math.atan2(k.wx-actor.wx,k.wz-actor.wz),actor.heading))<.65&&clearShot(arenas[r.arena],actor,k)).sort((a,b)=>distance(actor,a)-distance(actor,b));
-  const tx=Math.sin(actor.heading),tz=Math.cos(actor.heading);
   r.projectileSequence=(r.projectileSequence??0)+1;
-  r.projectiles.push({id:r.projectileSequence,kind,vulcan,owner:actor.id,target:candidates[0]?.id??null,wx:actor.wx+tx*3.5,wz:actor.wz+tz*3.5,heading:actor.heading,speed:kind==='missile'?70:vulcan?125:90,height:1.3,vy:3,life:kind==='missile'?3:vulcan?1.3:2.5,trail:[],bounces:0});
+  const shot={...makeProjectile(r,actor),id:r.projectileSequence,...(actionId==null?{}:{actionId})};r.projectiles.push(shot);
   if(kind==='missile')actor.missiles--;if(kind==='hedgehog'&&!vulcan)actor.ammo--;
   actor.fireCooldown=kind==='missile'?.9:vulcan?.075:.45;
   if(actor.item==='missile'&&!actor.missiles)actor.item='hedgehog';
-  if(r.multiplayer||distance(actor,r)<90)sound(r,kind==='missile'?'missile':vulcan?'vulcanFire':'fire',actor);
+  if(r.multiplayer||distance(actor,r)<90)sound(r,kind==='missile'?'missile':vulcan?'vulcanFire':'fire',actor,cueKey);
+  return shot;
+}
+export function applySupply(actor,kind){
+  switch(kind){
+    case 'health':actor.health=Math.min(MAX_HEALTH,actor.health+1);actor.notice=`+1 HEART · ${actor.health} / ${MAX_HEALTH}`;actor.noticeTime=2;break;
+    case 'missile':actor.missiles=Math.min(3,actor.missiles+1);actor.item='missile';break;
+    case 'hedgehog':actor.ammo=6;break;
+    case 'boost':actor.turbos=Math.min(3,actor.turbos+1);break;
+  }
+}
+function collectSupplies(r,actor){
+  if(actor.destroyed)return;
+  for(const supply of r.supplies){
+    if(supply.cooldown>0||distance(actor,supply)>=4||supply.kind==='health'&&actor.health>=MAX_HEALTH)continue;
+    applySupply(actor,supply.kind);supply.cooldown=8;supply.version=(supply.version??0)+1;supply.collector=actor.id;
+    if(r.multiplayer||actor===r)fx(r,'pickup',actor,`pickup:${supply.id}:${supply.version}`);
+  }
+}
+// Shared visual trajectory; damage remains exclusively in tickBattle.
+export function advanceProjectile(r,shot,dt){
+  const actors=[r,...r.bots],arena=arenas[r.arena];
+  shot.age=(shot.age??0)+dt;shot.life-=dt;shot.trail.push({wx:shot.wx,wz:shot.wz,height:shot.height});if(shot.trail.length>24)shot.trail.shift();
+  const decoy=r.chaffClouds?.find(c=>c.id===shot.decoy),target=decoy??actors.find(k=>k.id===shot.target&&!k.destroyed);
+  if(shot.kind==='missile'&&target){const turnRate=decoy?4.5:1.6;shot.heading+=clamp(angleDelta(Math.atan2(target.wx-shot.wx,target.wz-shot.wz),shot.heading),-turnRate*dt,turnRate*dt);}
+  let impact=false,victim;const steps=Math.ceil(shot.speed*dt/1.5);
+  for(let step=0;step<steps&&!impact;step++){
+    shot.wx+=Math.sin(shot.heading)*shot.speed*dt/steps;shot.wz+=Math.cos(shot.heading)*shot.speed*dt/steps;
+    if(decoy&&distance(shot,decoy)<3){shot.life=0;impact=true;shot.chaffed=true;break;}
+    impact=blocked(arena,shot.wx,shot.wz,.3);
+    victim=actors.find(k=>k.id!==shot.owner&&!k.destroyed&&k.shield<=0&&distance(k,shot)<2.7);
+    if(victim)impact=true;
+  }
+  if(impact)shot.life=0;
+  return {impact,victim,decoy};
 }
 export function damageBattle(r,victim,owner,amount){
   if(r.phase!=='racing'||r.finishCountdown!==null||victim.destroyed>0||victim.shield>0||victim.id===owner)return false;
@@ -142,6 +180,7 @@ export function tickBattle(r,keys,dt,inputs=null){
   if(r.phase==='countdown'){r.countdown-=dt;if(r.countdown<=0){r.phase='racing';r.notice='BATTLE ON! · FIRST TO 10 KILLS';r.noticeTime=3;}return;}
   const ending=r.finishCountdown!==null;if(ending)dt=Math.min(dt,r.finishCountdown);
   r.elapsed+=dt;r.noticeTime=Math.max(0,r.noticeTime-dt);r.shake=Math.max(0,r.shake-dt*2);
+  for(const supply of r.supplies)supply.cooldown=Math.max(0,supply.cooldown-dt);
   for(const effect of r.effects)effect.age+=dt;r.effects=r.effects.filter(f=>f.age<f.life);
   for(const cloud of r.chaffClouds)cloud.age+=dt;
   r.chaffClouds=r.chaffClouds.filter(c=>c.age<c.life);
@@ -151,13 +190,16 @@ export function tickBattle(r,keys,dt,inputs=null){
   const actors=[r,...r.bots],arena=arenas[r.arena];
   for(const actor of actors){
     if(actor!==r)actor.noticeTime=Math.max(0,(actor.noticeTime??0)-dt);
-    for(const key of ['fireCooldown','shield','celebrate','voiceCooldown','wallCooldown','vulcan','chaffCooldown'])actor[key]=Math.max(0,(actor[key]??0)-dt);
+    for(const key of ['fireCooldown','shield','celebrate','voiceCooldown','wallCooldown','vulcan','chaffCooldown']){if(inputs?.get(actor.id)?.actionClock&&['fireCooldown','chaffCooldown'].includes(key))continue;actor[key]=Math.max(0,(actor[key]??0)-dt);}
     if(actor.destroyed>0){actor.destroyed=Math.max(0,actor.destroyed-dt);if(actor.destroyed===0&&!ending)spawn(r,actor);continue;}
     actor.reload+=dt;if(actor.reload>=2){actor.ammo=Math.min(6,actor.ammo+1);actor.reload=0;}
     if((actor===r&&!r.multiplayer)||actor.human){
       const control=inputs?.get(actor.id)??(actor===r?keys:new Set());
       const held=control.keys instanceof Set?control.keys:control;
-      if(Array.isArray(control.moves))for(const command of control.moves)advanceKartMovement(r,actor,new Set(command.keys),MOVEMENT_DT);
+      if(Array.isArray(control.moves))for(const command of control.moves){
+        if(control.actionClock)for(const key of ['fireCooldown','chaffCooldown']){const remaining=(actor[key]??0)-MOVEMENT_DT;actor[key]=remaining<1e-8?0:remaining;}
+        advanceKartMovement(r,actor,new Set(command.keys),MOVEMENT_DT);collectSupplies(r,actor);control.afterMove?.(command.sequence);
+      }
       if(!Array.isArray(control.moves))advanceKartMovement(r,actor,held,dt);
       if(held.has(' '))fireBattle(r,actor);continue;
     }
@@ -180,30 +222,11 @@ export function tickBattle(r,keys,dt,inputs=null){
     if(!blocked(arena,b.wx-dx*push,b.wz-dz*push)){b.wx-=dx*push;b.wz-=dz*push;}
     a.speed*=.8;b.speed*=.8;if((a===r||b===r)&&r.wallCooldown<=0){fx(r,'crash',r);r.wallCooldown=.6;voice(r,r,'hurt');}
   }
-  for(const supply of r.supplies){
-    supply.cooldown=Math.max(0,supply.cooldown-dt);if(supply.cooldown>0)continue;
-    const collector=actors.find(k=>!k.destroyed&&distance(k,supply)<4&&(supply.kind!=='health'||k.health<MAX_HEALTH));if(!collector)continue;
-    switch(supply.kind){
-      case 'health':collector.health=Math.min(MAX_HEALTH,collector.health+1);collector.notice=`+1 HEART · ${collector.health} / ${MAX_HEALTH}`;collector.noticeTime=2;break;
-      case 'missile':collector.missiles=Math.min(3,collector.missiles+1);collector.item='missile';break;
-      case 'hedgehog':collector.ammo=6;break;
-      case 'boost':collector.turbos=Math.min(3,collector.turbos+1);break;
-    }
-    supply.cooldown=8;if(collector===r)fx(r,'pickup',collector);
-  }
+  for(const actor of actors)collectSupplies(r,actor);
   if(!ending)for(const cloud of r.chaffClouds)divertMissiles(r,cloud);
   for(const shot of r.projectiles){
-    shot.life-=dt;shot.trail.push({wx:shot.wx,wz:shot.wz,height:shot.height});if(shot.trail.length>24)shot.trail.shift();
-    const decoy=r.chaffClouds.find(c=>c.id===shot.decoy),target=decoy??actors.find(k=>k.id===shot.target&&!k.destroyed);
-    if(shot.kind==='missile'&&target){const turnRate=decoy?4.5:1.6;shot.heading+=clamp(angleDelta(Math.atan2(target.wx-shot.wx,target.wz-shot.wz),shot.heading),-turnRate*dt,turnRate*dt);}
-    let impact=false;const steps=Math.ceil(shot.speed*dt/1.5);
-    for(let step=0;step<steps&&!impact;step++){
-      shot.wx+=Math.sin(shot.heading)*shot.speed*dt/steps;shot.wz+=Math.cos(shot.heading)*shot.speed*dt/steps;
-      if(decoy&&distance(shot,decoy)<3){shot.life=0;impact=true;shot.chaffed=true;break;}
-      impact=blocked(arena,shot.wx,shot.wz,.3);
-      const victim=actors.find(k=>k.id!==shot.owner&&!k.destroyed&&k.shield<=0&&distance(k,shot)<2.7);
-      if(victim){impact=true;if(shot.kind==='hedgehog')damageBattle(r,victim,shot.owner,1);}
-    }
+    const {impact,victim,decoy}=advanceProjectile(r,shot,dt);
+    if(victim&&shot.kind==='hedgehog')damageBattle(r,victim,shot.owner,1);
     if(!impact&&shot.life>0)continue;
     shot.life=0;
     if(shot.kind==='missile'){

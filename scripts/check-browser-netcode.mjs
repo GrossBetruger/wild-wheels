@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import WebSocket from 'ws';
 import { pathToFileURL } from 'node:url';
+import { checkFeedback } from './check-feedback-scenario.mjs';
 
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const quantile=(values,p)=>[...values].sort((a,b)=>a-b)[Math.min(values.length-1,Math.floor(values.length*p))]??0;
@@ -26,7 +27,7 @@ app.multiplayer.controls=(member,body)=>{try{return originalControls(member,body
 // Test-only access to the actual game objects. Production files remain untouched.
 const gameSource=await readFile(new URL('game.js',source),'utf8');
 const server=createServer((req,res)=>{
-  if(req.url==='/game.js'){res.writeHead(200,{'Content-Type':'text/javascript','Cache-Control':'no-store'});res.end(gameSource+'\nglobalThis.__game={network,renderer,keys,get race(){return race}};');return;}
+  if(req.url==='/game.js'){res.writeHead(200,{'Content-Type':'text/javascript','Cache-Control':'no-store'});res.end(gameSource+'\nglobalThis.__game={network,renderer,keys,audio,get race(){return race}};');return;}
   app.server.emit('request',req,res);
 });
 server.on('upgrade',(...args)=>app.server.emit('upgrade',...args));
@@ -75,6 +76,13 @@ try{
     if(profile.guest)room.world.destroyed=999;
     Object.assign([room.world,...room.world.bots][identity.you],{wx:-65,wz:70,heading:Math.PI/2,motionHeading:Math.PI/2,cameraHeading:Math.PI/2,speed:0});
     for(let attempt=0;attempt<100;attempt++){if(await evaluate("__game.network.state?.world.phase==='racing'"))break;await sleep(50);}
+    if(process.argv.includes('--feedback')){
+      const result={profile:profile.name,run:profile.run,...await checkFeedback(evaluate,room,identity.you,sleep)};
+      results.push(result);console.log(JSON.stringify({...result,trace:undefined,requests:undefined,sounds:undefined}));
+      await evaluate('__game.network.leave()');await call('Target.closeTarget',{targetId});
+      for(const member of [...room.members.values()])app.multiplayer.remove(member);
+      continue;
+    }
     await evaluate(`(async()=>{
       const {createBattle,tickBattle,predictKartMovement}=await import('/combat.js');
       const game=__game,render=game.network.render.bind(game.network),start=performance.now();

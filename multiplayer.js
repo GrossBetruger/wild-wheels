@@ -48,6 +48,8 @@ export class Multiplayer {
   controls(member,body){
     if(!Number.isSafeInteger(body.sequence)||body.sequence<0||!Array.isArray(body.keys)||body.keys.length>10||body.keys.some(k=>!KEYS.has(k))||!Array.isArray(body.actions)||body.actions.length>8)throw problem(400,'Invalid controls.');
     for(const action of body.actions)if(!action||!['fire','chaff','cycle','select'].includes(action.type)||(action.type==='select'&&!['hedgehog','missile','boost'].includes(action.item)))throw problem(400,'Invalid action.');
+    for(const action of body.actions)if(action.id!==undefined&&(!Number.isSafeInteger(action.id)||action.id<0||!Number.isSafeInteger(action.afterMove)||action.afterMove< -1||action.afterMove>(member.acceptedMove??-1)+128))throw problem(400,'Invalid action sequence.');
+    if(body.epoch!==undefined&&body.epoch!==member.room.world.soundEpoch)return;
     if(body.moves!==undefined){
       if(!Number.isSafeInteger(body.epoch)||!Array.isArray(body.moves)||body.moves.length>8||body.moves.some(move=>!move||!Number.isSafeInteger(move.sequence)||move.sequence<0||!Array.isArray(move.keys)||move.keys.length>9||move.keys.some(key=>!KEYS.has(key)||key===' ')))throw problem(400,'Invalid movement.');
       if(body.epoch===member.room.world.soundEpoch){
@@ -59,11 +61,26 @@ export class Multiplayer {
         }
       }
     }
-    if(body.sequence>member.sequence){member.sequence=body.sequence;member.keys=new Set(body.keys);member.inputAt=Date.now();member.actions.push(...body.actions);member.actions=member.actions.slice(-16);}
+    if(body.sequence>member.sequence){
+      member.sequence=body.sequence;member.keys=new Set(body.keys);member.inputAt=Date.now();
+      for(const action of body.actions){
+        if(action.id!==undefined){if(action.id<=(member.acceptedAction??-1))continue;member.acceptedAction=action.id;member.predictedActions=true;}
+        if(member.actions.length>=64)throw problem(429,'Too many pending actions.');
+        member.actions.push(action);
+      }
+    }
+  }
+  applyActions(room,member,sequence){
+    const actor=[room.world,...room.world.bots][member.id];
+    while(member.actions.length&&(member.actions[0].afterMove??-1)<=sequence){
+      const action=member.actions.shift();
+      switch(action.type){case 'fire':fireBattle(room.world,actor,action.id);break;case 'chaff':releaseChaff(room.world,actor);break;case 'cycle':cycleItem(actor);break;case 'select':selectItem(actor,action.item);break;}
+      if(action.id!==undefined)member.actionAck=action.id;
+    }
   }
   makeWorld(room){
     room.world=createBattle(0,room.arena);room.world.human=true;room.world.skill=.85;room.world.multiplayer=true;room.world.soundEpoch=room.soundEpoch=(room.soundEpoch??0)+1;room.events=[];room.voices=[];
-    for(const member of room.members.values()){this.assign(room,member);member.moveQueue=[];member.acceptedMove=-1;member.lastMove=-1;member.moveCredit=0;}
+    for(const member of room.members.values()){this.assign(room,member);member.moveQueue=[];member.acceptedMove=-1;member.lastMove=-1;member.moveCredit=0;member.acceptedAction=-1;member.actionAck=-1;}
     this.roster(room);
   }
   assign(room,member){const actor=[room.world,...room.world.bots][member.id];if(actor.inactive||actor.destroyed||room.world.phase==='racing'){const fresh=createBattle(member.driver,room.arena);Object.assign(actor,actorData([fresh,...fresh.bots][member.id]),{reload:0,brain:0,path:[]});}Object.assign(actor,{human:true,inactive:false,name:member.name,driver:member.driver,color:member.color,notice:'',noticeTime:0});member.keys=new Set();member.actions=[];}
@@ -96,7 +113,7 @@ export class Multiplayer {
     view.voices=room.voices;view.name=member.name;
     const label=id=>id===member.id?'YOU':actors[id]?.name??drivers[actors[id]?.driver??0].name.split(' ')[0];
     view.killFeed=world.killFeed.map(entry=>({...entry,text:`${label(entry.attacker)} → ${label(entry.victim)}`}));
-    return {type:'state',time:room.networkTime??0,inputSequence:member.sequence,movementSequence:member.lastMove??-1,code:room.code,you:member.id,host:room.host,arena:room.arena,bots:room.botCount,players:[...room.members.values()].map(p=>({id:p.id,name:p.name,driver:p.driver,color:p.color})),world:view};
+    return {type:'state',time:room.networkTime??0,inputSequence:member.sequence,movementSequence:member.lastMove??-1,actionSequence:member.actionAck??-1,code:room.code,you:member.id,host:room.host,arena:room.arena,bots:room.botCount,players:[...room.members.values()].map(p=>({id:p.id,name:p.name,driver:p.driver,color:p.color})),world:view};
   }
   send(member,data){
     const socket=member.socket;
@@ -139,11 +156,10 @@ export class Multiplayer {
         if(member.commandMode){
           // Fixed ticks, a bounded catch-up burst, and server-time credit prevent speed hacks.
           const moves=(member.moveQueue??[]).splice(0,Math.min(8,Math.floor(member.moveCredit+1e-8)));
-          member.moveCredit-=moves.length;inputs.set(member.id,{keys,moves});
+          member.moveCredit-=moves.length;inputs.set(member.id,{keys,moves,actionClock:member.predictedActions,afterMove:sequence=>this.applyActions(room,member,sequence)});
         }
         if(!member.commandMode)inputs.set(member.id,keys);
-        const actor=actors[member.id];
-        for(const action of member.actions.splice(0))switch(action.type){case 'fire':fireBattle(room.world,actor);break;case 'chaff':releaseChaff(room.world,actor);break;case 'cycle':cycleItem(actor);break;case 'select':selectItem(actor,action.item);break;}
+        this.applyActions(room,member,member.lastMove??-1);
       }
       // Slot zero can become an AI when its player leaves; human clients keep their own slots.
       tickBattle(room.world,new Set(),dt,inputs);room.networkTime=(room.networkTime??0)+dt;

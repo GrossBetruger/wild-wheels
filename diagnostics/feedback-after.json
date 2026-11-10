@@ -1,0 +1,272 @@
+{
+  "errors": [],
+  "transportErrors": [],
+  "serverGaps": [],
+  "results": [
+    {
+      "profile": "local-host",
+      "run": 1,
+      "shotDelays": [
+        {
+          "kind": "hedgehog",
+          "delayMs": 0
+        },
+        {
+          "kind": "missile",
+          "delayMs": 0
+        }
+      ],
+      "pickupHiddenMs": 0,
+      "pickupInventoryMs": 0,
+      "pickupSoundMs": 0.1,
+      "duplicateShots": false,
+      "projectileBackwardFrames": 0,
+      "projectileStepErrorP95": 0.072,
+      "pickupSounds": 1,
+      "pass": true
+    },
+    {
+      "profile": "local-guest",
+      "run": 1,
+      "shotDelays": [
+        {
+          "kind": "hedgehog",
+          "delayMs": 0
+        },
+        {
+          "kind": "missile",
+          "delayMs": 0
+        }
+      ],
+      "pickupHiddenMs": 0,
+      "pickupInventoryMs": 0,
+      "pickupSoundMs": 0.1,
+      "duplicateShots": false,
+      "projectileBackwardFrames": 0,
+      "projectileStepErrorP95": 0.0691,
+      "pickupSounds": 1,
+      "pass": true
+    },
+    {
+      "profile": "160ms-guest",
+      "run": 1,
+      "shotDelays": [
+        {
+          "kind": "hedgehog",
+          "delayMs": 0
+        },
+        {
+          "kind": "missile",
+          "delayMs": 0
+        }
+      ],
+      "pickupHiddenMs": 0,
+      "pickupInventoryMs": 0,
+      "pickupSoundMs": 0.3,
+      "duplicateShots": false,
+      "projectileBackwardFrames": 0,
+      "projectileStepErrorP95": 0.045,
+      "pickupSounds": 1,
+      "pass": true
+    },
+    {
+      "profile": "160ms-jitter-guest",
+      "run": 1,
+      "shotDelays": [
+        {
+          "kind": "hedgehog",
+          "delayMs": 0
+        },
+        {
+          "kind": "missile",
+          "delayMs": 0
+        }
+      ],
+      "pickupHiddenMs": 0,
+      "pickupInventoryMs": 0,
+      "pickupSoundMs": 0.2,
+      "duplicateShots": false,
+      "projectileBackwardFrames": 0,
+      "projectileStepErrorP95": 0.036,
+      "pickupSounds": 1,
+      "pass": true
+    },
+    {
+      "profile": "local-host",
+      "run": 2,
+      "shotDelays": [
+        {
+          "kind": "hedgehog",
+          "delayMs": 0
+        },
+        {
+          "kind": "missile",
+          "delayMs": 0
+        }
+      ],
+      "pickupHiddenMs": 0,
+      "pickupInventoryMs": 0,
+      "pickupSoundMs": 0.2,
+      "duplicateShots": false,
+      "projectileBackwardFrames": 0,
+      "projectileStepErrorP95": 0.045,
+      "pickupSounds": 1,
+      "pass": true
+    },
+    {
+      "profile": "local-guest",
+      "run": 2,
+      "shotDelays": [
+        {
+          "kind": "hedgehog",
+          "delayMs": 0
+        },
+        {
+          "kind": "missile",
+          "delayMs": 0
+        }
+      ],
+      "pickupHiddenMs": 0,
+      "pickupInventoryMs": 0,
+      "pickupSoundMs": 0.2,
+      "duplicateShots": false,
+      "projectileBackwardFrames": 0,
+      "projectileStepErrorP95": 0.036,
+      "pickupSounds": 1,
+      "pass": true
+    },
+    {
+      "profile": "160ms-guest",
+      "run": 2,
+      "shotDelays": [
+        {
+          "kind": "hedgehog",
+          "delayMs": 0
+        },
+        {
+          "kind": "missile",
+          "delayMs": 0
+        }
+      ],
+      "pickupHiddenMs": 0,
+      "pickupInventoryMs": 0,
+      "pickupSoundMs": 0.4,
+      "duplicateShots": false,
+      "projectileBackwardFrames": 0,
+      "projectileStepErrorP95": 0.027,
+      "pickupSounds": 1,
+      "pass": true
+    },
+    {
+      "profile": "160ms-jitter-guest",
+      "run": 2,
+      "shotDelays": [
+        {
+          "kind": "hedgehog",
+          "delayMs": 0
+        },
+        {
+          "kind": "missile",
+          "delayMs": 0
+        }
+      ],
+      "pickupHiddenMs": 0,
+      "pickupInventoryMs": 0,
+      "pickupSoundMs": 0.2,
+      "duplicateShots": false,
+      "projectileBackwardFrames": 0,
+      "projectileStepErrorP95": 0.027,
+      "pickupSounds": 1,
+      "pass": true
+    },
+    {
+      "profile": "local-host",
+      "run": 3,
+      "shotDelays": [
+        {
+          "kind": "hedgehog",
+          "delayMs": 0
+        },
+        {
+          "kind": "missile",
+          "delayMs": 0
+        }
+      ],
+      "pickupHiddenMs": 0,
+      "pickupInventoryMs": 0,
+      "pickupSoundMs": 0.3,
+      "duplicateShots": false,
+      "projectileBackwardFrames": 0,
+      "projectileStepErrorP95": 0.027,
+      "pickupSounds": 1,
+      "pass": true
+    },
+    {
+      "profile": "local-guest",
+      "run": 3,
+      "shotDelays": [
+        {
+          "kind": "hedgehog",
+          "delayMs": 0
+        },
+        {
+          "kind": "missile",
+          "delayMs": 0
+        }
+      ],
+      "pickupHiddenMs": 0,
+      "pickupInventoryMs": 0,
+      "pickupSoundMs": 0.2,
+      "duplicateShots": false,
+      "projectileBackwardFrames": 0,
+      "projectileStepErrorP95": 0.081,
+      "pickupSounds": 1,
+      "pass": true
+    },
+    {
+      "profile": "160ms-guest",
+      "run": 3,
+      "shotDelays": [
+        {
+          "kind": "hedgehog",
+          "delayMs": 0
+        },
+        {
+          "kind": "missile",
+          "delayMs": 0
+        }
+      ],
+      "pickupHiddenMs": 0,
+      "pickupInventoryMs": 0,
+      "pickupSoundMs": 0.1,
+      "duplicateShots": false,
+      "projectileBackwardFrames": 0,
+      "projectileStepErrorP95": 0.09,
+      "pickupSounds": 1,
+      "pass": true
+    },
+    {
+      "profile": "160ms-jitter-guest",
+      "run": 3,
+      "shotDelays": [
+        {
+          "kind": "hedgehog",
+          "delayMs": 0
+        },
+        {
+          "kind": "missile",
+          "delayMs": 0
+        }
+      ],
+      "pickupHiddenMs": 0,
+      "pickupInventoryMs": 0,
+      "pickupSoundMs": 0.3,
+      "duplicateShots": false,
+      "projectileBackwardFrames": 0,
+      "projectileStepErrorP95": 0.09,
+      "pickupSounds": 1,
+      "pass": true
+    }
+  ],
+  "baselineCommit": "00c8434"
+}

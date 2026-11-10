@@ -1,0 +1,72 @@
+{
+  "errors": [],
+  "transportErrors": [],
+  "serverGaps": [],
+  "results": [
+    {
+      "profile": "local-host",
+      "run": 1,
+      "frames": 480,
+      "frameP95Ms": 16.7,
+      "frameP99Ms": 16.8,
+      "positionP95": 0,
+      "positionMax": 0,
+      "cameraP95Degrees": 0,
+      "cameraMaxDegrees": 0,
+      "freezeFrames": 0,
+      "backwardFrames": 0,
+      "maxUpdateAgeMs": 40.3,
+      "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+      "pass": true
+    },
+    {
+      "profile": "local-guest",
+      "run": 1,
+      "frames": 481,
+      "frameP95Ms": 16.7,
+      "frameP99Ms": 16.8,
+      "positionP95": 0,
+      "positionMax": 0,
+      "cameraP95Degrees": 0,
+      "cameraMaxDegrees": 0,
+      "freezeFrames": 0,
+      "backwardFrames": 0,
+      "maxUpdateAgeMs": 40.2,
+      "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+      "pass": true
+    },
+    {
+      "profile": "160ms-guest",
+      "run": 1,
+      "frames": 481,
+      "frameP95Ms": 16.7,
+      "frameP99Ms": 16.8,
+      "positionP95": 0,
+      "positionMax": 0,
+      "cameraP95Degrees": 0,
+      "cameraMaxDegrees": 0,
+      "freezeFrames": 0,
+      "backwardFrames": 0,
+      "maxUpdateAgeMs": 41.9,
+      "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+      "pass": true
+    },
+    {
+      "profile": "160ms-jitter-guest",
+      "run": 1,
+      "frames": 481,
+      "frameP95Ms": 16.8,
+      "frameP99Ms": 16.8,
+      "positionP95": 0,
+      "positionMax": 0,
+      "cameraP95Degrees": 0,
+      "cameraMaxDegrees": 0,
+      "freezeFrames": 0,
+      "backwardFrames": 0,
+      "maxUpdateAgeMs": 83.7,
+      "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+      "pass": true
+    }
+  ],
+  "baselineCommit": "00c8434"
+}

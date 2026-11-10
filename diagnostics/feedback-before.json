@@ -1,0 +1,88 @@
+{
+  "errors": [],
+  "transportErrors": [],
+  "serverGaps": [],
+  "results": [
+    {
+      "profile": "local-host",
+      "run": 1,
+      "shotDelays": [
+        {
+          "kind": "hedgehog",
+          "delayMs": 49.9
+        },
+        {
+          "kind": "missile",
+          "delayMs": 16
+        }
+      ],
+      "pickupHiddenMs": 33,
+      "pickupInventoryMs": 33,
+      "pickupSoundMs": 33.2,
+      "duplicateShots": false,
+      "pickupSounds": 1,
+      "pass": false
+    },
+    {
+      "profile": "local-guest",
+      "run": 1,
+      "shotDelays": [
+        {
+          "kind": "hedgehog",
+          "delayMs": 49.9
+        },
+        {
+          "kind": "missile",
+          "delayMs": 16.7
+        }
+      ],
+      "pickupHiddenMs": 66.4,
+      "pickupInventoryMs": 66.4,
+      "pickupSoundMs": null,
+      "duplicateShots": false,
+      "pickupSounds": 0,
+      "pass": false
+    },
+    {
+      "profile": "160ms-guest",
+      "run": 1,
+      "shotDelays": [
+        {
+          "kind": "hedgehog",
+          "delayMs": 183.3
+        },
+        {
+          "kind": "missile",
+          "delayMs": 183.3
+        }
+      ],
+      "pickupHiddenMs": 216.8,
+      "pickupInventoryMs": 216.8,
+      "pickupSoundMs": null,
+      "duplicateShots": false,
+      "pickupSounds": 0,
+      "pass": false
+    },
+    {
+      "profile": "160ms-jitter-guest",
+      "run": 1,
+      "shotDelays": [
+        {
+          "kind": "hedgehog",
+          "delayMs": 149.8
+        },
+        {
+          "kind": "missile",
+          "delayMs": 216.7
+        }
+      ],
+      "pickupHiddenMs": 217.2,
+      "pickupInventoryMs": 217.2,
+      "pickupSoundMs": null,
+      "duplicateShots": false,
+      "pickupSounds": 0,
+      "pass": false
+    }
+  ],
+  "baselineCommit": "00c8434"
+}

@@ -11,12 +11,12 @@ export class ActionAudio {
     if(this.selected&&sequence>=this.selected.sequence)this.selected=null;
     this.pending=this.pending.filter(event=>now-event.time<1);
   }
-  emit(type,now,resource=null){
+  emit(type,now,resource=null,key=null){
     if(!resource&&['driftCharge','driftChargeMax','boost'].includes(type)){
       if(now-(this.cues.get(type)??-Infinity)<.3)return;
       this.cues.set(type,now);
     }
-    this.pending.push({type,time:now,resource});this.play(type);
+    this.pending.push({type,time:now,resource,key});this.play(type);
   }
   available(resource){return (this.world?.[resource]??0)-this.pending.filter(event=>event.resource===resource).length;}
   action(type,item,now,sequence=-1){
@@ -49,7 +49,7 @@ export class ActionAudio {
       if(this.seen.has(event.id))return [];
       this.seen.add(event.id);if(this.seen.size>256)this.seen.delete(this.seen.values().next().value);
       if(event.owner===this.world?.id){
-        const index=this.pending.findIndex(pending=>pending.type===event.type&&now-pending.time<1);
+        const index=this.pending.findIndex(pending=>pending.type===event.type&&now-pending.time<1&&(!event.key||pending.key===event.key));
         if(index>=0){this.pending.splice(index,1);return [];}
       }
       return [event.type];
