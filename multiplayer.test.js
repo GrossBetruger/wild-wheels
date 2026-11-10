@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createGameServer } from './server.js';
 import WebSocket from 'ws';
 import { allocateRoomCode } from './multiplayer.js';
+import { decodeSnapshot } from './wire.js';
 
 async function serverFor(t){
   const app=createGameServer();clearInterval(app.multiplayer.timer);await new Promise(resolve=>app.server.listen(0,'127.0.0.1',resolve));
@@ -115,7 +116,8 @@ test('persistent socket controls deploy chaff and move a kart without an HTTP in
   const {multiplayer,post,origin}=await serverFor(t);const host=await post('/api/rooms',{name:'Host',driver:0,arena:0,bots:0});const room=multiplayer.rooms.get(host.code);room.world.phase='racing';
   const socket=new WebSocket(origin.replace('http:','ws:')+'/api/socket',{origin});t.after(()=>socket.terminate());socket.on('error',()=>{});
   await new Promise((resolve,reject)=>{socket.once('open',resolve);socket.once('error',reject);});
-  const state=()=>new Promise((resolve,reject)=>{const timeout=setTimeout(()=>reject(new Error('No shared state received')),2000);socket.once('message',data=>{clearTimeout(timeout);resolve(JSON.parse(data));});});
+  assert.equal(socket.extensions,'permessage-deflate');
+  const state=()=>new Promise((resolve,reject)=>{const timeout=setTimeout(()=>reject(new Error('No shared state received')),2000);socket.once('message',data=>{clearTimeout(timeout);resolve(decodeSnapshot(JSON.parse(data)));});});
   const joined=state();socket.send(JSON.stringify({type:'authenticate',token:host.token}));assert.equal((await joined).you,0);
   const ping=state();socket.send(JSON.stringify({type:'ping',sent:12.5}));assert.deepEqual(await ping,{type:'pong',sent:12.5});
   socket.send(JSON.stringify({type:'input',sequence:0,keys:['arrowup'],actions:[{type:'chaff'}]}));await new Promise(resolve=>setTimeout(resolve,20));const next=state();multiplayer.step(.05);const update=await next;

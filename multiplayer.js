@@ -4,6 +4,7 @@ import { WebSocketServer } from 'ws';
 import { createBattle, tickBattle, fireBattle, releaseChaff, standings } from './combat.js';
 import { drivers, selectItem, cycleItem } from './engine.js';
 import { ngrokOrigin } from './ngrok.js';
+import { encodeSnapshot } from './wire.js';
 
 const KEYS=new Set(['arrowup','arrowdown','arrowleft','arrowright','w','a','s','d','shift',' ']);
 const PLAYER_COLORS=['#8456cf','#df7053','#67a99c','#edb84f','#777cbb','#db8daf'];
@@ -25,7 +26,7 @@ export class Multiplayer {
   advance(now){this.accumulator=Math.min(.25,this.accumulator+Math.max(0,(now-this.lastAdvance)/1000));this.lastAdvance=now;while(this.accumulator>=1/60){this.step(1/60);this.accumulator-=1/60;}}
   close(){clearInterval(this.timer);for(const socket of this.sockets?.clients??[])socket.terminate();this.sockets?.close();for(const member of this.members.values())member.stream?.end();this.members.clear();this.rooms.clear();}
   attach(server){
-    this.sockets=new WebSocketServer({noServer:true,maxPayload:2048,perMessageDeflate:false});
+    this.sockets=new WebSocketServer({noServer:true,maxPayload:2048,perMessageDeflate:{serverNoContextTakeover:true,clientNoContextTakeover:true,concurrencyLimit:2,threshold:1024,zlibDeflateOptions:{level:1}}});
     server.on('upgrade',(req,socket,head)=>{
       try{if(req.url!=='/api/socket'||!req.headers.origin||new URL(req.headers.origin).host!==req.headers.host||this.sockets.clients.size>=192)throw problem(403,'Denied');this.limit(req,'upgrade',10);this.sockets.handleUpgrade(req,socket,head,ws=>this.openSocket(ws));}catch{socket.destroy();}
     });
@@ -87,10 +88,32 @@ export class Multiplayer {
     return {type:'state',time:room.networkTime??0,inputSequence:member.sequence,code:room.code,you:member.id,host:room.host,arena:room.arena,bots:room.botCount,players:[...room.members.values()].map(p=>({id:p.id,name:p.name,driver:p.driver,color:p.color})),world:view};
   }
   send(member,data){
-    if(member.socket?.readyState===1){if(member.socket.bufferedAmount>256*1024){member.socket.close(1013,'Connection too slow');return;}member.socket.send(JSON.stringify(data));return;}
+    const socket=member.socket;
+    if(socket?.readyState===1){
+      const packet={text:encodeSnapshot(data),epoch:data.world.soundEpoch,events:[...data.world.events],voices:[...data.world.voices]};
+      if(member.sendingSocket===socket){
+        // Keep one current update behind the active write, preserving bounded sound cues.
+        const previous=member.pendingPacket;
+        if(previous?.epoch===packet.epoch){packet.events=[...previous.events,...packet.events].slice(-64);packet.voices=[...previous.voices,...packet.voices].slice(-16);packet.merged=true;}
+        member.pendingPacket=packet;return;
+      }
+      member.pendingPacket=null;this.sendPacket(member,socket,packet);return;
+    }
     const stream=member.stream;if(!stream||stream.destroyed||stream.writableEnded)return;
     if(stream.writableLength>256*1024){stream.destroy();return;}
     stream.write(`data: ${JSON.stringify(data)}\n\n`);
+  }
+  sendPacket(member,socket,packet){
+    member.sendingSocket=socket;
+    let text=packet.text;
+    if(packet.merged){const state=JSON.parse(text);state.world.events=packet.events;state.world.voices=packet.voices;text=JSON.stringify(state);}
+    socket.send(text,error=>{
+      if(member.sendingSocket!==socket)return;
+      member.sendingSocket=null;
+      if(error||member.socket!==socket||socket.readyState!==1){member.pendingPacket=null;return;}
+      const next=member.pendingPacket;member.pendingPacket=null;
+      if(next)this.sendPacket(member,socket,next);
+    });
   }
   broadcast(room){for(const member of room.members.values())this.send(member,this.snapshot(room,member));}
   step(dt){

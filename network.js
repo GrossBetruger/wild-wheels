@@ -2,6 +2,7 @@ import { drivers } from './engine.js';
 import { NetworkPlayback } from './playback.js';
 import { LocalPrediction } from './prediction.js';
 import { ActionAudio } from './action-audio.js';
+import { decodeSnapshot } from './wire.js';
 
 export function invitationUrl(pageUrl,code,{publicOrigin,lan}={}){
   const page=new URL(pageUrl);
@@ -133,7 +134,7 @@ export class NetworkGame {
   stream(){
     const token=this.token,url=new URL('/api/socket',location.href);url.protocol=location.protocol==='https:'?'wss:':'ws:';const socket=this.socket=new WebSocket(url);
     socket.onopen=()=>{if(this.token===token)socket.send(JSON.stringify({type:'authenticate',token}));};
-    socket.onmessage=event=>{try{if(typeof event.data!=='string'||event.data.length>512*1024)throw new Error();const state=JSON.parse(event.data);if(this.token!==token)return;if(state.type==='state')this.accept(state);if(state.type==='pong'&&state.sent===this.lastPing)this.rtt=Math.max(0,Math.min(.3,performance.now()/1000-state.sent));}catch{socket.close();}};
+    socket.onmessage=event=>{try{if(typeof event.data!=='string'||event.data.length>512*1024)throw new Error();const state=JSON.parse(event.data);if(this.token!==token)return;if(state.type==='state')this.accept(decodeSnapshot(state));if(state.type==='pong'&&state.sent===this.lastPing)this.rtt=Math.max(0,Math.min(.3,performance.now()/1000-state.sent));}catch{socket.close();}};
     socket.onerror=()=>{};
     socket.onclose=()=>{if(this.token===token){this.keys.clear();this.status.textContent='Reconnecting to the room…';setTimeout(()=>{if(this.token===token)this.stream();},500);}};
   }
