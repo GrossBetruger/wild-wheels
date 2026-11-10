@@ -76,7 +76,12 @@ try{
     const identity=await evaluate(`(async()=>{__game.network.botCount.value='0';__game.network.invitation='07';await __game.network.connect('${profile.guest?'/api/join':'/api/rooms'}');return {code:__game.network.state.code,you:__game.network.state.you};})()`);
     const room=app.multiplayer.rooms.get(identity.code);
     if(process.argv.includes('--controls')){
-      const result={profile:profile.name,run:profile.run,...await checkControls(evaluate,app.multiplayer,room,identity.you,sleep)};
+      const captureFlip=process.argv.includes('--flip-screenshots')?async()=>{
+        await evaluate("document.querySelector('.viewport').scrollIntoView({block:'center'})");
+        const screenshot=await call('Page.captureScreenshot',{format:'png'},session);
+        await writeFile(`${output}.${profile.run}.${profile.name}.flip.png`,Buffer.from(screenshot.data,'base64'));
+      }:undefined;
+      const result={profile:profile.name,run:profile.run,...await checkControls(evaluate,app.multiplayer,room,identity.you,sleep,captureFlip)};
       results.push(result);console.log(JSON.stringify({...result,trace:undefined,flipTrace:undefined}));
       await evaluate("document.querySelector('.viewport').scrollIntoView({block:'center'})");
       const screenshot=await call('Page.captureScreenshot',{format:'png'},session);

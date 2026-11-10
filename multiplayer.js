@@ -8,7 +8,7 @@ import { encodeSnapshot } from './wire.js';
 
 const KEYS=new Set(['arrowup','arrowdown','arrowleft','arrowright','w','a','s','d','shift',' ']);
 const PLAYER_COLORS=['#8456cf','#df7053','#67a99c','#edb84f','#777cbb','#db8daf'];
-const FIELDS='id driver color wx wz heading motionHeading cameraHeading speed health kills deaths killStreak vulcan chaff chaffCooldown destroyed shield ammo missiles turbos item fireCooldown boost drift wasDrifting yaw spin celebrate stun voiceCooldown human name notice noticeTime inactive somersault somersaultCooldown'.split(' ');
+const FIELDS='id driver color wx wz heading motionHeading cameraHeading speed health kills deaths killStreak vulcan chaff chaffCooldown destroyed shield ammo missiles turbos item fireCooldown boost drift wasDrifting yaw spin celebrate stun voiceCooldown human name notice noticeTime inactive somersault somersaultCooldown somersaultCameraStart'.split(' ');
 const actorData=actor=>Object.fromEntries(FIELDS.map(key=>[key,actor[key]]));
 const problem=(status,message)=>Object.assign(new Error(message),{status});
 export function allocateRoomCode(rooms){

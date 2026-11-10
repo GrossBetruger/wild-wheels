@@ -7,9 +7,13 @@ const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]]
 const norm=a=>{const l=Math.hypot(...a)||1;return a.map(v=>v/l);};
 const dot=(a,b)=>a.reduce((sum,v,i)=>sum+v*b[i],0);
 class Mesh {
-  data=[];sprites=[];origin=[0,0,0];angle=0;
-  at(x,y,z,angle=0){this.origin=[x,y,z];this.angle=angle;return this;}
-  point(p){const c=Math.cos(this.angle),s=Math.sin(this.angle);return [this.origin[0]+p[0]*c+p[2]*s,this.origin[1]+p[1],this.origin[2]-p[0]*s+p[2]*c];}
+  data=[];sprites=[];origin=[0,0,0];angle=0;pitch=0;pivot=0;
+  at(x,y,z,angle=0){this.origin=[x,y,z];this.angle=angle;this.pitch=0;this.pivot=0;return this;}
+  point(p){
+    let y=p[1],z=p[2];
+    if(this.pitch){const c=Math.cos(this.pitch),s=Math.sin(this.pitch),dy=y-this.pivot;y=dy*c-z*s+this.pivot;z=dy*s+z*c;}
+    const c=Math.cos(this.angle),s=Math.sin(this.angle);return [this.origin[0]+p[0]*c+z*s,this.origin[1]+y,this.origin[2]-p[0]*s+z*c];
+  }
   particle(x,y,z,size,color){this.sprites.push(...this.point([x,y,z]),size,...color);}
   tri(a,b,c,color){const points=[a,b,c].map(p=>this.point(p)),n=norm(cross(sub(points[1],points[0]),sub(points[2],points[0])));const col=typeof color==='string'?rgb(color):color;for(const p of points)this.data.push(...p,...n,...col);}
   quad(a,b,c,d,color){this.tri(a,b,c,color);this.tri(a,c,d,color);}
@@ -100,8 +104,8 @@ export class Renderer {
     m.at(0,0,0);this.gl.bindBuffer(this.gl.ARRAY_BUFFER,this.staticBuffer);this.gl.bufferData(this.gl.ARRAY_BUFFER,new Float32Array(m.data),this.gl.STATIC_DRAW);this.staticCount=m.data.length/9;this.track=track;
   }
   kart(m,p,color,driver,yaw=0,spin=0,boost=false,clock=0,celebrate=0,jump=null){
-    if(!this.buildingModel&&(celebrate<=0||jump)){const angle=Math.atan2(p.tx,p.tz)-yaw+spin;this.model(`kart:${driver}:${color}`,p.x,jump?.height??0,p.z,angle,mesh=>this.kart(mesh,{x:0,z:0,tx:0,tz:1},color,driver),jump?.pitch??0);if(boost&&!jump)this.afterburner(p,angle,clock);return;}
-    const angle=Math.atan2(p.tx,p.tz)-yaw+spin;m.at(p.x,.13,p.z,angle);m.disc(.2,0,.25,2.3,3,'#3a4147');
+    if(!this.buildingModel&&(celebrate<=0||jump)){const angle=Math.atan2(p.tx,p.tz)-yaw+spin;m.at(p.x,.13,p.z,angle);m.disc(.2,0,.25,2.3,3,'#3a4147');this.model(`kart:${driver}:${color}`,p.x,jump?.height??0,p.z,angle,mesh=>this.kart(mesh,{x:0,z:0,tx:0,tz:1},color,driver),jump?.pitch??0);if(boost||jump)this.afterburner(p,angle,clock,jump);return;}
+    const angle=Math.atan2(p.tx,p.tz)-yaw+spin;m.at(p.x,.13,p.z,angle);if(!this.buildingModel)m.disc(.2,0,.25,2.3,3,'#3a4147');
     for(const x of [-1.6,1.6])for(const z of [-1.5,1.4]){m.ball(x,.65,z,.58,.68,.7,'#202534',8,5);m.box(x+Math.sign(x)*.5,.38,z,.08,.52,.6,'#b9b9b7');for(let t=0;t<3;t++)m.box(x,.7,z-.4+t*.3,1.05,.06,.08,'#343a45');}
     m.box(0,.5,0,3.2,.65,4.4,color);m.box(0,1.1,.9,2.7,.35,1.8,color);m.box(0,.55,2.2,3.5,.3,.35,'#c5c9c4');m.box(0,.5,-2.3,3.7,.3,.35,'#30384b');
     m.box(0,1,-.4,1.8,1.2,1.5,'#333445');m.box(0,1.2,-1.4,2.4,.6,.6,color);
@@ -134,8 +138,8 @@ export class Renderer {
     for(const side of [-1,1]){m.ball(side*1.2,.75,-2.45,.31,.31,.5,'#69788b',10,5);m.ball(side*1.2,.75,-2.85,.24,.24,.08,'#161d2a',10,4);}
     if(boost)this.afterburner(p,angle,clock);
   }
-  afterburner(p,angle,clock){
-    const g=this.glow;g.at(p.x,.13,p.z,angle);
+  afterburner(p,angle,clock,jump=null){
+    const g=this.glow;g.at(p.x,.13+(jump?.height??0),p.z,angle);g.pitch=jump?.pitch??0;g.pivot=1.87;
     for(const side of [-1,1]){
       const x=side*1.2,flicker=1+.15*Math.sin(clock*48+side)+.07*Math.sin(clock*81);
       g.flame(x,.75,-2.85,.35,4.8*flicker,[.07,.018,.003],clock+side);
@@ -225,7 +229,6 @@ export class Renderer {
     for(const actor of [r,...r.bots]){
       const pose=combatPose(actor);if(actor.destroyed){m.at(pose.x,.1,pose.z);m.disc(0,0,0,2,3,'#343344');continue;}
       const jump=somersaultPose(actor);
-      if(jump){m.at(pose.x,.03,pose.z);m.disc(0,0,0,2,2.8,'#353944');}
       this.kart(m,pose,actor.color??drivers[actor.driver].color,actor.driver,0,0,actor.boost>0,time,actor.celebrate,jump);
       if(actor.vulcan>0){
         const pulse=.8+.2*Math.sin(time*4);this.glow.at(pose.x,.15,pose.z);

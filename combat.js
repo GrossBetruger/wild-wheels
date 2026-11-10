@@ -21,7 +21,7 @@ function spawn(r,actor,initial=false){
   actor.motionHeading=actor.heading;actor.cameraHeading=actor.heading;actor.drift=0;actor.wasDrifting=false;actor.driftTrail=null;actor.driftEmit=0;
   actor.killStreak=0;actor.vulcan=0;
   actor.chaff=4;actor.chaffCooldown=0;
-  actor.somersault=0;actor.somersaultCooldown=0;
+  actor.somersault=0;actor.somersaultCooldown=0;actor.somersaultCameraStart=actor.cameraHeading;
 }
 export function createBattle(driver=0,arena=0,random=Math.random){
   const r=createRace(driver,0,random);r.mode='combat';r.arena=arena;r.duration=180;r.targetScore=10;r.id=0;r.color=drivers[driver].color;r.killFeed=[];r.driftParticles=[];r.chaffClouds=[];r.chaffSequence=0;
@@ -68,7 +68,8 @@ export function useBattleTurbo(r,actor=r,actionId){
 }
 export function somersaultBattle(world,actor=world){
   if(world.mode!=='combat'||world.phase!=='racing'||world.finishCountdown!==null||actor.destroyed>0||(actor.somersaultCooldown??0)>1e-8)return false;
-  actor.heading+=Math.PI;actor.motionHeading=actor.heading;actor.cameraHeading+=Math.PI;
+  actor.somersaultCameraStart=actor.cameraHeading;
+  actor.heading+=Math.PI;actor.motionHeading=actor.heading;
   actor.drift=0;actor.wasDrifting=false;actor.driftTrail=null;
   actor.somersault=SOMERSAULT_DURATION;actor.somersaultCooldown=1;return true;
 }
@@ -183,7 +184,11 @@ function moveActor(r,actor,steer,gas,brake,dt,handbrake=false){
   actor.speed=clamp(actor.speed+(gas?(drifting?100:300):drifting?-90:-170)*dt-(brake?400*dt:0),brake?-160:0,drifting?400:actor.boost>0?850:520);
   if(actor.boost>0&&!drifting)actor.speed=Math.min(850,actor.speed+650*dt);
   actor.motionHeading+=angleDelta(actor.heading,actor.motionHeading)*(1-Math.exp(-(drifting?3.8:14)*dt));
-  actor.cameraHeading+=angleDelta(actor.heading,actor.cameraHeading)*(1-Math.exp(-(drifting?5:9)*dt));
+  if(actor.somersault>0){
+    const progress=clamp(1-actor.somersault/SOMERSAULT_DURATION,0,1),turn=progress*progress*(3-2*progress);
+    actor.cameraHeading=actor.somersaultCameraStart+Math.PI*turn;
+  }
+  if(!(actor.somersault>0))actor.cameraHeading+=angleDelta(actor.heading,actor.cameraHeading)*(1-Math.exp(-(drifting?5:9)*dt));
   const travel=drifting||actor===r||actor.human?actor.motionHeading:actor.heading;
   const nx=actor.wx+Math.sin(travel)*actor.speed*.085*dt,nz=actor.wz+Math.cos(travel)*actor.speed*.085*dt;
   const arena=arenas[r.arena];
