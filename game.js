@@ -2,7 +2,7 @@ import { LENGTH, drivers, tracks, createRace, tick, useItem, useTurbo, selectIte
 import { Renderer } from './renderer.js';
 import { RaceAudio } from './audio.js';
 import { sampleTrack, branches } from './track.js';
-import { createBattle, tickBattle, fireBattle, releaseChaff, useBattleTurbo, arenas, standings, incomingMissiles, VULCAN_DURATION, MAX_HEALTH } from './combat.js';
+import { createBattle, tickBattle, fireBattle, releaseChaff, useBattleTurbo, somersaultBattle, arenas, standings, incomingMissiles, VULCAN_DURATION, MAX_HEALTH } from './combat.js';
 import { NetworkGame } from './network.js';
 import { matchResults } from './results.js';
 const $ = id => document.getElementById(id);
@@ -19,6 +19,7 @@ const useWeapon=()=>network.active?network.action('fire'):mode==='combat'?fireBa
 const switchWeapon=()=>network.active?network.action('cycle'):cycleItem(race);
 const chaff=()=>network.active?network.action('chaff'):mode==='combat'?releaseChaff(race):false;
 const turbo=()=>network.active?network.action('turbo'):mode==='combat'?useBattleTurbo(race):useTurbo(race);
+const somersault=()=>network.active?network.action('somersault'):mode==='combat'?somersaultBattle(race):false;
 const modeSwitch=document.createElement('nav');modeSwitch.className='mode-switch';modeSwitch.setAttribute('aria-label','Game mode');
 const selectedMaps={race:0,combat:0};
 for(const [value,label] of [['race','🏁 GRAND PRIX'],['combat','⚔ ARENA BATTLE']]){const button=document.createElement('button');button.id=`mode-${value}`;button.textContent=label;button.setAttribute('aria-pressed',String(value===mode));button.onclick=()=>{if(mode===value)return;mode=value;track=selectedMaps[mode];resetMap();};modeSwitch.append(button);}
@@ -52,6 +53,7 @@ const routeHint=document.createElement('div');routeHint.className='route-hint';d
 const driftMeter=document.createElement('div');driftMeter.className='drift-meter hidden';const driftLabel=document.createElement('strong'),driftCharge=document.createElement('progress'),driftHelp=document.createElement('small');driftCharge.max=1.2;driftCharge.setAttribute('aria-label','Drift boost charge');driftHelp.textContent='RELEASE DRIFT TO BOOST';driftMeter.append(driftLabel,driftCharge,driftHelp);document.querySelector('.viewport').append(driftMeter);
 const brakeButton=document.createElement('button');brakeButton.dataset.key='arrowdown';brakeButton.textContent='BRAKE';brakeButton.className='hidden';document.querySelector('.touch-controls').append(brakeButton);
 const chaffButton=document.createElement('button');chaffButton.id='release-chaff';chaffButton.className='chaff-button hidden';chaffButton.type='button';chaffButton.onclick=chaff;document.querySelector('.viewport').append(chaffButton);
+const somersaultButton=document.createElement('button');somersaultButton.id='somersault';somersaultButton.className='chaff-button somersault-button hidden';somersaultButton.type='button';somersaultButton.onclick=somersault;document.querySelector('.viewport').append(somersaultButton);
 const incomingWarning=document.createElement('div');incomingWarning.id='incoming-warning';incomingWarning.className='incoming-warning hidden';incomingWarning.setAttribute('role','alert');incomingWarning.setAttribute('aria-atomic','true');
 const incomingTitle=document.createElement('strong'),incomingHelp=document.createElement('span');incomingWarning.append(incomingTitle,incomingHelp);document.querySelector('.viewport').append(incomingWarning);
 function updateMapLabels(){const maps=mode==='combat'?arenas:tracks,info=maps[track];$('track-name').textContent=info.name;$('track-label').textContent=info.name.toUpperCase();$('track-desc').textContent=info.desc;$('difficulty').textContent=mode==='combat'?'MELEE':info.difficulty;document.querySelector('.race-meta').textContent=mode==='combat'?'10 KILLS · 3 MIN · 6 FIGHTERS':'3 LAPS · 6 RACERS';document.querySelector('.race-bar .divider').nextElementSibling.textContent=mode==='combat'?'DEATHMATCH':'GRAND PRIX';for(const button of modeSwitch.children)button.setAttribute('aria-pressed',String(button.id===`mode-${mode}`));for(const [index,button] of mapButtons.entries()){button.textContent=maps[index].name;button.setAttribute('aria-pressed',String(index===track));}const next=maps[(track+1)%maps.length];$('change-track').textContent='NEXT MAP →';$('change-track').setAttribute('aria-label',`Switch to ${next.name}`);}
@@ -116,6 +118,7 @@ function hud(){
   document.querySelector('.position small').textContent=mode==='combat'?'KILLS':'POSITION';document.querySelector('.lap small').textContent=mode==='combat'?'HEALTH':'LAP';document.querySelector('.timer small').textContent=mode==='combat'?'TIME LEFT':'RACE TIME';
   leaderboard.classList.toggle('hidden',mode!=='combat');
   chaffButton.classList.toggle('hidden',mode!=='combat');chaffButton.textContent=`C · CHAFF ${race.chaff??0}`;chaffButton.disabled=mode!=='combat'||race.phase!=='racing'||race.finishCountdown!==null||race.destroyed>0||race.chaff<=0||race.chaffCooldown>0;chaffButton.setAttribute('aria-label',`Release chaff, ${race.chaff??0} charges remaining. Keyboard C.`);
+  somersaultButton.classList.toggle('hidden',mode!=='combat');somersaultButton.disabled=race.phase!=='racing'||race.finishCountdown!==null||race.destroyed>0||(race.somersaultCooldown??0)>1e-8;somersaultButton.textContent=(race.somersaultCooldown??0)>1e-8?`Z · ${race.somersaultCooldown.toFixed(1)}s`:'Z · SOMERSAULT';somersaultButton.setAttribute('aria-label','Somersault: jump and turn 180 degrees. Keyboard Z.');
   routeHint.textContent='';
   driftMeter.classList.toggle('hidden',mode!=='combat'||!race.wasDrifting||race.phase!=='racing');driftCharge.value=race.drift;driftLabel.textContent=race.drift>=.85?'SUPER BOOST READY':race.drift>=.45?'BOOST READY':'DRIFT CHARGING';driftMeter.classList.toggle('charged',race.drift>=.45);driftMeter.classList.toggle('super',race.drift>=.85);
   if(mode==='combat'){
@@ -146,8 +149,8 @@ function hud(){
   const battle=mode==='combat',controls=document.querySelectorAll('.control');brakeButton.classList.toggle('hidden',!battle);
   controls[0].querySelector('span').textContent=battle?'WASD works · ↓ / S reverses':'WASD works, too';
   controls[1].querySelector('kbd').textContent='SHIFT';controls[1].querySelector('strong').textContent=battle?'Slide into a U-turn':'Drift the corners';controls[1].querySelector('span').textContent=battle?'Hold + steer, release to launch':'Hold + steer, release to boost';
-  controls[2].querySelector('span').textContent=battle?'Hold to fire · Q weapons · X turbo · C chaff':'Space fires · Q weapons · X turbo';controls[3].querySelector('span').textContent=battle?'Pause your battle':'Pause your race';
-  canvas.setAttribute('aria-label',battle?'Combat arena. Arrow keys drive, Shift and steering drift into a U-turn, release Shift to boost. Hold Space to shoot, Tab or Q changes weapons, X uses turbo, C releases chaff to distract missiles.':'Kart racing track. Arrow keys drive, Shift drifts, Space fires, Tab or Q changes weapons, X uses turbo.');
+  controls[2].querySelector('span').textContent=battle?'Q weapons · X turbo · C chaff · Z flip':'Space fires · Q weapons · X turbo';controls[3].querySelector('span').textContent=battle?'Pause your battle':'Pause your race';
+  canvas.setAttribute('aria-label',battle?'Combat arena. Arrow keys drive, Shift and steering drift into a U-turn, release Shift to boost. Hold Space to shoot, Tab or Q changes weapons, X uses turbo, Z jumps and turns 180 degrees, C releases chaff to distract missiles.':'Kart racing track. Arrow keys drive, Shift drifts, Space fires, Tab or Q changes weapons, X uses turbo.');
   $('map').setAttribute('aria-label',battle?'Arena map with cover and fighter positions':'Track map with alternate routes and racer positions');
   if(['ready','countdown','finished','paused'].includes(race.phase))finishFlash.classList.add('hidden');
   if(race.phase==='racing'&&race.finishRank!==null)finishFlash.classList.remove('hidden');
@@ -183,7 +186,7 @@ window.addEventListener('keydown',e=>{
   if(['arrowup','arrowdown','arrowleft','arrowright',' ','shift'].includes(key))e.preventDefault();
   keys.add(key);if(e.repeat)return;
   if(network.active)network.input();
-  switch(key){case 'enter':start();break;case 'escape':case 'p':pause();break;case ' ':useWeapon();break;case 'q':switchWeapon();break;case 'x':if(!e.ctrlKey&&!e.metaKey&&!e.altKey)turbo();break;case 'c':if(!e.ctrlKey&&!e.metaKey&&!e.altKey)chaff();break;}
+  switch(key){case 'enter':start();break;case 'escape':case 'p':pause();break;case ' ':useWeapon();break;case 'q':switchWeapon();break;case 'x':if(!e.ctrlKey&&!e.metaKey&&!e.altKey)turbo();break;case 'z':if(!e.ctrlKey&&!e.metaKey&&!e.altKey)somersault();break;case 'c':if(!e.ctrlKey&&!e.metaKey&&!e.altKey)chaff();break;}
 });
 window.addEventListener('keyup',e=>{keys.delete(e.key.toLowerCase());if(network.active)network.input();});window.addEventListener('blur',()=>{keys.clear();if(['racing','countdown'].includes(race.phase))pause();});document.addEventListener('visibilitychange',()=>{if(document.hidden&&['racing','countdown'].includes(race.phase))pause();});
 for(const event of ['pointerdown','keydown'])window.addEventListener(event,()=>{if(network.active)audio.unlock().catch(()=>{});},{once:true});

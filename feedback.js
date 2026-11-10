@@ -1,7 +1,7 @@
 import { applySupply, makeProjectile, advanceProjectile, MOVEMENT_DT, MAX_HEALTH } from './combat.js';
 import { selectItem, cycleItem } from './engine.js';
 
-const poseFields=['wx','wz','heading','motionHeading','cameraHeading','speed','drift','wasDrifting','boost','yaw'];
+const poseFields=['wx','wz','heading','motionHeading','cameraHeading','speed','drift','wasDrifting','boost','yaw','somersault','somersaultCooldown'];
 const resources=['ammo','missiles','turbos','health','chaff','item','notice','noticeTime'];
 const pick=(object,fields)=>Object.fromEntries(fields.filter(field=>object[field]!==undefined).map(field=>[field,object[field]]));
 const copyShot=shot=>({...shot,trail:shot.trail.map(point=>({...point}))});
@@ -80,6 +80,10 @@ export class LocalFeedback {
       this.operations.push({id:this.nextId++,type:'select',item:actor.item,afterMove});return true;
     }
     if(actor.phase!=='racing'||actor.destroyed||actor.finishCountdown!==null||now-this.received>.5)return false;
+    if(type==='somersault'){
+      if((actor.somersaultCooldown??0)>1e-8||this.operations.some(op=>op.type==='somersault'))return false;
+      this.operations.push({id:this.nextId++,type,afterMove:sequence});return true;
+    }
     if(type==='turbo'){
       if(actor.turbos<=0||actor.boost>0||this.operations.some(op=>op.type==='turbo'))return false;
       const id=this.nextId++;this.operations.push({id,type,afterMove});this.emit('boost',`action:${id}`);return true;

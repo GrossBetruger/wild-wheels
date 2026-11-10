@@ -32,6 +32,7 @@ export class NetworkPlayback {
       if(!a||!b||actor.destroyed||a.destroyed||b.destroyed||Math.hypot(b.wx-a.wx,b.wz-a.wz)>18||Math.hypot(actor.wx-b.wx,actor.wz-b.wz)>18)return actor;
       const result={...actor,wx:a.wx+(b.wx-a.wx)*fraction,wz:a.wz+(b.wz-a.wz)*fraction};
       for(const field of ['heading','cameraHeading'])result[field]=a[field]+Math.atan2(Math.sin(b[field]-a[field]),Math.cos(b[field]-a[field]))*fraction;
+      if(a.somersault>0&&b.somersault>0)result.somersault=a.somersault+(b.somersault-a.somersault)*fraction;
       return result;
     };
     const previousShots=new Map((before.world.projectiles??[]).map(shot=>[shot.id,shot]));

@@ -160,7 +160,10 @@ export class NetworkGame {
   action(type,item){
     if(!this.active||this.paused)return;
     if(!this.feedback.action(type,item,this.lastLocal??this.state.world,performance.now()/1000,this.prediction.nextSequence-1))return;
-    if(type==='turbo'){this.prediction.turbo(this.feedback.operations.at(-1));this.lastLocal=null;}
+    if(['turbo','somersault'].includes(type)){
+      this.prediction.maneuver(this.feedback.operations.at(-1));
+      this.lastLocal=this.prediction.sample(this.paused?new Set():this.keys,0,performance.now()/1000);
+    }
     this.input();
   }
   input(){

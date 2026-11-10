@@ -2,6 +2,7 @@ import { createRace, drivers } from './engine.js';
 export const VULCAN_DURATION=15;
 export const MAX_HEALTH=6;
 export const MOVEMENT_DT=1/60;
+export const SOMERSAULT_DURATION=.55;
 
 export const arenas=[
   {name:'Scrapyard',desc:'Container cover. Wide flanking lanes.',size:96,ground:'#8b927d',wall:'#d7794d',sky:'#b5d3d9',blocks:[[-40,-35,34,10],[40,35,34,10],[-35,35,10,34],[35,-35,10,34],[0,0,14,14]]},
@@ -20,6 +21,7 @@ function spawn(r,actor,initial=false){
   actor.motionHeading=actor.heading;actor.cameraHeading=actor.heading;actor.drift=0;actor.wasDrifting=false;actor.driftTrail=null;actor.driftEmit=0;
   actor.killStreak=0;actor.vulcan=0;
   actor.chaff=4;actor.chaffCooldown=0;
+  actor.somersault=0;actor.somersaultCooldown=0;
 }
 export function createBattle(driver=0,arena=0,random=Math.random){
   const r=createRace(driver,0,random);r.mode='combat';r.arena=arena;r.duration=180;r.targetScore=10;r.id=0;r.color=drivers[driver].color;r.killFeed=[];r.driftParticles=[];r.chaffClouds=[];r.chaffSequence=0;
@@ -63,6 +65,17 @@ export function makeProjectile(r,actor){
 export function useBattleTurbo(r,actor=r,actionId){
   if(r.phase!=='racing'||r.finishCountdown!==null||actor.destroyed>0||actor.turbos<=0||actor.boost>0)return false;
   actor.turbos--;actor.boost=2.5;fx(r,'boost',actor,actionId==null?undefined:`action:${actionId}`);return true;
+}
+export function somersaultBattle(world,actor=world){
+  if(world.mode!=='combat'||world.phase!=='racing'||world.finishCountdown!==null||actor.destroyed>0||(actor.somersaultCooldown??0)>1e-8)return false;
+  actor.heading+=Math.PI;actor.motionHeading=actor.heading;actor.cameraHeading+=Math.PI;
+  actor.drift=0;actor.wasDrifting=false;actor.driftTrail=null;
+  actor.somersault=SOMERSAULT_DURATION;actor.somersaultCooldown=1;return true;
+}
+export function somersaultPose(actor){
+  if(!(actor.somersault>0))return null;
+  const progress=clamp(1-actor.somersault/SOMERSAULT_DURATION,0,1);
+  return {height:Math.sin(progress*Math.PI)*5,pitch:-progress*Math.PI*2};
 }
 export function fireBattle(r,actor=r,actionId){
   if(r.phase!=='racing'||r.finishCountdown!==null||actor.destroyed>0||actor.fireCooldown>0)return;
@@ -118,7 +131,7 @@ export function damageBattle(r,victim,owner,amount){
   const attacker=[r,...r.bots].find(k=>k.id===owner);
   if(victim.health>0){fx(r,'hit',victim);if(attacker){attacker.celebrate=1.6;voice(r,attacker,'cheer');}return true;}
   victim.destroyed=3;victim.speed=0;victim.boost=0;victim.deaths++;fx(r,'explosion',victim);
-  victim.drift=0;victim.wasDrifting=false;victim.driftTrail=null;victim.killStreak=0;victim.vulcan=0;
+  victim.drift=0;victim.wasDrifting=false;victim.driftTrail=null;victim.killStreak=0;victim.vulcan=0;victim.somersault=0;
   if(attacker){attacker.kills++;attacker.celebrate=1.6;voice(r,attacker,'cheer');r.killFeed.unshift({attacker:attacker.id,victim:victim.id,text:`${attacker===r?'YOU':attacker.name??drivers[attacker.driver].name.split(' ')[0]} → ${victim===r?'YOU':victim.name??drivers[victim.driver].name.split(' ')[0]}`,time:r.elapsed});r.killFeed=r.killFeed.slice(0,3);}
   if(attacker&&!attacker.destroyed){
     attacker.killStreak++;
@@ -158,7 +171,7 @@ export function ageDriftEffects(r,dt){
 }
 function moveActor(r,actor,steer,gas,brake,dt,handbrake=false){
   // Chassis rotation and travel direction separate while the rear tires slide.
-  const drifting=handbrake&&!brake&&Math.abs(steer)>.1&&actor.speed>(actor.wasDrifting?70:110);
+  const drifting=handbrake&&!(actor.somersault>0)&&!brake&&Math.abs(steer)>.1&&actor.speed>(actor.wasDrifting?70:110);
   const before=actor.drift;
   if(drifting){actor.drift=Math.min(1.2,actor.drift+dt);if(before<.45&&actor.drift>=.45)sound(r,'driftCharge',actor);if(before<.85&&actor.drift>=.85)sound(r,'driftChargeMax',actor);}
   if(!drifting&&actor.wasDrifting){
@@ -182,10 +195,11 @@ function moveActor(r,actor,steer,gas,brake,dt,handbrake=false){
 export function predictKartMovement(world,actor,keys,dt){
   if(world.phase!=='racing'||world.finishCountdown!==null||actor.destroyed>0)return;
   // Reuse movement and wall collisions, without running weapons, damage or AI.
-  const scene={arena:world.arena,elapsed:world.elapsed,finishCountdown:null,events:[],effects:[],skids:[],driftParticles:[]};
+  const scene={mode:'combat',phase:world.phase,arena:world.arena,elapsed:world.elapsed,finishCountdown:null,events:[],effects:[],skids:[],driftParticles:[]};
   advanceKartMovement(scene,actor,keys,dt);return scene.events;
 }
 function advanceKartMovement(world,actor,keys,dt){
+  actor.somersault=Math.max(0,(actor.somersault??0)-dt);actor.somersaultCooldown=Math.max(0,(actor.somersaultCooldown??0)-dt);
   actor.boost=Math.max(0,(actor.boost??0)-dt);actor.human=true;
   const steer=Number(keys.has('arrowright')||keys.has('d'))-Number(keys.has('arrowleft')||keys.has('a'));
   moveActor(world,actor,steer,keys.has('arrowup')||keys.has('w'),keys.has('arrowdown')||keys.has('s'),dt,keys.has('shift'));
@@ -217,6 +231,7 @@ export function tickBattle(r,keys,dt,inputs=null){
       if(!Array.isArray(control.moves))advanceKartMovement(r,actor,held,dt);
       if(held.has(' '))fireBattle(r,actor);continue;
     }
+    actor.somersault=Math.max(0,(actor.somersault??0)-dt);actor.somersaultCooldown=Math.max(0,(actor.somersaultCooldown??0)-dt);
     actor.boost=Math.max(0,actor.boost-dt);
     const target=actors.filter(k=>k!==actor&&!k.destroyed).sort((a,b)=>distance(actor,a)-distance(actor,b))[0];if(!target)continue;
     actor.brain-=dt;const visible=clearShot(arena,actor,target);
@@ -256,5 +271,5 @@ export function tickBattle(r,keys,dt,inputs=null){
   }
   if(!ending)return;
   r.finishCountdown=Math.max(0,r.finishCountdown-dt);if(r.finishCountdown>1e-8)return;
-  r.phase='finished';r.finishCountdown=0;for(const actor of actors){actor.speed=0;actor.boost=0;actor.celebrate=0;actor.wasDrifting=false;actor.drift=0;}
+  r.phase='finished';r.finishCountdown=0;for(const actor of actors){actor.speed=0;actor.boost=0;actor.celebrate=0;actor.wasDrifting=false;actor.drift=0;actor.somersault=0;}
 }

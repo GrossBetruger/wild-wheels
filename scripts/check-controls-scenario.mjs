@@ -40,6 +40,31 @@ export async function checkControls(evaluate,app,room,id,sleep){
   for(let i=0;i<100;i++){if(await evaluate('__game.controlsDone'))break;await sleep(25);}
   const trace=await evaluate('__game.controlsTrace'),request=trace.find(frame=>frame.request);
   const turboPass=Boolean(request&&request.boost>2.4&&request.turbos===0)&&trace.every(frame=>frame.item==='hedgehog'&&!frame.turboSelected)&&trace.some(frame=>frame.vulcanShot)&&actor.turbos===0;
+  Object.assign(actor,{wx:-65,wz:70,heading:0,motionHeading:0,cameraHeading:0,speed:180,boost:0,vulcan:0,somersault:0,somersaultCooldown:0,fireCooldown:0,item:'hedgehog',ammo:5});room.world.supplies=[];
+  for(let i=0;i<100;i++){if(await evaluate('__game.network.state.world.vulcan===0&&__game.network.state.world.heading===0&&__game.network.state.world.wz>69'))break;await sleep(25);}
+  await evaluate(`(async()=>{
+    const {somersaultPose}=await import('/combat.js');
+    const game=__game,render=game.network.render.bind(game.network),start=performance.now();let flipped=false,again=false;
+    game.flipTrace=[];game.flipDone=false;
+    game.network.render=dt=>{
+      const time=(performance.now()-start)/1000;
+      if(!flipped){window.dispatchEvent(new KeyboardEvent('keydown',{key:'z'}));window.dispatchEvent(new KeyboardEvent('keyup',{key:'z'}));window.dispatchEvent(new KeyboardEvent('keydown',{key:' '}));window.dispatchEvent(new KeyboardEvent('keyup',{key:' '}));flipped=true;}
+      if(!again&&time>.1){window.dispatchEvent(new KeyboardEvent('keydown',{key:'z'}));window.dispatchEvent(new KeyboardEvent('keyup',{key:'z'}));again=true;}
+      const view=render(dt),jump=somersaultPose(view);
+      game.flipTrace.push({time,heading:view.heading,height:jump?.height??0,pitch:jump?.pitch??0,remaining:view.somersault,shot:view.projectiles.filter(p=>p.owner===view.id).at(-1)?.heading??null,item:view.item});
+      if(time>=.8){game.flipDone=true;game.network.render=render;}
+      return view;
+    };
+  })()`);
+  let remoteSawFlip=false;
+  for(let i=0;i<100;i++){
+    const remote=app.snapshot(room,room.members.get(id===host.id?guest.id:host.id));
+    remoteSawFlip ||= remote.world.bots.some(player=>player.id===id&&player.somersault>0);
+    if(await evaluate('__game.flipDone'))break;await sleep(25);
+  }
+  const flipTrace=await evaluate('__game.flipTrace');
+  const flippedHeading=frame=>Math.abs(Math.atan2(Math.sin(frame.heading-Math.PI),Math.cos(frame.heading-Math.PI)))<.01;
+  const flipPass=flipTrace.length>0&&flippedHeading(flipTrace[0])&&flipTrace.every(flippedHeading)&&flipTrace.some(frame=>frame.height>4)&&flipTrace.at(-1).height===0&&flipTrace[0].shot!==null&&Math.abs(flipTrace[0].shot-Math.PI)<.01&&remoteSawFlip;
   const other=[room.world,...room.world.bots].find(player=>!player.inactive&&player.id!==id);
   Object.assign(actor,{wx:-65,wz:0,heading:0,motionHeading:0,cameraHeading:0,speed:0,boost:0,shield:0,chaff:2,chaffCooldown:0});
   Object.assign(other,{wx:-65,wz:-65,heading:0,motionHeading:0,cameraHeading:0,speed:0,boost:0,destroyed:0,shield:0,fireCooldown:0,item:'missile',missiles:1,vulcan:0});
@@ -61,5 +86,5 @@ export async function checkControls(evaluate,app,room,id,sleep){
   for(let i=0;i<100;i++){if(await evaluate("!document.getElementById('match-results').classList.contains('hidden')&&document.querySelectorAll('#match-results tbody tr').length===2"))break;await sleep(25);}
   const leaderboard=await evaluate("[...document.querySelectorAll('#match-results tbody tr')].map(row=>[...row.cells].map(cell=>cell.textContent))");
   const resultsPass=JSON.stringify(leaderboard)===JSON.stringify([['1',other.name,'10','2'],['2',displayName+' · YOU','3','4']])&&await evaluate("document.querySelectorAll('#match-results tbody .you').length===1&&!document.querySelector('#match-results b')");
-  return {readyPass,readyCleared,readyUI,namePass,pickupKeptVulcan,turboPass,warningPass,warning,resultsPass,leaderboard,pass:readyPass&&readyCleared&&namePass&&pickupKeptVulcan&&turboPass&&warningPass&&resultsPass,trace};
+  return {readyPass,readyCleared,readyUI,namePass,pickupKeptVulcan,turboPass,flipPass,remoteSawFlip,flipTrace,warningPass,warning,resultsPass,leaderboard,pass:readyPass&&readyCleared&&namePass&&pickupKeptVulcan&&turboPass&&flipPass&&warningPass&&resultsPass,trace};
 }
