@@ -5,6 +5,8 @@ export const MOVEMENT_DT=1/60;
 export const SOMERSAULT_DURATION=.55;
 export const BOMB_FALL_TIME=.9;
 export const BOMB_RADIUS=22;
+export const BOMB_START_AMMO=2;
+export const BOMB_RECHARGE=5;
 
 export const arenas=[
   {name:'Scrapyard',desc:'Container cover. Wide flanking lanes.',size:96,ground:'#8b927d',wall:'#d7794d',sky:'#b5d3d9',blocks:[[-40,-35,34,10],[40,35,34,10],[-35,35,10,34],[35,-35,10,34],[0,0,14,14]]},
@@ -33,7 +35,7 @@ export function createBattle(driver=0,arena=0,random=Math.random){
   return r;
 }
 export function standings(r){return [r,...r.bots].filter(actor=>!actor.inactive).sort((a,b)=>b.kills-a.kills||a.deaths-b.deaths||a.id-b.id);}
-export function equipBomber(actor){Object.assign(actor,{bomber:true,bombAmmo:1,bombReload:0,speed:0,shield:0,destroyed:0});return actor;}
+export function equipBomber(actor){Object.assign(actor,{bomber:true,bombAmmo:BOMB_START_AMMO,bombReload:0,speed:0,shield:0,destroyed:0});return actor;}
 export function validBombTarget(world,point){return Boolean(point)&&Number.isFinite(point.wx)&&Number.isFinite(point.wz)&&Math.abs(point.wx)<=arenas[world.arena].size&&Math.abs(point.wz)<=arenas[world.arena].size;}
 export function dropBomb(world,actor,point,actionId){
   if(!actor.bomber||actor.inactive||world.phase!=='racing'||world.finishCountdown!==null||actor.bombAmmo<1||!validBombTarget(world,point))return false;
@@ -163,6 +165,7 @@ export function damageBattle(r,victim,owner,amount){
   victim.destroyed=3;victim.speed=0;victim.boost=0;victim.deaths++;fx(r,'explosion',victim);
   victim.drift=0;victim.wasDrifting=false;victim.driftTrail=null;victim.killStreak=0;victim.vulcan=0;victim.somersault=0;
   if(attacker){attacker.kills++;attacker.celebrate=1.6;voice(r,attacker,'cheer');r.killFeed.unshift({id:r.killSequence=(r.killSequence??0)+1,attacker:attacker.id,victim:victim.id,victimName:victim.name??drivers[victim.driver].name,victimColor:victim.color??drivers[victim.driver].color,text:`${attacker===r?'YOU':attacker.name??drivers[attacker.driver].name.split(' ')[0]} → ${victim===r?'YOU':victim.name??drivers[victim.driver].name.split(' ')[0]}`,time:r.elapsed});r.killFeed=r.killFeed.slice(0,16);}
+  if(attacker?.bomber)attacker.bombAmmo++;
   if(attacker&&!attacker.bomber&&!attacker.destroyed){
     attacker.killStreak++;
     if(attacker.killStreak%2===0){attacker.vulcan=VULCAN_DURATION;attacker.health=Math.max(attacker.health,4);attacker.item='hedgehog';attacker.fireCooldown=0;fx(r,'vulcanReady',attacker);attacker.notice='2-KILL STREAK · HEDGEHOG VULCAN!';attacker.noticeTime=3;}
@@ -254,7 +257,7 @@ export function tickBattle(r,keys,dt,inputs=null){
     if(actor!==r)actor.noticeTime=Math.max(0,(actor.noticeTime??0)-dt);
     for(const key of ['fireCooldown','shield','celebrate','voiceCooldown','wallCooldown','vulcan','chaffCooldown']){if(inputs?.get(actor.id)?.actionClock&&['fireCooldown','chaffCooldown'].includes(key))continue;actor[key]=Math.max(0,(actor[key]??0)-dt);}
     if(actor.bomber){
-      if(!actor.inactive&&!ending){actor.bombReload+=dt;while(actor.bombReload>=2-1e-8){actor.bombAmmo++;actor.bombReload=Math.max(0,actor.bombReload-2);}}
+      if(!actor.inactive&&!ending){actor.bombReload+=dt;while(actor.bombReload>=BOMB_RECHARGE-1e-8){actor.bombAmmo++;actor.bombReload=Math.max(0,actor.bombReload-BOMB_RECHARGE);}}
       continue;
     }
     if(actor.destroyed>0){actor.destroyed=Math.max(0,actor.destroyed-dt);if(actor.destroyed===0&&!ending)spawn(r,actor);continue;}

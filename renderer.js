@@ -2,7 +2,7 @@ import { sampleTrack, branches } from './track.js';
 import { LENGTH, drivers, pickupType } from './engine.js';
 import { arenas, combatPose, somersaultPose, BOMB_FALL_TIME, BOMB_RADIUS } from './combat.js';
 import { kartNameplates } from './nameplates.js';
-import { arenaOverview } from './mobile.js';
+import { bomberCamera } from './mobile.js';
 const rgb=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255);
 const sub=(a,b)=>a.map((v,i)=>v-b[i]);
 const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
@@ -37,12 +37,13 @@ export class Renderer {
     this.models=new Map();this.instances=[];this.quality='auto';this.resolution=1.25;this.fps=0;this.fpsStart=0;this.frameCount=0;this.slowWindows=0;this.fastWindows=0;
     const debug=gl.getExtension('WEBGL_debug_renderer_info');this.gpuName=debug?gl.getParameter(debug.UNMASKED_RENDERER_WEBGL):'WebGL';this.softwareGPU=/swiftshader|llvmpipe|software/i.test(this.gpuName);if(this.softwareGPU)this.resolution=.75;
     this.program=gl.createProgram();
-    gl.attachShader(this.program,shader(gl,gl.VERTEX_SHADER,`attribute vec3 position;attribute vec3 normal;attribute vec3 color;uniform mat4 matrix;uniform vec3 eye;uniform vec3 origin;uniform vec2 rotation;uniform vec2 pitch;uniform float emission;varying vec3 shade;varying float distanceToEye;vec3 tilt(vec3 v){return vec3(v.x,v.y*pitch.x-v.z*pitch.y,v.y*pitch.y+v.z*pitch.x);}void main(){vec3 a=tilt(position-vec3(0.,2.,0.))+vec3(0.,2.,0.);vec3 b=tilt(normal);vec3 p=vec3(a.x*rotation.x+a.z*rotation.y,a.y,-a.x*rotation.y+a.z*rotation.x)+origin;vec3 n=vec3(b.x*rotation.x+b.z*rotation.y,b.y,-b.x*rotation.y+b.z*rotation.x);gl_Position=matrix*vec4(p,1.0);float light=.62+.38*max(0.,dot(normalize(n),normalize(vec3(-.5,1.,.3))));shade=color*mix(light,1.,emission);distanceToEye=length(p-eye);}`));
+    gl.attachShader(this.program,shader(gl,gl.VERTEX_SHADER,`attribute vec3 position;attribute vec3 normal;attribute vec3 color;uniform mat4 matrix;uniform vec3 eye;uniform vec3 origin;uniform vec2 rotation;uniform vec2 pitch;uniform float emission;uniform float fogScale;varying vec3 shade;varying float distanceToEye;vec3 tilt(vec3 v){return vec3(v.x,v.y*pitch.x-v.z*pitch.y,v.y*pitch.y+v.z*pitch.x);}void main(){vec3 a=tilt(position-vec3(0.,2.,0.))+vec3(0.,2.,0.);vec3 b=tilt(normal);vec3 p=vec3(a.x*rotation.x+a.z*rotation.y,a.y,-a.x*rotation.y+a.z*rotation.x)+origin;vec3 n=vec3(b.x*rotation.x+b.z*rotation.y,b.y,-b.x*rotation.y+b.z*rotation.x);gl_Position=matrix*vec4(p,1.0);float light=.62+.38*max(0.,dot(normalize(n),normalize(vec3(-.5,1.,.3))));shade=color*mix(light,1.,emission);distanceToEye=length(p-eye)*fogScale;}`));
     gl.attachShader(this.program,shader(gl,gl.FRAGMENT_SHADER,`precision mediump float;varying vec3 shade;varying float distanceToEye;uniform vec3 fog;void main(){float amount=smoothstep(130.,950.,distanceToEye);gl_FragColor=vec4(mix(shade,fog,amount*.92),1.);}`));
     gl.linkProgram(this.program);if(!gl.getProgramParameter(this.program,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(this.program));gl.useProgram(this.program);
     this.attributes=['position','normal','color'].map(n=>gl.getAttribLocation(this.program,n));this.matrix=gl.getUniformLocation(this.program,'matrix');this.eyeUniform=gl.getUniformLocation(this.program,'eye');this.fog=gl.getUniformLocation(this.program,'fog');this.emission=gl.getUniformLocation(this.program,'emission');this.staticBuffer=gl.createBuffer();this.dynamicBuffer=gl.createBuffer();this.glowBuffer=gl.createBuffer();gl.enable(gl.DEPTH_TEST);this.track=-1;this.eye=null;
     this.originUniform=gl.getUniformLocation(this.program,'origin');this.rotationUniform=gl.getUniformLocation(this.program,'rotation');gl.uniform3f(this.originUniform,0,0,0);gl.uniform2f(this.rotationUniform,1,0);
     this.pitchUniform=gl.getUniformLocation(this.program,'pitch');gl.uniform2f(this.pitchUniform,1,0);
+    this.fogScale=gl.getUniformLocation(this.program,'fogScale');
     this.particleProgram=gl.createProgram();
     gl.attachShader(this.particleProgram,shader(gl,gl.VERTEX_SHADER,`attribute vec3 position;attribute float size;attribute vec3 color;uniform mat4 matrix;uniform float height;varying vec3 tint;void main(){gl_Position=matrix*vec4(position,1.);gl_PointSize=clamp(size*height/max(.1,gl_Position.w),1.,180.);tint=color;}`));
     gl.attachShader(this.particleProgram,shader(gl,gl.FRAGMENT_SHADER,`precision mediump float;varying vec3 tint;uniform float smoke;void main(){vec2 p=gl_PointCoord*2.-1.;float r=length(p);float glow=exp(-r*r*3.5)*(1.-smoothstep(.65,1.,r));gl_FragColor=smoke>.5?vec4(tint,glow*.5):vec4(tint*glow,1.);}`));
@@ -181,6 +182,7 @@ export class Renderer {
     const player=sampleTrack(r.s/LENGTH,r.x,r.route),ahead=sampleTrack((r.s+220)/LENGTH,r.x*.6,r.route);
     const shake=r.shake*Math.sin(time*79)*.3,eye=[player.x-player.tx*17+shake,8.5+(r.boost>0?.7:0),player.z-player.tz*17];
     const view=cameraMatrix(eye,[ahead.x,2.5,ahead.z],width/height,r.boost>0?1.2:1.07);
+    gl.uniform1f(this.fogScale,1);
     gl.uniformMatrix4fv(this.matrix,false,view);gl.uniform3fv(this.eyeUniform,eye);gl.uniform3fv(this.fog,sky);gl.uniform1f(this.emission,0);
     this.drawBuffer(this.staticBuffer,this.staticCount);
     const m=new Mesh();this.glow=new Mesh();this.smoke=new Mesh();
@@ -221,7 +223,9 @@ export class Renderer {
     if(this.track!==`arena-${r.arena}`)this.arenaScenery(r.arena);
     const gl=this.gl,canvas=this.canvas,width=Math.round(canvas.clientWidth*this.pixelRatio()),height=Math.round(canvas.clientHeight*this.pixelRatio());if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;}gl.viewport(0,0,width,height);
     const sky=rgb(arenas[r.arena].sky);gl.clearColor(...sky,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(this.program);
-    const p=combatPose(r),cx=Math.sin(r.cameraHeading),cz=Math.cos(r.cameraHeading),overview=r.bomber?arenaOverview(width,height,arenas[r.arena].size):null,eye=overview?.eye??[p.x-cx*17,10+(r.destroyed?5:0),p.z-cz*17],view=overview?.matrix??cameraMatrix(eye,[p.x+cx*18,1.5,p.z+cz*18],width/height,r.boost>0?1.2:r.wasDrifting?1.13:1.07);
+    const p=combatPose(r),cx=Math.sin(r.cameraHeading),cz=Math.cos(r.cameraHeading),overview=r.bomber?bomberCamera(width,height,arenas[r.arena].size,this.bomberView??'3d'):null,eye=overview?.eye??[p.x-cx*17,10+(r.destroyed?5:0),p.z-cz*17],view=overview?.matrix??cameraMatrix(eye,[p.x+cx*18,1.5,p.z+cz*18],width/height,r.boost>0?1.2:r.wasDrifting?1.13:1.07);
+    this.bomberMatrix=overview?.matrix??null;
+    gl.uniform1f(this.fogScale,overview?.fogScale??1);
     this.nameplates=kartNameplates(r,view,eye);
     gl.uniformMatrix4fv(this.matrix,false,view);gl.uniform3fv(this.eyeUniform,eye);gl.uniform3fv(this.fog,sky);gl.uniform1f(this.emission,0);this.drawBuffer(this.staticBuffer,this.staticCount);
     const m=new Mesh();this.glow=new Mesh();this.smoke=new Mesh();
@@ -254,7 +258,7 @@ export class Renderer {
       const progress=Math.min(1,bomb.age/BOMB_FALL_TIME),height=65*(1-progress*progress);
       m.at(bomb.wx,.15,bomb.wz);for(let i=0;i<40;i++){const a=i/40*Math.PI*2,b=(i+.65)/40*Math.PI*2,inner=BOMB_RADIUS-.7,outer=BOMB_RADIUS;m.quad([Math.sin(a)*inner,0,Math.cos(a)*inner],[Math.sin(a)*outer,0,Math.cos(a)*outer],[Math.sin(b)*outer,0,Math.cos(b)*outer],[Math.sin(b)*inner,0,Math.cos(b)*inner],'#ff6848');}
       m.box(0,0,0,4,.15,.5,'#fff0b3');m.box(0,0,0,.5,.15,4,'#fff0b3');
-      const scale=r.bomber?1+(1-progress)*.8:1;
+      const scale=overview?.halfHeight?1+(1-progress)*.8:1;
       m.at(bomb.wx,height,bomb.wz,bomb.age*3);m.ball(0,0,0,2.2*scale,3.4*scale,2.2*scale,'#39334e',10,6);m.box(0,2.3*scale,0,5*scale,.5,.7*scale,'#ffdb69');m.box(0,2.3*scale,0,.7*scale,.5,5*scale,'#ffdb69');
       this.glow.at(bomb.wx,height+3,bomb.wz);this.glow.particle(0,0,0,3,[.8,.35,.03]);
     }
@@ -277,7 +281,7 @@ export class Renderer {
       this.glow.at(particle.wx,particle.height,particle.wz);this.glow.particle(0,0,0,.42*fade,tint);this.glow.particle(-particle.vx*.025,-particle.vy*.025,-particle.vz*.025,.2*fade,tint);
     }
     if(r.wasDrifting){this.glow.at(p.x,.25,p.z,r.heading);const color=r.drift>=.85?[.5,.08,.9]:r.drift>=.45?[0,.4,.9]:[.6,.2,.02];for(const side of [-1,1])this.glow.particle(side*1.65,0,-1.4,1,color);}
-    this.flush(m,view,overview?height/(2*overview.halfHeight):height);
+    this.flush(m,view,overview?.halfHeight?height/(2*overview.halfHeight):height);
   }
   atomicExplosion(m,effect){
     const t=effect.age,fade=Math.max(0,1-t/3),radius=Math.min(BOMB_RADIUS,t*48);
