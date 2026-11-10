@@ -247,13 +247,14 @@ export class Renderer {
     for(const effect of r.effects){if(effect.type==='explosion'){this.explosion(m,effect);continue;}for(let i=0;i<10;i++){const a=i*2.4,t=effect.age;m.at(effect.wx+Math.cos(a)*t*8,1+t*4,effect.wz+Math.sin(a)*t*8);m.ball(0,0,0,.12,.12,.12,'#f4dc8b',5,3);}}
     for(const cloud of r.chaffClouds){
       const t=cloud.age,fade=Math.min(1,(cloud.life-t)/1.4),expansion=1-Math.exp(-t*2.5);
+      const tint=rgb(cloud.color??'#a8cde1'),flake=tint.map(c=>.15+c*.85),highlight=tint.map(c=>.65+c*.35),smoke=tint.map(c=>.45+c*.45);
       for(let i=0;i<96;i++){
         const a=i*2.399,spread=(2+expansion*3.5)*(1+i%5*.16),x=cloud.wx+Math.cos(a)*spread+Math.sin(t*.7+i)*.4,z=cloud.wz+Math.sin(a)*spread+Math.cos(t*.6+i)*.4,y=2.5+(i%7)*.55+Math.sin(t*1.8+i)*.7-(1-fade);
-        m.at(x,y,z,a+t*4);m.box(0,0,0,.22+fade*.2,.04,.6,i%3?'#c9e4ef':'#ffffff');
-        this.glow.at(x,y,z);const sparkle=(.55+.45*Math.sin(i*3+t*12)**2)*fade;this.glow.particle(0,0,0,(i%3===0?1.8:.8)*fade,[.55*sparkle,.85*sparkle,1*sparkle]);
+        m.at(x,y,z,a+t*4);m.box(0,0,0,.22+fade*.2,.04,.6,i%3?flake:highlight);
+        this.glow.at(x,y,z);const sparkle=(.55+.45*Math.sin(i*3+t*12)**2)*fade;this.glow.particle(0,0,0,(i%3===0?1.8:.8)*fade,flake.map(c=>c*sparkle));
       }
-      this.smoke.at(cloud.wx,3+Math.sin(t)*.3,cloud.wz);this.smoke.particle(0,0,0,(10+expansion*8)*Math.sqrt(fade),[.75,.85,.9]);
-      if(t<.45){this.glow.at(cloud.wx,2.5,cloud.wz);this.glow.particle(0,0,0,9*(1-t/.45),[.5,.75,1]);for(let i=0;i<16;i++){const f=i/15;this.glow.at(cloud.originX+(cloud.wx-cloud.originX)*f,1.5+Math.sin(f*Math.PI)*2,cloud.originZ+(cloud.wz-cloud.originZ)*f);this.glow.particle(0,0,0,1.2*(1-t/.45),[.35,.65,.9]);}}
+      this.smoke.at(cloud.wx,3+Math.sin(t)*.3,cloud.wz);this.smoke.particle(0,0,0,(10+expansion*8)*Math.sqrt(fade),smoke);
+      if(t<.45){this.glow.at(cloud.wx,2.5,cloud.wz);this.glow.particle(0,0,0,9*(1-t/.45),flake);for(let i=0;i<16;i++){const f=i/15;this.glow.at(cloud.originX+(cloud.wx-cloud.originX)*f,1.5+Math.sin(f*Math.PI)*2,cloud.originZ+(cloud.wz-cloud.originZ)*f);this.glow.particle(0,0,0,1.2*(1-t/.45),flake);}}
     }
     for(const particle of r.driftParticles){
       const fade=1-particle.age/particle.life;

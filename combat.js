@@ -44,6 +44,7 @@ function divertMissiles(r,cloud){
     if(shot.kind!=='missile'||shot.target!==cloud.owner||shot.decoy!=null||distance(shot,cloud)>70||!clearShot(arenas[r.arena],shot,cloud))continue;
     shot.target=null;shot.decoy=cloud.id;shot.life=Math.max(shot.life??0,1.8);diverted++;
   }
+  if(diverted)sound(r,'chaffDivert',cloud);
   return diverted;
 }
 export function releaseChaff(r,actor=r){
@@ -51,7 +52,7 @@ export function releaseChaff(r,actor=r){
   const tx=Math.sin(actor.heading),tz=Math.cos(actor.heading),side=r.chaffSequence%2?1:-1;
   const candidates=[18,12,6].flatMap(ahead=>[side,-side].map(s=>({wx:actor.wx+tx*ahead+tz*s*ahead*.55,wz:actor.wz+tz*ahead-tx*s*ahead*.55})));
   const point=candidates.find(p=>!blocked(arenas[r.arena],p.wx,p.wz,.5)&&clearShot(arenas[r.arena],actor,p))??{wx:actor.wx+tx*2,wz:actor.wz+tz*2};
-  const cloud={...point,originX:actor.wx,originZ:actor.wz,id:r.chaffSequence++,owner:actor.id,age:0,life:8};
+  const cloud={...point,originX:actor.wx,originZ:actor.wz,id:r.chaffSequence++,owner:actor.id,color:actor.color??drivers[actor.driver].color,age:0,life:8};
   actor.chaff--;actor.chaffCooldown=.65;r.chaffClouds.push(cloud);const diverted=divertMissiles(r,cloud);
   if(r.multiplayer||distance(actor,r)<90)sound(r,'chaff',actor);
   actor.notice=diverted?`CHAFF · ${diverted} MISSILE${diverted===1?'':'S'} DIVERTED`:'CHAFF RELEASED';actor.noticeTime=2;

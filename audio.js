@@ -82,6 +82,7 @@ export class RaceAudio {
   }
   event(type){switch(type){
     case 'chaff':this.note(110,.15,{type:'sine',end:45,volume:.4});this.burst(.8,5500,.45,0,900);this.note(880,.2,{type:'sine',end:330,volume:.12,delay:.08});break;
+    case 'chaffDivert':this.note(1200,.22,{type:'triangle',end:160,volume:.18});this.burst(.22,3000,.24,0,500);this.note(660,.12,{type:'sine',end:990,volume:.2,delay:.1});this.note(990,.2,{type:'sine',end:1320,volume:.16,delay:.19});break;
     case 'crash':this.note(145,.24,{type:'sine',end:35,volume:.7});this.burst(.2,1800,.75,0,200);this.note(290,.12,{end:100,volume:.12});break;
     case 'fire':this.note(180,.19,{type:'sine',end:45,volume:.65});this.burst(.09,2600,.5,0,400);this.note(850,.16,{end:260,volume:.13});break;
     case 'vulcanFire':this.note(135,.065,{type:'sine',end:48,volume:.3});this.burst(.045,2100,.22,0,500);break;
