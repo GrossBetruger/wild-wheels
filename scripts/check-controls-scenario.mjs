@@ -41,10 +41,25 @@ export async function checkControls(evaluate,app,room,id,sleep){
   const trace=await evaluate('__game.controlsTrace'),request=trace.find(frame=>frame.request);
   const turboPass=Boolean(request&&request.boost>2.4&&request.turbos===0)&&trace.every(frame=>frame.item==='hedgehog'&&!frame.turboSelected)&&trace.some(frame=>frame.vulcanShot)&&actor.turbos===0;
   const other=[room.world,...room.world.bots].find(player=>!player.inactive&&player.id!==id);
+  Object.assign(actor,{wx:-65,wz:0,heading:0,motionHeading:0,cameraHeading:0,speed:0,boost:0,shield:0,chaff:2,chaffCooldown:0});
+  Object.assign(other,{wx:-65,wz:-65,heading:0,motionHeading:0,cameraHeading:0,speed:0,boost:0,destroyed:0,shield:0,fireCooldown:0,item:'missile',missiles:1,vulcan:0});
+  room.world.projectiles=[];room.world.chaffClouds=[];
+  const shooter=room.members.get(other.id);
+  app.controls(shooter,{sequence:shooter.sequence+1,keys:[],actions:[{type:'fire'}]});
+  for(let i=0;i<100;i++){if(await evaluate("!document.getElementById('incoming-warning').classList.contains('hidden')"))break;await sleep(10);}
+  const warning=await evaluate(`(()=>{
+    const element=document.getElementById('incoming-warning'),animation=element.getAnimations()[0];
+    if(animation)animation.currentTime=0;const first=getComputedStyle(element).backgroundColor;
+    if(animation)animation.currentTime=600;const second=getComputedStyle(element).backgroundColor;
+    return {visible:!element.classList.contains('hidden'),text:element.textContent,blinks:first!==second};
+  })()`);
+  await evaluate("window.dispatchEvent(new KeyboardEvent('keydown',{key:'c'}))");
+  for(let i=0;i<100;i++){if(actor.chaff===1&&await evaluate("document.getElementById('incoming-warning').classList.contains('hidden')"))break;await sleep(10);}
+  const warningPass=warning.visible&&warning.blinks&&warning.text.includes('INCOMING MISSILE')&&warning.text.includes('CHAFF')&&actor.chaff===1&&await evaluate("document.getElementById('incoming-warning').classList.contains('hidden')");
   Object.assign(actor,{kills:3,deaths:4});Object.assign(other,{kills:10,deaths:2});
   Object.assign(room.world,{phase:'finished',finishRank:1,finishTime:20,finishCountdown:0});
   for(let i=0;i<100;i++){if(await evaluate("!document.getElementById('match-results').classList.contains('hidden')&&document.querySelectorAll('#match-results tbody tr').length===2"))break;await sleep(25);}
   const leaderboard=await evaluate("[...document.querySelectorAll('#match-results tbody tr')].map(row=>[...row.cells].map(cell=>cell.textContent))");
   const resultsPass=JSON.stringify(leaderboard)===JSON.stringify([['1',other.name,'10','2'],['2',displayName+' · YOU','3','4']])&&await evaluate("document.querySelectorAll('#match-results tbody .you').length===1&&!document.querySelector('#match-results b')");
-  return {readyPass,readyCleared,readyUI,namePass,pickupKeptVulcan,turboPass,resultsPass,leaderboard,pass:readyPass&&readyCleared&&namePass&&pickupKeptVulcan&&turboPass&&resultsPass,trace};
+  return {readyPass,readyCleared,readyUI,namePass,pickupKeptVulcan,turboPass,warningPass,warning,resultsPass,leaderboard,pass:readyPass&&readyCleared&&namePass&&pickupKeptVulcan&&turboPass&&warningPass&&resultsPass,trace};
 }

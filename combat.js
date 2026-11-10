@@ -29,6 +29,10 @@ export function createBattle(driver=0,arena=0,random=Math.random){
   return r;
 }
 export function standings(r){return [r,...r.bots].filter(actor=>!actor.inactive).sort((a,b)=>b.kills-a.kills||a.deaths-b.deaths||a.id-b.id);}
+export function incomingMissiles(world){
+  if(world.mode!=='combat'||world.phase!=='racing'||world.finishCountdown!==null||world.destroyed>0)return 0;
+  return world.projectiles.filter(shot=>shot.kind==='missile'&&shot.target===world.id&&shot.owner!==world.id&&shot.life>0&&shot.decoy==null&&!shot.chaffed).length;
+}
 function voice(r,actor,cue){if((actor.voiceCooldown??0)>0&&cue!=='win')return;actor.voiceCooldown=1.5;r.voices.push({driver:actor.driver,cue,pan:actor===r?0:clamp((actor.wx-r.wx)/70,-.8,.8),volume:actor===r?1:.6});}
 function sound(r,type,actor,key){r.events.push(r.multiplayer?{type,owner:actor.owner??actor.id,wx:actor.wx,wz:actor.wz,id:`${r.soundEpoch}:${r.soundSequence=(r.soundSequence??0)+1}`,...(key?{key}:{})} :type);}
 function fx(r,type,actor,key){sound(r,type,actor,key);r.effects.push({type,wx:actor.wx,wz:actor.wz,age:0,life:type==='explosion'?2.5:.65});}

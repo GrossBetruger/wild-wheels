@@ -2,7 +2,7 @@ import { LENGTH, drivers, tracks, createRace, tick, useItem, useTurbo, selectIte
 import { Renderer } from './renderer.js';
 import { RaceAudio } from './audio.js';
 import { sampleTrack, branches } from './track.js';
-import { createBattle, tickBattle, fireBattle, releaseChaff, useBattleTurbo, arenas, standings, VULCAN_DURATION, MAX_HEALTH } from './combat.js';
+import { createBattle, tickBattle, fireBattle, releaseChaff, useBattleTurbo, arenas, standings, incomingMissiles, VULCAN_DURATION, MAX_HEALTH } from './combat.js';
 import { NetworkGame } from './network.js';
 import { matchResults } from './results.js';
 const $ = id => document.getElementById(id);
@@ -52,6 +52,8 @@ const routeHint=document.createElement('div');routeHint.className='route-hint';d
 const driftMeter=document.createElement('div');driftMeter.className='drift-meter hidden';const driftLabel=document.createElement('strong'),driftCharge=document.createElement('progress'),driftHelp=document.createElement('small');driftCharge.max=1.2;driftCharge.setAttribute('aria-label','Drift boost charge');driftHelp.textContent='RELEASE DRIFT TO BOOST';driftMeter.append(driftLabel,driftCharge,driftHelp);document.querySelector('.viewport').append(driftMeter);
 const brakeButton=document.createElement('button');brakeButton.dataset.key='arrowdown';brakeButton.textContent='BRAKE';brakeButton.className='hidden';document.querySelector('.touch-controls').append(brakeButton);
 const chaffButton=document.createElement('button');chaffButton.id='release-chaff';chaffButton.className='chaff-button hidden';chaffButton.type='button';chaffButton.onclick=chaff;document.querySelector('.viewport').append(chaffButton);
+const incomingWarning=document.createElement('div');incomingWarning.id='incoming-warning';incomingWarning.className='incoming-warning hidden';incomingWarning.setAttribute('role','alert');incomingWarning.setAttribute('aria-atomic','true');
+const incomingTitle=document.createElement('strong'),incomingHelp=document.createElement('span');incomingWarning.append(incomingTitle,incomingHelp);document.querySelector('.viewport').append(incomingWarning);
 function updateMapLabels(){const maps=mode==='combat'?arenas:tracks,info=maps[track];$('track-name').textContent=info.name;$('track-label').textContent=info.name.toUpperCase();$('track-desc').textContent=info.desc;$('difficulty').textContent=mode==='combat'?'MELEE':info.difficulty;document.querySelector('.race-meta').textContent=mode==='combat'?'10 KILLS · 3 MIN · 6 FIGHTERS':'3 LAPS · 6 RACERS';document.querySelector('.race-bar .divider').nextElementSibling.textContent=mode==='combat'?'DEATHMATCH':'GRAND PRIX';for(const button of modeSwitch.children)button.setAttribute('aria-pressed',String(button.id===`mode-${mode}`));for(const [index,button] of mapButtons.entries()){button.textContent=maps[index].name;button.setAttribute('aria-pressed',String(index===track));}const next=maps[(track+1)%maps.length];$('change-track').textContent='NEXT MAP →';$('change-track').setAttribute('aria-label',`Switch to ${next.name}`);}
 const ammoRack=document.createElement('div');ammoRack.className='ammo-rack';const ammoCards=new Map();
 for(const [type,icon,label] of [['hedgehog','🦔','HEDGEHOGS'],['missile','🚀','MISSILES'],['boost','ϟ','TURBOS']]){
@@ -88,6 +90,14 @@ let scoreboardKey='';
 function put(id,value){const node=$(id);if(node.textContent!==String(value))node.textContent=value;}
 function hud(){
   showResults();
+  const threats=incomingMissiles(race);
+  incomingWarning.classList.toggle('hidden',threats===0);
+  if(threats){
+    const title=threats===1?'⚠ INCOMING MISSILE':'⚠ INCOMING MISSILES';
+    const help=race.chaff>0&&race.chaffCooldown<=0?'C / CHAFF TO BREAK THE LOCK':'EVADE THE MISSILE';
+    if(incomingTitle.textContent!==title)incomingTitle.textContent=title;
+    if(incomingHelp.textContent!==help)incomingHelp.textContent=help;
+  }
   for(const button of modeSwitch.children)button.disabled=network.active;
   for(const button of mapButtons)button.disabled=network.active&&!network.isHost;
   $('change-track').disabled=network.active&&!network.isHost;$('restart').disabled=network.active&&!network.isHost;
