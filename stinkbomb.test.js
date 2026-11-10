@@ -50,7 +50,7 @@ test('dizzy guest prediction follows the same movement and expiration as the ser
   assert.ok(Math.abs(actor.wx-expected.wx)<1e-9);assert.ok(Math.abs(actor.wz-expected.wz)<1e-9);assert.equal(actor.heading,expected.heading);assert.equal(actor.dizzy,expected.dizzy);
 });
 
-test('a driver kill awards one point each to the killer and both bombers whose gas is active',()=>{
+test('a driver kill awards one point to the killer and half a point to each bomber whose gas is active',()=>{
   const world=createBattle();Object.assign(world,{phase:'racing',supplies:[]});
   const [bomberA,bomberB,victim]=world.bots;world.bots=[bomberA,bomberB,victim];equipBomber(bomberA);equipBomber(bomberB);
   Object.assign(victim,{wx:-65,wz:0,shield:0,health:3,human:true,speed:0});
@@ -58,8 +58,8 @@ test('a driver kill awards one point each to the killer and both bombers whose g
   tickBattle(world,new Set(),1/60);
   damageBattle(world,victim,world.id,1);assert.deepEqual([world.kills,bomberA.kills,bomberB.kills],[0,0,0]);
   damageBattle(world,victim,world.id,2);
-  assert.deepEqual([world.kills,bomberA.kills,bomberB.kills,victim.deaths],[1,1,1,1]);
-  damageBattle(world,victim,world.id,3);assert.deepEqual([world.kills,bomberA.kills,bomberB.kills],[1,1,1]);
+  assert.deepEqual([world.kills,bomberA.kills,bomberB.kills,victim.deaths],[1,.5,.5,1]);
+  damageBattle(world,victim,world.id,3);assert.deepEqual([world.kills,bomberA.kills,bomberB.kills],[1,.5,.5]);
 });
 test('a bomber who also lands the killing blow gets one point despite multiple gas clouds',()=>{
   const world=equipBomber(createBattle());Object.assign(world,{phase:'racing',supplies:[]});
@@ -77,7 +77,7 @@ test('newer gas does not extend another bomber credit beyond their own four seco
   world.stinkClouds=[{owner:bomberB.id,wx:-65,wz:0,age:0,life:2.5,hits:[]}];tickBattle(world,new Set(),1/60);
   for(let i=0;i<61;i++)tickBattle(world,new Set(),1/60);
   damageBattle(world,victim,world.id,3);
-  assert.deepEqual([world.kills,bomberA.kills,bomberB.kills],[1,0,1]);
+  assert.deepEqual([world.kills,bomberA.kills,bomberB.kills],[1,0,.5]);
 });
 test('expired gas earns no point and gas credit does not carry across respawn',()=>{
   const world=createBattle();Object.assign(world,{phase:'racing',supplies:[]});
@@ -94,7 +94,16 @@ test('gas credit is cleared on death so the next life awards only its killer',()
   const [bomber,victim]=world.bots;world.bots=[bomber,victim];equipBomber(bomber);
   Object.assign(victim,{wx:-65,wz:0,shield:0,health:3,human:true,speed:0});
   world.stinkClouds=[{owner:bomber.id,wx:-65,wz:0,age:0,life:2.5,hits:[]}];tickBattle(world,new Set(),1/60);
-  damageBattle(world,victim,world.id,3);assert.deepEqual([world.kills,bomber.kills],[1,1]);
+  damageBattle(world,victim,world.id,3);assert.deepEqual([world.kills,bomber.kills],[1,.5]);
   for(let i=0;i<310;i++)tickBattle(world,new Set(),1/60);
-  damageBattle(world,victim,world.id,3);assert.deepEqual([world.kills,bomber.kills,victim.deaths],[2,1,2]);
+  damageBattle(world,victim,world.id,3);assert.deepEqual([world.kills,bomber.kills,victim.deaths],[2,.5,2]);
+});
+
+test('two stinkbomb assists add up to one point on the leaderboard',()=>{
+  const world=createBattle();Object.assign(world,{phase:'racing',supplies:[]});
+  const [bomber,victimA,victimB]=world.bots;world.bots=[bomber,victimA,victimB];equipBomber(bomber);
+  for(const victim of [victimA,victimB])Object.assign(victim,{wx:-65,wz:0,shield:0,health:3,human:true,speed:0});
+  world.stinkClouds=[{owner:bomber.id,wx:-65,wz:0,age:0,life:2.5,hits:[]}];tickBattle(world,new Set(),1/60);
+  damageBattle(world,victimA,world.id,3);assert.deepEqual([world.kills,bomber.kills],[1,.5]);
+  damageBattle(world,victimB,world.id,3);assert.deepEqual([world.kills,bomber.kills],[2,1]);
 });
