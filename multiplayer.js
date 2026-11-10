@@ -83,7 +83,7 @@ export class Multiplayer {
     view.voices=room.voices;view.name=member.name;
     const label=id=>id===member.id?'YOU':actors[id]?.name??drivers[actors[id]?.driver??0].name.split(' ')[0];
     view.killFeed=world.killFeed.map(entry=>({...entry,text:`${label(entry.attacker)} → ${label(entry.victim)}`}));
-    return {type:'state',code:room.code,you:member.id,host:room.host,arena:room.arena,bots:room.botCount,players:[...room.members.values()].map(p=>({id:p.id,name:p.name,driver:p.driver,color:p.color})),world:view};
+    return {type:'state',time:room.networkTime??0,code:room.code,you:member.id,host:room.host,arena:room.arena,bots:room.botCount,players:[...room.members.values()].map(p=>({id:p.id,name:p.name,driver:p.driver,color:p.color})),world:view};
   }
   send(member,data){
     if(member.socket?.readyState===1){if(member.socket.bufferedAmount>256*1024){member.socket.close(1013,'Connection too slow');return;}member.socket.send(JSON.stringify(data));return;}
@@ -104,7 +104,7 @@ export class Multiplayer {
         for(const action of member.actions.splice(0))switch(action.type){case 'fire':fireBattle(room.world,actor);break;case 'chaff':releaseChaff(room.world,actor);break;case 'cycle':cycleItem(actor);break;case 'select':selectItem(actor,action.item);break;}
       }
       // Slot zero can become an AI when its player leaves; human clients keep their own slots.
-      tickBattle(room.world,new Set(),dt,inputs);
+      tickBattle(room.world,new Set(),dt,inputs);room.networkTime=(room.networkTime??0)+dt;
       room.events.push(...room.world.events);room.voices.push(...room.world.voices);room.events=room.events.slice(-64);room.voices=room.voices.slice(-16);room.world.events=[];room.world.voices=[];
       room.snapshotClock=(room.snapshotClock??0)+dt;if(room.snapshotClock>=1/30-1e-8){room.snapshotClock=0;this.broadcast(room);room.events=[];room.voices=[];}
     }

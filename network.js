@@ -1,4 +1,5 @@
 import { drivers } from './engine.js';
+import { NetworkPlayback } from './playback.js';
 
 export function invitationUrl(pageUrl,code,{publicOrigin,lan}={}){
   const page=new URL(pageUrl);
@@ -7,7 +8,7 @@ export function invitationUrl(pageUrl,code,{publicOrigin,lan}={}){
 }
 
 export class NetworkGame {
-  token=null;state=null;paused=false;sequence=0;actions=[];poses=new Map();
+  token=null;state=null;paused=false;sequence=0;actions=[];playback=new NetworkPlayback();
   constructor({anchor,keys,driver,arena,onState,onLeave,unlock}){
     Object.assign(this,{keys,driver,arena,onState,onLeave,unlock});
     this.panel=document.createElement('section');this.panel.className='network-panel';this.panel.setAttribute('aria-label','Multiplayer arena lobby');
@@ -86,7 +87,8 @@ export class NetworkGame {
   }
   accept(state){
     if(!this.active)return;
-    if(this.state&&state.world.elapsed<this.state.world.elapsed)this.poses.clear();
+    if(this.state&&state.world.elapsed<this.state.world.elapsed)this.playback.clear();
+    this.playback.push(state.time,state.world);
     const rosterKey=JSON.stringify([state.host,state.you,state.players]);
     this.state=state;this.leaveButton.classList.remove('hidden');this.share.classList.remove('hidden');this.copyButton.classList.remove('hidden');this.animalChoice.classList.remove('hidden');
     this.updateShare();this.help.classList.remove('hidden');
@@ -103,16 +105,10 @@ export class NetworkGame {
     if(this.paused&&['countdown','racing'].includes(world.phase))return {...world,phase:'paused',resumePhase:world.phase};
     return world;
   }
-  render(dt){
-    const view=this.view();if(!view)return null;
-    const smooth=actor=>{
-      let pose=this.poses.get(actor.id);
-      if(!pose||actor.destroyed||Math.hypot(actor.wx-pose.wx,actor.wz-pose.wz)>18)pose={wx:actor.wx,wz:actor.wz,heading:actor.heading,cameraHeading:actor.cameraHeading};
-      const factor=1-Math.exp(-dt*45);pose.wx+=(actor.wx-pose.wx)*factor;pose.wz+=(actor.wz-pose.wz)*factor;
-      for(const field of ['heading','cameraHeading'])pose[field]+=Math.atan2(Math.sin(actor[field]-pose[field]),Math.cos(actor[field]-pose[field]))*factor;
-      this.poses.set(actor.id,pose);return {...actor,...pose};
-    };
-    return {...smooth(view),bots:view.bots.map(smooth)};
+  render(){
+    const world=this.playback.sample()??this.view();if(!world)return null;
+    if(this.paused&&['countdown','racing'].includes(world.phase))return {...world,phase:'paused',resumePhase:world.phase};
+    return world;
   }
   action(type,item){if(!this.active)return;this.actions.push({type,...(item?{item}:{})});this.actions=this.actions.slice(-8);this.input();}
   input(){
@@ -136,7 +132,7 @@ export class NetworkGame {
   pause(){this.paused=!this.paused;this.keys.clear();this.actions=[];this.input();this.onState(this.view());}
   leave(message='You left the room.'){
     if(!this.active)return;
-    this.request('/api/leave',{}).catch(()=>{});this.token=null;this.socket?.close();this.state=null;this.pending=null;this.actions=[];this.keys.clear();this.poses.clear();
+    this.request('/api/leave',{}).catch(()=>{});this.token=null;this.socket?.close();this.state=null;this.pending=null;this.actions=[];this.keys.clear();this.playback.clear();
     this.internetError=false;this.hostButton.disabled=false;this.name.disabled=false;this.botCount.disabled=false;for(const option of this.botCount.options)option.disabled=false;this.leaveButton.classList.add('hidden');this.copyButton.classList.add('hidden');this.internetButton.classList.add('hidden');this.animalChoice.classList.add('hidden');this.share.classList.add('hidden');this.help.classList.add('hidden');this.players.replaceChildren();this.status.textContent=message;this.onLeave();
   }
 }
