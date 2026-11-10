@@ -49,3 +49,52 @@ test('dizzy guest prediction follows the same movement and expiration as the ser
   app.controls(guest,{sequence:0,keys:[],actions:[],epoch:room.world.soundEpoch,moves:prediction.commands()});for(let i=0;i<8;i++)app.step(1/60);
   assert.ok(Math.abs(actor.wx-expected.wx)<1e-9);assert.ok(Math.abs(actor.wz-expected.wz)<1e-9);assert.equal(actor.heading,expected.heading);assert.equal(actor.dizzy,expected.dizzy);
 });
+
+test('a driver kill awards one point each to the killer and both bombers whose gas is active',()=>{
+  const world=createBattle();Object.assign(world,{phase:'racing',supplies:[]});
+  const [bomberA,bomberB,victim]=world.bots;world.bots=[bomberA,bomberB,victim];equipBomber(bomberA);equipBomber(bomberB);
+  Object.assign(victim,{wx:-65,wz:0,shield:0,health:3,human:true,speed:0});
+  world.stinkClouds=[{owner:bomberA.id,wx:-65,wz:0,age:0,life:2.5,hits:[]},{owner:bomberB.id,wx:-65,wz:0,age:0,life:2.5,hits:[]}];
+  tickBattle(world,new Set(),1/60);
+  damageBattle(world,victim,world.id,1);assert.deepEqual([world.kills,bomberA.kills,bomberB.kills],[0,0,0]);
+  damageBattle(world,victim,world.id,2);
+  assert.deepEqual([world.kills,bomberA.kills,bomberB.kills,victim.deaths],[1,1,1,1]);
+  damageBattle(world,victim,world.id,3);assert.deepEqual([world.kills,bomberA.kills,bomberB.kills],[1,1,1]);
+});
+test('a bomber who also lands the killing blow gets one point despite multiple gas clouds',()=>{
+  const world=equipBomber(createBattle());Object.assign(world,{phase:'racing',supplies:[]});
+  const victim=world.bots[0];world.bots=[victim];Object.assign(victim,{wx:-65,wz:0,shield:0,health:3,human:true,speed:0});
+  world.stinkClouds=[{owner:world.id,wx:-65,wz:0,age:0,life:2.5,hits:[]},{owner:world.id,wx:-65,wz:0,age:0,life:2.5,hits:[]}];
+  tickBattle(world,new Set(),1/60);damageBattle(world,victim,world.id,3);
+  assert.equal(world.kills,1);assert.equal(victim.deaths,1);assert.equal(world.bombAmmo,2);
+});
+test('newer gas does not extend another bomber credit beyond their own four seconds',()=>{
+  const world=createBattle();Object.assign(world,{phase:'racing',supplies:[]});
+  const [bomberA,bomberB,victim]=world.bots;world.bots=[bomberA,bomberB,victim];equipBomber(bomberA);equipBomber(bomberB);
+  Object.assign(victim,{wx:-65,wz:0,shield:0,health:3,human:true,speed:0});
+  world.stinkClouds=[{owner:bomberA.id,wx:-65,wz:0,age:0,life:2.5,hits:[]}];tickBattle(world,new Set(),1/60);
+  for(let i=0;i<180;i++)tickBattle(world,new Set(),1/60);
+  world.stinkClouds=[{owner:bomberB.id,wx:-65,wz:0,age:0,life:2.5,hits:[]}];tickBattle(world,new Set(),1/60);
+  for(let i=0;i<61;i++)tickBattle(world,new Set(),1/60);
+  damageBattle(world,victim,world.id,3);
+  assert.deepEqual([world.kills,bomberA.kills,bomberB.kills],[1,0,1]);
+});
+test('expired gas earns no point and gas credit does not carry across respawn',()=>{
+  const world=createBattle();Object.assign(world,{phase:'racing',supplies:[]});
+  const [bomber,victim]=world.bots;world.bots=[bomber,victim];equipBomber(bomber);
+  Object.assign(victim,{wx:-65,wz:0,shield:0,health:3,human:true,speed:0});
+  world.stinkClouds=[{owner:bomber.id,wx:-65,wz:0,age:0,life:2.5,hits:[]}];tickBattle(world,new Set(),1/60);
+  for(let i=0;i<241;i++)tickBattle(world,new Set(),1/60);
+  damageBattle(world,victim,world.id,3);assert.deepEqual([world.kills,bomber.kills],[1,0]);
+  for(let i=0;i<310;i++)tickBattle(world,new Set(),1/60);
+  damageBattle(world,victim,world.id,3);assert.deepEqual([world.kills,bomber.kills,victim.deaths],[2,0,2]);
+});
+test('gas credit is cleared on death so the next life awards only its killer',()=>{
+  const world=createBattle();Object.assign(world,{phase:'racing',supplies:[]});
+  const [bomber,victim]=world.bots;world.bots=[bomber,victim];equipBomber(bomber);
+  Object.assign(victim,{wx:-65,wz:0,shield:0,health:3,human:true,speed:0});
+  world.stinkClouds=[{owner:bomber.id,wx:-65,wz:0,age:0,life:2.5,hits:[]}];tickBattle(world,new Set(),1/60);
+  damageBattle(world,victim,world.id,3);assert.deepEqual([world.kills,bomber.kills],[1,1]);
+  for(let i=0;i<310;i++)tickBattle(world,new Set(),1/60);
+  damageBattle(world,victim,world.id,3);assert.deepEqual([world.kills,bomber.kills,victim.deaths],[2,1,2]);
+});

@@ -28,7 +28,7 @@ function spawn(r,actor,initial=false){
   actor.killStreak=0;actor.vulcan=0;
   actor.chaff=4;actor.chaffCooldown=0;
   actor.somersault=0;actor.somersaultCooldown=0;actor.somersaultCameraStart=actor.cameraHeading;
-  actor.dizzy=0;
+  actor.dizzy=0;actor.stinkContributors=new Map();
 }
 export function createBattle(driver=0,arena=0,random=Math.random){
   const r=createRace(driver,0,random);r.mode='combat';r.arena=arena;r.duration=180;r.targetScore=10;r.id=0;r.color=drivers[driver].color;r.killFeed=[];r.driftParticles=[];r.chaffClouds=[];r.chaffSequence=0;r.bombs=[];r.bombSequence=0;r.stinkClouds=[];
@@ -166,9 +166,16 @@ export function damageBattle(r,victim,owner,amount){
   if(victim===r)r.shake=.5;
   const attacker=[r,...r.bots].find(k=>k.id===owner);
   if(victim.health>0){fx(r,'hit',victim);if(attacker){attacker.celebrate=1.6;voice(r,attacker,'cheer');}return true;}
+  const credited=new Set(attacker?[attacker]:[]);
+  if(victim.dizzy>0)for(const [id,expires] of victim.stinkContributors??[]){
+    if(expires<=r.elapsed+1e-8)continue;
+    const bomber=[r,...r.bots].find(actor=>actor.id===id&&actor.bomber&&!actor.inactive);
+    if(bomber&&bomber!==victim)credited.add(bomber);
+  }
+  victim.stinkContributors=new Map();
   victim.destroyed=3;victim.speed=0;victim.boost=0;victim.deaths++;fx(r,'explosion',victim);
   victim.drift=0;victim.wasDrifting=false;victim.driftTrail=null;victim.killStreak=0;victim.vulcan=0;victim.somersault=0;victim.dizzy=0;
-  if(attacker){attacker.kills++;attacker.celebrate=1.6;voice(r,attacker,'cheer');r.killFeed.unshift({id:r.killSequence=(r.killSequence??0)+1,attacker:attacker.id,victim:victim.id,victimName:victim.name??drivers[victim.driver].name,victimColor:victim.color??drivers[victim.driver].color,text:`${attacker===r?'YOU':attacker.name??drivers[attacker.driver].name.split(' ')[0]} → ${victim===r?'YOU':victim.name??drivers[victim.driver].name.split(' ')[0]}`,time:r.elapsed});r.killFeed=r.killFeed.slice(0,16);}
+  for(const scorer of credited){scorer.kills++;scorer.celebrate=1.6;voice(r,scorer,'cheer');r.killFeed.unshift({id:r.killSequence=(r.killSequence??0)+1,attacker:scorer.id,victim:victim.id,victimName:victim.name??drivers[victim.driver].name,victimColor:victim.color??drivers[victim.driver].color,text:`${scorer===r?'YOU':scorer.name??drivers[scorer.driver].name.split(' ')[0]} → ${victim===r?'YOU':victim.name??drivers[victim.driver].name.split(' ')[0]}`,time:r.elapsed});r.killFeed=r.killFeed.slice(0,16);}
   if(attacker&&!attacker.bomber&&!attacker.destroyed){
     attacker.killStreak++;
     if(attacker.killStreak%2===0){attacker.vulcan=VULCAN_DURATION;attacker.health=Math.max(attacker.health,4);attacker.item='hedgehog';attacker.fireCooldown=0;fx(r,'vulcanReady',attacker);attacker.notice='2-KILL STREAK · HEDGEHOG VULCAN!';attacker.noticeTime=3;}
@@ -330,6 +337,9 @@ export function tickBattle(r,keys,dt,inputs=null){
   if(!ending)for(const cloud of r.stinkClouds)for(const actor of actors){
     if(actor.bomber||actor.inactive||actor.destroyed||actor.shield>0||cloud.hits.includes(actor.id)||distance(actor,cloud)>STINK_RADIUS)continue;
     cloud.hits.push(actor.id);if(!(actor.dizzy>0))sound(r,'dizzy',actor);actor.dizzy=DIZZY_DURATION;
+    actor.stinkContributors??=new Map();
+    for(const [id,expires] of actor.stinkContributors)if(expires<=r.elapsed+1e-8)actor.stinkContributors.delete(id);
+    actor.stinkContributors.set(cloud.owner,r.elapsed+DIZZY_DURATION);
   }
   const order=standings(r);r.rank=order.findIndex(k=>k.id===0)+1;
   if(!ending&&(order[0].kills>=r.targetScore||r.elapsed>=r.duration)){
