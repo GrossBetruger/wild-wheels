@@ -30,9 +30,9 @@ function chooseMap(index){if(index===track)return;if(network.active){if(network.
 const network=new NetworkGame({anchor:modeSwitch,keys,driver:()=>selected,arena:()=>track,unlock:()=>audio.unlock(),onState:world=>{
   const changed=mode!=='combat'||track!==world.arena;
   const driverChanged=selected!==world.driver;
-  race=world;mode='combat';track=world.arena;selected=world.driver;if(changed){lastPhase='';updateMapLabels();}
+  race=world;mode='combat';track=world.arena;if(changed){lastPhase='';updateMapLabels();}
   document.querySelector('.race-meta').textContent=`10 KILLS · 3 MIN · ${network.state.players.length+network.state.bots} FIGHTERS`;
-  if(changed||driverChanged){[...$('drivers').children].forEach((button,index)=>button.classList.toggle('selected',index===selected));$('driver-name').textContent=drivers[selected].name;}
+  if(changed||driverChanged)showDriver(world.driver);
 },onLeave:()=>{race=newGame();lastPhase='';keys.clear();updateMapLabels();}});
 const leaderboard=document.createElement('section');leaderboard.className='leaderboard hidden';document.querySelector('aside').append(leaderboard);
 const routeHint=document.createElement('div');routeHint.className='route-hint';document.querySelector('.viewport').append(routeHint);
@@ -62,7 +62,7 @@ function drawMap(){
   map.clearRect(0,0,280,126);
   if(mode==='combat'){
     map.fillStyle='#e5e0d9';map.fillRect(78,3,124,120);map.fillStyle='#92839d';for(const [x,z,w,d] of arenas[track].blocks)map.fillRect(140+(x-w/2)*.6,63+(z-d/2)*.6,w*.6,d*.6);
-    for(const actor of [race,...race.bots]){if(actor.destroyed)continue;map.fillStyle=actor===race?'#7251d2':actor.color;map.beginPath();map.arc(140+actor.wx*.6,63+actor.wz*.6,actor===race?4:3,0,7);map.fill();}return;
+    for(const actor of [race,...race.bots]){if(actor.destroyed)continue;map.fillStyle=actor.color;map.beginPath();map.arc(140+actor.wx*.6,63+actor.wz*.6,actor===race?4:3,0,7);map.fill();}return;
   }
   map.beginPath();for(let i=0;i<=120;i++){const [x,y]=mapPoint(i/120*Math.PI*2);if(i===0)map.moveTo(x,y);if(i>0)map.lineTo(x,y);}map.closePath();map.strokeStyle='#ded9cf';map.lineWidth=17;map.stroke();map.strokeStyle='#faf8f0';map.lineWidth=10;map.stroke();
   for(const [i,branch] of branches.entries()){map.beginPath();for(let j=0;j<=40;j++){const[x,y]=mapPoint((branch.start+(branch.end-branch.start)*j/40)*Math.PI*2,i+1);if(j===0)map.moveTo(x,y);if(j>0)map.lineTo(x,y);}map.strokeStyle='#c6a258';map.lineWidth=4;map.stroke();}
@@ -77,7 +77,7 @@ function hud(){
   for(const button of modeSwitch.children)button.disabled=network.active;
   for(const button of mapButtons)button.disabled=network.active&&!network.isHost;
   $('change-track').disabled=network.active&&!network.isHost;$('restart').disabled=network.active&&!network.isHost;$('start').disabled=network.active&&!network.isHost&&race.phase!=='paused';
-  if(network.active)for(const button of $('drivers').children)button.disabled=true;
+  for(const button of $('drivers').children)button.disabled=!['ready','finished'].includes(race.phase);
   if(mode==='race'){
     $('position').replaceChildren(document.createTextNode(String(race.rank)),Object.assign(document.createElement('span'),{textContent:ordinal(race.rank)}));
     $('lap').replaceChildren(document.createTextNode(String(Math.min(3,Math.floor(race.s/LENGTH)+1)).padStart(2,'0')+' '),Object.assign(document.createElement('span'),{textContent:'/ 03'}));
@@ -124,7 +124,6 @@ function hud(){
   if(race.phase==='racing'&&race.finishRank!==null)finishFlash.classList.remove('hidden');
   $('message').classList.toggle('hidden',race.phase==='racing');
   const button=$('start'),message=$('message');button.classList.toggle('hidden',race.phase==='countdown');
-  for(const b of $('drivers').children)b.disabled=network.active||!['ready','finished'].includes(race.phase);
   $('pause').textContent=race.phase==='paused'?'▶':'Ⅱ';
   switch(race.phase){
     case 'ready':message.querySelector('.pill').textContent=mode==='combat'?'EVERY KART FOR ITSELF':'THE GRID IS WAITING';message.querySelector('h2').textContent=mode==='combat'?'Small karts. Big trouble.':'Born to be wild.';message.querySelector('p').textContent=mode==='combat'?'First to 10 kills · 3 minutes · Hold Space to fire':'Six racers. Three laps. Two alternate routes.';message.querySelector('small').textContent=`${mode==='combat'?arenas[track].name:tracks[track].name} · Press Enter to start`;button.textContent=mode==='combat'?'LET’S BATTLE ↗':'LET’S RACE ↗';$('status').textContent='READY WHEN YOU ARE';break;
@@ -134,7 +133,8 @@ function hud(){
     case 'finished':keys.clear();message.querySelector('.pill').textContent=mode==='combat'?'BATTLE COMPLETE':'RACE COMPLETE';message.querySelector('h2').textContent=`${race.finishRank}${ordinal(race.finishRank)} PLACE`;message.querySelector('p').textContent=mode==='combat'?`${race.kills} kills · ${race.deaths} deaths · ${timeLabel(race.finishTime)}`:`Finished ${race.finishRank}${ordinal(race.finishRank).toLowerCase()} of 6 · ${timeLabel(race.finishTime)}`;message.querySelector('small').textContent='';button.textContent='PLAY AGAIN ↗';$('status').textContent='MATCH COMPLETE';break;
   }
 }
-function selectDriver(index){selected=index;race=newGame();lastPhase='';[...$('drivers').children].forEach((b,i)=>{b.classList.toggle('selected',i===index);b.setAttribute('aria-pressed',String(i===index));});const d=drivers[index];$('driver-name').textContent=d.name;$('driver-desc').textContent=d.desc;$('driver-number').textContent=String(index+1).padStart(2,'0');for(const [id,value] of [['speed-stat',d.speed],['handling-stat',d.handling],['accel-stat',d.accel]]){$(id).replaceChildren(...Array.from({length:5},(_,i)=>Object.assign(document.createElement('i'),{className:i<value?'on':''})));}}
+function showDriver(index){selected=index;[...$('drivers').children].forEach((b,i)=>{b.classList.toggle('selected',i===index);b.setAttribute('aria-pressed',String(i===index));});const d=drivers[index];$('driver-name').textContent=d.name;$('driver-desc').textContent=d.desc;$('driver-number').textContent=String(index+1).padStart(2,'0');for(const [id,value] of [['speed-stat',d.speed],['handling-stat',d.handling],['accel-stat',d.accel]]){$(id).replaceChildren(...Array.from({length:5},(_,i)=>Object.assign(document.createElement('i'),{className:i<value?'on':''})));}}
+function selectDriver(index){if(network.active){network.chooseDriver(index);return;}showDriver(index);race=newGame();lastPhase='';}
 drivers.forEach((d,i)=>{const b=document.createElement('button');b.className='driver';b.textContent=d.emoji;b.title=d.name;b.setAttribute('aria-label',d.name);b.onclick=()=>selectDriver(i);$('drivers').append(b);});
 function start(){audio.unlock().catch(()=>{$('sound').textContent='CLICK FOR SOUND';});if(network.active){if(network.paused){network.pause();return;}if(network.isHost)network.control('start');return;}if(race.phase==='paused'){race.phase=race.resumePhase||'racing';return;}if(race.phase==='racing'||race.phase==='countdown')return;race=newGame();race.phase='countdown';lastCount=-1;tone(400);}
 function pause(){if(network.active){network.pause();return;}if(race.phase==='paused'){race.phase=race.resumePhase;return;}if(!['racing','countdown'].includes(race.phase))return;race.resumePhase=race.phase;race.phase='paused';keys.clear();}

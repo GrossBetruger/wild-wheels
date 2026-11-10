@@ -6,6 +6,7 @@ import { drivers, selectItem, cycleItem } from './engine.js';
 import { ngrokOrigin } from './ngrok.js';
 
 const KEYS=new Set(['arrowup','arrowdown','arrowleft','arrowright','w','a','s','d','shift',' ']);
+const PLAYER_COLORS=['#8456cf','#df7053','#67a99c','#edb84f','#777cbb','#db8daf'];
 const FIELDS='id driver color wx wz heading motionHeading cameraHeading speed health kills deaths killStreak vulcan chaff chaffCooldown destroyed shield ammo missiles turbos item fireCooldown boost drift wasDrifting yaw spin celebrate stun voiceCooldown human name notice noticeTime inactive'.split(' ');
 const actorData=actor=>Object.fromEntries(FIELDS.map(key=>[key,actor[key]]));
 const problem=(status,message)=>Object.assign(new Error(message),{status});
@@ -15,7 +16,7 @@ export function allocateRoomCode(rooms){
   return available[randomInt(available.length)];
 }
 const person=body=>{
-  if(!body||typeof body.name!=='string'||body.name.trim().length<1||body.name.length>24||!Number.isInteger(body.driver)||body.driver<0||body.driver>=drivers.length)throw problem(400,'Enter a name (1–24 characters) and choose a driver.');
+  if(!body||typeof body.name!=='string'||body.name.trim().length<1||body.name.length>24||(body.driver!==null&&(!Number.isInteger(body.driver)||body.driver<0||body.driver>=drivers.length)))throw problem(400,'Enter a name (1–24 characters) and choose a driver.');
   return {name:body.name.trim(),driver:body.driver};
 };
 export class Multiplayer {
@@ -52,16 +53,18 @@ export class Multiplayer {
     for(const member of room.members.values())this.assign(room,member);
     this.roster(room);
   }
-  assign(room,member){const actor=[room.world,...room.world.bots][member.id];if(actor.inactive||actor.destroyed||room.world.phase==='racing'){const fresh=createBattle(member.driver,room.arena);Object.assign(actor,actorData([fresh,...fresh.bots][member.id]),{reload:0,brain:0,path:[]});}Object.assign(actor,{human:true,inactive:false,name:member.name,driver:member.driver,color:drivers[member.driver].color,notice:'',noticeTime:0});member.keys=new Set();member.actions=[];}
+  assign(room,member){const actor=[room.world,...room.world.bots][member.id];if(actor.inactive||actor.destroyed||room.world.phase==='racing'){const fresh=createBattle(member.driver,room.arena);Object.assign(actor,actorData([fresh,...fresh.bots][member.id]),{reload:0,brain:0,path:[]});}Object.assign(actor,{human:true,inactive:false,name:member.name,driver:member.driver,color:member.color,notice:'',noticeTime:0});member.keys=new Set();member.actions=[];}
   roster(room){
     room.botCount=Math.min(room.botCount,6-room.members.size);
     const actors=[room.world,...room.world.bots],bots=actors.filter(actor=>!room.members.has(actor.id)).slice(0,room.botCount);
-    for(const actor of actors){const human=room.members.has(actor.id),active=human||bots.includes(actor);if(active&&actor.inactive){actor.destroyed=0;actor.health=3;actor.shield=2;actor.speed=0;}actor.human=human;actor.inactive=!active;if(!active){actor.destroyed=1e9;actor.speed=0;}if(!human)actor.name=undefined;}
+    for(const actor of actors){const human=room.members.has(actor.id),active=human||bots.includes(actor);if(active&&actor.inactive){actor.destroyed=0;actor.health=3;actor.shield=2;actor.speed=0;}actor.human=human;actor.color=PLAYER_COLORS[actor.id];actor.inactive=!active;if(!active){actor.destroyed=1e9;actor.speed=0;}if(!human)actor.name=undefined;}
   }
   join(room,body){
     const identity=person(body);if(room.members.size>=6)throw problem(409,'This room is full (6 players).');
     const id=[0,1,2,3,4,5].find(slot=>!room.members.has(slot)),token=randomBytes(32).toString('hex');
-    const member={...identity,name:identity.name==='Player'?`Player ${id+1}`:identity.name,id,token,room,keys:new Set(),actions:[],lastSeen:Date.now(),sequence:-1};room.members.set(id,member);this.members.set(token,member);this.assign(room,member);this.roster(room);this.broadcast(room);return member;
+    const used=new Set([...room.members.values()].map(player=>player.driver));
+    const driver=identity.driver??drivers.findIndex((_,index)=>!used.has(index));
+    const member={...identity,driver:driver<0?id%drivers.length:driver,color:PLAYER_COLORS[id],name:identity.name==='Player'?`Player ${id+1}`:identity.name,id,token,room,keys:new Set(),actions:[],lastSeen:Date.now(),sequence:-1};room.members.set(id,member);this.members.set(token,member);this.assign(room,member);this.roster(room);this.broadcast(room);return member;
   }
   remove(member){
     const room=member.room;this.members.delete(member.token);room.members.delete(member.id);member.stream?.end();member.socket?.close(1000,'Left room');
@@ -80,7 +83,7 @@ export class Multiplayer {
     view.voices=room.voices;view.name=member.name;
     const label=id=>id===member.id?'YOU':actors[id]?.name??drivers[actors[id]?.driver??0].name.split(' ')[0];
     view.killFeed=world.killFeed.map(entry=>({...entry,text:`${label(entry.attacker)} → ${label(entry.victim)}`}));
-    return {type:'state',code:room.code,you:member.id,host:room.host,arena:room.arena,bots:room.botCount,players:[...room.members.values()].map(p=>({id:p.id,name:p.name,driver:p.driver})),world:view};
+    return {type:'state',code:room.code,you:member.id,host:room.host,arena:room.arena,bots:room.botCount,players:[...room.members.values()].map(p=>({id:p.id,name:p.name,driver:p.driver,color:p.color})),world:view};
   }
   send(member,data){
     if(member.socket?.readyState===1){if(member.socket.bufferedAmount>256*1024){member.socket.close(1013,'Connection too slow');return;}member.socket.send(JSON.stringify(data));return;}
@@ -148,6 +151,12 @@ export class Multiplayer {
       if(req.method!=='POST')throw problem(405,'Use POST.');
       this.limit(req,path,path==='/api/input'?180:15);const body=await this.body(req);
       switch(path){
+        case '/api/driver':{
+          if(!['ready','finished'].includes(room.world.phase))throw problem(409,'Choose an animal before the next match.');
+          if(!Number.isInteger(body.driver)||body.driver<0||body.driver>=drivers.length)throw problem(400,'Choose an animal.');
+          member.driver=body.driver;[room.world,...room.world.bots][member.id].driver=body.driver;
+          this.broadcast(room);json(200,{ok:true});break;
+        }
         case '/api/input':{
           this.controls(member,body);json(200,{ok:true});break;
         }

@@ -22,6 +22,40 @@ test('two browser players join one room, control separate karts, and see their o
   assert.ok(Math.hypot(room.world.wx-before0.wx,room.world.wz-before0.wz)>2);assert.ok(Math.hypot(room.world.bots[0].wx-before1.wx,room.world.bots[0].wz-before1.wz)>2);
   const view=multiplayer.snapshot(room,multiplayer.members.get(guest.token));assert.equal(view.world.id,1);assert.equal(view.world.wx,room.world.bots[0].wx);assert.equal(view.world.bots.find(k=>k.id===0).wx,room.world.wx);
 });
+test('joining players get different default animals and distinct kart colors',async t=>{
+  const {post}=await serverFor(t);
+  const host=await post('/api/rooms',{name:'Host',driver:0,arena:0,bots:5});
+  assert.equal(new Set([host.world.color,...host.world.bots.map(bot=>bot.color)]).size,6);
+  const guest1=await post('/api/join',{name:'One',driver:null,code:host.code});
+  const guest2=await post('/api/join',{name:'Two',driver:null,code:host.code});
+  const guest3=await post('/api/join',{name:'Three',driver:null,code:host.code});
+  const guest4=await post('/api/join',{name:'Four',driver:null,code:host.code});
+  const guest5=await post('/api/join',{name:'Five',driver:null,code:host.code});
+  assert.deepEqual(guest5.players.map(player=>player.driver),[0,1,2,3,0,1]);
+  assert.equal(new Set(guest5.players.map(player=>player.color)).size,6);
+  assert.equal(guest1.world.driver,1);
+  assert.equal(guest2.world.driver,2);
+  assert.equal(guest3.world.driver,3);
+  assert.equal(guest4.world.driver,0);
+});
+test('a player can choose an animal in the lobby and keep it for the next match',async t=>{
+  const {multiplayer,post}=await serverFor(t);
+  const host=await post('/api/rooms',{name:'Host',driver:0,arena:0});
+  const guest=await post('/api/join',{name:'Guest',driver:null,code:host.code});
+  const color=guest.players.find(player=>player.id===guest.you).color;
+  assert.equal((await post('/api/driver',{driver:3},guest.token)).status,200);
+  const room=multiplayer.rooms.get(host.code);
+  const chosen=multiplayer.snapshot(room,multiplayer.members.get(guest.token));
+  assert.equal(chosen.world.driver,3);
+  assert.equal(chosen.world.color,color);
+  assert.equal(chosen.players.find(player=>player.id===guest.you).driver,3);
+  assert.equal(multiplayer.snapshot(room,multiplayer.members.get(host.token)).world.bots.find(actor=>actor.id===guest.you).driver,3);
+  await post('/api/control',{action:'start'},host.token);
+  const started=multiplayer.snapshot(room,multiplayer.members.get(guest.token));
+  assert.equal(started.world.driver,3);
+  assert.equal(started.world.color,color);
+  assert.equal((await post('/api/driver',{driver:2},guest.token)).status,409);
+});
 test('a remote player can hit and kill another human with server-scored missiles',async t=>{
   const {multiplayer,post}=await serverFor(t);const host=await post('/api/rooms',{name:'Defender',driver:0,arena:0});const guest=await post('/api/join',{name:'Attacker',driver:1,code:host.code});
   const room=multiplayer.rooms.get(host.code),r=room.world,attacker=r.bots[0];Object.assign(r,{phase:'racing',wx:-65,wz:0,heading:0,health:6,shield:0,supplies:[]});Object.assign(attacker,{wx:-65,wz:-20,heading:0,motionHeading:0,shield:0,fireCooldown:0,missiles:3});for(const bot of r.bots.slice(1))bot.destroyed=100;
