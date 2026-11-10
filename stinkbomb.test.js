@@ -23,7 +23,8 @@ test('gas makes nearby exposed karts dizzy for four seconds without damaging hea
   assert.equal(nearby.dizzy,4);assert.equal(shielded.dizzy,0);assert.equal(outside.dizzy,0);
   assert.equal(nearby.health,3);assert.equal(world.kills,0);assert.equal(world.bombAmmo,2);assert.equal(world.stinkClouds.length,1);
   for(let i=0;i<120;i++)tickBattle(world,new Set(),1/60);assert.ok(Math.abs(nearby.dizzy-2)<1e-8);
-  for(let i=0;i<121;i++)tickBattle(world,new Set(),1/60);assert.equal(nearby.dizzy,0);assert.equal(nearby.health,3);assert.equal(world.stinkClouds.length,0);
+  for(let i=0;i<121;i++)tickBattle(world,new Set(),1/60);assert.equal(nearby.dizzy,0);assert.equal(nearby.health,3);assert.equal(world.stinkClouds.length,1);
+  for(let i=0;i<60;i++)tickBattle(world,new Set(),1/60);assert.equal(world.stinkClouds.length,0);
 });
 test('karts entering lingering gas get dizzy, and death clears dizziness',()=>{
   const world=equipBomber(createBattle());Object.assign(world,{phase:'racing',supplies:[],stinkAmmo:1});
@@ -106,4 +107,15 @@ test('two stinkbomb assists add up to one point on the leaderboard',()=>{
   world.stinkClouds=[{owner:bomber.id,wx:-65,wz:0,age:0,life:2.5,hits:[]}];tickBattle(world,new Set(),1/60);
   damageBattle(world,victimA,world.id,3);assert.deepEqual([world.kills,bomber.kills],[1,.5]);
   damageBattle(world,victimB,world.id,3);assert.deepEqual([world.kills,bomber.kills],[2,1]);
+});
+
+test('stink gas still affects a new arrival after three seconds and disperses after five seconds',()=>{
+  const world=equipBomber(createBattle());Object.assign(world,{phase:'racing',supplies:[],stinkAmmo:1});
+  const victim=world.bots[0];world.bots=[victim];Object.assign(victim,{wx:-65,wz:30,shield:0,health:3,human:true,speed:0});
+  dropBomb(world,world,{wx:-65,wz:0,kind:'stink'});
+  for(let i=0;i<234;i++)tickBattle(world,new Set(),1/60);
+  assert.equal(world.stinkClouds.length,1);assert.equal(victim.dizzy,0);
+  victim.wz=0;tickBattle(world,new Set(),1/60);assert.equal(victim.dizzy,4);
+  for(let i=0;i<118;i++)tickBattle(world,new Set(),1/60);assert.equal(world.stinkClouds.length,1);
+  for(let i=0;i<2;i++)tickBattle(world,new Set(),1/60);assert.equal(world.stinkClouds.length,0);assert.ok(victim.dizzy>1.9);assert.equal(victim.health,3);
 });

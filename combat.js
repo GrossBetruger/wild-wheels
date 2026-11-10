@@ -327,7 +327,7 @@ export function tickBattle(r,keys,dt,inputs=null){
   for(const bomb of r.bombs){
     bomb.age+=dt;if(bomb.age<BOMB_FALL_TIME-1e-8)continue;
     if(bomb.kind==='stink'){
-      r.stinkClouds.push({id:bomb.id,owner:bomb.owner,wx:bomb.wx,wz:bomb.wz,age:0,life:2.5,hits:[]});sound(r,'stinkBurst',bomb);continue;
+      r.stinkClouds.push({id:bomb.id,owner:bomb.owner,wx:bomb.wx,wz:bomb.wz,age:0,life:5,hits:[]});sound(r,'stinkBurst',bomb);continue;
     }
     sound(r,'bombExplosion',bomb);r.effects.push({type:'abomb',wx:bomb.wx,wz:bomb.wz,age:0,life:3,color:bomb.color});
     for(const victim of actors)if(distance(victim,bomb)<=BOMB_RADIUS)damageBattle(r,victim,bomb.owner,3);
