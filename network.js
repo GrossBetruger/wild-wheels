@@ -13,17 +13,10 @@ export function invitationUrl(pageUrl,code,{publicOrigin,lan}={}){
 }
 
 export class PlayRequestPrompt {
-  identity=null;dismissed=new Set();
   sample(state){
-    if(!state)return [];
-    const identity=[state.code,state.world.soundEpoch,state.host,state.you].join(':');
-    if(identity!==this.identity){this.identity=identity;this.dismissed.clear();}
-    const waiting=state.players.filter(player=>player.id!==state.host&&player.wantsToPlay);
-    this.dismissed=new Set([...this.dismissed].filter(id=>waiting.some(player=>player.id===id)));
-    if(state.host!==state.you||!['ready','finished'].includes(state.world.phase))return [];
-    return waiting.some(player=>!this.dismissed.has(player.id))?waiting:[];
+    if(!state?.startRequest||state.host!==state.you||!['ready','finished'].includes(state.world.phase))return [];
+    return state.players.filter(player=>player.id!==state.host&&player.wantsToPlay);
   }
-  dismiss(state){for(const player of state.players)if(player.wantsToPlay)this.dismissed.add(player.id);}
 }
 
 export class NetworkGame {
@@ -55,20 +48,21 @@ export class NetworkGame {
     this.readyDialog=document.createElement('dialog');this.readyDialog.id='play-request-popup';this.readyDialog.className='play-request-popup';this.readyDialog.setAttribute('aria-labelledby','play-request-title');
     const art=document.createElement('div');art.className='play-request-art';art.textContent='🏁';art.setAttribute('aria-hidden','true');
     this.readyTitle=document.createElement('h2');this.readyTitle.id='play-request-title';
-    const detail=document.createElement('p');detail.textContent='Your friends are on the grid. Ready to make some trouble?';
+    const detail=document.createElement('p');detail.textContent='Starts automatically unless you refuse. You can also start now.';
+    this.readyCountdown=document.createElement('strong');this.readyCountdown.id='play-request-countdown';this.readyCountdown.className='play-request-countdown';this.readyCountdown.setAttribute('aria-live','polite');
     this.readyPeople=document.createElement('div');this.readyPeople.className='play-request-people';
     this.readyError=document.createElement('p');this.readyError.setAttribute('role','status');
-    this.readyStartButton=this.button('LET’S BATTLE ↗',async()=>{
+    this.readyStartButton=this.button('START NOW ↗',async()=>{
       if(!this.isHost||this.readyStartButton.disabled)return;
       this.readyStartButton.disabled=true;this.readyError.textContent='';
       try{await this.request('/api/control',{action:'start'});this.paused=false;this.dismissPlayRequest();}
       catch(error){this.readyError.textContent=error.message;}
       finally{this.readyStartButton.disabled=false;}
     });this.readyStartButton.className='primary';this.readyStartButton.autofocus=true;
-    this.readyLaterButton=this.button('NOT YET',()=>this.dismissPlayRequest());
+    this.readyLaterButton=this.button('REFUSE',()=>this.refusePlayRequest());
     const actions=document.createElement('div');actions.className='play-request-actions';actions.append(this.readyStartButton,this.readyLaterButton);
-    this.readyDialog.append(art,this.readyTitle,detail,this.readyPeople,actions,this.readyError);document.querySelector('.viewport').append(this.readyDialog);
-    this.readyDialog.addEventListener('cancel',event=>{event.preventDefault();this.dismissPlayRequest();});
+    this.readyDialog.append(art,this.readyTitle,detail,this.readyCountdown,this.readyPeople,actions,this.readyError);document.querySelector('.viewport').append(this.readyDialog);
+    this.readyDialog.addEventListener('cancel',event=>{event.preventDefault();this.refusePlayRequest();});
     this.readyDialog.addEventListener('keydown',event=>event.stopPropagation());
     this.refreshInfo();
     this.infoTimer=setInterval(()=>{if(this.active&&this.isHost)this.refreshInfo();},5000);
@@ -78,12 +72,22 @@ export class NetworkGame {
   get active(){return Boolean(this.token);}
   get isHost(){return this.state?.host===this.state?.you;}
   get wantsToPlay(){return Boolean(this.state?.players.find(player=>player.id===this.state.you)?.wantsToPlay);}
-  dismissPlayRequest(){if(this.state)this.playRequestPrompt.dismiss(this.state);this.readyDialog.close();}
+  get playRequestRefused(){return Boolean(this.state?.players.find(player=>player.id===this.state.you)?.playRequestRefused);}
+  dismissPlayRequest(){this.readyDialog.close();}
+  async refusePlayRequest(){
+    if(!this.isHost||!this.state?.startRequest||this.readyLaterButton.disabled)return;
+    const requestId=this.state.startRequest.id;this.readyLaterButton.disabled=true;this.readyError.textContent='';
+    try{await this.request('/api/control',{action:'refuse-start',requestId});this.dismissPlayRequest();}
+    catch(error){this.readyError.textContent=error.message;}
+    finally{this.readyLaterButton.disabled=false;}
+  }
   updatePlayRequest(){
     const waiting=this.playRequestPrompt.sample(this.state);
     if(!waiting.length){this.readyDialog.close();return;}
     const title=waiting.length===1?`${waiting[0].name} wants to play!`:`${waiting.length} players are ready!`;
     if(this.readyTitle.textContent!==title)this.readyTitle.textContent=title;
+    const seconds=Math.ceil(this.state.startRequest.remainingMs/1000),countdown=seconds>0?`AUTO-START IN ${seconds}…`:'STARTING…';
+    if(this.readyCountdown.textContent!==countdown)this.readyCountdown.textContent=countdown;
     const key=JSON.stringify(waiting.map(player=>[player.id,player.name,player.driver,player.color]));
     if(key!==this.readyPeopleKey){
       this.readyPeopleKey=key;this.readyPeople.replaceChildren(...waiting.map(player=>{
@@ -179,8 +183,10 @@ export class NetworkGame {
     this.status.textContent=`${state.players.length} PLAYER${state.players.length===1?'':'S'} · ${state.bots} BOT${state.bots===1?'':'S'} · ${this.isHost?'Share the link, then press Let’s Battle.':'Choose your animal; the host starts the match.'}`;
     if(['ready','finished'].includes(state.world.phase)){
       const waiting=state.players.filter(player=>player.id!==state.host&&player.wantsToPlay).map(player=>player.name);
-      if(this.isHost&&waiting.length)this.status.textContent=`${waiting.join(', ')} ${waiting.length===1?'wants':'want'} to play. Press Let’s Battle to start.`;
-      if(!this.isHost&&this.wantsToPlay)this.status.textContent='You’re ready! Waiting for the host to start.';
+      const seconds=Math.ceil((state.startRequest?.remainingMs??0)/1000);
+      if(this.isHost&&waiting.length)this.status.textContent=`${waiting.join(', ')} ${waiting.length===1?'wants':'want'} to play. Auto-start in ${seconds}s unless you refuse.`;
+      if(!this.isHost&&this.wantsToPlay)this.status.textContent=`Starting in ${seconds}s unless the host refuses.`;
+      if(!this.isHost&&this.playRequestRefused)this.status.textContent='The host refused your play request. You can ask again.';
     }
     if(['countdown','racing'].includes(state.world.phase))this.status.textContent=`MATCH LIVE · ${state.players.length} players + ${state.bots} bots`;
     if(rosterKey!==this.rosterKey){this.rosterKey=rosterKey;this.players.replaceChildren(...state.players.map(player=>{const label=document.createElement('span');label.textContent=`${player.role==='bomber'?'✈':drivers[player.driver].emoji} ${player.name}${player.role==='bomber'?' · BOMBER':''}${player.id===state.host?' · HOST':''}${player.id===state.you?' · YOU':''}${player.wantsToPlay?' · READY ✓':''}`;label.style.borderLeft=`4px solid ${player.color}`;return label;}));}

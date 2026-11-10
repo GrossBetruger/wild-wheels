@@ -29,7 +29,7 @@ test('players can rename themselves in a room and names survive the next match',
   assert.equal(guestMember.name,'Sammy');
   assert.equal((await post('/api/name',{name:'Intruder'})).status,401);
 });
-test('a guest requests play, both players see readiness, and only the host starts the match',async t=>{
+test('a guest request arms auto-start, both players see it, and the host can still start immediately',async t=>{
   const {multiplayer,post}=await serverFor(t);
   const host=await post('/api/rooms',{name:'Host',driver:0,arena:0,bots:0});
   const guest=await post('/api/join',{name:'Friend',driver:1,code:host.code});
@@ -40,12 +40,23 @@ test('a guest requests play, both players see readiness, and only the host start
   assert.equal(hostView.players.find(player=>player.name==='Friend').wantsToPlay,true);
   assert.equal(guestView.players.find(player=>player.id===guest.you).wantsToPlay,true);
   assert.equal(hostView.players.find(player=>player.name==='Host').wantsToPlay,false);
+  assert.equal(hostView.startRequest.id,guestView.startRequest.id);assert.ok(hostView.startRequest.remainingMs>0&&hostView.startRequest.remainingMs<=3000);
   assert.equal(room.world.phase,'ready');
   assert.equal((await post('/api/control',{action:'start'},guest.token)).status,403);
   assert.equal((await post('/api/control',{action:'start'},host.token)).status,200);
   assert.equal(room.world.phase,'countdown');
   assert.ok(multiplayer.snapshot(room,multiplayer.members.get(host.token)).players.every(player=>!player.wantsToPlay));
   assert.equal((await post('/api/ready',{ready:true},guest.token)).status,409);
+});
+test('only the host can refuse the pending request and stale refusals do not cancel a new request',async t=>{
+  const {multiplayer,post}=await serverFor(t);
+  const host=await post('/api/rooms',{name:'Host',driver:0,arena:0,bots:0}),guest=await post('/api/join',{name:'Guest',driver:1,code:host.code});
+  await post('/api/ready',{ready:true,deadline:0},guest.token);const room=multiplayer.rooms.get(host.code),requestId=room.startRequest.id;
+  assert.equal((await post('/api/control',{action:'refuse-start',requestId},guest.token)).status,403);
+  assert.equal((await post('/api/control',{action:'refuse-start'},host.token)).status,400);
+  assert.equal((await post('/api/control',{action:'refuse-start',requestId},host.token)).status,200);
+  const view=multiplayer.snapshot(room,multiplayer.members.get(guest.token));assert.equal(view.startRequest,null);assert.equal(view.players.find(player=>player.id===guest.you).playRequestRefused,true);
+  await post('/api/ready',{ready:true},guest.token);assert.equal((await post('/api/control',{action:'refuse-start',requestId},host.token)).status,409);assert.ok(room.startRequest);
 });
 test('two browser players join one room, control separate karts, and see their own perspectives',async t=>{
   const {multiplayer,post}=await serverFor(t);

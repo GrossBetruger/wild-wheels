@@ -1,9 +1,26 @@
 export async function checkMobile(evaluate,app,room,id,sleep,capture,rotate,tap,drag){
+  const fixtureHeartbeat=setInterval(()=>{for(const member of room.members.values())if(member.id!==id&&!member.socket)member.lastSeen=Date.now();},1000);fixtureHeartbeat.unref();
+  try{
   const host=room.members.get(room.host),enemy=id===host.id?app.join(room,{name:'Target <img>',driver:1}):host;
   enemy.name='Target <img>';
+  let readyRequestPass=false;
+  if(id===host.id){
+    await evaluate(`fetch('/api/ready',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer ${enemy.token}'},body:JSON.stringify({ready:true})})`);
+    for(let i=0;i<100;i++){if(await evaluate('__game.network.readyDialog.open'))break;await sleep(10);}
+    const shown=await evaluate("__game.network.readyDialog.open&&__game.network.readyCountdown.textContent.includes('AUTO-START IN')&&__game.network.readyLaterButton.textContent==='REFUSE'");
+    if(capture)await capture('host-play-request');
+    await evaluate('__game.network.readyLaterButton.click()');
+    for(let i=0;i<100;i++){if(!room.startRequest&&!enemy.wantsToPlay)break;await sleep(10);}
+    readyRequestPass=shown&&!room.startRequest&&!enemy.wantsToPlay;
+  }
   await evaluate("document.getElementById('start').click()");
-  if(id!==room.host)await evaluate(`fetch('/api/control',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer ${host.token}'},body:JSON.stringify({action:'start'})})`);
-  for(let i=0;i<100;i++){if(room.world.phase==='countdown')break;await sleep(25);}
+  if(id!==room.host){
+    for(let i=0;i<100;i++){if(room.startRequest)break;await sleep(10);}
+    const deadline=room.startRequest?.deadline;
+    for(let i=0;i<200;i++){if(room.world.phase==='countdown')break;await sleep(25);}
+    readyRequestPass=Number.isFinite(deadline)&&app.startNow()>=deadline&&room.world.phase==='countdown';
+  }
+  for(let i=0;i<200;i++){if(room.world.phase==='countdown')break;await sleep(25);}
   const actor=[room.world,...room.world.bots][id],other=[room.world,...room.world.bots][enemy.id];
   Object.assign(room.world,{phase:'racing',supplies:[],projectiles:[]});
   Object.assign(other,{wx:-65,wz:30,speed:0,shield:0,health:3,destroyed:0,name:'Target <img>'});
@@ -92,5 +109,6 @@ export async function checkMobile(evaluate,app,room,id,sleep,capture,rotate,tap,
   await chooseCamera('3d');
   await evaluate("document.getElementById('mobile-fullscreen').click()");
   const exited=await evaluate("!document.querySelector('.race-panel').classList.contains('mobile-fullscreen')");
-  return {initialAmmo,fullscreen,overhead,default3D,closeView,portraitKartWidth,mapOption,switchPreservesGame,namedTarget,accurate,spent,immediate,feedbackDelayMs:feedback?.delay,boundedDrops,desktopSawDrop,blast,noKillBonus,stinkRefill,stinkShot,stinkWorks,stinkImmediate,dizzyExpired,refill,refillAt,marginsIgnored,landscape,landscapePass,exited,pass:initialAmmo&&fullscreen&&overhead&&default3D&&closeView&&mapOption&&switchPreservesGame&&namedTarget&&accurate&&spent&&immediate&&boundedDrops&&desktopSawDrop&&blast&&noKillBonus&&stinkRefill&&stinkShot&&stinkWorks&&stinkImmediate&&dizzyExpired&&refill&&marginsIgnored&&landscapePass&&exited};
+  return {readyRequestPass,initialAmmo,fullscreen,overhead,default3D,closeView,portraitKartWidth,mapOption,switchPreservesGame,namedTarget,accurate,spent,immediate,feedbackDelayMs:feedback?.delay,boundedDrops,desktopSawDrop,blast,noKillBonus,stinkRefill,stinkShot,stinkWorks,stinkImmediate,dizzyExpired,refill,refillAt,marginsIgnored,landscape,landscapePass,exited,pass:readyRequestPass&&initialAmmo&&fullscreen&&overhead&&default3D&&closeView&&mapOption&&switchPreservesGame&&namedTarget&&accurate&&spent&&immediate&&boundedDrops&&desktopSawDrop&&blast&&noKillBonus&&stinkRefill&&stinkShot&&stinkWorks&&stinkImmediate&&dizzyExpired&&refill&&marginsIgnored&&landscapePass&&exited};
+  }finally{clearInterval(fixtureHeartbeat);}
 }

@@ -199,8 +199,9 @@ function hud(){
   $('change-track').disabled=network.active&&!network.isHost;$('restart').disabled=network.active&&!network.isHost;
   $('start').disabled=network.active&&!network.isHost&&race.phase!=='paused'&&(network.wantsToPlay||network.readyPending||!['ready','finished'].includes(race.phase));
   if(network.active&&!network.isHost&&['ready','finished'].includes(race.phase)){
-    $('start').textContent=network.wantsToPlay?'WAITING FOR HOST ✓':network.readyPending?'SENDING…':'LET’S PLAY ↗';
-    $('message').querySelector('small').textContent=network.wantsToPlay?'You’re ready! The host has been notified.':'Let the host know you want to play.';
+    const seconds=Math.ceil((network.state.startRequest?.remainingMs??0)/1000);
+    $('start').textContent=network.wantsToPlay?`STARTING IN ${seconds}…`:network.readyPending?'SENDING…':network.playRequestRefused?'REQUEST AGAIN ↗':'LET’S PLAY ↗';
+    $('message').querySelector('small').textContent=network.wantsToPlay?'The match starts automatically unless the host refuses.':network.playRequestRefused?'The host refused. You can ask again.':'Ask to start automatically in three seconds.';
   }
   for(const button of $('drivers').children)button.disabled=!['ready','finished'].includes(race.phase);
   if(mode==='race'){

@@ -1,6 +1,9 @@
 import { damageBattle } from '../combat.js';
 
 export async function checkControls(evaluate,app,room,id,sleep,captureFlip,captureChaff,captureNotices,captureReady,captureBomb,captureStink){
+  // Simulated peers have no browser socket to send their usual session heartbeats.
+  const fixtureHeartbeat=setInterval(()=>{for(const member of room.members.values())if(member.id!==id&&!member.socket)member.lastSeen=Date.now();},1000);fixtureHeartbeat.unref();
+  try{
   const host=room.members.get(room.host);
   const guest=id===room.host?app.join(room,{name:'Ready Friend',driver:1}):room.members.get(id);
   const displayName=id===room.host?'Alex <b>':'Sam <b>';
@@ -9,30 +12,31 @@ export async function checkControls(evaluate,app,room,id,sleep,captureFlip,captu
   for(let i=0;i<100;i++){if(await evaluate("document.getElementById('start').disabled===false"))break;await sleep(25);}
   if(id!==room.host)await evaluate("document.getElementById('start').click()");
   if(id===room.host)await evaluate(`fetch('/api/ready',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer ${guest.token}'},body:JSON.stringify({ready:true})})`);
-  for(let i=0;i<100;i++){if(await evaluate(`__game.network.state.players.some(p=>p.id===${guest.id}&&p.wantsToPlay)&&(${id===room.host}||document.getElementById('start').textContent.includes('WAITING FOR HOST')&&document.getElementById('start').disabled)`))break;await sleep(25);}
+  for(let i=0;i<100;i++){if(await evaluate(`__game.network.state.players.some(p=>p.id===${guest.id}&&p.wantsToPlay)&&(${id===room.host}||document.getElementById('start').textContent.includes('STARTING IN')&&document.getElementById('start').disabled)`))break;await sleep(25);}
   const readyUI=await evaluate(`({status:__game.network.status.textContent,button:document.getElementById('start').textContent,disabled:document.getElementById('start').disabled,roster:__game.network.players.textContent})`);
-  const readyPass=Boolean(guest.wantsToPlay)&&(id===room.host?readyUI.status.includes('Ready Friend')&&readyUI.status.includes('wants to play'):readyUI.status.includes('Waiting for the host')&&readyUI.button.includes('WAITING FOR HOST')&&readyUI.disabled);
+  const readyPass=Boolean(guest.wantsToPlay)&&(id===room.host?readyUI.status.includes('Ready Friend')&&readyUI.status.includes('wants to play')&&readyUI.status.includes('Auto-start'):readyUI.status.includes('unless the host refuses')&&readyUI.button.includes('STARTING IN')&&readyUI.disabled);
   const popup=await evaluate(`(()=>{const dialog=__game.network.readyDialog,rect=dialog.getBoundingClientRect();return {open:dialog.open,text:dialog.textContent,centered:Math.abs(rect.x+rect.width/2-innerWidth/2)<40&&Math.abs(rect.y+rect.height/2-innerHeight/2)<40};})()`);
-  let popupPass=id===host.id?popup.open&&popup.centered&&popup.text.includes('Ready Friend')&&!await evaluate("Boolean(__game.network.readyDialog.querySelector('img'))"):!popup.open;
+  let popupPass=id===host.id?popup.open&&popup.centered&&popup.text.includes('Ready Friend')&&popup.text.includes('AUTO-START IN')&&popup.text.includes('REFUSE')&&!await evaluate("Boolean(__game.network.readyDialog.querySelector('img'))"):!popup.open;
   if(id===host.id){
     if(captureReady){await sleep(400);await captureReady();}
-    await evaluate('__game.network.readyLaterButton.click()');await sleep(120);
-    popupPass &&= guest.wantsToPlay&&!await evaluate('__game.network.readyDialog.open');
+    await evaluate('__game.network.readyLaterButton.click()');
   }
+  if(id!==host.id)await evaluate(`fetch('/api/control',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer ${host.token}'},body:JSON.stringify({action:'refuse-start',requestId:__game.network.state.startRequest.id})})`);
+  for(let i=0;i<100;i++){if(!room.startRequest&&!guest.wantsToPlay&&await evaluate(`!__game.network.readyDialog.open&&(${id===host.id}||__game.network.playRequestRefused&&!document.getElementById('start').disabled)`))break;await sleep(10);}
+  const refusalPass=!room.startRequest&&!guest.wantsToPlay&&(id===host.id||await evaluate("__game.network.status.textContent.includes('refused')&&!document.getElementById('start').disabled"));
+  popupPass &&= !await evaluate('__game.network.readyDialog.open');
+  if(id===host.id){await sleep(3100);popupPass &&= room.world.phase==='ready';}
   const draftPreserved=await evaluate(`__game.network.name.value===${JSON.stringify(displayName)}`);
   if(id===room.host)await evaluate('__game.network.saveNameButton.click()');
   if(id!==room.host)await evaluate("__game.network.name.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))");
   for(let i=0;i<100;i++){if(await evaluate(`__game.network.state.world.name===${JSON.stringify(displayName)}&&__game.network.nameFeedback.textContent==='Name saved.'`))break;await sleep(25);}
   const namePass=editable&&draftPreserved&&await evaluate(`__game.network.state.world.name===${JSON.stringify(displayName)}&&__game.network.players.textContent.includes(${JSON.stringify(displayName)})&&!__game.network.players.querySelector('b')`);
-  if(id===host.id){
-    await evaluate(`fetch('/api/ready',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer ${guest.token}'},body:JSON.stringify({ready:false})})`);
-    for(let i=0;i<100;i++){if(await evaluate(`!__game.network.state.players.find(p=>p.id===${guest.id}).wantsToPlay`))break;await sleep(10);}
-    await evaluate(`fetch('/api/ready',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer ${guest.token}'},body:JSON.stringify({ready:true})})`);
-    for(let i=0;i<100;i++){if(await evaluate('__game.network.readyDialog.open'))break;await sleep(10);}
-    await evaluate('__game.network.readyStartButton.click()');
-  }
-  if(id!==host.id)await evaluate(`fetch('/api/control',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer ${host.token}'},body:JSON.stringify({action:'start'})})`);
-  for(let i=0;i<100;i++){if(await evaluate("__game.network.state.world.phase==='countdown'&&!__game.network.readyDialog.open"))break;await sleep(10);}
+  if(id===host.id)await evaluate(`fetch('/api/ready',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer ${guest.token}'},body:JSON.stringify({ready:true})})`);
+  if(id!==host.id)await evaluate("document.getElementById('start').click()");
+  for(let i=0;i<100;i++){if(room.startRequest)break;await sleep(10);}
+  const deadline=room.startRequest?.deadline;
+  for(let i=0;i<500;i++){if(await evaluate("__game.network.state.world.phase==='countdown'&&!__game.network.readyDialog.open"))break;await sleep(10);}
+  const autoStartPass=Number.isFinite(deadline)&&app.startNow()>=deadline&&app.startNow()-deadline<1000&&room.world.phase==='countdown';
   popupPass &&= !await evaluate('__game.network.readyDialog.open');
   const readyCleared=[...room.members.values()].every(player=>!player.wantsToPlay)&&room.world.phase==='countdown';
   Object.assign(room.world,{phase:'racing',supplies:[]});
@@ -162,5 +166,6 @@ export async function checkControls(evaluate,app,room,id,sleep,captureFlip,captu
   for(let i=0;i<100;i++){if(await evaluate("!document.getElementById('match-results').classList.contains('hidden')&&document.querySelectorAll('#match-results tbody tr').length===2"))break;await sleep(25);}
   const leaderboard=await evaluate("[...document.querySelectorAll('#match-results tbody tr')].map(row=>[...row.cells].map(cell=>cell.textContent))");
   const resultsPass=JSON.stringify(leaderboard)===JSON.stringify([['1',other.name,'10','2'],['2',displayName+' · YOU','3','4']])&&await evaluate("document.querySelectorAll('#match-results tbody .you').length===1&&!document.querySelector('#match-results b')");
-  return {readyPass,readyCleared,readyUI,popupPass,popup,namePass,pickupKeptVulcan,turboPass,flipPass,cameraPass,remoteSawFlip,flipTrace,desktopManual,warningPass,warning,chaffPass,chaffColor:ownCloud?.color,chaffSoundCount,greenNoticePass,orbitPass,orbitRotation,orbitTrace,desktopBombPass,stinkPass,whackPass,whack,resultsPass,leaderboard,pass:readyPass&&readyCleared&&popupPass&&namePass&&pickupKeptVulcan&&turboPass&&flipPass&&desktopManual&&warningPass&&chaffPass&&greenNoticePass&&orbitPass&&desktopBombPass&&stinkPass&&whackPass&&resultsPass,trace};
+  return {readyPass,readyCleared,readyUI,popupPass,popup,refusalPass,autoStartPass,namePass,pickupKeptVulcan,turboPass,flipPass,cameraPass,remoteSawFlip,flipTrace,desktopManual,warningPass,warning,chaffPass,chaffColor:ownCloud?.color,chaffSoundCount,greenNoticePass,orbitPass,orbitRotation,orbitTrace,desktopBombPass,stinkPass,whackPass,whack,resultsPass,leaderboard,pass:readyPass&&readyCleared&&popupPass&&refusalPass&&autoStartPass&&namePass&&pickupKeptVulcan&&turboPass&&flipPass&&desktopManual&&warningPass&&chaffPass&&greenNoticePass&&orbitPass&&desktopBombPass&&stinkPass&&whackPass&&resultsPass,trace};
+  }finally{clearInterval(fixtureHeartbeat);}
 }
