@@ -48,7 +48,7 @@ for(const [type,icon,label] of [['hedgehog','🦔','HEDGEHOGS'],['missile','🚀
   const count=document.createElement('b');count.id=`${type}-count`;const name=document.createElement('span');name.className='ammo-label';name.textContent=label;
   button.append(symbol,count,name);button.onclick=()=>type==='boost'?turbo():network.active?network.action('select',type):selectItem(race,type);ammoRack.append(button);ammoCards.set(type,{button,count,label,name});
 }
-document.querySelector('.item-box').prepend(ammoRack);document.querySelector('.item-box small').textContent='SPACE TO FIRE · TAB / Q WEAPONS · B TURBO';
+document.querySelector('.item-box').prepend(ammoRack);document.querySelector('.item-box small').textContent='SPACE TO FIRE · TAB / Q WEAPONS · X TURBO';
 const vulcanStatus=document.createElement('div');vulcanStatus.className='vulcan-status hidden';const vulcanTitle=document.createElement('strong'),vulcanTime=document.createElement('progress');vulcanTime.max=VULCAN_DURATION;vulcanTime.setAttribute('aria-label','Hedgehog Vulcan seconds remaining');vulcanStatus.append(vulcanTitle,vulcanTime);document.querySelector('.item-box').prepend(vulcanStatus);
 const finishFlash=document.createElement('div');finishFlash.className='finish-flash hidden';finishFlash.setAttribute('role','status');finishFlash.setAttribute('aria-live','polite');
 const finishTitle=document.createElement('strong'),finishDetail=document.createElement('span');finishFlash.append(finishTitle,finishDetail);document.querySelector('.viewport').append(finishFlash);
@@ -117,14 +117,14 @@ function hud(){
   if(vulcanVisible)routeHint.textContent=`${race.vulcan<=3?'VULCAN ENDING':'VULCAN ACTIVE'} · ${race.vulcan.toFixed(1)}s`;
   vulcanStatus.classList.toggle('hidden',!vulcan||race.phase!=='racing');vulcanTitle.textContent=`HEDGEHOG VULCAN · ${(race.vulcan??0).toFixed(1)}s`;vulcanTime.value=race.vulcan??0;
   if(vulcan&&race.item==='hedgehog')$('item-name').textContent='VULCAN · HOLD SPACE TO SPRAY';
-  for(const [type,card] of ammoCards){const count={hedgehog:race.ammo,missile:race.missiles,boost:race.turbos}[type],powered=vulcan&&type==='hedgehog',boost=type==='boost';card.count.textContent=powered?'∞':count;card.name.textContent=powered?'VULCAN':boost?'B · TURBO':card.label;card.button.disabled=(!powered&&count===0)||race.phase==='finished'||boost&&(race.phase!=='racing'||race.destroyed>0||race.finishCountdown!==null||race.boost>0);card.button.classList.toggle('selected',!boost&&race.item===type);card.button.classList.toggle('vulcan',powered);card.button.setAttribute('aria-pressed',String(!boost&&race.item===type));card.button.setAttribute('aria-label',boost?`Use turbo, ${count} charges remaining. Keyboard B.`:`${powered?'Unlimited Vulcan hedgehogs':`${count} ${card.label.toLowerCase()}`}${race.item===type?', selected':''}`);}
+  for(const [type,card] of ammoCards){const count={hedgehog:race.ammo,missile:race.missiles,boost:race.turbos}[type],powered=vulcan&&type==='hedgehog',boost=type==='boost';card.count.textContent=powered?'∞':count;card.name.textContent=powered?'VULCAN':boost?'X · TURBO':card.label;card.button.disabled=(!powered&&count===0)||race.phase==='finished'||boost&&(race.phase!=='racing'||race.destroyed>0||race.finishCountdown!==null||race.boost>0);card.button.classList.toggle('selected',!boost&&race.item===type);card.button.classList.toggle('vulcan',powered);card.button.setAttribute('aria-pressed',String(!boost&&race.item===type));card.button.setAttribute('aria-label',boost?`Use turbo, ${count} charges remaining. Keyboard X.`:`${powered?'Unlimited Vulcan hedgehogs':`${count} ${card.label.toLowerCase()}`}${race.item===type?', selected':''}`);}
   if(race.phase==='countdown'){const n=Math.ceil(race.countdown);if(n!==lastCount){tone(300+n*100);lastCount=n;}$('message').querySelector('h2').textContent=n;}
   if(lastPhase===race.phase)return;lastPhase=race.phase;
   const battle=mode==='combat',controls=document.querySelectorAll('.control');brakeButton.classList.toggle('hidden',!battle);
   controls[0].querySelector('span').textContent=battle?'WASD works · ↓ / S reverses':'WASD works, too';
   controls[1].querySelector('kbd').textContent='SHIFT';controls[1].querySelector('strong').textContent=battle?'Slide into a U-turn':'Drift the corners';controls[1].querySelector('span').textContent=battle?'Hold + steer, release to launch':'Hold + steer, release to boost';
-  controls[2].querySelector('span').textContent=battle?'Hold to fire · Q weapons · B turbo · C chaff':'Space fires · Q weapons · B turbo';controls[3].querySelector('span').textContent=battle?'Pause your battle':'Pause your race';
-  canvas.setAttribute('aria-label',battle?'Combat arena. Arrow keys drive, Shift and steering drift into a U-turn, release Shift to boost. Hold Space to shoot, Tab or Q changes weapons, B uses turbo, C releases chaff to distract missiles.':'Kart racing track. Arrow keys drive, Shift drifts, Space fires, Tab or Q changes weapons, B uses turbo.');
+  controls[2].querySelector('span').textContent=battle?'Hold to fire · Q weapons · X turbo · C chaff':'Space fires · Q weapons · X turbo';controls[3].querySelector('span').textContent=battle?'Pause your battle':'Pause your race';
+  canvas.setAttribute('aria-label',battle?'Combat arena. Arrow keys drive, Shift and steering drift into a U-turn, release Shift to boost. Hold Space to shoot, Tab or Q changes weapons, X uses turbo, C releases chaff to distract missiles.':'Kart racing track. Arrow keys drive, Shift drifts, Space fires, Tab or Q changes weapons, X uses turbo.');
   $('map').setAttribute('aria-label',battle?'Arena map with cover and fighter positions':'Track map with alternate routes and racer positions');
   if(['ready','countdown','finished','paused'].includes(race.phase))finishFlash.classList.add('hidden');
   if(race.phase==='racing'&&race.finishRank!==null)finishFlash.classList.remove('hidden');
@@ -160,7 +160,7 @@ window.addEventListener('keydown',e=>{
   if(['arrowup','arrowdown','arrowleft','arrowright',' ','shift'].includes(key))e.preventDefault();
   keys.add(key);if(e.repeat)return;
   if(network.active)network.input();
-  switch(key){case 'enter':start();break;case 'escape':case 'p':pause();break;case ' ':useWeapon();break;case 'q':switchWeapon();break;case 'b':if(!e.ctrlKey&&!e.metaKey&&!e.altKey)turbo();break;case 'c':if(!e.ctrlKey&&!e.metaKey&&!e.altKey)chaff();break;}
+  switch(key){case 'enter':start();break;case 'escape':case 'p':pause();break;case ' ':useWeapon();break;case 'q':switchWeapon();break;case 'x':if(!e.ctrlKey&&!e.metaKey&&!e.altKey)turbo();break;case 'c':if(!e.ctrlKey&&!e.metaKey&&!e.altKey)chaff();break;}
 });
 window.addEventListener('keyup',e=>{keys.delete(e.key.toLowerCase());if(network.active)network.input();});window.addEventListener('blur',()=>{keys.clear();if(['racing','countdown'].includes(race.phase))pause();});document.addEventListener('visibilitychange',()=>{if(document.hidden&&['racing','countdown'].includes(race.phase))pause();});
 for(const event of ['pointerdown','keydown'])window.addEventListener(event,()=>{if(network.active)audio.unlock().catch(()=>{});},{once:true});

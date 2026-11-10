@@ -21,7 +21,7 @@ export async function checkControls(evaluate,app,room,id,sleep){
     game.controlsTrace=[];game.controlsDone=false;game.keys.add('arrowup');
     game.network.render=dt=>{
       const time=(performance.now()-start)/1000;let request=false;
-      if(!boosted&&time>=.1){window.dispatchEvent(new KeyboardEvent('keydown',{key:'b'}));boosted=true;request=true;}
+      if(!boosted&&time>=.1){window.dispatchEvent(new KeyboardEvent('keydown',{key:'x'}));boosted=true;request=true;}
       if(!fired&&time>=.3){window.dispatchEvent(new KeyboardEvent('keydown',{key:' '}));window.dispatchEvent(new KeyboardEvent('keyup',{key:' '}));fired=true;}
       const view=render(dt);
       game.controlsTrace.push({time,dt,request,boost:view.boost,speed:view.speed,turbos:view.turbos,item:view.item,vulcanShot:view.projectiles.some(p=>p.owner===view.id&&p.vulcan),turboSelected:document.getElementById('ammo-boost').classList.contains('selected')});

@@ -152,7 +152,7 @@ export function tick(r, keys, dt) {
   const rowS = row * 1800 + 1000;
   if (row >= 0 && before <= rowS && r.s >= rowS && row !== r.pickup && [-.65, 0, .65].some(x => Math.abs(x - r.x) < .23)) {
     r.pickup = row; const lane=[-.65,0,.65].find(x=>Math.abs(x-r.x)<.23),kind=pickupType(row,lane);if(kind!=='boost')r.item=kind;
-    switch(kind){case 'hedgehog':r.ammo=Math.min(6,r.ammo+3);notify(r,'+3 HEDGEHOGS · SPACE TO FIRE');break;case 'boost':r.turbos=Math.min(3,r.turbos+1);notify(r,'TURBO CELL · B TO BOOST');break;case 'missile':r.missiles=Math.min(3,r.missiles+1);notify(r,'MISSILE ARMED · SPACE TO DESTROY');break;}effect(r,'pickup');
+    switch(kind){case 'hedgehog':r.ammo=Math.min(6,r.ammo+3);notify(r,'+3 HEDGEHOGS · SPACE TO FIRE');break;case 'boost':r.turbos=Math.min(3,r.turbos+1);notify(r,'TURBO CELL · X TO BOOST');break;case 'missile':r.missiles=Math.min(3,r.missiles+1);notify(r,'MISSILE ARMED · SPACE TO DESTROY');break;}effect(r,'pickup');
   }
   for (const shot of r.projectiles) {
     const previous=shot.s;shot.trail.push({s:shot.s,x:shot.x,height:shot.height,route:shot.route});if(shot.trail.length>(shot.kind==='missile'?30:12))shot.trail.shift();
