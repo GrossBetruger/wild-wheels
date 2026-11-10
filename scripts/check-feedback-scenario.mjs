@@ -1,3 +1,15 @@
+export function projectileMotion(trace){
+  const errors=[];let backwardFrames=0;
+  for(let i=1;i<trace.length;i++)for(const shot of trace[i].shots){
+    const previous=trace[i-1].shots.find(old=>old.kind===shot.kind);if(!previous)continue;
+    // Projectiles use real time, even when gameplay dt is capped at 50 ms.
+    const travel=shot.wx-previous.wx,expected=(shot.kind==='missile'?70:90)*(trace[i].time-trace[i-1].time);
+    if(travel<-.01)backwardFrames++;
+    errors.push(Math.abs(travel-expected));
+  }
+  errors.sort((a,b)=>a-b);
+  return {projectileBackwardFrames:backwardFrames,projectileStepErrorP95:+(errors[Math.floor(errors.length*.95)]??0).toFixed(4)};
+}
 export async function checkFeedback(evaluate,room,playerId,sleep){
   const actor=[room.world,...room.world.bots][playerId];
   Object.assign(actor,{ammo:5,missiles:0,item:'hedgehog',fireCooldown:0});
@@ -28,13 +40,6 @@ export async function checkFeedback(evaluate,room,playerId,sleep){
   const shotDelays=requests.map(request=>({kind:request.kind,delayMs:delay(trace.find(frame=>frame.time>=request.time&&frame.shots.some(shot=>shot.kind===request.kind))?.time,request.time)}));
   const pickupHiddenMs=delay(trace.find(frame=>frame.hidden)?.time,contact),pickupInventoryMs=delay(trace.find(frame=>frame.missiles===1)?.time,contact),pickupSoundMs=delay(sounds.find(sound=>sound.type==='pickup')?.time,contact);
   const duplicateShots=trace.some(frame=>['hedgehog','missile'].some(kind=>frame.shots.filter(shot=>shot.kind===kind).length>1));
-  const stepErrors=[];let backwardFrames=0;
-  for(let i=1;i<trace.length;i++)for(const shot of trace[i].shots){
-    const previous=trace[i-1].shots.find(old=>old.kind===shot.kind);if(!previous)continue;
-    const travel=shot.wx-previous.wx,expected=(shot.kind==='missile'?70:90)*trace[i].dt;
-    if(travel<-.01)backwardFrames++;
-    stepErrors.push(Math.abs(travel-expected));
-  }
-  stepErrors.sort((a,b)=>a-b);const projectileStepErrorP95=+(stepErrors[Math.floor(stepErrors.length*.95)]??0).toFixed(4);
+  const {projectileBackwardFrames:backwardFrames,projectileStepErrorP95}=projectileMotion(trace);
   return {shotDelays,pickupHiddenMs,pickupInventoryMs,pickupSoundMs,duplicateShots,projectileBackwardFrames:backwardFrames,projectileStepErrorP95,pickupSounds:sounds.filter(sound=>sound.type==='pickup').length,pass:shotDelays.length===2&&shotDelays.every(shot=>shot.delayMs!==null&&shot.delayMs<=20)&&[pickupHiddenMs,pickupInventoryMs,pickupSoundMs].every(value=>value!==null&&value<=20)&&!duplicateShots&&backwardFrames===0&&projectileStepErrorP95<=.15&&sounds.filter(sound=>sound.type==='pickup').length===1,trace,requests,sounds};
 }
