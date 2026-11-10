@@ -8,7 +8,7 @@ import { encodeSnapshot } from './wire.js';
 
 const KEYS=new Set(['arrowup','arrowdown','arrowleft','arrowright','w','a','s','d','shift',' ']);
 const PLAYER_COLORS=['#8456cf','#df7053','#67a99c','#edb84f','#777cbb','#db8daf'];
-const FIELDS='id driver color wx wz heading motionHeading cameraHeading speed health kills deaths killStreak vulcan chaff chaffCooldown destroyed shield ammo missiles turbos item fireCooldown boost drift wasDrifting yaw spin celebrate stun voiceCooldown human name notice noticeTime inactive somersault somersaultCooldown somersaultCameraStart bomber bombAmmo bombReload'.split(' ');
+const FIELDS='id driver color wx wz heading motionHeading cameraHeading speed health kills deaths killStreak vulcan chaff chaffCooldown destroyed shield ammo missiles turbos item fireCooldown boost drift wasDrifting yaw spin celebrate stun voiceCooldown human name notice noticeTime inactive somersault somersaultCooldown somersaultCameraStart bomber bombAmmo bombReload stinkAmmo dizzy'.split(' ');
 const actorData=actor=>Object.fromEntries(FIELDS.map(key=>[key,actor[key]]));
 const problem=(status,message)=>Object.assign(new Error(message),{status});
 export function allocateRoomCode(rooms){
@@ -48,7 +48,7 @@ export class Multiplayer {
   }
   controls(member,body){
     if(!Number.isSafeInteger(body.sequence)||body.sequence<0||!Array.isArray(body.keys)||body.keys.length>10||body.keys.some(k=>!KEYS.has(k))||!Array.isArray(body.actions)||body.actions.length>8)throw problem(400,'Invalid controls.');
-    for(const action of body.actions)if(!action||!['fire','turbo','somersault','chaff','cycle','select','bomb'].includes(action.type)||(action.type==='select'&&!['hedgehog','missile'].includes(action.item))||(action.type==='bomb'&&!validBombTarget(member.room.world,action)))throw problem(400,'Invalid action.');
+    for(const action of body.actions)if(!action||!['fire','turbo','somersault','chaff','cycle','select','bomb'].includes(action.type)||(action.type==='select'&&!['hedgehog','missile'].includes(action.item))||(action.type==='bomb'&&(!validBombTarget(member.room.world,action)||(action.kind!==undefined&&!['abomb','stink'].includes(action.kind)))))throw problem(400,'Invalid action.');
     for(const action of body.actions)if(action.id!==undefined&&(!Number.isSafeInteger(action.id)||action.id<0||!Number.isSafeInteger(action.afterMove)||action.afterMove< -1||action.afterMove>(member.acceptedMove??-1)+128))throw problem(400,'Invalid action sequence.');
     if(body.epoch!==undefined&&body.epoch!==member.room.world.soundEpoch)return;
     if(body.moves!==undefined){

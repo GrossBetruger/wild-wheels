@@ -99,7 +99,8 @@ try{
       const captureNotices=process.argv.includes('--notice-screenshots')?captureScene('notices'):undefined;
       const captureReady=process.argv.includes('--ready-screenshots')?captureScene('ready'):undefined;
       const captureBomb=process.argv.includes('--bomb-screenshots')?captureScene('bomb'):undefined;
-      const result={profile:profile.name,run:profile.run,...await checkControls(evaluate,app.multiplayer,room,identity.you,sleep,captureFlip,captureChaff,captureNotices,captureReady,captureBomb)};
+      const captureStink=process.argv.includes('--stink-screenshots')?captureScene('stink'):undefined;
+      const result={profile:profile.name,run:profile.run,...await checkControls(evaluate,app.multiplayer,room,identity.you,sleep,captureFlip,captureChaff,captureNotices,captureReady,captureBomb,captureStink)};
       results.push(result);console.log(JSON.stringify({...result,trace:undefined,flipTrace:undefined,orbitTrace:undefined}));
       await evaluate("document.querySelector('.viewport').scrollIntoView({block:'center'})");
       const screenshot=await call('Page.captureScreenshot',{format:'png'},session);

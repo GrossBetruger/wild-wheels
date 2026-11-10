@@ -1,6 +1,6 @@
 import { sampleTrack, branches } from './track.js';
 import { LENGTH, drivers, pickupType } from './engine.js';
-import { arenas, combatPose, somersaultPose, BOMB_FALL_TIME, BOMB_RADIUS } from './combat.js';
+import { arenas, combatPose, somersaultPose, BOMB_FALL_TIME, BOMB_RADIUS, STINK_RADIUS, DIZZY_DURATION } from './combat.js';
 import { kartNameplates } from './nameplates.js';
 import { bomberCamera } from './mobile.js';
 const rgb=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255);
@@ -229,7 +229,8 @@ export class Renderer {
       const target=r.bots.find(actor=>!actor.bomber&&!actor.inactive&&!actor.destroyed);
       this.bomberFocus??={wx:target?.wx??0,wz:target?.wz??0};this.bomberElapsed=r.elapsed;
     }
-    const p=combatPose(r),cx=Math.sin(r.cameraHeading),cz=Math.cos(r.cameraHeading),overview=r.bomber?bomberCamera(width,height,arenas[r.arena].size,this.bomberView??'3d',this.bomberFocus,this.bomberZoom??1):null,eye=overview?.eye??[p.x-cx*17,10+(r.destroyed?5:0),p.z-cz*17],view=overview?.matrix??cameraMatrix(eye,[p.x+cx*18,1.5,p.z+cz*18],width/height,r.boost>0?1.2:r.wasDrifting?1.13:1.07);
+    const wobble=r.dizzy>0&&!matchMedia('(prefers-reduced-motion: reduce)').matches?Math.sin((DIZZY_DURATION-r.dizzy)*8)*.06:0;
+    const p=combatPose(r),cx=Math.sin(r.cameraHeading+wobble),cz=Math.cos(r.cameraHeading+wobble),overview=r.bomber?bomberCamera(width,height,arenas[r.arena].size,this.bomberView??'3d',this.bomberFocus,this.bomberZoom??1):null,eye=overview?.eye??[p.x-cx*17,10+(r.destroyed?5:0),p.z-cz*17],view=overview?.matrix??cameraMatrix(eye,[p.x+cx*18,1.5,p.z+cz*18],width/height,r.boost>0?1.2:r.wasDrifting?1.13:1.07);
     this.bomberMatrix=overview?.matrix??null;
     gl.uniform1f(this.fogScale,overview?.fogScale??1);
     this.nameplates=kartNameplates(r,view,eye);
@@ -246,6 +247,7 @@ export class Renderer {
       if(overview){m.at(pose.x,.08,pose.z);m.disc(0,0,0,3.6,3.6,actor.color??drivers[actor.driver].color);}
       const jump=somersaultPose(actor);
       this.kart(m,pose,actor.color??drivers[actor.driver].color,actor.driver,0,0,actor.boost>0,time,actor.celebrate,jump);
+      if(actor.dizzy>0)for(let i=0;i<4;i++){const angle=time*3+i*Math.PI/2;m.at(pose.x+Math.sin(angle)*3.2,6.8+Math.sin(angle*2)*.5,pose.z+Math.cos(angle)*3.2,angle);m.box(0,0,0,1.2,.22,.3,'#fff08b');m.box(0,0,0,.3,.22,1.2,'#fff08b');this.glow.at(m.origin[0],m.origin[1],m.origin[2]);this.glow.particle(0,0,0,.8,[.7,.6,.05]);}
       if(actor.vulcan>0){
         const pulse=.8+.2*Math.sin(time*4);this.glow.at(pose.x,.15,pose.z);
         for(let i=0;i<32;i++){const a=i/32*Math.PI*2,b=(i+1)/32*Math.PI*2;this.glow.quad([Math.cos(a)*3.3,0,Math.sin(a)*3.3],[Math.cos(b)*3.3,0,Math.sin(b)*3.3],[Math.cos(b)*3.65,0,Math.sin(b)*3.65],[Math.cos(a)*3.65,0,Math.sin(a)*3.65],[.55*pulse,.23*pulse,.02]);}
@@ -261,14 +263,16 @@ export class Renderer {
     for(const supply of r.supplies){if(supply.cooldown>0)continue;const pose={x:supply.wx,z:supply.wz,tx:0,tz:1},bob=Math.sin(time*2)*.3;m.at(pose.x,.1,pose.z);m.disc(0,0,0,3,3,{missile:'#c65d51',hedgehog:'#bb9c68',boost:'#d4bc55',health:'#78b88c'}[supply.kind]);switch(supply.kind){case 'missile':this.missile(m,pose,2+bob,time,1.5);break;case 'hedgehog':this.hedgehog(m,pose.x,1.5+bob,pose.z,1.1,time);break;case 'boost':m.at(pose.x,1+bob,pose.z,time);m.box(0,0,0,1.2,2,.8,'#f1cc62');break;case 'health':m.at(pose.x,1+bob,pose.z,time);m.box(0,.7,0,2.4,.7,.5,'#d6f4c6');m.box(0,0,0,.7,2.4,.5,'#d6f4c6');break;}}
     for(const shot of r.projectiles){const pose={x:shot.wx,z:shot.wz,tx:Math.sin(shot.heading),tz:Math.cos(shot.heading)};if(shot.kind==='missile'){this.missile(m,pose,shot.height);this.glow.at(shot.wx,shot.height,shot.wz,shot.heading);this.glow.flame(0,0,-1,.25,2,[.5,.17,.03],time);}if(shot.kind==='hedgehog')this.hedgehog(m,shot.wx,shot.height,shot.wz,shot.vulcan?.45:.6,time*15);for(let i=0;i<shot.trail.length;i+=3){const t=shot.trail[i],size=.12+(1-i/shot.trail.length)*.5;if(shot.vulcan){this.glow.at(t.wx,t.height,t.wz);this.glow.particle(0,0,0,.32,[.7,.35,.03]);continue;}m.at(t.wx,t.height,t.wz);m.ball(0,0,0,size,size,size,shot.kind==='missile'?'#c5c6c8':'#d7bf85',5,3);}}
     for(const bomb of r.bombs??[]){
-      const progress=Math.min(1,bomb.age/BOMB_FALL_TIME),height=65*(1-progress*progress);
-      m.at(bomb.wx,.15,bomb.wz);for(let i=0;i<40;i++){const a=i/40*Math.PI*2,b=(i+.65)/40*Math.PI*2,inner=BOMB_RADIUS-.7,outer=BOMB_RADIUS;m.quad([Math.sin(a)*inner,0,Math.cos(a)*inner],[Math.sin(a)*outer,0,Math.cos(a)*outer],[Math.sin(b)*outer,0,Math.cos(b)*outer],[Math.sin(b)*inner,0,Math.cos(b)*inner],'#ff6848');}
+      const progress=Math.min(1,bomb.age/BOMB_FALL_TIME),height=65*(1-progress*progress),stink=bomb.kind==='stink',radius=stink?STINK_RADIUS:BOMB_RADIUS;
+      m.at(bomb.wx,.15,bomb.wz);for(let i=0;i<40;i++){const a=i/40*Math.PI*2,b=(i+.65)/40*Math.PI*2,inner=radius-.7,outer=radius;m.quad([Math.sin(a)*inner,0,Math.cos(a)*inner],[Math.sin(a)*outer,0,Math.cos(a)*outer],[Math.sin(b)*outer,0,Math.cos(b)*outer],[Math.sin(b)*inner,0,Math.cos(b)*inner],stink?'#a8db63':'#ff6848');}
       m.box(0,0,0,4,.15,.5,'#fff0b3');m.box(0,0,0,.5,.15,4,'#fff0b3');
       const scale=overview?.halfHeight?1+(1-progress)*.8:1;
+      if(stink){m.at(bomb.wx,height,bomb.wz,bomb.age*3);m.box(0,-1.8,0,2.7*scale,3.6*scale,2.7*scale,'#83ae4f');m.box(0,1.8*scale,0,1.8*scale,.6,1.8*scale,'#dedb88');continue;}
       m.at(bomb.wx,height,bomb.wz,bomb.age*3);m.ball(0,0,0,2.2*scale,3.4*scale,2.2*scale,'#39334e',10,6);m.box(0,2.3*scale,0,5*scale,.5,.7*scale,'#ffdb69');m.box(0,2.3*scale,0,.7*scale,.5,5*scale,'#ffdb69');
       this.glow.at(bomb.wx,height+3,bomb.wz);this.glow.particle(0,0,0,3,[.8,.35,.03]);
     }
     for(const effect of r.effects){if(effect.type==='abomb'){this.atomicExplosion(m,effect);continue;}if(effect.type==='explosion'){this.explosion(m,effect);continue;}for(let i=0;i<10;i++){const a=i*2.4,t=effect.age;m.at(effect.wx+Math.cos(a)*t*8,1+t*4,effect.wz+Math.sin(a)*t*8);m.ball(0,0,0,.12,.12,.12,'#f4dc8b',5,3);}}
+    for(const cloud of r.stinkClouds??[]){const fade=Math.min(1,(cloud.life-cloud.age)/.7);for(let i=0;i<15;i++){const angle=i*2.399+cloud.age*.2,radius=2+(i%5)*2.6,x=cloud.wx+Math.sin(angle)*radius,z=cloud.wz+Math.cos(angle)*radius,y=1+(i%3)+Math.sin(cloud.age*2+i)*.7;this.smoke.at(x,y,z);this.smoke.particle(0,0,0,(7+cloud.age*2)*Math.sqrt(fade),[.5,.7,.23]);this.glow.at(x,y+.4,z);this.glow.particle(0,0,0,.25*fade,[.15,.3,.04]);}}
     for(const cloud of r.chaffClouds){
       const t=cloud.age,fade=Math.min(1,(cloud.life-t)/1.4),expansion=1-Math.exp(-t*2.5);
       const tint=rgb(cloud.color??'#a8cde1'),flake=tint.map(c=>.15+c*.85),highlight=tint.map(c=>.65+c*.35),smoke=tint.map(c=>.45+c*.45);

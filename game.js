@@ -24,7 +24,7 @@ const qualitySelect=document.createElement('select');qualitySelect.setAttribute(
 const fpsMeter=document.createElement('span');fpsMeter.id='render-fps';fpsMeter.textContent='Measuring FPS…';fpsMeter.title=renderer.gpuName;renderControls.append(graphicsLabel,fpsMeter);if(renderer.softwareGPU){const warning=document.createElement('span');warning.textContent='SOFTWARE GPU';warning.title='Chrome is rendering graphics without hardware acceleration.';renderControls.append(warning);}document.querySelector('.race-panel').append(renderControls);
 const buildLabel=document.createElement('span');buildLabel.id='build-version';buildLabel.textContent='BUILD …';buildLabel.title='Compare this build ID on both computers after refreshing.';renderControls.append(buildLabel);
 fetch('/build.json',{cache:'no-store',signal:AbortSignal.timeout(4000)}).then(response=>{if(!response.ok)throw new Error();return response.json();}).then(info=>{buildLabel.textContent=`BUILD ${info.build}`;}).catch(()=>{buildLabel.textContent='BUILD UNAVAILABLE';});
-const newGame=()=>mode==='combat'?(mobile?equipBomber(createBattle(selected,track)):createBattle(selected,track)):createRace(selected,track);
+const newGame=()=>{if(mobile)bomberWeapon='abomb';return mode==='combat'?(mobile?equipBomber(createBattle(selected,track)):createBattle(selected,track)):createRace(selected,track);};
 const useWeapon=()=>network.active?network.action('fire'):mode==='combat'?fireBattle(race):useItem(race);
 const switchWeapon=()=>network.active?network.action('cycle'):cycleItem(race);
 const chaff=()=>network.active?network.action('chaff'):mode==='combat'?releaseChaff(race):false;
@@ -48,13 +48,17 @@ for(const [value,label] of [['3d','3D VIEW'],['map','2D MAP']]){
 }
 document.querySelector('.viewport').append(cameraSwitch);
 const mobileScreenButton=document.createElement('button');mobileScreenButton.id='mobile-fullscreen';mobileScreenButton.textContent='FULL SCREEN';mobileScreenButton.onclick=()=>mobileImmersive?exitMobileFullscreen():enterMobileFullscreen();
-const bombHud=document.createElement('div');bombHud.id='bomb-hud';bombHud.className='bomb-hud';const bombCount=document.createElement('strong'),bombRefill=document.createElement('span');bombCount.id='bomb-count';bombRefill.id='bomb-refill';bombCount.textContent='2 A-BOMBS';bombRefill.textContent='+1 / 5s OR KILL';bombHud.append(bombCount,bombRefill);
+let bomberWeapon='abomb';
+const bombHud=document.createElement('div');bombHud.id='bomb-hud';bombHud.className='bomb-hud';
+const bombCount=document.createElement('strong'),bombRefill=document.createElement('span'),stinkCount=document.createElement('strong'),stinkRefill=document.createElement('span');bombCount.id='bomb-count';bombRefill.id='bomb-refill';stinkCount.id='stink-count';stinkRefill.id='stink-refill';bombCount.textContent='2 A-BOMBS';bombRefill.textContent='+1 / 10s';stinkCount.textContent='0 STINK';stinkRefill.textContent='NEXT IN 5s';
+const bombChoice=document.createElement('button'),stinkChoice=document.createElement('button');
+for(const [button,kind,title,count,refill] of [[bombChoice,'abomb','A-bombs',bombCount,bombRefill],[stinkChoice,'stink','Stinkbombs',stinkCount,stinkRefill]]){button.type='button';button.id=`bomber-weapon-${kind}`;button.className='bomb-choice';button.setAttribute('aria-label',`Select ${title}`);button.onclick=()=>{bomberWeapon=kind;};button.append(count,refill);bombHud.append(button);}
 mobileHint.textContent='Tap to bomb · Drag to explore · + / − to zoom.';mobilePanel.append(bombHud,mobileHint,mobileScreenButton);racePanel.append(mobilePanel);
 let bomberPointer=null;
 function dropAt(clientX,clientY){
   const target=bombTarget(clientX,clientY,canvas.getBoundingClientRect(),arenas[race.arena].size,renderer.bomberView,renderer.bomberFocus,renderer.bomberZoom??1);if(!target)return;
-  const dropped=network.active?network.action('bomb',target):dropBomb(race,race,target);
-  if(!dropped){mobileHint.textContent='Rearming… +1 A-bomb every 5 seconds or kill.';return;}
+  target.kind=bomberWeapon;const dropped=network.active?network.action('bomb',target):dropBomb(race,race,target);
+  if(!dropped){mobileHint.textContent='Rearming… A-bombs every 10s, stinkbombs in between.';return;}
   mobileHint.textContent='Bomb away! Tap another target when ready.';
 }
 canvas.addEventListener('pointerdown',event=>{
@@ -90,6 +94,7 @@ function resetMap(){race=newGame();lastPhase='';lastCount=-1;keys.clear();update
 function chooseMap(index){if(index===track)return;if(network.active){if(network.isHost)network.control('arena',index);return;}track=index;selectedMaps[mode]=index;resetMap();}
 const network=new NetworkGame({anchor:modeSwitch,keys,role:mobile?'bomber':'driver',driver:()=>selected,arena:()=>track,unlock:()=>audio.unlock(),sound:type=>audio.event(type),onState:world=>{
   const changed=mode!=='combat'||track!==world.arena;
+  if(race.soundEpoch!==world.soundEpoch)bomberWeapon='abomb';
   const driverChanged=selected!==world.driver;
   race=world;mode='combat';track=world.arena;if(changed){lastPhase='';updateMapLabels();}
   document.querySelector('.race-meta').textContent=`10 KILLS · 3 MIN · ${network.state.players.length+network.state.bots} FIGHTERS`;
@@ -109,6 +114,7 @@ function showResults(){
 }
 const routeHint=document.createElement('div');routeHint.className='route-hint';document.querySelector('.viewport').append(routeHint);
 const nameplateLayer=document.createElement('div');nameplateLayer.className='kart-nameplates';nameplateLayer.setAttribute('aria-hidden','true');document.querySelector('.viewport').append(nameplateLayer);const nameplateNodes=new Map();
+const dizzyNotice=document.createElement('div');dizzyNotice.id='dizzy-notice';dizzyNotice.className='dizzy-notice hidden';dizzyNotice.setAttribute('role','status');document.querySelector('.viewport').append(dizzyNotice);
 const driftMeter=document.createElement('div');driftMeter.className='drift-meter hidden';const driftLabel=document.createElement('strong'),driftCharge=document.createElement('progress'),driftHelp=document.createElement('small');driftCharge.max=1.2;driftCharge.setAttribute('aria-label','Drift boost charge');driftHelp.textContent='RELEASE DRIFT TO BOOST';driftMeter.append(driftLabel,driftCharge,driftHelp);document.querySelector('.viewport').append(driftMeter);
 const brakeButton=document.createElement('button');brakeButton.dataset.key='arrowdown';brakeButton.textContent='BRAKE';brakeButton.className='hidden';document.querySelector('.touch-controls').append(brakeButton);
 const chaffButton=document.createElement('button');chaffButton.id='release-chaff';chaffButton.className='chaff-button hidden';chaffButton.type='button';chaffButton.onclick=chaff;document.querySelector('.viewport').append(chaffButton);
@@ -163,8 +169,15 @@ let scoreboardKey='';
 function put(id,value){const node=$(id);if(node.textContent!==String(value))node.textContent=value;}
 function hud(){
   document.querySelector('.viewport').classList.toggle('bomber-view',Boolean(race.bomber));
-  if(race.bomber){put('bomb-count',`${race.bombAmmo} A-BOMB${race.bombAmmo===1?'':'S'}`);bombHud.classList.toggle('empty',race.bombAmmo<1);put('bomb-refill',race.phase==='racing'&&race.finishCountdown===null?`+1 IN ${Math.max(0,BOMB_RECHARGE-race.bombReload).toFixed(1)}s / KILL`:'+1 / 5s OR KILL');}
-  if(race.bomber&&race.bombAmmo>0&&mobileHint.textContent.startsWith('Rearming'))mobileHint.textContent='Ready! Tap the arena to drop an A-bomb.';
+  if(race.bomber){
+    put('bomb-count',`${race.bombAmmo} A-BOMB${race.bombAmmo===1?'':'S'}`);put('stink-count',`${race.stinkAmmo} STINK`);
+    const live=race.phase==='racing'&&race.finishCountdown===null,stinkWait=(race.bombReload<5?5:15)-race.bombReload;
+    put('bomb-refill',live?`+1 IN ${Math.max(0,BOMB_RECHARGE-race.bombReload).toFixed(1)}s`:'+1 / 10s');put('stink-refill',live?`+1 IN ${stinkWait.toFixed(1)}s`:'BETWEEN A-BOMBS');
+    bombChoice.setAttribute('aria-pressed',String(bomberWeapon==='abomb'));stinkChoice.setAttribute('aria-pressed',String(bomberWeapon==='stink'));bombChoice.classList.toggle('empty',race.bombAmmo<1);stinkChoice.classList.toggle('empty',race.stinkAmmo<1);
+    if(race[bomberWeapon==='stink'?'stinkAmmo':'bombAmmo']>0&&mobileHint.textContent.startsWith('Rearming'))mobileHint.textContent='Ready! Tap the arena to drop your selected bomb.';
+  }
+  const dizzy=!race.bomber&&race.phase==='racing'&&race.destroyed<=0&&race.dizzy>0;
+  dizzyNotice.classList.toggle('hidden',!dizzy);document.querySelector('.viewport').classList.toggle('dizzy-active',dizzy);if(dizzy)put('dizzy-notice',`✦ DIZZY · ${race.dizzy.toFixed(1)}s`);
   showResults();
   const whack=killCelebration.sample(race,performance.now()/1000);whackBanner.classList.toggle('hidden',!whack);
   if(!whack)whackKey=null;
@@ -232,7 +245,7 @@ function hud(){
   controls[1].querySelector('kbd').textContent='SHIFT';controls[1].querySelector('strong').textContent=battle?'Slide into a U-turn':'Drift the corners';controls[1].querySelector('span').textContent=battle?'Hold + steer, release to launch':'Hold + steer, release to boost';
   controls[2].querySelector('span').textContent=battle?'Q weapons · X turbo · C chaff · Z flip':'Space fires · Q weapons · X turbo';controls[3].querySelector('span').textContent=battle?'Pause your battle':'Pause your race';
   canvas.setAttribute('aria-label',battle?'Combat arena. Arrow keys drive, Shift and steering drift into a U-turn, release Shift to boost. Hold Space to shoot, Tab or Q changes weapons, X uses turbo, Z jumps and turns 180 degrees, C releases chaff to distract missiles.':'Kart racing track. Arrow keys drive, Shift drifts, Space fires, Tab or Q changes weapons, X uses turbo.');
-  if(race.bomber)canvas.setAttribute('aria-label','Bomber arena. Tap a target to drop an A-bomb. Start with two bombs and gain one every five seconds or kill. Choose the 3D view or 2D map.');
+  if(race.bomber)canvas.setAttribute('aria-label','Bomber arena. Select A-bombs or stinkbombs, then tap a target. Start with two A-bombs. Refills alternate: stinkbomb at five seconds, A-bomb at ten seconds. Drag to pan; use plus and minus to zoom.');
   $('map').setAttribute('aria-label',battle?'Arena map with cover and fighter positions':'Track map with alternate routes and racer positions');
   if(['ready','countdown','finished','paused'].includes(race.phase))finishFlash.classList.add('hidden');
   if(race.phase==='racing'&&race.finishRank!==null)finishFlash.classList.remove('hidden');
@@ -240,7 +253,7 @@ function hud(){
   const button=$('start'),message=$('message');button.classList.toggle('hidden',race.phase==='countdown');
   $('pause').textContent=race.phase==='paused'?'▶':'Ⅱ';
   switch(race.phase){
-    case 'ready':message.querySelector('.pill').textContent=race.bomber?'YOU HAVE AIR SUPPORT':mode==='combat'?'EVERY KART FOR ITSELF':'THE GRID IS WAITING';message.querySelector('h2').textContent=race.bomber?'Trouble from above.':mode==='combat'?'Small karts. Big trouble.':'Born to be wild.';message.querySelector('p').textContent=race.bomber?'Tap to drop A-bombs · Start with 2 · +1 every 5s or kill':mode==='combat'?'First to 10 kills · 3 minutes · Hold Space to fire':'Six racers. Three laps. Two alternate routes.';message.querySelector('small').textContent=`${mode==='combat'?arenas[track].name:tracks[track].name} · ${race.bomber?'First to 10 kills':'Press Enter to start'}`;button.textContent=race.bomber?'LET’S BOMB ↗':mode==='combat'?'LET’S BATTLE ↗':'LET’S RACE ↗';$('status').textContent='READY WHEN YOU ARE';break;
+    case 'ready':message.querySelector('.pill').textContent=race.bomber?'YOU HAVE AIR SUPPORT':mode==='combat'?'EVERY KART FOR ITSELF':'THE GRID IS WAITING';message.querySelector('h2').textContent=race.bomber?'Trouble from above.':mode==='combat'?'Small karts. Big trouble.':'Born to be wild.';message.querySelector('p').textContent=race.bomber?'Start with 2 A-bombs · Stink at 5s · A-bomb at 10s':mode==='combat'?'First to 10 kills · 3 minutes · Hold Space to fire':'Six racers. Three laps. Two alternate routes.';message.querySelector('small').textContent=`${mode==='combat'?arenas[track].name:tracks[track].name} · ${race.bomber?'Tap to bomb · Drag to explore':'Press Enter to start'}`;button.textContent=race.bomber?'LET’S BOMB ↗':mode==='combat'?'LET’S BATTLE ↗':'LET’S RACE ↗';$('status').textContent='READY WHEN YOU ARE';break;
     case 'countdown':message.querySelector('.pill').textContent='ON YOUR MARKS';message.querySelector('p').textContent=race.bomber?'Pick your target. Tap when the battle starts.':'Hold ↑ or W to accelerate';message.querySelector('small').textContent='';$('status').textContent='LIGHTS OUT IN 3…';break;
     case 'racing':tone(850,.3);$('status').textContent='MAKE SOME PIXEL DUST';break;
     case 'paused':message.querySelector('.pill').textContent='PIT STOP';message.querySelector('h2').textContent='Catch your breath.';message.querySelector('p').textContent=network.active?'The match continues while you are away.':'Your rivals can wait.';button.textContent='BACK TO THE RACE ↗';$('status').textContent='RACE PAUSED';break;

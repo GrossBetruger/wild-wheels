@@ -1,6 +1,6 @@
 import { predictKartMovement, somersaultBattle, commandKeys, MOVEMENT_DT } from './combat.js';
 
-const fields=['wx','wz','speed','heading','motionHeading','cameraHeading','drift','wasDrifting','boost','yaw','somersault','somersaultCooldown'];
+const fields=['wx','wz','speed','heading','motionHeading','cameraHeading','drift','wasDrifting','boost','yaw','somersault','somersaultCooldown','dizzy'];
 const angle=(a,b)=>Math.atan2(Math.sin(a-b),Math.cos(a-b));
 const copy=world=>({...world,driftTrail:null,driftEmit:0});
 const applyManeuver=(world,actor,action)=>{if(action.type==='somersault'){somersaultBattle(world,actor);return;}actor.boost=2.5;};
@@ -58,7 +58,7 @@ export class LocalPrediction {
       predictKartMovement(this.world,future,keys,MOVEMENT_DT);
       for(const field of ['wx','wz'])result[field]+=(future[field]-this.actor[field])*fraction;
       for(const field of ['heading','motionHeading','cameraHeading'])result[field]+=angle(future[field],this.actor[field])*fraction;
-      for(const field of ['somersault','somersaultCooldown'])result[field]=(this.actor[field]??0)+((future[field]??0)-(this.actor[field]??0))*fraction;
+      for(const field of ['somersault','somersaultCooldown','dizzy'])result[field]=(this.actor[field]??0)+((future[field]??0)-(this.actor[field]??0))*fraction;
     }
     for(const field of Object.keys(this.error)){this.error[field]*=decay;result[field]+=this.error[field];}
     return result;

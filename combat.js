@@ -6,7 +6,9 @@ export const SOMERSAULT_DURATION=.55;
 export const BOMB_FALL_TIME=.9;
 export const BOMB_RADIUS=22;
 export const BOMB_START_AMMO=2;
-export const BOMB_RECHARGE=5;
+export const BOMB_RECHARGE=10;
+export const STINK_RADIUS=14;
+export const DIZZY_DURATION=4;
 
 export const arenas=[
   {name:'Scrapyard',desc:'Container cover. Wide flanking lanes.',size:96,ground:'#8b927d',wall:'#d7794d',sky:'#b5d3d9',blocks:[[-40,-35,34,10],[40,35,34,10],[-35,35,10,34],[35,-35,10,34],[0,0,14,14]]},
@@ -26,21 +28,23 @@ function spawn(r,actor,initial=false){
   actor.killStreak=0;actor.vulcan=0;
   actor.chaff=4;actor.chaffCooldown=0;
   actor.somersault=0;actor.somersaultCooldown=0;actor.somersaultCameraStart=actor.cameraHeading;
+  actor.dizzy=0;
 }
 export function createBattle(driver=0,arena=0,random=Math.random){
-  const r=createRace(driver,0,random);r.mode='combat';r.arena=arena;r.duration=180;r.targetScore=10;r.id=0;r.color=drivers[driver].color;r.killFeed=[];r.driftParticles=[];r.chaffClouds=[];r.chaffSequence=0;r.bombs=[];r.bombSequence=0;
-  const actors=[r,...r.bots];for(const [id,actor] of actors.entries())Object.assign(actor,{id,wx:0,wz:0,heading:0,kills:0,deaths:0,health:3,destroyed:0,shield:0,celebrate:0,fireCooldown:0,reload:0,brain:0,path:[],bomber:false,bombAmmo:0,bombReload:0});
+  const r=createRace(driver,0,random);r.mode='combat';r.arena=arena;r.duration=180;r.targetScore=10;r.id=0;r.color=drivers[driver].color;r.killFeed=[];r.driftParticles=[];r.chaffClouds=[];r.chaffSequence=0;r.bombs=[];r.bombSequence=0;r.stinkClouds=[];
+  const actors=[r,...r.bots];for(const [id,actor] of actors.entries())Object.assign(actor,{id,wx:0,wz:0,heading:0,kills:0,deaths:0,health:3,destroyed:0,shield:0,celebrate:0,fireCooldown:0,reload:0,brain:0,path:[],bomber:false,bombAmmo:0,bombReload:0,stinkAmmo:0});
   for(const actor of actors)spawn(r,actor,true);
   r.supplies=[[-70,-65,'missile'],[70,65,'missile'],[-65,70,'hedgehog'],[65,-70,'hedgehog'],[-12,48,'boost'],[12,-48,'boost'],[-70,0,'health'],[70,0,'health']].map(([wx,wz,kind],id)=>({id,version:0,wx,wz,kind,cooldown:0}));
   return r;
 }
 export function standings(r){return [r,...r.bots].filter(actor=>!actor.inactive).sort((a,b)=>b.kills-a.kills||a.deaths-b.deaths||a.id-b.id);}
-export function equipBomber(actor){Object.assign(actor,{bomber:true,bombAmmo:BOMB_START_AMMO,bombReload:0,speed:0,shield:0,destroyed:0});return actor;}
+export function equipBomber(actor){Object.assign(actor,{bomber:true,bombAmmo:BOMB_START_AMMO,stinkAmmo:0,bombReload:0,speed:0,shield:0,destroyed:0,dizzy:0});return actor;}
 export function validBombTarget(world,point){return Boolean(point)&&Number.isFinite(point.wx)&&Number.isFinite(point.wz)&&Math.abs(point.wx)<=arenas[world.arena].size&&Math.abs(point.wz)<=arenas[world.arena].size;}
 export function dropBomb(world,actor,point,actionId){
-  if(!actor.bomber||actor.inactive||world.phase!=='racing'||world.finishCountdown!==null||actor.bombAmmo<1||!validBombTarget(world,point))return false;
-  actor.bombAmmo--;world.bombSequence++;
-  const bomb={id:world.bombSequence,owner:actor.id,wx:point.wx,wz:point.wz,age:0,color:actor.color,...(actionId==null?{}:{actionId})};world.bombs.push(bomb);
+  const kind=point?.kind??'abomb',resource=kind==='stink'?'stinkAmmo':'bombAmmo';
+  if(!['abomb','stink'].includes(kind)||!actor.bomber||actor.inactive||world.phase!=='racing'||world.finishCountdown!==null||!(actor[resource]>=1)||!validBombTarget(world,point))return false;
+  actor[resource]--;world.bombSequence++;
+  const bomb={id:world.bombSequence,kind,owner:actor.id,wx:point.wx,wz:point.wz,age:0,color:actor.color,...(actionId==null?{}:{actionId})};world.bombs.push(bomb);
   sound(world,'bombDrop',{...point,owner:actor.id},actionId==null?undefined:`action:${actionId}`);return bomb;
 }
 export function incomingMissiles(world){
@@ -163,9 +167,8 @@ export function damageBattle(r,victim,owner,amount){
   const attacker=[r,...r.bots].find(k=>k.id===owner);
   if(victim.health>0){fx(r,'hit',victim);if(attacker){attacker.celebrate=1.6;voice(r,attacker,'cheer');}return true;}
   victim.destroyed=3;victim.speed=0;victim.boost=0;victim.deaths++;fx(r,'explosion',victim);
-  victim.drift=0;victim.wasDrifting=false;victim.driftTrail=null;victim.killStreak=0;victim.vulcan=0;victim.somersault=0;
+  victim.drift=0;victim.wasDrifting=false;victim.driftTrail=null;victim.killStreak=0;victim.vulcan=0;victim.somersault=0;victim.dizzy=0;
   if(attacker){attacker.kills++;attacker.celebrate=1.6;voice(r,attacker,'cheer');r.killFeed.unshift({id:r.killSequence=(r.killSequence??0)+1,attacker:attacker.id,victim:victim.id,victimName:victim.name??drivers[victim.driver].name,victimColor:victim.color??drivers[victim.driver].color,text:`${attacker===r?'YOU':attacker.name??drivers[attacker.driver].name.split(' ')[0]} → ${victim===r?'YOU':victim.name??drivers[victim.driver].name.split(' ')[0]}`,time:r.elapsed});r.killFeed=r.killFeed.slice(0,16);}
-  if(attacker?.bomber)attacker.bombAmmo++;
   if(attacker&&!attacker.bomber&&!attacker.destroyed){
     attacker.killStreak++;
     if(attacker.killStreak%2===0){attacker.vulcan=VULCAN_DURATION;attacker.health=Math.max(attacker.health,4);attacker.item='hedgehog';attacker.fireCooldown=0;fx(r,'vulcanReady',attacker);attacker.notice='2-KILL STREAK · HEDGEHOG VULCAN!';attacker.noticeTime=3;}
@@ -203,6 +206,7 @@ export function ageDriftEffects(r,dt){
   r.driftParticles=r.driftParticles.filter(p=>p.age<p.life).slice(-240);
 }
 function moveActor(r,actor,steer,gas,brake,dt,handbrake=false){
+  if(actor.dizzy>0)steer=clamp(steer*.6+Math.sin((DIZZY_DURATION-actor.dizzy)*9)*.4,-1,1);
   // Chassis rotation and travel direction separate while the rear tires slide.
   const drifting=handbrake&&!(actor.somersault>0)&&!brake&&Math.abs(steer)>.1&&actor.speed>(actor.wasDrifting?70:110);
   const before=actor.drift;
@@ -236,6 +240,7 @@ export function predictKartMovement(world,actor,keys,dt){
   advanceKartMovement(scene,actor,keys,dt);return scene.events;
 }
 function advanceKartMovement(world,actor,keys,dt){
+  actor.dizzy=Math.max(0,(actor.dizzy??0)-dt);
   actor.somersault=Math.max(0,(actor.somersault??0)-dt);actor.somersaultCooldown=Math.max(0,(actor.somersaultCooldown??0)-dt);
   actor.boost=Math.max(0,(actor.boost??0)-dt);actor.human=true;
   const steer=keys.steer??(Number(keys.has('arrowright')||keys.has('d'))-Number(keys.has('arrowleft')||keys.has('a')));
@@ -251,13 +256,19 @@ export function tickBattle(r,keys,dt,inputs=null){
   for(const effect of r.effects)effect.age+=dt;r.effects=r.effects.filter(f=>f.age<f.life);
   for(const cloud of r.chaffClouds)cloud.age+=dt;
   r.chaffClouds=r.chaffClouds.filter(c=>c.age<c.life);
+  for(const cloud of r.stinkClouds)cloud.age+=dt;
+  r.stinkClouds=r.stinkClouds.filter(cloud=>cloud.age<cloud.life);
   ageDriftEffects(r,dt);
   const actors=[r,...r.bots],arena=arenas[r.arena];
   for(const actor of actors){
     if(actor!==r)actor.noticeTime=Math.max(0,(actor.noticeTime??0)-dt);
     for(const key of ['fireCooldown','shield','celebrate','voiceCooldown','wallCooldown','vulcan','chaffCooldown']){if(inputs?.get(actor.id)?.actionClock&&['fireCooldown','chaffCooldown'].includes(key))continue;actor[key]=Math.max(0,(actor[key]??0)-dt);}
     if(actor.bomber){
-      if(!actor.inactive&&!ending){actor.bombReload+=dt;while(actor.bombReload>=BOMB_RECHARGE-1e-8){actor.bombAmmo++;actor.bombReload=Math.max(0,actor.bombReload-BOMB_RECHARGE);}}
+      if(!actor.inactive&&!ending){
+        const before=actor.bombReload;actor.bombReload+=dt;
+        if(before<5-1e-8&&actor.bombReload>=5-1e-8){actor.stinkAmmo++;actor.bombReload=Math.max(5,actor.bombReload);}
+        if(actor.bombReload>=BOMB_RECHARGE-1e-8){actor.bombAmmo++;actor.bombReload=Math.max(0,actor.bombReload-BOMB_RECHARGE);}
+      }
       continue;
     }
     if(actor.destroyed>0){actor.destroyed=Math.max(0,actor.destroyed-dt);if(actor.destroyed===0&&!ending)spawn(r,actor);continue;}
@@ -272,7 +283,7 @@ export function tickBattle(r,keys,dt,inputs=null){
       if(!Array.isArray(control.moves))advanceKartMovement(r,actor,held,dt);
       if(held.has(' '))fireBattle(r,actor);continue;
     }
-    actor.somersault=Math.max(0,(actor.somersault??0)-dt);actor.somersaultCooldown=Math.max(0,(actor.somersaultCooldown??0)-dt);
+    actor.dizzy=Math.max(0,(actor.dizzy??0)-dt);actor.somersault=Math.max(0,(actor.somersault??0)-dt);actor.somersaultCooldown=Math.max(0,(actor.somersaultCooldown??0)-dt);
     actor.boost=Math.max(0,actor.boost-dt);
     const target=actors.filter(k=>k!==actor&&!k.bomber&&!k.inactive&&!k.destroyed).sort((a,b)=>distance(actor,a)-distance(actor,b))[0];if(!target)continue;
     actor.brain-=dt;const visible=clearShot(arena,actor,target);
@@ -308,11 +319,18 @@ export function tickBattle(r,keys,dt,inputs=null){
   r.projectiles=r.projectiles.filter(p=>p.life>0);
   for(const bomb of r.bombs){
     bomb.age+=dt;if(bomb.age<BOMB_FALL_TIME-1e-8)continue;
+    if(bomb.kind==='stink'){
+      r.stinkClouds.push({id:bomb.id,owner:bomb.owner,wx:bomb.wx,wz:bomb.wz,age:0,life:2.5,hits:[]});sound(r,'stinkBurst',bomb);continue;
+    }
     sound(r,'bombExplosion',bomb);r.effects.push({type:'abomb',wx:bomb.wx,wz:bomb.wz,age:0,life:3,color:bomb.color});
     for(const victim of actors)if(distance(victim,bomb)<=BOMB_RADIUS)damageBattle(r,victim,bomb.owner,3);
     if(!r.bomber&&distance(r,bomb)<BOMB_RADIUS*2)r.shake=Math.max(r.shake,.7);
   }
   r.bombs=r.bombs.filter(bomb=>bomb.age<BOMB_FALL_TIME-1e-8);
+  if(!ending)for(const cloud of r.stinkClouds)for(const actor of actors){
+    if(actor.bomber||actor.inactive||actor.destroyed||actor.shield>0||cloud.hits.includes(actor.id)||distance(actor,cloud)>STINK_RADIUS)continue;
+    cloud.hits.push(actor.id);if(!(actor.dizzy>0))sound(r,'dizzy',actor);actor.dizzy=DIZZY_DURATION;
+  }
   const order=standings(r);r.rank=order.findIndex(k=>k.id===0)+1;
   if(!ending&&(order[0].kills>=r.targetScore||r.elapsed>=r.duration)){
     r.winner=order[0].id===0?'player':order[0].id-1;r.finishRank=r.rank;r.finishTime=Math.min(r.elapsed,r.duration);r.finishCountdown=3;r.events.push(r.rank===1?'victory':'finish');voice(r,order[0],'win');

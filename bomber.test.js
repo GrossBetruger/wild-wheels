@@ -4,16 +4,18 @@ import { createBattle, equipBomber, dropBomb, tickBattle, damageBattle, targetAh
 import { Multiplayer } from './multiplayer.js';
 import { LocalFeedback } from './feedback.js';
 
-test('a bomber starts with two bombs, gains one every five seconds, and can save them up',()=>{
+test('refills alternate: stinkbomb at five seconds, A-bomb at ten, then repeat',()=>{
   const world=equipBomber(createBattle());Object.assign(world,{phase:'racing',bots:[],supplies:[]});
   assert.equal(world.bombAmmo,2);
-  for(let i=0;i<299;i++)tickBattle(world,new Set(),1/60);assert.equal(world.bombAmmo,2);
-  tickBattle(world,new Set(),1/60);assert.equal(world.bombAmmo,3);
-  for(let i=0;i<300;i++)tickBattle(world,new Set(),1/60);assert.equal(world.bombAmmo,4);
-  assert.ok(dropBomb(world,world,{wx:0,wz:0}));assert.equal(world.bombAmmo,3);
-  world.phase='paused';for(let i=0;i<300;i++)tickBattle(world,new Set(),1/60);assert.equal(world.bombAmmo,3);
+  assert.equal(world.stinkAmmo,0);
+  for(let i=0;i<299;i++)tickBattle(world,new Set(),1/60);assert.equal(world.bombAmmo,2);assert.equal(world.stinkAmmo,0);
+  tickBattle(world,new Set(),1/60);assert.equal(world.bombAmmo,2);assert.equal(world.stinkAmmo,1);
+  for(let i=0;i<300;i++)tickBattle(world,new Set(),1/60);assert.equal(world.bombAmmo,3);assert.equal(world.stinkAmmo,1);
+  for(let i=0;i<300;i++)tickBattle(world,new Set(),1/60);assert.equal(world.bombAmmo,3);assert.equal(world.stinkAmmo,2);
+  for(let i=0;i<300;i++)tickBattle(world,new Set(),1/60);assert.equal(world.bombAmmo,4);assert.equal(world.stinkAmmo,2);
+  world.phase='paused';for(let i=0;i<600;i++)tickBattle(world,new Set(),1/60);assert.equal(world.bombAmmo,4);assert.equal(world.stinkAmmo,2);
 });
-test('a falling A-bomb explodes after 0.9 seconds and earns one bomb for every nearby kart killed',()=>{
+test('a falling A-bomb explodes after 0.9 seconds and kills nearby karts without rewarding ammunition',()=>{
   const world=equipBomber(createBattle());Object.assign(world,{phase:'racing',supplies:[]});
   const [nearby,edge,outside]=world.bots;world.bots=[nearby,edge,outside];
   Object.assign(nearby,{wx:-65,wz:0,shield:0,health:3,speed:0,human:true});Object.assign(edge,{wx:-65,wz:22,shield:0,health:3,speed:0,human:true});Object.assign(outside,{wx:-65,wz:23,shield:0,health:3,speed:0,human:true});
@@ -21,16 +23,16 @@ test('a falling A-bomb explodes after 0.9 seconds and earns one bomb for every n
   for(let i=0;i<53;i++)tickBattle(world,new Set(),1/60);
   assert.equal(nearby.health,3);assert.equal(edge.health,3);assert.equal(world.bombs.length,1);
   tickBattle(world,new Set(),1/60);
-  assert.equal(nearby.health,0);assert.equal(edge.health,0);assert.equal(outside.health,3);assert.equal(world.kills,2);assert.equal(world.bombAmmo,3);assert.equal(world.vulcan,0);assert.equal(world.bombs.length,0);
+  assert.equal(nearby.health,0);assert.equal(edge.health,0);assert.equal(outside.health,3);assert.equal(world.kills,2);assert.equal(world.bombAmmo,1);assert.equal(world.stinkAmmo,0);assert.equal(world.vulcan,0);assert.equal(world.bombs.length,0);
   assert.ok(world.effects.some(effect=>effect.type==='abomb'&&effect.wx===-65&&effect.wz===0));
 });
-test('a kill awards a bomb immediately without restarting the five-second refill clock',()=>{
+test('kills do not grant either bomb type or restart the ten-second refill clock',()=>{
   const world=equipBomber(createBattle());Object.assign(world,{phase:'racing',supplies:[]});
   const victim=world.bots[0];world.bots=[victim];Object.assign(victim,{wx:-65,wz:0,health:3,shield:0,speed:0,human:true});
-  for(let i=0;i<294;i++)tickBattle(world,new Set(),1/60);
-  damageBattle(world,victim,world.id,3);assert.equal(world.bombAmmo,3);assert.equal(world.kills,1);
-  assert.equal(damageBattle(world,victim,world.id,3),false);assert.equal(world.bombAmmo,3);
-  for(let i=0;i<6;i++)tickBattle(world,new Set(),1/60);assert.equal(world.bombAmmo,4);
+  for(let i=0;i<594;i++)tickBattle(world,new Set(),1/60);
+  damageBattle(world,victim,world.id,3);assert.equal(world.bombAmmo,2);assert.equal(world.stinkAmmo,1);assert.equal(world.kills,1);
+  assert.equal(damageBattle(world,victim,world.id,3),false);assert.equal(world.bombAmmo,2);
+  for(let i=0;i<6;i++)tickBattle(world,new Set(),1/60);assert.equal(world.bombAmmo,3);assert.equal(world.stinkAmmo,1);
 });
 test('bombers cannot drive, collect kart supplies, fire kart weapons, or be hit by karts',()=>{
   const world=equipBomber(createBattle());Object.assign(world,{phase:'racing',wx:-65,wz:0,bots:[],supplies:[{wx:-65,wz:0,kind:'missile',cooldown:0}]});
@@ -61,12 +63,13 @@ test('the server rejects invalid bomb targets and prevents duplicate drops or fo
   const app=new Multiplayer();t.after(()=>app.close());clearInterval(app.timer);
   const room={code:'07',arena:0,botCount:0,host:0,members:new Map()};app.makeWorld(room);app.rooms.set('07',room);
   const bomber=app.join(room,{name:'Phone',driver:0,role:'bomber'});app.join(room,{name:'Driver',driver:1});room.world.phase='racing';
-  for(const target of [{wx:97,wz:0},{wx:0,wz:Infinity},{wx:'0',wz:0}])assert.throws(()=>app.controls(bomber,{sequence:0,keys:[],actions:[{type:'bomb',...target}]}),/Invalid action/);
+  for(const target of [{wx:97,wz:0},{wx:0,wz:Infinity},{wx:'0',wz:0},{wx:0,wz:0,kind:'infinite'}])assert.throws(()=>app.controls(bomber,{sequence:0,keys:[],actions:[{type:'bomb',...target}]}),/Invalid action/);
   const epoch=room.world.soundEpoch;
   app.controls(bomber,{sequence:0,keys:[],actions:[{type:'bomb',id:0,afterMove:-1,wx:30,wz:40}],epoch,bombAmmo:100});app.step(1/60);
   app.controls(bomber,{sequence:1,keys:[],actions:[{type:'bomb',id:0,afterMove:-1,wx:30,wz:40},{type:'bomb',id:1,afterMove:-1,wx:30,wz:40},{type:'bomb',id:2,afterMove:-1,wx:30,wz:40}],epoch});app.step(1/60);
   assert.equal(room.world.bombs.length,2);assert.equal(room.world.bombAmmo,0);assert.equal(room.world.bombs[0].wx,30);assert.equal(room.world.bombs[0].wz,40);
   app.makeWorld(room);assert.equal(room.world.bomber,true);assert.equal(room.world.bombAmmo,2);
+  assert.equal(room.world.stinkAmmo,0);
 });
 test('a tap shows its bomb and spends its ammunition immediately, then confirmation keeps one bomb',()=>{
   const world=equipBomber(createBattle());Object.assign(world,{phase:'racing',soundEpoch:1,bots:[],supplies:[]});

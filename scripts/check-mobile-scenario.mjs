@@ -17,9 +17,9 @@ export async function checkMobile(evaluate,app,room,id,sleep,capture,rotate,tap,
   for(let i=0;i<100;i++){if(await evaluate("[...document.querySelectorAll('.kart-nameplate')].some(node=>node.textContent==='Target <img>')"))break;await sleep(10);}
   const namedTarget=await evaluate("[...document.querySelectorAll('.kart-nameplate')].some(node=>node.textContent==='Target <img>')&&!document.querySelector('.kart-nameplates img')");
   await evaluate(`{
-    __game.bombTrace=[];__game.bombTap=null;
-    document.getElementById('game').addEventListener('pointerup',()=>{__game.bombTap=performance.now();});
-    const render=__game.network.render.bind(__game.network);__game.network.render=(...args)=>{const view=render(...args);if(__game.bombTap!==null)__game.bombTrace.push({delay:performance.now()-__game.bombTap,ammo:view.bombAmmo,bombs:view.bombs.map(b=>({wx:b.wx,wz:b.wz,owner:b.owner}))});return view;};
+    __game.bombTrace=[];__game.lastTapFrames=[];__game.bombTap=null;
+    document.getElementById('game').addEventListener('pointerup',()=>{__game.bombTap=performance.now();__game.lastTapFrames=[];});
+    const render=__game.network.render.bind(__game.network);__game.network.render=(...args)=>{const view=render(...args);if(__game.bombTap!==null){const frame={delay:performance.now()-__game.bombTap,ammo:view.bombAmmo,stinkAmmo:view.stinkAmmo,bombs:view.bombs.map(b=>({wx:b.wx,wz:b.wz,owner:b.owner,kind:b.kind}))};__game.bombTrace.push(frame);__game.lastTapFrames.push(frame);}return view;};
   }`);
   const targetPixel=async(wx,wz)=>evaluate(`(()=>{const r=document.getElementById('game').getBoundingClientRect(),matrix=__game.renderer.bomberMatrix,point=[${wx},0,${wz},1],clip=[0,1,2,3].map(row=>point.reduce((sum,value,column)=>sum+matrix[column*4+row]*value,0));return {x:r.left+(clip[0]/clip[3]+1)*r.width/2,y:r.top+(1-clip[1]/clip[3])*r.height/2};})()`);
   const chooseCamera=async view=>{await evaluate(`document.getElementById('bomber-view-${view}').click();new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))`);};
@@ -35,18 +35,31 @@ export async function checkMobile(evaluate,app,room,id,sleep,capture,rotate,tap,
   if(capture)await capture('portrait-3d-drop');
   for(let i=0;i<150;i++){if(other.deaths===1)break;await sleep(10);}
   const blast=other.deaths===1&&actor.kills===1&&app.snapshot(room,enemy).world.effects.some(effect=>effect.type==='abomb');
-  const killRefill=actor.bombAmmo===1&&room.world.elapsed<5;
+  const noKillBonus=actor.bombAmmo===0&&actor.stinkAmmo===0&&room.world.elapsed<5;
   if(capture){await sleep(350);await capture('portrait-3d-blast');}
   const feedback=await evaluate("__game.bombTrace[0]??null");
   const immediate=Boolean(feedback&&feedback.ammo===1&&feedback.bombs.some(bomb=>bomb.owner===id));
-  for(let i=0;i<600;i++){if(actor.bombAmmo===2)break;await sleep(10);}
-  const refillAt=room.world.elapsed,refill=actor.bombAmmo===2&&refillAt>=4.999;
+  for(let i=0;i<600;i++){if(actor.stinkAmmo===1)break;await sleep(10);}
+  const stinkRefill=actor.stinkAmmo===1&&actor.bombAmmo===0&&room.world.elapsed>=4.999;
+  Object.assign(other,{wx:-65,wz:30,health:3,shield:0,destroyed:0,speed:0});
+  await evaluate("document.getElementById('bomber-weapon-stink').click()");
+  for(let i=0;i<100;i++){if(await evaluate('__game.race.stinkAmmo===1&&__game.race.bots.some(actor=>actor.wx===-65&&actor.wz===30)'))break;await sleep(10);}
+  const stinkPoint=await targetPixel(-65,30);await tap(stinkPoint.x,stinkPoint.y);
+  for(let i=0;i<100;i++){if(room.world.bombs.some(bomb=>bomb.kind==='stink'))break;await sleep(10);}
+  const stinkShot=room.world.bombs.some(bomb=>bomb.kind==='stink'&&bomb.owner===id)&&actor.bombAmmo===0&&actor.stinkAmmo===0;
+  for(let i=0;i<150;i++){if(other.dizzy>0)break;await sleep(10);}
+  const stinkWorks=other.dizzy>0&&other.health===3&&actor.kills===1&&room.world.stinkClouds.length>0;
+  const stinkFeedback=await evaluate('__game.lastTapFrames[0]??null'),stinkImmediate=Boolean(stinkFeedback&&stinkFeedback.ammo===0&&stinkFeedback.stinkAmmo===0&&stinkFeedback.bombs.some(bomb=>bomb.kind==='stink'));
+  if(capture)await capture('stink-cloud');
+  for(let i=0;i<1000;i++){if(actor.bombAmmo===1&&other.dizzy===0)break;await sleep(10);}
+  const refillAt=room.world.elapsed,refill=actor.bombAmmo===1&&actor.stinkAmmo===0&&refillAt>=9.999,dizzyExpired=other.dizzy===0&&other.health===3;
+  await evaluate("document.getElementById('bomber-weapon-abomb').click()");
   const margin=await evaluate("(()=>{const r=document.getElementById('game').getBoundingClientRect();return {x:r.left+2,y:r.top+2};})()");
   const before=room.world.bombSequence;await tap(margin.x,margin.y);await sleep(200);
-  const marginsIgnored=room.world.bombSequence===before&&actor.bombAmmo===2;
+  const marginsIgnored=room.world.bombSequence===before&&actor.bombAmmo===1;
   await chooseCamera('map');
   const mapOption=await evaluate("__game.renderer.bomberView==='map'&&document.getElementById('bomber-view-map').getAttribute('aria-pressed')==='true'");
-  const switchPreservesGame=actor.bombAmmo===2&&actor.kills===1&&room.world.phase==='racing';
+  const switchPreservesGame=actor.bombAmmo===1&&actor.kills===1&&room.world.phase==='racing';
   if(capture)await capture('portrait-2d-map');
   const landscape=[];
   for(const angle of [0,90,270])for(const view of ['3d','map']){
@@ -79,5 +92,5 @@ export async function checkMobile(evaluate,app,room,id,sleep,capture,rotate,tap,
   await chooseCamera('3d');
   await evaluate("document.getElementById('mobile-fullscreen').click()");
   const exited=await evaluate("!document.querySelector('.race-panel').classList.contains('mobile-fullscreen')");
-  return {initialAmmo,fullscreen,overhead,default3D,closeView,portraitKartWidth,mapOption,switchPreservesGame,namedTarget,accurate,spent,immediate,feedbackDelayMs:feedback?.delay,boundedDrops,desktopSawDrop,blast,killRefill,refill,refillAt,marginsIgnored,landscape,landscapePass,exited,pass:initialAmmo&&fullscreen&&overhead&&default3D&&closeView&&mapOption&&switchPreservesGame&&namedTarget&&accurate&&spent&&immediate&&boundedDrops&&desktopSawDrop&&blast&&killRefill&&refill&&marginsIgnored&&landscapePass&&exited};
+  return {initialAmmo,fullscreen,overhead,default3D,closeView,portraitKartWidth,mapOption,switchPreservesGame,namedTarget,accurate,spent,immediate,feedbackDelayMs:feedback?.delay,boundedDrops,desktopSawDrop,blast,noKillBonus,stinkRefill,stinkShot,stinkWorks,stinkImmediate,dizzyExpired,refill,refillAt,marginsIgnored,landscape,landscapePass,exited,pass:initialAmmo&&fullscreen&&overhead&&default3D&&closeView&&mapOption&&switchPreservesGame&&namedTarget&&accurate&&spent&&immediate&&boundedDrops&&desktopSawDrop&&blast&&noKillBonus&&stinkRefill&&stinkShot&&stinkWorks&&stinkImmediate&&dizzyExpired&&refill&&marginsIgnored&&landscapePass&&exited};
 }

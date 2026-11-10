@@ -97,6 +97,8 @@ export class RaceAudio {
     case 'missile':this.burst(.7,600,.65,0,2400);this.note(95,.3,{type:'sine',end:40,volume:.6});this.note(240,.4,{end:900,volume:.14});break;
     case 'bombDrop':this.note(1100,.8,{type:'sine',end:100,volume:.2});this.burst(.6,2000,.12,0,400);break;
     case 'bombExplosion':this.note(65,1.5,{type:'sine',end:18,volume:1});this.burst(2,2200,.9,0,70);this.burst(.8,5000,.5,.08,200);break;
+    case 'stinkBurst':this.note(95,.3,{type:'sawtooth',end:35,volume:.16});this.burst(.8,900,.2,0,160);break;
+    case 'dizzy':this.note(620,.35,{type:'triangle',end:180,volume:.12});this.note(400,.45,{type:'sine',end:650,volume:.1,delay:.15});break;
     case 'explosion':this.note(85,.8,{type:'sine',end:22,volume:1});this.burst(1.3,3500,.9,0,90);this.burst(.5,5500,.45,.09,300);this.note(160,.2,{end:38,volume:.4});break;
     case 'respawn':this.note(330,.3,{type:'sine',end:660,volume:.1});break;
     case 'victory':this.fanfare();break;
