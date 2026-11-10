@@ -78,6 +78,9 @@ try{
     if(process.argv.includes('--controls')){
       const result={profile:profile.name,run:profile.run,...await checkControls(evaluate,app.multiplayer,room,identity.you,sleep)};
       results.push(result);console.log(JSON.stringify({...result,trace:undefined}));
+      await evaluate("document.querySelector('.viewport').scrollIntoView({block:'center'})");
+      const screenshot=await call('Page.captureScreenshot',{format:'png'},session);
+      await writeFile(`${output}.${profile.run}.${profile.name}.png`,Buffer.from(screenshot.data,'base64'));
       await evaluate('__game.network.leave()');await call('Target.closeTarget',{targetId});
       for(const member of [...room.members.values()])app.multiplayer.remove(member);
       continue;

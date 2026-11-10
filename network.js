@@ -19,6 +19,10 @@ export class NetworkGame {
     this.panel=document.createElement('section');this.panel.className='network-panel';this.panel.setAttribute('aria-label','Multiplayer arena lobby');
     const title=document.createElement('strong');title.textContent='PLAY TOGETHER · UP TO 6 PLAYERS';
     this.name=document.createElement('input');this.name.placeholder='Your name';this.name.value='Player';this.name.maxLength=24;this.name.setAttribute('aria-label','Player name');
+    this.saveNameButton=this.button('SAVE NAME',()=>this.saveName());this.saveNameButton.classList.add('hidden');this.saveNameButton.disabled=true;
+    this.nameFeedback=document.createElement('span');this.nameFeedback.className='network-name-status';this.nameFeedback.setAttribute('role','status');
+    this.name.oninput=()=>{this.nameDirty=true;this.nameFeedback.textContent='';this.saveNameButton.disabled=!this.name.value.trim()||this.namePending||this.name.value.trim()===this.state?.world.name;};
+    this.name.onkeydown=event=>{if(event.key==='Enter'&&this.active){event.preventDefault();event.stopPropagation();this.saveName();}};
     this.invitation=new URL(location.href).searchParams.get('room')??'';
     this.botCount=document.createElement('select');this.botCount.setAttribute('aria-label','Number of multiplayer bots');for(let count=0;count<=5;count++){const option=document.createElement('option');option.value=String(count);option.textContent=`${count} BOT${count===1?'':'S'}`;this.botCount.append(option);}this.botCount.value='1';this.botCount.onchange=()=>{if(this.active)this.control('bots',undefined,Number(this.botCount.value));};
     this.animalChoice=document.createElement('select');this.animalChoice.className='hidden';this.animalChoice.setAttribute('aria-label','Your multiplayer animal');for(const [index,animal] of drivers.entries()){const option=document.createElement('option');option.value=String(index);option.textContent=`${animal.emoji} ${animal.name}`;this.animalChoice.append(option);}this.animalChoice.onchange=()=>this.chooseDriver(Number(this.animalChoice.value));
@@ -29,7 +33,7 @@ export class NetworkGame {
     this.share=document.createElement('input');this.share.className='hidden';this.share.setAttribute('aria-label','Room invitation link');this.share.addEventListener('input',()=>{this.shareEdited=true;});
     this.internetButton=this.button('START INTERNET LINK',()=>this.startInternetLink());this.internetButton.classList.add('hidden');
     this.copyButton=this.button('COPY INVITE',async()=>{try{await navigator.clipboard.writeText(this.share.value);this.status.textContent='Invitation copied.';}catch{this.share.focus();this.share.select();this.status.textContent='Copy the selected invitation link.';}});this.copyButton.classList.add('hidden');
-    const row=document.createElement('div');row.className='network-controls';row.append(this.name,this.animalChoice,this.botCount,this.hostButton,this.leaveButton);
+    const row=document.createElement('div');row.className='network-controls';row.append(this.name,this.saveNameButton,this.nameFeedback,this.animalChoice,this.botCount,this.hostButton,this.leaveButton);
     const invite=document.createElement('div');invite.className='network-invite';invite.append(this.share,this.internetButton,this.copyButton);
     this.help=document.createElement('p');this.help.className='network-help hidden';
     this.panel.append(title,row,this.status,this.players,invite,this.help);anchor.before(this.panel);
@@ -41,6 +45,16 @@ export class NetworkGame {
   get active(){return Boolean(this.token);}
   get isHost(){return this.state?.host===this.state?.you;}
   get wantsToPlay(){return Boolean(this.state?.players.find(player=>player.id===this.state.you)?.wantsToPlay);}
+  async saveName(){
+    if(!this.active||this.namePending||!this.name.value.trim())return;
+    const token=this.token;this.namePending=true;this.saveNameButton.disabled=true;this.name.disabled=true;this.nameFeedback.textContent='Saving…';
+    try{
+      const reply=await this.request('/api/name',{name:this.name.value.trim()});
+      if(this.token!==token)return;
+      this.name.value=reply.name;this.nameDirty=false;this.nameFeedback.textContent='Name saved.';
+    }catch(error){if(this.token===token)this.nameFeedback.textContent=error.message;}
+    finally{if(this.token===token){this.namePending=false;this.name.disabled=false;this.saveNameButton.disabled=this.name.value.trim()===this.state?.world.name;}}
+  }
   async requestPlay(){
     if(!this.active||this.isHost||this.readyPending||this.wantsToPlay||!['ready','finished'].includes(this.state.world.phase))return;
     this.readyPending=true;
@@ -92,9 +106,9 @@ export class NetworkGame {
     this.hostButton.disabled=true;this.status.textContent='Connecting…';
     try{
       this.unlock().catch(()=>{});if(path==='/api/rooms')await this.refreshInfo();const reply=await this.request(path,{name:this.name.value.trim(),driver:path==='/api/join'?null:this.driver(),arena:this.arena(),bots:Number(this.botCount.value),code:this.invitation.toUpperCase()});
-      this.token=reply.token;this.sequence=0;this.pending=null;this.failures=0;this.shareEdited=false;this.actions=[];this.keys.clear();this.paused=false;this.accept(reply);this.stream();
+      this.token=reply.token;this.nameDirty=false;this.namePending=false;this.sequence=0;this.pending=null;this.failures=0;this.shareEdited=false;this.actions=[];this.keys.clear();this.paused=false;this.accept(reply);this.stream();
     }catch(error){this.status.textContent=error.message;}
-    this.hostButton.disabled=this.active;this.name.disabled=this.active;
+    this.hostButton.disabled=this.active;this.name.disabled=false;
   }
   accept(state){
     if(!this.active)return;
@@ -108,6 +122,9 @@ export class NetworkGame {
     this.prediction.accept(state.world,now,{sequence:state.movementSequence??-1,actionSequence:state.actionSequence??-1});
     const rosterKey=JSON.stringify([state.host,state.you,state.players]);
     this.state=state;this.leaveButton.classList.remove('hidden');this.share.classList.remove('hidden');this.copyButton.classList.remove('hidden');this.animalChoice.classList.remove('hidden');
+    this.saveNameButton.classList.remove('hidden');
+    if(!this.nameDirty&&!this.namePending&&this.name.value!==state.world.name)this.name.value=state.world.name;
+    this.saveNameButton.disabled=this.namePending||!this.name.value.trim()||this.name.value.trim()===state.world.name;
     this.updateShare();this.help.classList.remove('hidden');
     this.botCount.value=String(state.bots);this.botCount.disabled=!this.isHost||!['ready','finished'].includes(state.world.phase);for(const option of this.botCount.options)option.disabled=Number(option.value)>6-state.players.length;
     this.animalChoice.value=String(state.world.driver);this.animalChoice.disabled=!['ready','finished'].includes(state.world.phase);
@@ -118,7 +135,7 @@ export class NetworkGame {
       if(!this.isHost&&this.wantsToPlay)this.status.textContent='You’re ready! Waiting for the host to start.';
     }
     if(['countdown','racing'].includes(state.world.phase))this.status.textContent=`MATCH LIVE · ${state.players.length} players + ${state.bots} bots`;
-    if(rosterKey!==this.rosterKey){this.rosterKey=rosterKey;this.name.value=state.world.name;this.players.replaceChildren(...state.players.map(player=>{const label=document.createElement('span');label.textContent=`${drivers[player.driver].emoji} ${player.name}${player.id===state.host?' · HOST':''}${player.id===state.you?' · YOU':''}${player.wantsToPlay?' · READY ✓':''}`;label.style.borderLeft=`4px solid ${player.color}`;return label;}));}
+    if(rosterKey!==this.rosterKey){this.rosterKey=rosterKey;this.players.replaceChildren(...state.players.map(player=>{const label=document.createElement('span');label.textContent=`${drivers[player.driver].emoji} ${player.name}${player.id===state.host?' · HOST':''}${player.id===state.you?' · YOU':''}${player.wantsToPlay?' · READY ✓':''}`;label.style.borderLeft=`4px solid ${player.color}`;return label;}));}
     this.onState(this.view());
   }
   view(){
@@ -169,6 +186,7 @@ export class NetworkGame {
   pause(){this.paused=!this.paused;this.keys.clear();this.actions=[];this.input();this.onState(this.view());}
   leave(message='You left the room.'){
     if(!this.active)return;
+    this.saveNameButton.classList.add('hidden');this.nameFeedback.textContent='';this.nameDirty=false;this.namePending=false;
     this.driftFeedback=new LocalDrift();
     this.request('/api/leave',{}).catch(()=>{});this.token=null;this.socket?.close();this.state=null;this.pending=null;this.actions=[];this.keys.clear();this.playback.clear();this.prediction.clear();this.actionAudio=new ActionAudio(this.sound);this.feedback=new LocalFeedback((type,key)=>this.actionAudio.emit(type,performance.now()/1000,null,key));this.lastLocal=null;this.rtt=0;this.lastPing=-Infinity;
     this.internetError=false;this.hostButton.disabled=false;this.name.disabled=false;this.botCount.disabled=false;for(const option of this.botCount.options)option.disabled=false;this.leaveButton.classList.add('hidden');this.copyButton.classList.add('hidden');this.internetButton.classList.add('hidden');this.animalChoice.classList.add('hidden');this.share.classList.add('hidden');this.help.classList.add('hidden');this.players.replaceChildren();this.status.textContent=message;this.onLeave();

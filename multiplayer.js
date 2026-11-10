@@ -211,6 +211,11 @@ export class Multiplayer {
       if(req.method!=='POST')throw problem(405,'Use POST.');
       this.limit(req,path,path==='/api/input'?180:15);const body=await this.body(req);
       switch(path){
+        case '/api/name':{
+          if(typeof body.name!=='string'||!body.name.trim()||body.name.length>24)throw problem(400,'Enter a name (1–24 characters).');
+          member.name=body.name.trim();[room.world,...room.world.bots][member.id].name=member.name;
+          this.broadcast(room);json(200,{ok:true,name:member.name});break;
+        }
         case '/api/ready':{
           if(!['ready','finished'].includes(room.world.phase))throw problem(409,'Match already running.');
           if(typeof body.ready!=='boolean')throw problem(400,'Choose ready or not ready.');

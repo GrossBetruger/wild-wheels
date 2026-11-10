@@ -1,12 +1,20 @@
 export async function checkControls(evaluate,app,room,id,sleep){
   const host=room.members.get(room.host);
   const guest=id===room.host?app.join(room,{name:'Ready Friend',driver:1}):room.members.get(id);
+  const displayName=id===room.host?'Alex <b>':'Sam <b>';
+  const editable=await evaluate(`!__game.network.name.disabled`);
+  await evaluate(`{const input=__game.network.name;input.value=${JSON.stringify(displayName)};input.dispatchEvent(new Event('input'));}`);
   for(let i=0;i<100;i++){if(await evaluate("document.getElementById('start').disabled===false"))break;await sleep(25);}
   if(id!==room.host)await evaluate("document.getElementById('start').click()");
   if(id===room.host)await evaluate(`fetch('/api/ready',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer ${guest.token}'},body:JSON.stringify({ready:true})})`);
   for(let i=0;i<100;i++){if(await evaluate(`__game.network.state.players.some(p=>p.id===${guest.id}&&p.wantsToPlay)&&(${id===room.host}||document.getElementById('start').textContent.includes('WAITING FOR HOST')&&document.getElementById('start').disabled)`))break;await sleep(25);}
   const readyUI=await evaluate(`({status:__game.network.status.textContent,button:document.getElementById('start').textContent,disabled:document.getElementById('start').disabled,roster:__game.network.players.textContent})`);
   const readyPass=Boolean(guest.wantsToPlay)&&(id===room.host?readyUI.status.includes('Ready Friend')&&readyUI.status.includes('wants to play'):readyUI.status.includes('Waiting for the host')&&readyUI.button.includes('WAITING FOR HOST')&&readyUI.disabled);
+  const draftPreserved=await evaluate(`__game.network.name.value===${JSON.stringify(displayName)}`);
+  if(id===room.host)await evaluate('__game.network.saveNameButton.click()');
+  if(id!==room.host)await evaluate("__game.network.name.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))");
+  for(let i=0;i<100;i++){if(await evaluate(`__game.network.state.world.name===${JSON.stringify(displayName)}&&__game.network.nameFeedback.textContent==='Name saved.'`))break;await sleep(25);}
+  const namePass=editable&&draftPreserved&&await evaluate(`__game.network.state.world.name===${JSON.stringify(displayName)}&&__game.network.players.textContent.includes(${JSON.stringify(displayName)})&&!__game.network.players.querySelector('b')`);
   await evaluate(`fetch('/api/control',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer ${host.token}'},body:JSON.stringify({action:'start'})})`);
   const readyCleared=[...room.members.values()].every(player=>!player.wantsToPlay)&&room.world.phase==='countdown';
   Object.assign(room.world,{phase:'racing',supplies:[]});
@@ -32,5 +40,11 @@ export async function checkControls(evaluate,app,room,id,sleep){
   for(let i=0;i<100;i++){if(await evaluate('__game.controlsDone'))break;await sleep(25);}
   const trace=await evaluate('__game.controlsTrace'),request=trace.find(frame=>frame.request);
   const turboPass=Boolean(request&&request.boost>2.4&&request.turbos===0)&&trace.every(frame=>frame.item==='hedgehog'&&!frame.turboSelected)&&trace.some(frame=>frame.vulcanShot)&&actor.turbos===0;
-  return {readyPass,readyCleared,readyUI,pickupKeptVulcan,turboPass,pass:readyPass&&readyCleared&&pickupKeptVulcan&&turboPass,trace};
+  const other=[room.world,...room.world.bots].find(player=>!player.inactive&&player.id!==id);
+  Object.assign(actor,{kills:3,deaths:4});Object.assign(other,{kills:10,deaths:2});
+  Object.assign(room.world,{phase:'finished',finishRank:1,finishTime:20,finishCountdown:0});
+  for(let i=0;i<100;i++){if(await evaluate("!document.getElementById('match-results').classList.contains('hidden')&&document.querySelectorAll('#match-results tbody tr').length===2"))break;await sleep(25);}
+  const leaderboard=await evaluate("[...document.querySelectorAll('#match-results tbody tr')].map(row=>[...row.cells].map(cell=>cell.textContent))");
+  const resultsPass=JSON.stringify(leaderboard)===JSON.stringify([['1',other.name,'10','2'],['2',displayName+' · YOU','3','4']])&&await evaluate("document.querySelectorAll('#match-results tbody .you').length===1&&!document.querySelector('#match-results b')");
+  return {readyPass,readyCleared,readyUI,namePass,pickupKeptVulcan,turboPass,resultsPass,leaderboard,pass:readyPass&&readyCleared&&namePass&&pickupKeptVulcan&&turboPass&&resultsPass,trace};
 }

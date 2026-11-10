@@ -1,0 +1,31 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createBattle } from './combat.js';
+import { createRace } from './engine.js';
+import { matchResults } from './results.js';
+
+test('final battle leaderboard ranks by kills then fewer deaths and keeps player names',()=>{
+  const world=createBattle();Object.assign(world,{id:0,name:'Alex',kills:5,deaths:3});
+  world.bots=[{id:1,driver:1,name:'Sam',kills:10,deaths:4},{id:2,driver:2,name:'Jo',kills:5,deaths:1},{id:3,driver:3,name:'Left room',kills:20,deaths:0,inactive:true}];
+  assert.deepEqual(matchResults(world),[
+    {place:1,name:'Sam',you:false,kills:10,deaths:4},
+    {place:2,name:'Jo',you:false,kills:5,deaths:1},
+    {place:3,name:'Alex · YOU',you:true,kills:5,deaths:3}
+  ]);
+});
+
+test('a guest gets the same final ordering and their own row is identified',()=>{
+  const world=createBattle();Object.assign(world,{id:1,name:'Sam',kills:10,deaths:4});
+  world.bots=[{id:0,driver:0,name:'Alex',kills:5,deaths:3},{id:2,driver:2,name:'Jo',kills:5,deaths:1}];
+  assert.deepEqual(matchResults(world).map(row=>[row.place,row.name,row.you]),[[1,'Sam · YOU',true],[2,'Jo',false],[3,'Alex',false]]);
+});
+
+test('race results keep recorded finish order even after an overtake and label unfinished racers',()=>{
+  const world=createRace();Object.assign(world,{name:'Alex',s:10000,finishOrder:[{id:0,time:90},{id:'player',time:95}]});
+  world.bots=[{name:'Sam',driver:1,s:9000},{name:'Jo',driver:2,s:8000}];
+  assert.deepEqual(matchResults(world),[
+    {place:1,name:'Sam',you:false,time:90},
+    {place:2,name:'Alex · YOU',you:true,time:95},
+    {place:3,name:'Jo',you:false,time:null}
+  ]);
+});

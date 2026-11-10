@@ -12,6 +12,23 @@ async function serverFor(t){
   const post=async(path,body,token,headers={})=>{const response=await fetch(origin+path,{method:'POST',headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`} :{}),...headers},body:JSON.stringify(body),signal:AbortSignal.timeout(3000)});return {status:response.status,...await response.json()};};
   return {...app,post,origin};
 }
+test('players can rename themselves in a room and names survive the next match',async t=>{
+  const {multiplayer,post}=await serverFor(t);
+  const host=await post('/api/rooms',{name:'Host',driver:0,arena:0,bots:0});
+  const guest=await post('/api/join',{name:'Player',driver:1,code:host.code});
+  assert.equal((await post('/api/name',{name:'  Sam  ',id:host.you},guest.token)).status,200);
+  const room=multiplayer.rooms.get(host.code),hostMember=multiplayer.members.get(host.token),guestMember=multiplayer.members.get(guest.token);
+  assert.equal(multiplayer.snapshot(room,hostMember).players.find(player=>player.id===guest.you).name,'Sam');
+  assert.equal(multiplayer.snapshot(room,guestMember).world.name,'Sam');
+  assert.equal(hostMember.name,'Host');
+  await post('/api/control',{action:'start'},host.token);
+  assert.equal(multiplayer.snapshot(room,guestMember).world.name,'Sam');
+  room.world.phase='racing';assert.equal((await post('/api/name',{name:'Sammy'},guest.token)).status,200);
+  assert.equal(multiplayer.snapshot(room,hostMember).world.bots.find(actor=>actor.id===guest.you).name,'Sammy');
+  for(const name of ['', '   ', 'x'.repeat(25), null])assert.equal((await post('/api/name',{name},guest.token)).status,400);
+  assert.equal(guestMember.name,'Sammy');
+  assert.equal((await post('/api/name',{name:'Intruder'})).status,401);
+});
 test('a guest requests play, both players see readiness, and only the host starts the match',async t=>{
   const {multiplayer,post}=await serverFor(t);
   const host=await post('/api/rooms',{name:'Host',driver:0,arena:0,bots:0});

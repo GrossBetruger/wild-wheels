@@ -4,6 +4,7 @@ import { RaceAudio } from './audio.js';
 import { sampleTrack, branches } from './track.js';
 import { createBattle, tickBattle, fireBattle, releaseChaff, useBattleTurbo, arenas, standings, VULCAN_DURATION, MAX_HEALTH } from './combat.js';
 import { NetworkGame } from './network.js';
+import { matchResults } from './results.js';
 const $ = id => document.getElementById(id);
 const canvas = $('game'), map = $('map').getContext('2d');
 const keys = new Set(), audio = new RaceAudio(), renderer = new Renderer(canvas);
@@ -36,6 +37,17 @@ const network=new NetworkGame({anchor:modeSwitch,keys,driver:()=>selected,arena:
   if(changed||driverChanged)showDriver(world.driver);
 },onLeave:()=>{race=newGame();lastPhase='';keys.clear();updateMapLabels();}});
 const leaderboard=document.createElement('section');leaderboard.className='leaderboard hidden';document.querySelector('aside').append(leaderboard);
+const finalResults=document.createElement('section');finalResults.id='match-results';finalResults.className='match-results hidden';finalResults.setAttribute('aria-label','Final leaderboard');$('start').before(finalResults);let resultsKey='';
+function showResults(){
+  const visible=race.phase==='finished';finalResults.classList.toggle('hidden',!visible);$('message').classList.toggle('results-visible',visible);
+  if(!visible){resultsKey='';return;}
+  const rows=matchResults(race),version=JSON.stringify([mode,rows]);if(version===resultsKey)return;resultsKey=version;
+  const table=document.createElement('table'),caption=document.createElement('caption');caption.textContent='FINAL LEADERBOARD';table.append(caption);
+  const header=table.createTHead().insertRow();for(const label of mode==='combat'?['Place','Player','Kills','Deaths']:['Place','Player','Time']){const cell=document.createElement('th');cell.scope='col';cell.textContent=label;header.append(cell);}
+  const body=table.createTBody();
+  for(const result of rows){const row=body.insertRow();row.classList.toggle('you',result.you);for(const value of mode==='combat'?[result.place,result.name,result.kills,result.deaths]:[result.place,result.name,result.time===null?'DNF':timeLabel(result.time)])row.insertCell().textContent=String(value);}
+  finalResults.replaceChildren(table);
+}
 const routeHint=document.createElement('div');routeHint.className='route-hint';document.querySelector('.viewport').append(routeHint);
 const driftMeter=document.createElement('div');driftMeter.className='drift-meter hidden';const driftLabel=document.createElement('strong'),driftCharge=document.createElement('progress'),driftHelp=document.createElement('small');driftCharge.max=1.2;driftCharge.setAttribute('aria-label','Drift boost charge');driftHelp.textContent='RELEASE DRIFT TO BOOST';driftMeter.append(driftLabel,driftCharge,driftHelp);document.querySelector('.viewport').append(driftMeter);
 const brakeButton=document.createElement('button');brakeButton.dataset.key='arrowdown';brakeButton.textContent='BRAKE';brakeButton.className='hidden';document.querySelector('.touch-controls').append(brakeButton);
@@ -75,6 +87,7 @@ function timeLabel(t){return `${String(Math.floor(t/60)).padStart(2,'0')}:${(t%6
 let scoreboardKey='';
 function put(id,value){const node=$(id);if(node.textContent!==String(value))node.textContent=value;}
 function hud(){
+  showResults();
   for(const button of modeSwitch.children)button.disabled=network.active;
   for(const button of mapButtons)button.disabled=network.active&&!network.isHost;
   $('change-track').disabled=network.active&&!network.isHost;$('restart').disabled=network.active&&!network.isHost;
