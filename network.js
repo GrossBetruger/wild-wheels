@@ -1,3 +1,9 @@
+export function invitationUrl(pageUrl,code,{publicOrigin,lan}={}){
+  const page=new URL(pageUrl);
+  const origin=['localhost','127.0.0.1'].includes(page.hostname)?publicOrigin??lan??page.origin:page.origin;
+  return new URL(`/?room=${encodeURIComponent(code)}`,origin).href;
+}
+
 export class NetworkGame {
   token=null;state=null;paused=false;sequence=0;actions=[];poses=new Map();
   constructor({anchor,keys,driver,arena,onState,onLeave,unlock}){
@@ -11,19 +17,32 @@ export class NetworkGame {
     this.leaveButton=this.button('LEAVE ROOM',()=>this.leave());this.leaveButton.classList.add('hidden');
     this.status=document.createElement('p');this.status.setAttribute('role','status');this.status.textContent='Host an arena and share the link. Opening it joins the game automatically.';
     this.players=document.createElement('div');this.players.className='network-players';
-    this.share=document.createElement('input');this.share.className='hidden';this.share.setAttribute('aria-label','Room invitation link. You can replace the address with your public IP.');this.share.addEventListener('input',()=>{this.shareEdited=true;});
+    this.share=document.createElement('input');this.share.className='hidden';this.share.setAttribute('aria-label','Room invitation link');this.share.addEventListener('input',()=>{this.shareEdited=true;});
     this.copyButton=this.button('COPY INVITE',async()=>{try{await navigator.clipboard.writeText(this.share.value);this.status.textContent='Invitation copied.';}catch{this.share.focus();this.share.select();this.status.textContent='Copy the selected invitation link.';}});this.copyButton.classList.add('hidden');
     const row=document.createElement('div');row.className='network-controls';row.append(this.name,this.botCount,this.hostButton,this.leaveButton);
     const invite=document.createElement('div');invite.className='network-invite';invite.append(this.share,this.copyButton);
-    this.help=document.createElement('p');this.help.className='network-help hidden';this.help.textContent='Same Wi-Fi: share this link. Internet: replace the IP with your public IP and forward TCP port 5173 to this computer.';
+    this.help=document.createElement('p');this.help.className='network-help hidden';
     this.panel.append(title,row,this.status,this.players,invite,this.help);anchor.before(this.panel);
-    fetch('/api/info').then(r=>r.json()).then(info=>{this.lan=info.addresses?.[0];}).catch(()=>{});
+    this.refreshInfo();
+    this.infoTimer=setInterval(()=>{if(this.active&&this.isHost)this.refreshInfo();},5000);
     this.timer=setInterval(()=>this.input(),1000/30);
     if(this.invitation)queueMicrotask(()=>this.connect('/api/join'));
   }
   get active(){return Boolean(this.token);}
   get isHost(){return this.state?.host===this.state?.you;}
   button(label,action){const button=document.createElement('button');button.type='button';button.textContent=label;button.onclick=action;return button;}
+  async refreshInfo(){
+    try{
+      const response=await fetch('/api/info',{signal:AbortSignal.timeout(2000)});if(!response.ok)return;
+      const info=await response.json();this.lan=info.addresses?.[0];this.publicOrigin=info.publicOrigin;this.updateShare();
+    }catch{}
+  }
+  updateShare(){
+    if(!this.state)return;
+    const local=['localhost','127.0.0.1'].includes(location.hostname);
+    if(!this.shareEdited)this.share.value=invitationUrl(location.href,this.state.code,{publicOrigin:this.publicOrigin,lan:this.lan});
+    this.help.textContent=location.protocol==='https:'||local&&this.publicOrigin?'Share this HTTPS link with a friend to play over the internet.':`Same Wi-Fi: share this link. Internet: start ngrok http ${location.port||5173}; the invitation updates automatically.`;
+  }
   async request(path,body){
     const response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json',...(this.token?{Authorization:`Bearer ${this.token}`}:{})},body:JSON.stringify(body),signal:AbortSignal.timeout(3000)});
     const value=await response.json();if(!response.ok)throw new Error(value.error??'Connection failed.');return value;
@@ -32,7 +51,7 @@ export class NetworkGame {
     if(this.active)return;
     this.hostButton.disabled=true;this.status.textContent='Connecting…';
     try{
-      this.unlock().catch(()=>{});const reply=await this.request(path,{name:this.name.value.trim(),driver:this.driver(),arena:this.arena(),bots:Number(this.botCount.value),code:this.invitation.toUpperCase()});
+      this.unlock().catch(()=>{});if(path==='/api/rooms')await this.refreshInfo();const reply=await this.request(path,{name:this.name.value.trim(),driver:this.driver(),arena:this.arena(),bots:Number(this.botCount.value),code:this.invitation.toUpperCase()});
       this.token=reply.token;this.sequence=0;this.pending=null;this.failures=0;this.shareEdited=false;this.actions=[];this.keys.clear();this.paused=false;this.accept(reply);this.stream();
     }catch(error){this.status.textContent=error.message;}
     this.hostButton.disabled=this.active;this.name.disabled=this.active;
@@ -42,7 +61,7 @@ export class NetworkGame {
     if(this.state&&state.world.elapsed<this.state.world.elapsed)this.poses.clear();
     const rosterKey=JSON.stringify([state.host,state.you,state.players]);
     this.state=state;this.leaveButton.classList.remove('hidden');this.share.classList.remove('hidden');this.copyButton.classList.remove('hidden');
-    const origin=['localhost','127.0.0.1'].includes(location.hostname)?this.lan??location.origin:location.origin;if(!this.shareEdited)this.share.value=`${origin}/?room=${state.code}`;this.help.classList.remove('hidden');
+    this.updateShare();this.help.classList.remove('hidden');
     this.botCount.value=String(state.bots);this.botCount.disabled=!this.isHost||!['ready','finished'].includes(state.world.phase);for(const option of this.botCount.options)option.disabled=Number(option.value)>6-state.players.length;
     this.status.textContent=`${state.players.length} PLAYER${state.players.length===1?'':'S'} · ${state.bots} BOT${state.bots===1?'':'S'} · ${this.isHost?'Share the link, then press Let’s Battle.':'The host starts the match.'}`;
     if(['countdown','racing'].includes(state.world.phase))this.status.textContent=`MATCH LIVE · ${state.players.length} players + ${state.bots} bots`;

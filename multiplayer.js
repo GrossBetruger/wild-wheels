@@ -3,6 +3,7 @@ import { networkInterfaces } from 'node:os';
 import { WebSocketServer } from 'ws';
 import { createBattle, tickBattle, fireBattle, releaseChaff, standings } from './combat.js';
 import { drivers, selectItem, cycleItem } from './engine.js';
+import { ngrokOrigin } from './ngrok.js';
 
 const KEYS=new Set(['arrowup','arrowdown','arrowleft','arrowright','w','a','s','d','shift',' ']);
 const FIELDS='id driver color wx wz heading motionHeading cameraHeading speed health kills deaths killStreak vulcan chaff chaffCooldown destroyed shield ammo missiles turbos item fireCooldown boost drift wasDrifting yaw spin celebrate stun voiceCooldown human name notice noticeTime inactive'.split(' ');
@@ -124,7 +125,7 @@ export class Multiplayer {
       if(path==='/api/info'&&req.method==='GET'){
         this.limit(req,'info',20);const port=this.port??5173;
         const addresses=Object.values(networkInterfaces()).flat().filter(n=>n&&!n.internal&&n.family==='IPv4').map(n=>`http://${n.address}:${port}`);
-        json(200,{addresses});return true;
+        json(200,{addresses,publicOrigin:await ngrokOrigin(port)});return true;
       }
       if(path==='/api/rooms'||path==='/api/join'){
         if(req.method!=='POST')throw problem(405,'Use POST.');this.limit(req,'join',20,60000);const body=await this.body(req);person(body);

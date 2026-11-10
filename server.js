@@ -6,7 +6,7 @@ import { Multiplayer } from './multiplayer.js';
 const files = new Map([['/', ['index.html', 'text/html']], ['/style.css', ['style.css', 'text/css']], ...['game.js','engine.js','renderer.js','audio.js','track.js','combat.js','network.js'].map(file=>['/'+file,[file,'text/javascript']])]);
 export function createGameServer(){
 const multiplayer=new Multiplayer();
-const runtimeHash=createHash('sha256');for(const name of ['server.js','multiplayer.js','combat.js','engine.js','track.js','package-lock.json'])runtimeHash.update(name).update(readFileSync(new URL(name,import.meta.url)));const runtimeBuild=runtimeHash.digest('hex');
+const runtimeHash=createHash('sha256');for(const name of ['server.js','multiplayer.js','ngrok.js','combat.js','engine.js','track.js','package-lock.json'])runtimeHash.update(name).update(readFileSync(new URL(name,import.meta.url)));const runtimeBuild=runtimeHash.digest('hex');
 const server=createServer(async (req, res) => {
   if((req.url??'').split('?')[0]==='/build.json'){
     try{
