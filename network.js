@@ -193,15 +193,15 @@ export class NetworkGame {
     if(this.paused&&['countdown','racing'].includes(world.phase))return {...world,phase:'paused',resumePhase:world.phase};
     return world;
   }
-  render(dt){
+  render(dt,keys=this.keys){
     const world=this.playback.sample()??this.view();if(!world)return null;
-    const local=this.prediction.sample(this.paused?new Set():this.keys,dt,performance.now()/1000);
+    const local=this.prediction.sample(this.paused?new Set():keys,dt,performance.now()/1000);
     const now=performance.now()/1000;
     for(const type of this.prediction.sounds.splice(0))this.actionAudio.emit(type,now);
     this.lastLocal=local;
     const movement=this.prediction.nextSequence-1;
     let view=this.feedback.render(world,local??world,now,movement);
-    if(!this.paused&&this.keys.has(' ')&&this.feedback.action('fire',undefined,local??world,now,movement)){this.input();view=this.feedback.render(world,local??world,now,movement);}
+    if(!this.paused&&keys.has(' ')&&this.feedback.action('fire',undefined,local??world,now,movement)){this.input();view=this.feedback.render(world,local??world,now,movement);}
     view=this.driftFeedback.render(view,now,!this.paused&&now-this.prediction.received<.5);
     if(this.paused&&['countdown','racing'].includes(world.phase))return {...view,phase:'paused',resumePhase:world.phase};
     return view;
@@ -214,6 +214,7 @@ export class NetworkGame {
       this.lastLocal=this.prediction.sample(this.paused?new Set():this.keys,0,performance.now()/1000);
     }
     this.input();
+    return true;
   }
   input(){
     const now=performance.now()/1000;

@@ -8,6 +8,7 @@ import { pathToFileURL } from 'node:url';
 import { checkFeedback } from './check-feedback-scenario.mjs';
 import { checkDrift } from './check-drift-scenario.mjs';
 import { checkControls } from './check-controls-scenario.mjs';
+import { checkMobile } from './check-mobile-scenario.mjs';
 
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const quantile=(values,p)=>[...values].sort((a,b)=>a-b)[Math.min(values.length-1,Math.floor(values.length*p))]??0;
@@ -57,6 +58,11 @@ try{
     activeProfile=`${profile.run}:${profile.name}`;
     const {targetId}=await call('Target.createTarget',{url:'about:blank'});({sessionId:session}=await call('Target.attachToTarget',{targetId,flatten:true}));
     await call('Page.enable',{},session);await call('Runtime.enable',{},session);
+    if(process.argv.includes('--mobile')){
+      await call('Emulation.setDeviceMetricsOverride',{width:430,height:900,deviceScaleFactor:1,mobile:true,screenOrientation:{type:'portraitPrimary',angle:0}},session);
+      await call('Emulation.setTouchEmulationEnabled',{enabled:true},session);
+      await call('Page.addScriptToEvaluateOnNewDocument',{source:"window.__motionPermission='denied';Object.defineProperty(DeviceOrientationEvent,'requestPermission',{configurable:true,value:async()=>window.__motionPermission});"},session);
+    }
     await call('Page.addScriptToEvaluateOnNewDocument',{source:`{
       const Original=window.WebSocket;let seed=71;
       const random=()=>((seed=Math.imul(seed,1664525)+1013904223>>>0)/4294967296);
@@ -75,6 +81,11 @@ try{
     if(profile.guest){const room={code:'07',arena:0,botCount:0,host:0,members:new Map()};app.multiplayer.makeWorld(room);app.multiplayer.rooms.set('07',room);app.multiplayer.join(room,{name:'Host',driver:1});}
     const identity=await evaluate(`(async()=>{__game.network.botCount.value='0';__game.network.invitation='07';await __game.network.connect('${profile.guest?'/api/join':'/api/rooms'}');return {code:__game.network.state.code,you:__game.network.state.you};})()`);
     const room=app.multiplayer.rooms.get(identity.code);
+    if(process.argv.includes('--mobile')){
+      const capture=async()=>{const screenshot=await call('Page.captureScreenshot',{format:'png'},session);await writeFile(`${output}.${profile.run}.${profile.name}.mobile.png`,Buffer.from(screenshot.data,'base64'));};
+      const result={profile:profile.name,run:profile.run,...await checkMobile(evaluate,app.multiplayer,room,identity.you,sleep,capture)};results.push(result);console.log(JSON.stringify(result));
+      await evaluate('__game.network.leave()');await call('Target.closeTarget',{targetId});for(const member of [...room.members.values()])app.multiplayer.remove(member);continue;
+    }
     if(process.argv.includes('--controls')){
       const captureScene=label=>async()=>{
         await evaluate("document.querySelector('.viewport').scrollIntoView({block:'center'})");
@@ -86,7 +97,7 @@ try{
       const captureNotices=process.argv.includes('--notice-screenshots')?captureScene('notices'):undefined;
       const captureReady=process.argv.includes('--ready-screenshots')?captureScene('ready'):undefined;
       const result={profile:profile.name,run:profile.run,...await checkControls(evaluate,app.multiplayer,room,identity.you,sleep,captureFlip,captureChaff,captureNotices,captureReady)};
-      results.push(result);console.log(JSON.stringify({...result,trace:undefined,flipTrace:undefined}));
+      results.push(result);console.log(JSON.stringify({...result,trace:undefined,flipTrace:undefined,orbitTrace:undefined}));
       await evaluate("document.querySelector('.viewport').scrollIntoView({block:'center'})");
       const screenshot=await call('Page.captureScreenshot',{format:'png'},session);
       await writeFile(`${output}.${profile.run}.${profile.name}.png`,Buffer.from(screenshot.data,'base64'));

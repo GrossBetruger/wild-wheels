@@ -113,7 +113,7 @@ export function tick(r, keys, dt) {
   const driver = drivers[r.driver];
   const throttle = keys.has('arrowup') || keys.has('w');
   const brake = keys.has('arrowdown') || keys.has('s');
-  const steering = Number(keys.has('arrowright') || keys.has('d')) - Number(keys.has('arrowleft') || keys.has('a'));
+  const steering = keys.steer ?? (Number(keys.has('arrowright') || keys.has('d')) - Number(keys.has('arrowleft') || keys.has('a')));
   const drifting = keys.has('shift') && steering !== 0 && r.speed > 180;
   r.speed += (throttle ? 160 + driver.accel * 22 : -100) * dt;
   if (brake) r.speed -= 370 * dt;

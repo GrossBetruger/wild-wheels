@@ -5,6 +5,19 @@ import { encodeSnapshot, decodeSnapshot } from './wire.js';
 import { ActionAudio } from './action-audio.js';
 import { ChaffNotice } from './combat-notices.js';
 
+test('a diverted missile circles the cloud three times, falls, and explodes safely even after the cloud expires',()=>{
+  const world=createBattle();Object.assign(world,{phase:'racing',wx:-65,wz:0,shield:0,bots:[],supplies:[],chaffClouds:[{id:0,owner:0,wx:-65,wz:20,age:0,life:.1}],projectiles:[{kind:'missile',owner:99,target:null,decoy:0,decoyOwner:0,decoyCenter:{wx:-65,wz:20},wx:-60,wz:20,heading:Math.PI,speed:70,height:1.3,life:4,trail:[]}]});
+  const missile=world.projectiles[0];let rotation=0,previous=null,maxHeight=0,sawFall=false;
+  for(let i=0;i<180;i++){
+    tickBattle(world,new Set(),1/60);maxHeight=Math.max(maxHeight,missile.height);
+    if(missile.orbitAge>0&&missile.orbitAge<=1.8){const angle=Math.atan2(missile.wx+65,missile.wz-20);if(previous!==null)rotation+=Math.atan2(Math.sin(angle-previous),Math.cos(angle-previous));previous=angle;}
+    if(missile.orbitAge>1.8&&missile.height<2)sawFall=true;
+  }
+  assert.ok(rotation>Math.PI*5.7);assert.ok(maxHeight>=4);assert.equal(sawFall,true);
+  assert.equal(missile.height,.15);assert.equal(world.projectiles.length,0);assert.equal(world.chaffClouds.length,0);assert.equal(world.health,3);
+  assert.ok(world.effects.some(effect=>effect.type==='explosion'));
+});
+
 test('the green notice confirms only this player’s successful chaff diversion and expires once',()=>{
   const world=createBattle();Object.assign(world,{id:1,phase:'racing',soundEpoch:1,elapsed:2,chaffClouds:[]});
   const notice=new ChaffNotice();assert.equal(notice.sample(world,0),null);

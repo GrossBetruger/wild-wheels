@@ -51,6 +51,7 @@ export class Multiplayer {
     for(const action of body.actions)if(action.id!==undefined&&(!Number.isSafeInteger(action.id)||action.id<0||!Number.isSafeInteger(action.afterMove)||action.afterMove< -1||action.afterMove>(member.acceptedMove??-1)+128))throw problem(400,'Invalid action sequence.');
     if(body.epoch!==undefined&&body.epoch!==member.room.world.soundEpoch)return;
     if(body.moves!==undefined){
+      if(Array.isArray(body.moves)&&body.moves.some(move=>move?.steer!==undefined&&(!Number.isFinite(move.steer)||Math.abs(move.steer)>1)))throw problem(400,'Invalid steering.');
       if(!Number.isSafeInteger(body.epoch)||!Array.isArray(body.moves)||body.moves.length>8||body.moves.some(move=>!move||!Number.isSafeInteger(move.sequence)||move.sequence<0||!Array.isArray(move.keys)||move.keys.length>9||move.keys.some(key=>!KEYS.has(key)||key===' ')))throw problem(400,'Invalid movement.');
       if(body.epoch===member.room.world.soundEpoch){
         member.commandMode=true;member.moveQueue??=[];member.acceptedMove??=-1;

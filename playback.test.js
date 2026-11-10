@@ -2,6 +2,24 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { NetworkPlayback } from './playback.js';
 
+test('batched updates retain the chaff success sound and voice until the next rendered frame',()=>{
+  const playback=new NetworkPlayback();
+  playback.push(0,{id:0,arena:0,phase:'racing',soundEpoch:1,wx:0,wz:0,heading:0,cameraHeading:0,bots:[],events:['chaffDivert'],voices:[{cue:'cheer',driver:0}]},0);
+  playback.push(1/30,{id:0,arena:0,phase:'racing',soundEpoch:1,wx:0,wz:0,heading:0,cameraHeading:0,bots:[],events:[],voices:[]},.001);
+  const view=playback.sample(.016);
+  assert.deepEqual(view.events,['chaffDivert']);assert.deepEqual(view.voices,[{cue:'cheer',driver:0}]);
+  view.events.length=0;view.voices.length=0;
+  playback.push(2/30,{id:0,arena:0,phase:'racing',soundEpoch:1,wx:0,wz:0,heading:0,cameraHeading:0,bots:[],events:[],voices:[]},.02);
+  assert.deepEqual(playback.sample(.033).events,[]);assert.deepEqual(playback.sample(.033).voices,[]);
+});
+
+test('starting another match discards unplayed sounds from the previous match',()=>{
+  const playback=new NetworkPlayback();
+  playback.push(8,{id:0,arena:0,phase:'racing',soundEpoch:1,wx:0,wz:0,heading:0,cameraHeading:0,bots:[],events:['explosion'],voices:[{cue:'hurt',driver:0}]},0);
+  playback.push(8.1,{id:0,arena:0,phase:'racing',soundEpoch:2,wx:0,wz:0,heading:0,cameraHeading:0,bots:[],events:[],voices:[]},.01);
+  assert.deepEqual(playback.sample(.016).events,[]);assert.deepEqual(playback.sample(.016).voices,[]);
+});
+
 test('projectiles and animation time advance between network updates',()=>{
   const playback=new NetworkPlayback();
   playback.push(0,{id:0,arena:0,phase:'racing',elapsed:5,wx:0,wz:0,heading:0,cameraHeading:0,destroyed:0,bots:[],projectiles:[{id:1,wx:0,wz:0,height:1,heading:0}]},0);

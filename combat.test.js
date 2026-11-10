@@ -245,7 +245,7 @@ test('chaff creates a visible decoy ahead and detonates missiles arriving from e
     const r=createBattle(0,0,()=>.5);Object.assign(r,{phase:'racing',wx:-65,wz:0,heading:0,motionHeading:0,cameraHeading:0,bots:[],supplies:[],shield:0});
     r.projectiles=[{kind:'missile',target:0,owner:99,wx:-65,wz:missileZ,heading,speed:70,height:1.3,life:3,trail:[]}];
     releaseChaff(r);assert.equal(r.chaffClouds[0].wz,18);
-    for(let frame=0;frame<40;frame++)tickBattle(r,new Set(),.05);
+    for(let frame=0;frame<80;frame++)tickBattle(r,new Set(),.05);
     const explosion=r.effects.find(effect=>effect.type==='explosion');
     assert.ok(explosion,'The intercepted missile produces an explosion');assert.ok(explosion.wz>10,'The detonation happens ahead of the kart');assert.equal(r.projectiles.length,0);assert.equal(r.health,3);assert.equal(r.notice,'CHAFF INTERCEPT · MISSILE DESTROYED');
   }
@@ -257,7 +257,8 @@ test('chaff remains airborne for eight seconds and attracts missiles arriving si
   r.projectiles=[{kind:'missile',target:0,owner:99,wx:-65,wz:45,heading:Math.PI,speed:70,height:1.3,life:3,trail:[]}];
   tickBattle(r,new Set(),.05);assert.equal(r.projectiles[0].target,null);
   for(let frame=0;frame<20;frame++)tickBattle(r,new Set(),.05);
-  assert.equal(r.projectiles.length,0);assert.equal(r.health,3);assert.equal(r.notice,'CHAFF INTERCEPT · MISSILE DESTROYED');assert.equal(r.chaffClouds.length,1);
-  for(let frame=0;frame<40;frame++)tickBattle(r,new Set(),.05);
+  assert.equal(r.projectiles.length,1);assert.ok(r.projectiles[0].orbitAge>0);assert.equal(r.health,3);assert.equal(r.chaffClouds.length,1);
+  for(let frame=0;frame<55;frame++)tickBattle(r,new Set(),.05);
+  assert.equal(r.projectiles.length,0);assert.equal(r.health,3);assert.equal(r.notice,'CHAFF INTERCEPT · MISSILE DESTROYED');
   assert.equal(r.chaffClouds.length,0);
 });

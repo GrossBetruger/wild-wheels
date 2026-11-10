@@ -1,4 +1,4 @@
-import { predictKartMovement, somersaultBattle, MOVEMENT_DT } from './combat.js';
+import { predictKartMovement, somersaultBattle, commandKeys, MOVEMENT_DT } from './combat.js';
 
 const fields=['wx','wz','speed','heading','motionHeading','cameraHeading','drift','wasDrifting','boost','yaw','somersault','somersaultCooldown'];
 const angle=(a,b)=>Math.atan2(Math.sin(a-b),Math.cos(a-b));
@@ -31,7 +31,7 @@ export class LocalPrediction {
     this.history=this.history.filter(command=>command.sequence>sequence);
     for(const action of this.maneuvers)if(action.afterMove<=sequence)applyManeuver(world,this.actor,action);
     for(const command of this.history){
-      predictKartMovement(world,this.actor,new Set(command.keys),MOVEMENT_DT);
+      predictKartMovement(world,this.actor,commandKeys(command),MOVEMENT_DT);
       for(const action of this.maneuvers)if(action.afterMove===command.sequence)applyManeuver(world,this.actor,action);
     }
     if(reset||Math.hypot(old.wx-this.actor.wx,old.wz-this.actor.wz)>18){this.error={wx:0,wz:0,heading:0,cameraHeading:0};return;}
@@ -43,8 +43,8 @@ export class LocalPrediction {
       this.accumulator+=Math.min(.05,Math.max(0,dt));
       while(this.accumulator>=MOVEMENT_DT-1e-8&&this.history.length<120){
         const held=[...keys].filter(key=>['arrowup','arrowdown','arrowleft','arrowright','w','a','s','d','shift'].includes(key));
-        this.history.push({sequence:this.nextSequence++,keys:held});
-        this.sounds.push(...(predictKartMovement(this.world,this.actor,new Set(held),MOVEMENT_DT)??[]));
+        const command={sequence:this.nextSequence++,keys:held,...(Number.isFinite(keys.steer)?{steer:keys.steer}:{})};this.history.push(command);
+        this.sounds.push(...(predictKartMovement(this.world,this.actor,commandKeys(command),MOVEMENT_DT)??[]));
         for(const action of this.maneuvers)if(action.afterMove===this.nextSequence-1)applyManeuver(this.world,this.actor,action);
         this.accumulator-=MOVEMENT_DT;
       }

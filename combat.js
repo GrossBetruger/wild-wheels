@@ -42,7 +42,7 @@ function divertMissiles(r,cloud){
   let diverted=0;
   for(const shot of r.projectiles){
     if(shot.kind!=='missile'||shot.target!==cloud.owner||shot.decoy!=null||distance(shot,cloud)>70||!clearShot(arenas[r.arena],shot,cloud))continue;
-    shot.target=null;shot.decoy=cloud.id;shot.life=Math.max(shot.life??0,1.8);diverted++;
+    shot.target=null;shot.decoy=cloud.id;shot.decoyOwner=cloud.owner;shot.decoyCenter={wx:cloud.wx,wz:cloud.wz};shot.life=Math.max(shot.life??0,4.5);diverted++;
   }
   if(diverted){cloud.diversions=(cloud.diversions??0)+diverted;cloud.divertedAt=r.elapsed;sound(r,'chaffDivert',cloud);}
   return diverted;
@@ -60,9 +60,12 @@ export function releaseChaff(r,actor=r){
 }
 export function makeProjectile(r,actor){
   const kind=actor.item==='missile'&&actor.missiles>0?'missile':'hedgehog',vulcan=kind==='hedgehog'&&actor.vulcan>0;
-  const candidates=[r,...r.bots].filter(k=>k.id!==actor.id&&!k.destroyed&&k.shield<=0&&distance(k,actor)<100&&Math.abs(angleDelta(Math.atan2(k.wx-actor.wx,k.wz-actor.wz),actor.heading))<.65&&clearShot(arenas[r.arena],actor,k)).sort((a,b)=>distance(actor,a)-distance(actor,b));
-  return {kind,vulcan,owner:actor.id,target:candidates[0]?.id??null,wx:actor.wx+Math.sin(actor.heading)*3.5,wz:actor.wz+Math.cos(actor.heading)*3.5,heading:actor.heading,speed:kind==='missile'?70:vulcan?125:90,height:1.3,vy:3,life:kind==='missile'?3:vulcan?1.3:2.5,age:0,trail:[],bounces:0};
+  return {kind,vulcan,owner:actor.id,target:targetAhead(r,actor)?.id??null,wx:actor.wx+Math.sin(actor.heading)*3.5,wz:actor.wz+Math.cos(actor.heading)*3.5,heading:actor.heading,speed:kind==='missile'?70:vulcan?125:90,height:1.3,vy:3,life:kind==='missile'?3:vulcan?1.3:2.5,age:0,trail:[],bounces:0};
 }
+export function targetAhead(world,actor=world,cone=.65){
+  return [world,...world.bots].filter(other=>other.id!==actor.id&&!other.inactive&&!other.destroyed&&other.shield<=0&&distance(other,actor)<100&&Math.abs(angleDelta(Math.atan2(other.wx-actor.wx,other.wz-actor.wz),actor.heading))<cone&&clearShot(arenas[world.arena],actor,other)).sort((a,b)=>distance(actor,a)-distance(actor,b))[0]??null;
+}
+export function commandKeys(command){const keys=new Set(command.keys);if(Number.isFinite(command.steer))keys.steer=command.steer;return keys;}
 export function useBattleTurbo(r,actor=r,actionId){
   if(r.phase!=='racing'||r.finishCountdown!==null||actor.destroyed>0||actor.turbos<=0||actor.boost>0)return false;
   actor.turbos--;actor.boost=2.5;fx(r,'boost',actor,actionId==null?undefined:`action:${actionId}`);return true;
@@ -110,17 +113,32 @@ function collectSupplies(r,actor){
   }
 }
 // Shared visual trajectory; damage remains exclusively in tickBattle.
+function orbitChaff(shot,decoy,dt){
+  shot.orbitAge+=dt;
+  const circling=Math.min(1,shot.orbitAge/1.8),fall=Math.max(0,shot.orbitAge-1.8),angle=shot.orbitAngle+Math.PI*6*circling+fall*5;
+  const radius=shot.orbitRadius*(1-.3*circling)*Math.max(.6,1-fall*.5);
+  shot.wx=decoy.wx+Math.sin(angle)*radius;shot.wz=decoy.wz+Math.cos(angle)*radius;
+  shot.heading=angle+Math.PI/2;
+  shot.height=shot.orbitHeight+(4.2-shot.orbitHeight)*Math.min(1,shot.orbitAge/.35)-7*fall*fall;
+  const impact=shot.height<=.15;
+  if(impact){shot.height=.15;shot.life=0;}
+  return {impact,decoy};
+}
 export function advanceProjectile(r,shot,dt){
   const actors=[r,...r.bots],arena=arenas[r.arena];
   shot.age=(shot.age??0)+dt;shot.life-=dt;shot.trail.push({wx:shot.wx,wz:shot.wz,height:shot.height});if(shot.trail.length>24)shot.trail.shift();
-  const decoy=r.chaffClouds?.find(c=>c.id===shot.decoy),target=decoy??actors.find(k=>k.id===shot.target&&!k.destroyed);
+  const decoy=r.chaffClouds?.find(c=>c.id===shot.decoy)??(shot.decoyCenter?{...shot.decoyCenter,owner:shot.decoyOwner}:null),target=decoy??actors.find(k=>k.id===shot.target&&!k.destroyed);
+  if(decoy&&shot.orbitAge!==undefined)return orbitChaff(shot,decoy,dt);
   if(shot.kind==='missile'&&target){const turnRate=decoy?4.5:1.6;shot.heading+=clamp(angleDelta(Math.atan2(target.wx-shot.wx,target.wz-shot.wz),shot.heading),-turnRate*dt,turnRate*dt);}
   let impact=false,victim;const steps=Math.ceil(shot.speed*dt/1.5);
   for(let step=0;step<steps&&!impact;step++){
     shot.wx+=Math.sin(shot.heading)*shot.speed*dt/steps;shot.wz+=Math.cos(shot.heading)*shot.speed*dt/steps;
-    if(decoy&&distance(shot,decoy)<3){shot.life=0;impact=true;shot.chaffed=true;break;}
+    if(decoy&&distance(shot,decoy)<6){
+      shot.orbitAge=0;shot.orbitAngle=Math.atan2(shot.wx-decoy.wx,shot.wz-decoy.wz);shot.orbitRadius=distance(shot,decoy);shot.orbitHeight=shot.height;shot.chaffed=true;shot.life=Math.max(shot.life,3);
+      return orbitChaff(shot,decoy,dt);
+    }
     impact=blocked(arena,shot.wx,shot.wz,.3);
-    victim=actors.find(k=>k.id!==shot.owner&&!k.destroyed&&k.shield<=0&&distance(k,shot)<2.7);
+    victim=decoy?undefined:actors.find(k=>k.id!==shot.owner&&!k.destroyed&&k.shield<=0&&distance(k,shot)<2.7);
     if(victim)impact=true;
   }
   if(impact)shot.life=0;
@@ -207,7 +225,7 @@ export function predictKartMovement(world,actor,keys,dt){
 function advanceKartMovement(world,actor,keys,dt){
   actor.somersault=Math.max(0,(actor.somersault??0)-dt);actor.somersaultCooldown=Math.max(0,(actor.somersaultCooldown??0)-dt);
   actor.boost=Math.max(0,(actor.boost??0)-dt);actor.human=true;
-  const steer=Number(keys.has('arrowright')||keys.has('d'))-Number(keys.has('arrowleft')||keys.has('a'));
+  const steer=keys.steer??(Number(keys.has('arrowright')||keys.has('d'))-Number(keys.has('arrowleft')||keys.has('a')));
   moveActor(world,actor,steer,keys.has('arrowup')||keys.has('w'),keys.has('arrowdown')||keys.has('s'),dt,keys.has('shift'));
   actor.yaw=steer*.12;
 }
@@ -232,7 +250,7 @@ export function tickBattle(r,keys,dt,inputs=null){
       const held=control.keys instanceof Set?control.keys:control;
       if(Array.isArray(control.moves))for(const command of control.moves){
         if(control.actionClock)for(const key of ['fireCooldown','chaffCooldown']){const remaining=(actor[key]??0)-MOVEMENT_DT;actor[key]=remaining<1e-8?0:remaining;}
-        advanceKartMovement(r,actor,new Set(command.keys),MOVEMENT_DT);collectSupplies(r,actor);control.afterMove?.(command.sequence);
+        advanceKartMovement(r,actor,commandKeys(command),MOVEMENT_DT);collectSupplies(r,actor);control.afterMove?.(command.sequence);
       }
       if(!Array.isArray(control.moves))advanceKartMovement(r,actor,held,dt);
       if(held.has(' '))fireBattle(r,actor);continue;

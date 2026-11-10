@@ -87,8 +87,13 @@ export async function checkControls(evaluate,app,room,id,sleep,captureFlip,captu
   const cameraPass=flipTrace[0].cameraHeading<.15&&flipTrace.some(frame=>frame.cameraHeading>1.2&&frame.cameraHeading<1.9)&&Math.abs(flipTrace.at(-1).cameraHeading-Math.PI)<.02&&cameraSteps.every((step,index)=>step>=-.001&&step<=(flipTrace[index+1].time-flipTrace[index].time+.002)*Math.PI*1.5/.55+.02);
   const flipPass=flipTrace.length>0&&flippedHeading(flipTrace[0])&&flipTrace.every(flippedHeading)&&flipTrace.some(frame=>frame.height>4)&&flipTrace.at(-1).height===0&&flipTrace[0].shot!==null&&Math.abs(flipTrace[0].shot-Math.PI)<.01&&remoteSawFlip&&cameraPass;
   const other=[room.world,...room.world.bots].find(player=>!player.inactive&&player.id!==id);
-  Object.assign(actor,{wx:-65,wz:0,heading:0,motionHeading:0,cameraHeading:0,speed:0,boost:0,shield:0,chaff:2,chaffCooldown:0});
-  Object.assign(other,{wx:-65,wz:-65,heading:0,motionHeading:0,cameraHeading:0,speed:0,boost:0,destroyed:0,shield:0,fireCooldown:0,item:'missile',missiles:1,vulcan:0});
+  Object.assign(actor,{wx:-65,wz:0,heading:0,motionHeading:0,cameraHeading:0,speed:0,boost:0,shield:0,chaff:2,chaffCooldown:0,ammo:5});
+  Object.assign(other,{wx:-65,wz:60,heading:Math.PI,motionHeading:Math.PI,cameraHeading:Math.PI,speed:0,boost:0,destroyed:0,shield:0,fireCooldown:0,item:'missile',missiles:1,vulcan:0});
+  room.world.projectiles=[];
+  for(let i=0;i<100;i++){if(await evaluate("document.querySelector('.kart-nameplate')?.textContent==="+JSON.stringify(other.name)))break;await sleep(25);}
+  await sleep(150);
+  const desktopManual=actor.ammo>=5&&room.world.projectiles.every(shot=>shot.owner!==id);
+  other.wz=-65;other.heading=0;other.motionHeading=0;other.cameraHeading=0;
   room.world.projectiles=[];room.world.chaffClouds=[];
   const shooter=room.members.get(other.id);
   app.controls(shooter,{sequence:shooter.sequence+1,keys:[],actions:[{type:'fire'}]});
@@ -112,6 +117,16 @@ export async function checkControls(evaluate,app,room,id,sleep,captureFlip,captu
   await sleep(150);
   const chaffSoundCount=await evaluate('__game.chaffSounds.length'),chaffPass=colorPass&&chaffSoundCount===1;
   const greenNoticePass=await evaluate("!document.getElementById('averted-notice').classList.contains('hidden')&&document.getElementById('averted-notice').textContent.includes('MISSILE AVERTED')&&document.getElementById('incoming-warning').classList.contains('hidden')");
+  const orbitTrace=[];let sawOrbit=false,orbitCaptured=false;
+  for(let i=0;i<220;i++){
+    const shot=await evaluate("(()=>{const p=__game.race.projectiles.find(p=>p.decoy!=null);return p?{wx:p.wx,wz:p.wz,height:p.height,age:p.orbitAge??null}:null;})()");
+    if(shot){orbitTrace.push(shot);if(shot.age!==null)sawOrbit=true;}
+    if(captureChaff&&!orbitCaptured&&shot?.age>.4){await captureChaff();orbitCaptured=true;}
+    if(sawOrbit&&!shot)break;await sleep(20);
+  }
+  let orbitRotation=0,previousAngle=null;
+  for(const shot of orbitTrace.filter(shot=>shot.age!==null&&shot.age<=1.8)){const angle=Math.atan2(shot.wx-ownCloud.wx,shot.wz-ownCloud.wz);if(previousAngle!==null)orbitRotation+=Math.atan2(Math.sin(angle-previousAngle),Math.cos(angle-previousAngle));previousAngle=angle;}
+  const orbitPass=sawOrbit&&orbitRotation>Math.PI*4.8&&orbitTrace.some(shot=>shot.height>3.5)&&orbitTrace.some(shot=>shot.age>1.8&&shot.height<2)&&room.world.projectiles.every(shot=>shot.decoy==null);
   await evaluate(`fetch('/api/name',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer ${shooter.token}'},body:JSON.stringify({name:'Rival <img>'})})`);
   room.world.projectiles=[];Object.assign(other,{health:3,shield:0,destroyed:0});damageBattle(room.world,other,id,3);
   for(let i=0;i<100;i++){if(await evaluate("!document.getElementById('whack-banner').classList.contains('hidden')"))break;await sleep(10);}
@@ -130,5 +145,5 @@ export async function checkControls(evaluate,app,room,id,sleep,captureFlip,captu
   for(let i=0;i<100;i++){if(await evaluate("!document.getElementById('match-results').classList.contains('hidden')&&document.querySelectorAll('#match-results tbody tr').length===2"))break;await sleep(25);}
   const leaderboard=await evaluate("[...document.querySelectorAll('#match-results tbody tr')].map(row=>[...row.cells].map(cell=>cell.textContent))");
   const resultsPass=JSON.stringify(leaderboard)===JSON.stringify([['1',other.name,'10','2'],['2',displayName+' · YOU','3','4']])&&await evaluate("document.querySelectorAll('#match-results tbody .you').length===1&&!document.querySelector('#match-results b')");
-  return {readyPass,readyCleared,readyUI,popupPass,popup,namePass,pickupKeptVulcan,turboPass,flipPass,cameraPass,remoteSawFlip,flipTrace,warningPass,warning,chaffPass,chaffColor:ownCloud?.color,chaffSoundCount,greenNoticePass,whackPass,whack,resultsPass,leaderboard,pass:readyPass&&readyCleared&&popupPass&&namePass&&pickupKeptVulcan&&turboPass&&flipPass&&warningPass&&chaffPass&&greenNoticePass&&whackPass&&resultsPass,trace};
+  return {readyPass,readyCleared,readyUI,popupPass,popup,namePass,pickupKeptVulcan,turboPass,flipPass,cameraPass,remoteSawFlip,flipTrace,desktopManual,warningPass,warning,chaffPass,chaffColor:ownCloud?.color,chaffSoundCount,greenNoticePass,orbitPass,orbitRotation,orbitTrace,whackPass,whack,resultsPass,leaderboard,pass:readyPass&&readyCleared&&popupPass&&namePass&&pickupKeptVulcan&&turboPass&&flipPass&&desktopManual&&warningPass&&chaffPass&&greenNoticePass&&orbitPass&&whackPass&&resultsPass,trace};
 }

@@ -1,6 +1,7 @@
 import { sampleTrack, branches } from './track.js';
 import { LENGTH, drivers, pickupType } from './engine.js';
 import { arenas, combatPose, somersaultPose } from './combat.js';
+import { kartNameplates } from './nameplates.js';
 const rgb=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255);
 const sub=(a,b)=>a.map((v,i)=>v-b[i]);
 const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
@@ -171,6 +172,7 @@ export class Renderer {
   hedgehog(m,x,y,z,size,angle=0){if(!this.buildingModel){this.model(`hedgehog:${size}`,x,y,z,angle,mesh=>this.hedgehog(mesh,0,0,0,size));return;}m.at(x,y,z,angle);m.ball(0,0,0,size,size*.8,size,'#79513b',8,5);for(let i=0;i<9;i++){const a=i/9*Math.PI*2;m.cone(Math.cos(a)*size*.6,size*.2,Math.sin(a)*size*.6,size*.25,size*.85,'#dab67f',4);}m.ball(0,-size*.1,size*.85,size*.5,size*.4,size*.4,'#eed1a1',7,4);m.ball(0,0,size*1.2,size*.15,size*.15,size*.15,'#242a34',6,3);}
   draw(r,time){
     this.instances=[];
+    this.nameplates=[];
     if(r.mode==='combat'){this.drawBattle(r,time);return;}
     if(this.track!==r.track)this.scenery(r.track);
     const gl=this.gl,canvas=this.canvas;const width=Math.round(canvas.clientWidth*this.pixelRatio()),height=Math.round(canvas.clientHeight*this.pixelRatio());if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;}gl.viewport(0,0,width,height);
@@ -219,6 +221,7 @@ export class Renderer {
     const gl=this.gl,canvas=this.canvas,width=Math.round(canvas.clientWidth*this.pixelRatio()),height=Math.round(canvas.clientHeight*this.pixelRatio());if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;}gl.viewport(0,0,width,height);
     const sky=rgb(arenas[r.arena].sky);gl.clearColor(...sky,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(this.program);
     const p=combatPose(r),cx=Math.sin(r.cameraHeading),cz=Math.cos(r.cameraHeading),eye=[p.x-cx*17,10+(r.destroyed?5:0),p.z-cz*17],view=cameraMatrix(eye,[p.x+cx*18,1.5,p.z+cz*18],width/height,r.boost>0?1.2:r.wasDrifting?1.13:1.07);
+    this.nameplates=kartNameplates(r,view,eye);
     gl.uniformMatrix4fv(this.matrix,false,view);gl.uniform3fv(this.eyeUniform,eye);gl.uniform3fv(this.fog,sky);gl.uniform1f(this.emission,0);this.drawBuffer(this.staticBuffer,this.staticCount);
     const m=new Mesh();this.glow=new Mesh();this.smoke=new Mesh();
     for(const skid of r.skids){

@@ -7,7 +7,11 @@ export class NetworkPlayback {
   push(time,world,now=performance.now()/1000){
     if(!Number.isFinite(time))return;
     const previous=this.frames.at(-1);
-    if(previous&&(world.arena!==previous.world.arena||world.phase!==previous.world.phase||world.id!==previous.world.id||time<previous.time))this.clear();
+    if(previous&&(world.arena!==previous.world.arena||world.phase!==previous.world.phase||world.id!==previous.world.id||world.soundEpoch!==previous.world.soundEpoch||time<previous.time))this.clear();
+    // A render consumes these arrays. Preserve cues if several updates arrive before it.
+    const pending=this.frames.at(-1)?.world;
+    world.events=[...(pending?.events??[]),...(world.events??[])].slice(-64);
+    world.voices=[...(pending?.voices??[]),...(world.voices??[])].slice(-16);
     if(this.frames.at(-1)?.time===time)this.frames.pop();
     this.frames.push({time,world,offset:now-time});
     if(this.frames.length>32)this.frames.shift();

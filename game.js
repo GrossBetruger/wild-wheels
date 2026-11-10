@@ -6,9 +6,18 @@ import { createBattle, tickBattle, fireBattle, releaseChaff, useBattleTurbo, som
 import { NetworkGame } from './network.js';
 import { matchResults } from './results.js';
 import { KillCelebration, ChaffNotice } from './combat-notices.js';
+import { TiltSteering, allowTilt, usesMobileControls, mobileLockTarget } from './mobile.js';
 const $ = id => document.getElementById(id);
 const canvas = $('game'), map = $('map').getContext('2d');
 const keys = new Set(), audio = new RaceAudio(), renderer = new Renderer(canvas);
+const mobile=usesMobileControls(navigator.maxTouchPoints,matchMedia('(pointer:coarse)').matches),tilt=new TiltSteering();let autoFire=mobile;
+const racePanel=document.querySelector('.race-panel');let mobileImmersive=false,mobileNativeFullscreen=false;
+function exitMobileFullscreen(){mobileImmersive=false;mobileNativeFullscreen=false;racePanel.classList.remove('mobile-fullscreen');document.body.classList.remove('mobile-playing');mobileScreenButton.textContent='FULL SCREEN';if(document.fullscreenElement===racePanel)document.exitFullscreen().catch(()=>{});}
+function enterMobileFullscreen(){
+  if(!mobile)return;mobileImmersive=true;racePanel.classList.add('mobile-fullscreen');document.body.classList.add('mobile-playing');mobileScreenButton.textContent='EXIT FULL SCREEN';
+  if(!document.fullscreenElement&&racePanel.requestFullscreen)racePanel.requestFullscreen().then(()=>{mobileNativeFullscreen=true;}).catch(()=>{});
+}
+document.addEventListener('fullscreenchange',()=>{if(document.fullscreenElement===racePanel)mobileNativeFullscreen=true;if(mobileNativeFullscreen&&!document.fullscreenElement)exitMobileFullscreen();});
 let race = createRace(), lastTime = 0, selected = 0, track = 0, mode='race', lastPhase = '', lastCount = -1;
 const renderControls=document.createElement('div');renderControls.className='render-controls';const graphicsLabel=document.createElement('label');graphicsLabel.textContent='GRAPHICS ';
 const qualitySelect=document.createElement('select');qualitySelect.setAttribute('aria-label','Graphics quality');for(const [value,label] of [['auto','Auto'],['high','High'],['balanced','Balanced'],['low','Low']]){const option=document.createElement('option');option.value=value;option.textContent=label;qualitySelect.append(option);}qualitySelect.onchange=()=>renderer.setQuality(qualitySelect.value);graphicsLabel.append(qualitySelect);
@@ -21,6 +30,22 @@ const switchWeapon=()=>network.active?network.action('cycle'):cycleItem(race);
 const chaff=()=>network.active?network.action('chaff'):mode==='combat'?releaseChaff(race):false;
 const turbo=()=>network.active?network.action('turbo'):mode==='combat'?useBattleTurbo(race):useTurbo(race);
 const somersault=()=>network.active?network.action('somersault'):mode==='combat'?somersaultBattle(race):false;
+const mobilePanel=document.createElement('div');mobilePanel.className='mobile-panel';mobilePanel.classList.toggle('hidden',!mobile);
+const tiltButton=document.createElement('button'),centerButton=document.createElement('button'),autoButton=document.createElement('button'),mobileHint=document.createElement('span');
+const mobileScreenButton=document.createElement('button');mobileScreenButton.id='mobile-fullscreen';mobileScreenButton.textContent='FULL SCREEN';mobileScreenButton.onclick=()=>mobileImmersive?exitMobileFullscreen():enterMobileFullscreen();
+tiltButton.id='enable-tilt';tiltButton.textContent='ENABLE TILT';centerButton.textContent='RECENTER';autoButton.id='auto-fire';autoButton.textContent='AUTO FIRE: ON';autoButton.setAttribute('aria-pressed',String(autoFire));mobileHint.textContent='Tilt mode steers and drives. Brake and other touch controls stay available.';
+const orientation=event=>{if(!document.hidden)tilt.sample(event.beta,event.gamma,screen.orientation?.angle??0);};
+tiltButton.onclick=async()=>{
+  if(tilt.enabled){tilt.enabled=false;tilt.recenter();window.removeEventListener('deviceorientation',orientation);tiltButton.textContent='ENABLE TILT';mobileHint.textContent='Tilt off. Use the touch controls.';return;}
+  try{
+    await allowTilt({mobile,secure:isSecureContext,orientation:window.DeviceOrientationEvent});
+    tilt.enabled=true;tilt.recenter();window.addEventListener('deviceorientation',orientation);tiltButton.textContent='TILT: ON';mobileHint.textContent='Hold your phone comfortably, then tilt left or right. Brake to slow down.';
+    setTimeout(()=>{if(tilt.enabled&&tilt.baseline===null)mobileHint.textContent='No motion data yet. Tilt your phone or use the touch controls.';},2500);
+  }catch(error){mobileHint.textContent=error.message;}
+};
+centerButton.onclick=()=>{tilt.recenter();mobileHint.textContent='Hold your phone in your preferred position to recenter.';};
+autoButton.onclick=()=>{autoFire=!autoFire;autoButton.textContent=`AUTO FIRE: ${autoFire?'ON':'OFF'}`;autoButton.setAttribute('aria-pressed',String(autoFire));};
+mobilePanel.append(tiltButton,centerButton,autoButton,mobileScreenButton,mobileHint);racePanel.append(mobilePanel);if(mobile)racePanel.append(document.querySelector('.touch-controls'));
 const modeSwitch=document.createElement('nav');modeSwitch.className='mode-switch';modeSwitch.setAttribute('aria-label','Game mode');
 const selectedMaps={race:0,combat:0};
 for(const [value,label] of [['race','🏁 GRAND PRIX'],['combat','⚔ ARENA BATTLE']]){const button=document.createElement('button');button.id=`mode-${value}`;button.textContent=label;button.setAttribute('aria-pressed',String(value===mode));button.onclick=()=>{if(mode===value)return;mode=value;track=selectedMaps[mode];resetMap();};modeSwitch.append(button);}
@@ -51,6 +76,8 @@ function showResults(){
   finalResults.replaceChildren(table);
 }
 const routeHint=document.createElement('div');routeHint.className='route-hint';document.querySelector('.viewport').append(routeHint);
+const nameplateLayer=document.createElement('div');nameplateLayer.className='kart-nameplates';nameplateLayer.setAttribute('aria-hidden','true');document.querySelector('.viewport').append(nameplateLayer);const nameplateNodes=new Map();
+const mobileLock=document.createElement('div');mobileLock.id='mobile-lock';mobileLock.className='mobile-lock hidden';document.querySelector('.viewport').append(mobileLock);
 const driftMeter=document.createElement('div');driftMeter.className='drift-meter hidden';const driftLabel=document.createElement('strong'),driftCharge=document.createElement('progress'),driftHelp=document.createElement('small');driftCharge.max=1.2;driftCharge.setAttribute('aria-label','Drift boost charge');driftHelp.textContent='RELEASE DRIFT TO BOOST';driftMeter.append(driftLabel,driftCharge,driftHelp);document.querySelector('.viewport').append(driftMeter);
 const brakeButton=document.createElement('button');brakeButton.dataset.key='arrowdown';brakeButton.textContent='BRAKE';brakeButton.className='hidden';document.querySelector('.touch-controls').append(brakeButton);
 const chaffButton=document.createElement('button');chaffButton.id='release-chaff';chaffButton.className='chaff-button hidden';chaffButton.type='button';chaffButton.onclick=chaff;document.querySelector('.viewport').append(chaffButton);
@@ -76,7 +103,17 @@ function announceFinish(){
   finishDetail.textContent=finishText();finishFlash.classList.remove('hidden');
 }
 function finishText(){return `${mode==='combat'?`${race.kills} KILLS`:timeLabel(race.finishTime)} · ${mode==='combat'?'BATTLE':'RACE'} ENDING IN ${Math.ceil(race.finishCountdown)}…`;}
-function draw(){renderer.draw(race,race.elapsed);drawMap();}
+function draw(){
+  renderer.draw(race,race.elapsed);drawMap();
+  const visible=new Set();
+  for(const plate of renderer.nameplates??[]){
+    visible.add(plate.id);let label=nameplateNodes.get(plate.id);
+    if(!label){label=document.createElement('span');label.className='kart-nameplate';nameplateNodes.set(plate.id,label);nameplateLayer.append(label);}
+    if(label.textContent!==plate.name)label.textContent=plate.name;
+    label.style.left=`${plate.x}%`;label.style.top=`${plate.y}%`;label.style.borderColor=plate.color;
+  }
+  for(const [id,label] of nameplateNodes)if(!visible.has(id)){label.remove();nameplateNodes.delete(id);}
+}
 function mapPoint(t,route=0){const p=sampleTrack(t/(Math.PI*2),0,route);return [140+p.x*.29,64+p.z*.16];}
 function drawMap(){
   map.clearRect(0,0,280,126);
@@ -178,7 +215,7 @@ function hud(){
 function showDriver(index){selected=index;[...$('drivers').children].forEach((b,i)=>{b.classList.toggle('selected',i===index);b.setAttribute('aria-pressed',String(i===index));});const d=drivers[index];$('driver-name').textContent=d.name;$('driver-desc').textContent=d.desc;$('driver-number').textContent=String(index+1).padStart(2,'0');for(const [id,value] of [['speed-stat',d.speed],['handling-stat',d.handling],['accel-stat',d.accel]]){$(id).replaceChildren(...Array.from({length:5},(_,i)=>Object.assign(document.createElement('i'),{className:i<value?'on':''})));}}
 function selectDriver(index){if(network.active){network.chooseDriver(index);return;}showDriver(index);race=newGame();lastPhase='';}
 drivers.forEach((d,i)=>{const b=document.createElement('button');b.className='driver';b.textContent=d.emoji;b.title=d.name;b.setAttribute('aria-label',d.name);b.onclick=()=>selectDriver(i);$('drivers').append(b);});
-function start(){audio.unlock().catch(()=>{$('sound').textContent='CLICK FOR SOUND';});if(network.active){if(network.paused){network.pause();return;}if(network.isHost){network.control('start');return;}network.requestPlay();return;}if(race.phase==='paused'){race.phase=race.resumePhase||'racing';return;}if(race.phase==='racing'||race.phase==='countdown')return;race=newGame();race.phase='countdown';lastCount=-1;tone(400);}
+function start(){if(mobile)enterMobileFullscreen();audio.unlock().catch(()=>{$('sound').textContent='CLICK FOR SOUND';});if(network.active){if(network.paused){network.pause();return;}if(network.isHost){network.control('start');return;}network.requestPlay();return;}if(race.phase==='paused'){race.phase=race.resumePhase||'racing';return;}if(race.phase==='racing'||race.phase==='countdown')return;race=newGame();race.phase='countdown';lastCount=-1;tone(400);}
 function pause(){if(network.active){network.pause();return;}if(race.phase==='paused'){race.phase=race.resumePhase;return;}if(!['racing','countdown'].includes(race.phase))return;race.resumePhase=race.phase;race.phase='paused';keys.clear();}
 $('start').onclick=start;$('pause').onclick=pause;$('restart').onclick=()=>{if(network.active){network.control('reset');return;}race=newGame();lastPhase='';keys.clear();};
 $('change-track').onclick=()=>chooseMap((track+1)%mapButtons.length);
@@ -199,8 +236,9 @@ window.addEventListener('keydown',e=>{
   switch(key){case 'enter':start();break;case 'escape':case 'p':pause();break;case ' ':useWeapon();break;case 'q':switchWeapon();break;case 'x':if(!e.ctrlKey&&!e.metaKey&&!e.altKey)turbo();break;case 'z':if(!e.ctrlKey&&!e.metaKey&&!e.altKey)somersault();break;case 'c':if(!e.ctrlKey&&!e.metaKey&&!e.altKey)chaff();break;}
 });
 window.addEventListener('keyup',e=>{keys.delete(e.key.toLowerCase());if(network.active)network.input();});window.addEventListener('blur',()=>{keys.clear();if(['racing','countdown'].includes(race.phase))pause();});document.addEventListener('visibilitychange',()=>{if(document.hidden&&['racing','countdown'].includes(race.phase))pause();});
+window.addEventListener('blur',()=>tilt.recenter());document.addEventListener('visibilitychange',()=>{if(document.hidden)tilt.recenter();});
 for(const event of ['pointerdown','keydown'])window.addEventListener(event,()=>{if(network.active)audio.unlock().catch(()=>{});},{once:true});
 document.querySelectorAll('[data-key]').forEach(b=>{b.addEventListener('pointerdown',e=>{e.preventDefault();b.setPointerCapture(e.pointerId);keys.add(b.dataset.key);if(b.dataset.key===' ')useWeapon();if(network.active)network.input();});for(const name of ['pointerup','pointercancel','lostpointercapture'])b.addEventListener(name,()=>{keys.delete(b.dataset.key);if(network.active)network.input();});});
 selectDriver(0);updateMapLabels();
 let nextVisualFrame=0;
-function frame(t){if(t+1<nextVisualFrame){requestAnimationFrame(frame);return;}nextVisualFrame=Math.max(nextVisualFrame+1000/60,t+1);const dt=lastTime?Math.min((t-lastTime)/1000,.05):0;lastTime=t;renderer.recordFrame(t);const performanceText=`${renderer.fps||'…'} FPS · ${renderer.pixelRatio().toFixed(2)}×${network.active?` · ${network.rtt?Math.round(network.rtt*1000):'…'} ms ping`:''}`;if(fpsMeter.textContent!==performanceText)fpsMeter.textContent=performanceText;if(network.active){race=network.render(dt)??race;}if(!network.active&&mode==='combat')tickBattle(race,keys,dt);if(!network.active&&mode==='race')tick(race,keys,dt);for(const event of race.events){audio.event(event);if(event==='victory'||event==='finish')announceFinish();}race.events.length=0;const priority={win:5,lap:4,cheer:3,hurt:2,pass:1};race.voices.sort((a,b)=>priority[b.cue]-priority[a.cue]);for(const call of race.voices)audio.voice(call);race.voices.length=0;audio.update(race);draw();hud();requestAnimationFrame(frame);}requestAnimationFrame(frame);
+function frame(t){if(t+1<nextVisualFrame){requestAnimationFrame(frame);return;}nextVisualFrame=Math.max(nextVisualFrame+1000/60,t+1);const dt=lastTime?Math.min((t-lastTime)/1000,.05):0;lastTime=t;renderer.recordFrame(t);const performanceText=`${renderer.fps||'…'} FPS · ${renderer.pixelRatio().toFixed(2)}×${network.active?` · ${network.rtt?Math.round(network.rtt*1000):'…'} ms ping`:''}`;if(fpsMeter.textContent!==performanceText)fpsMeter.textContent=performanceText;const driving=tilt.keys(keys,mobile&&race.phase==='racing'&&!document.hidden);if(network.active){race=network.render(dt,driving)??race;}if(!network.active&&mode==='combat')tickBattle(race,driving,dt);if(!network.active&&mode==='race')tick(race,driving,dt);const lock=mobileLockTarget(race,mobile,autoFire&&!document.hidden);mobileLock.classList.toggle('hidden',!lock);if(lock){mobileLock.textContent='LOCKED · AUTO FIRE';if(useWeapon()&&network.active)race=network.render(0,driving)??race;}for(const event of race.events){audio.event(event);if(event==='victory'||event==='finish')announceFinish();}race.events.length=0;const priority={win:5,lap:4,cheer:3,hurt:2,pass:1};race.voices.sort((a,b)=>priority[b.cue]-priority[a.cue]);for(const call of race.voices)audio.voice(call);race.voices.length=0;audio.update(race);draw();hud();requestAnimationFrame(frame);}requestAnimationFrame(frame);
