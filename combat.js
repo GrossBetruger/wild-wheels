@@ -56,10 +56,13 @@ export function makeProjectile(r,actor){
   const candidates=[r,...r.bots].filter(k=>k.id!==actor.id&&!k.destroyed&&k.shield<=0&&distance(k,actor)<100&&Math.abs(angleDelta(Math.atan2(k.wx-actor.wx,k.wz-actor.wz),actor.heading))<.65&&clearShot(arenas[r.arena],actor,k)).sort((a,b)=>distance(actor,a)-distance(actor,b));
   return {kind,vulcan,owner:actor.id,target:candidates[0]?.id??null,wx:actor.wx+Math.sin(actor.heading)*3.5,wz:actor.wz+Math.cos(actor.heading)*3.5,heading:actor.heading,speed:kind==='missile'?70:vulcan?125:90,height:1.3,vy:3,life:kind==='missile'?3:vulcan?1.3:2.5,age:0,trail:[],bounces:0};
 }
+export function useBattleTurbo(r,actor=r,actionId){
+  if(r.phase!=='racing'||r.finishCountdown!==null||actor.destroyed>0||actor.turbos<=0||actor.boost>0)return false;
+  actor.turbos--;actor.boost=2.5;fx(r,'boost',actor,actionId==null?undefined:`action:${actionId}`);return true;
+}
 export function fireBattle(r,actor=r,actionId){
   if(r.phase!=='racing'||r.finishCountdown!==null||actor.destroyed>0||actor.fireCooldown>0)return;
   const cueKey=actionId==null?undefined:`action:${actionId}`;
-  if(actor.item==='boost'&&actor.turbos>0){actor.turbos--;actor.boost=2.5;actor.fireCooldown=.2;fx(r,'boost',actor,cueKey);actor.item=actor.missiles>0?'missile':'hedgehog';return true;}
   const kind=actor.item==='missile'&&actor.missiles>0?'missile':'hedgehog';
   const vulcan=kind==='hedgehog'&&actor.vulcan>0;
   if(kind==='hedgehog'&&!vulcan&&actor.ammo<=0)return;
@@ -74,7 +77,7 @@ export function fireBattle(r,actor=r,actionId){
 export function applySupply(actor,kind){
   switch(kind){
     case 'health':actor.health=Math.min(MAX_HEALTH,actor.health+1);actor.notice=`+1 HEART · ${actor.health} / ${MAX_HEALTH}`;actor.noticeTime=2;break;
-    case 'missile':actor.missiles=Math.min(3,actor.missiles+1);actor.item='missile';break;
+    case 'missile':actor.missiles=Math.min(3,actor.missiles+1);if(!(actor.vulcan>0&&actor.item==='hedgehog'))actor.item='missile';break;
     case 'hedgehog':actor.ammo=6;break;
     case 'boost':actor.turbos=Math.min(3,actor.turbos+1);break;
   }

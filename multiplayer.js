@@ -1,7 +1,7 @@
 import { randomBytes, randomInt } from 'node:crypto';
 import { networkInterfaces } from 'node:os';
 import { WebSocketServer } from 'ws';
-import { createBattle, tickBattle, fireBattle, releaseChaff, standings } from './combat.js';
+import { createBattle, tickBattle, fireBattle, releaseChaff, useBattleTurbo, standings } from './combat.js';
 import { drivers, selectItem, cycleItem } from './engine.js';
 import { ngrokOrigin } from './ngrok.js';
 import { encodeSnapshot } from './wire.js';
@@ -47,7 +47,7 @@ export class Multiplayer {
   }
   controls(member,body){
     if(!Number.isSafeInteger(body.sequence)||body.sequence<0||!Array.isArray(body.keys)||body.keys.length>10||body.keys.some(k=>!KEYS.has(k))||!Array.isArray(body.actions)||body.actions.length>8)throw problem(400,'Invalid controls.');
-    for(const action of body.actions)if(!action||!['fire','chaff','cycle','select'].includes(action.type)||(action.type==='select'&&!['hedgehog','missile','boost'].includes(action.item)))throw problem(400,'Invalid action.');
+    for(const action of body.actions)if(!action||!['fire','turbo','chaff','cycle','select'].includes(action.type)||(action.type==='select'&&!['hedgehog','missile'].includes(action.item)))throw problem(400,'Invalid action.');
     for(const action of body.actions)if(action.id!==undefined&&(!Number.isSafeInteger(action.id)||action.id<0||!Number.isSafeInteger(action.afterMove)||action.afterMove< -1||action.afterMove>(member.acceptedMove??-1)+128))throw problem(400,'Invalid action sequence.');
     if(body.epoch!==undefined&&body.epoch!==member.room.world.soundEpoch)return;
     if(body.moves!==undefined){
@@ -74,11 +74,12 @@ export class Multiplayer {
     const actor=[room.world,...room.world.bots][member.id];
     while(member.actions.length&&(member.actions[0].afterMove??-1)<=sequence){
       const action=member.actions.shift();
-      switch(action.type){case 'fire':fireBattle(room.world,actor,action.id);break;case 'chaff':releaseChaff(room.world,actor);break;case 'cycle':cycleItem(actor);break;case 'select':selectItem(actor,action.item);break;}
+      switch(action.type){case 'fire':fireBattle(room.world,actor,action.id);break;case 'turbo':useBattleTurbo(room.world,actor,action.id);break;case 'chaff':releaseChaff(room.world,actor);break;case 'cycle':cycleItem(actor);break;case 'select':selectItem(actor,action.item);break;}
       if(action.id!==undefined)member.actionAck=action.id;
     }
   }
   makeWorld(room){
+    for(const member of room.members.values())member.wantsToPlay=false;
     room.world=createBattle(0,room.arena);room.world.human=true;room.world.skill=.85;room.world.multiplayer=true;room.world.soundEpoch=room.soundEpoch=(room.soundEpoch??0)+1;room.events=[];room.voices=[];
     for(const member of room.members.values()){this.assign(room,member);member.moveQueue=[];member.acceptedMove=-1;member.lastMove=-1;member.moveCredit=0;member.acceptedAction=-1;member.actionAck=-1;}
     this.roster(room);
@@ -113,7 +114,7 @@ export class Multiplayer {
     view.voices=room.voices;view.name=member.name;
     const label=id=>id===member.id?'YOU':actors[id]?.name??drivers[actors[id]?.driver??0].name.split(' ')[0];
     view.killFeed=world.killFeed.map(entry=>({...entry,text:`${label(entry.attacker)} → ${label(entry.victim)}`}));
-    return {type:'state',time:room.networkTime??0,inputSequence:member.sequence,movementSequence:member.lastMove??-1,actionSequence:member.actionAck??-1,code:room.code,you:member.id,host:room.host,arena:room.arena,bots:room.botCount,players:[...room.members.values()].map(p=>({id:p.id,name:p.name,driver:p.driver,color:p.color})),world:view};
+    return {type:'state',time:room.networkTime??0,inputSequence:member.sequence,movementSequence:member.lastMove??-1,actionSequence:member.actionAck??-1,code:room.code,you:member.id,host:room.host,arena:room.arena,bots:room.botCount,players:[...room.members.values()].map(p=>({id:p.id,name:p.name,driver:p.driver,color:p.color,wantsToPlay:Boolean(p.wantsToPlay)})),world:view};
   }
   send(member,data){
     const socket=member.socket;
@@ -210,6 +211,11 @@ export class Multiplayer {
       if(req.method!=='POST')throw problem(405,'Use POST.');
       this.limit(req,path,path==='/api/input'?180:15);const body=await this.body(req);
       switch(path){
+        case '/api/ready':{
+          if(!['ready','finished'].includes(room.world.phase))throw problem(409,'Match already running.');
+          if(typeof body.ready!=='boolean')throw problem(400,'Choose ready or not ready.');
+          member.wantsToPlay=body.ready;this.broadcast(room);json(200,{ok:true});break;
+        }
         case '/api/driver':{
           if(!['ready','finished'].includes(room.world.phase))throw problem(409,'Choose an animal before the next match.');
           if(!Number.isInteger(body.driver)||body.driver<0||body.driver>=drivers.length)throw problem(400,'Choose an animal.');

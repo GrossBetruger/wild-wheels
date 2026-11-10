@@ -7,12 +7,14 @@ import WebSocket from 'ws';
 import { pathToFileURL } from 'node:url';
 import { checkFeedback } from './check-feedback-scenario.mjs';
 import { checkDrift } from './check-drift-scenario.mjs';
+import { checkControls } from './check-controls-scenario.mjs';
 
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const quantile=(values,p)=>[...values].sort((a,b)=>a-b)[Math.min(values.length-1,Math.floor(values.length*p))]??0;
 const chrome=process.env.CHROME_PATH??'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const outputIndex=process.argv.indexOf('--output');
-const output=outputIndex>=0?process.argv[outputIndex+1]:'/private/tmp/wild-wheels-browser.json';
+const output=outputIndex>=0?process.argv[outputIndex+1]:join(tmpdir(),'wild-wheels-browser.json');
+const functional=process.argv.includes('--functional');
 const sourceIndex=process.argv.indexOf('--source');
 const source=sourceIndex>=0?pathToFileURL(process.argv[sourceIndex+1]+'/'):new URL('../',import.meta.url);
 const repeatIndex=process.argv.indexOf('--repeat'),repeat=repeatIndex>=0?Number(process.argv[repeatIndex+1]):1;
@@ -73,6 +75,13 @@ try{
     if(profile.guest){const room={code:'07',arena:0,botCount:0,host:0,members:new Map()};app.multiplayer.makeWorld(room);app.multiplayer.rooms.set('07',room);app.multiplayer.join(room,{name:'Host',driver:1});}
     const identity=await evaluate(`(async()=>{__game.network.botCount.value='0';__game.network.invitation='07';await __game.network.connect('${profile.guest?'/api/join':'/api/rooms'}');return {code:__game.network.state.code,you:__game.network.state.you};})()`);
     const room=app.multiplayer.rooms.get(identity.code);
+    if(process.argv.includes('--controls')){
+      const result={profile:profile.name,run:profile.run,...await checkControls(evaluate,app.multiplayer,room,identity.you,sleep)};
+      results.push(result);console.log(JSON.stringify({...result,trace:undefined}));
+      await evaluate('__game.network.leave()');await call('Target.closeTarget',{targetId});
+      for(const member of [...room.members.values()])app.multiplayer.remove(member);
+      continue;
+    }
     Object.assign(room.world,{phase:'racing',supplies:[]});
     if(profile.guest)room.world.destroyed=999;
     Object.assign([room.world,...room.world.bots][identity.you],{wx:-65,wz:70,heading:Math.PI/2,motionHeading:Math.PI/2,cameraHeading:Math.PI/2,speed:0});
@@ -80,6 +89,7 @@ try{
     if(process.argv.includes('--feedback')||process.argv.includes('--drift')){
       const check=process.argv.includes('--drift')?checkDrift:checkFeedback;
       const result={profile:profile.name,run:profile.run,...await check(evaluate,room,identity.you,sleep)};
+      if(functional&&result.behaviorPass!==undefined)result.pass=result.behaviorPass;
       results.push(result);console.log(JSON.stringify({...result,trace:undefined,requests:undefined,sounds:undefined}));
       await evaluate('__game.network.leave()');await call('Target.closeTarget',{targetId});
       for(const member of [...room.members.values()])app.multiplayer.remove(member);
@@ -114,12 +124,14 @@ try{
     for(let i=1;i<measured.length;i++){const a=measured[i-1],b=measured[i],dx=b.wx-a.wx,dz=b.wz-a.wz,rx=b.expectedX-a.expectedX,rz=b.expectedZ-a.expectedZ;if(Math.hypot(rx,rz)>.05&&Math.hypot(dx,dz)<.005)freezes++;if(Math.hypot(rx,rz)>.05&&dx*rx+dz*rz<-.001)backwards++;}
     const result={profile:profile.name,run:profile.run,frames:frames.length,frameP95Ms:+quantile(frameTimes,.95).toFixed(2),frameP99Ms:+quantile(frameTimes,.99).toFixed(2),positionP95:+quantile(measured.map(f=>f.positionError),.95).toFixed(4),positionMax:+Math.max(...measured.map(f=>f.positionError)).toFixed(4),cameraP95Degrees:+quantile(measured.map(f=>f.cameraError),.95).toFixed(4),cameraMaxDegrees:+Math.max(...measured.map(f=>f.cameraError)).toFixed(4),freezeFrames:freezes,backwardFrames:backwards,maxUpdateAgeMs:+Math.max(...measured.map(f=>f.sinceUpdate*1000)).toFixed(2),gpu,trace:frames};
     const host=results.find(row=>row.run===profile.run&&row.profile==='local-host');
-    result.pass=result.positionP95<=.15&&result.positionMax<=.5&&result.cameraP95Degrees<=1&&result.cameraMaxDegrees<=3&&freezes===0&&backwards===0&&result.frameP95Ms<=20&&result.frameP95Ms<=(host?.frameP95Ms??result.frameP95Ms)+2;
+    result.behaviorPass=result.positionP95<=.15&&result.positionMax<=.5&&result.cameraP95Degrees<=1&&result.cameraMaxDegrees<=3&&freezes===0&&backwards===0;
+    result.frameBudgetPass=result.frameP95Ms<=20&&result.frameP95Ms<=(host?.frameP95Ms??result.frameP95Ms)+2;
+    result.pass=result.behaviorPass&&(functional||result.frameBudgetPass);
     results.push(result);console.log(JSON.stringify({...result,trace:undefined}));
     await evaluate('__game.network.leave()');await call('Target.closeTarget',{targetId});
     for(const member of [...room.members.values()])app.multiplayer.remove(member);
   }
-  await writeFile(output,JSON.stringify({errors,transportErrors,serverGaps,results},null,2)+'\n');
+  await writeFile(output,JSON.stringify({frameBudgetEnforced:!functional,errors,transportErrors,serverGaps,results},null,2)+'\n');
   if(transportErrors.length)console.log(JSON.stringify({transportErrors}));
   if(errors.length)throw new Error(errors.join('\n'));
   if(transportErrors.length||results.some(result=>!result.pass))process.exitCode=1;

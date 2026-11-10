@@ -5,6 +5,43 @@ import { LocalFeedback } from './feedback.js';
 import { Multiplayer } from './multiplayer.js';
 import { encodeSnapshot, decodeSnapshot } from './wire.js';
 
+test('collecting a missile leaves an equipped Vulcan selected locally and on the server',t=>{
+  const app=new Multiplayer();t.after(()=>app.close());clearInterval(app.timer);
+  const room={code:'07',arena:0,botCount:0,host:0,members:new Map()};app.makeWorld(room);app.rooms.set('07',room);
+  const member=app.join(room,{name:'Host',driver:0});
+  Object.assign(room.world,{phase:'racing',wx:-65,wz:70,vulcan:10,item:'hedgehog',fireCooldown:0,missiles:0,supplies:[{id:0,version:0,wx:-65,wz:70,kind:'missile',cooldown:0}]});
+  const feedback=new LocalFeedback(()=>{});feedback.accept(app.snapshot(room,member),0);
+  const view=feedback.render(room.world,room.world,0,-1);
+  assert.equal(view.missiles,1);assert.equal(view.item,'hedgehog');
+  app.step(1/60);
+  assert.equal(room.world.missiles,1);assert.equal(room.world.item,'hedgehog');
+  assert.equal(feedback.action('fire',undefined,view,1/60,-1),true);
+  assert.equal(feedback.render(room.world,view,1/60,-1).projectiles.at(-1).vulcan,true);
+});
+
+test('turbo spends its own charge and can be activated while a Vulcan shot is on cooldown',t=>{
+  const app=new Multiplayer();t.after(()=>app.close());clearInterval(app.timer);
+  const room={code:'07',arena:0,botCount:0,host:0,members:new Map()};app.makeWorld(room);app.rooms.set('07',room);
+  const member=app.join(room,{name:'Host',driver:0});
+  Object.assign(room.world,{phase:'racing',wx:-65,wz:70,vulcan:10,item:'hedgehog',ammo:5,missiles:2,turbos:1,boost:0,fireCooldown:.075,supplies:[]});
+  const heard=[],feedback=new LocalFeedback(type=>heard.push(type));feedback.accept(app.snapshot(room,member),0);
+  assert.equal(feedback.action('turbo',undefined,room.world,0,-1),true);
+  assert.equal(feedback.action('turbo',undefined,room.world,0,-1),false);
+  const view=feedback.render(room.world,room.world,0,-1);
+  assert.equal(view.turbos,0);assert.equal(view.item,'hedgehog');assert.equal(view.ammo,5);assert.equal(view.missiles,2);assert.deepEqual(heard,['boost']);
+  const controls={sequence:0,keys:[],actions:feedback.commands()};app.controls(member,controls);app.controls(member,controls);app.step(1/60);
+  assert.equal(room.world.turbos,0);assert.ok(room.world.boost>2.4);assert.equal(room.world.item,'hedgehog');assert.equal(room.world.projectiles.length,0);
+  feedback.accept(app.snapshot(room,member),.1);
+  assert.equal(feedback.render(room.world,room.world,.1,-1).turbos,0);
+});
+
+test('an empty turbo inventory cannot trigger a boost or a local cue',()=>{
+  const world=createBattle();Object.assign(world,{phase:'racing',turbos:0,boost:0,item:'missile',missiles:1});
+  const heard=[],feedback=new LocalFeedback(type=>heard.push(type));feedback.accept({world},0);
+  assert.equal(feedback.action('turbo',undefined,world,0,-1),false);
+  assert.equal(world.boost,0);assert.equal(world.item,'missile');assert.deepEqual(heard,[]);
+});
+
 test('firing shows one projectile and spends one displayed round before a server reply',()=>{
   const world=createBattle();Object.assign(world,{phase:'racing',wx:0,wz:60,heading:0,fireCooldown:0});
   const heard=[],feedback=new LocalFeedback(type=>heard.push(type));feedback.accept({world,movementSequence:-1,actionSequence:-1},0);

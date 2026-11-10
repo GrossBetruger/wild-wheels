@@ -12,6 +12,24 @@ async function serverFor(t){
   const post=async(path,body,token,headers={})=>{const response=await fetch(origin+path,{method:'POST',headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`} :{}),...headers},body:JSON.stringify(body),signal:AbortSignal.timeout(3000)});return {status:response.status,...await response.json()};};
   return {...app,post,origin};
 }
+test('a guest requests play, both players see readiness, and only the host starts the match',async t=>{
+  const {multiplayer,post}=await serverFor(t);
+  const host=await post('/api/rooms',{name:'Host',driver:0,arena:0,bots:0});
+  const guest=await post('/api/join',{name:'Friend',driver:1,code:host.code});
+  assert.equal((await post('/api/ready',{ready:true},guest.token)).status,200);
+  const room=multiplayer.rooms.get(host.code);
+  const hostView=multiplayer.snapshot(room,multiplayer.members.get(host.token));
+  const guestView=multiplayer.snapshot(room,multiplayer.members.get(guest.token));
+  assert.equal(hostView.players.find(player=>player.name==='Friend').wantsToPlay,true);
+  assert.equal(guestView.players.find(player=>player.id===guest.you).wantsToPlay,true);
+  assert.equal(hostView.players.find(player=>player.name==='Host').wantsToPlay,false);
+  assert.equal(room.world.phase,'ready');
+  assert.equal((await post('/api/control',{action:'start'},guest.token)).status,403);
+  assert.equal((await post('/api/control',{action:'start'},host.token)).status,200);
+  assert.equal(room.world.phase,'countdown');
+  assert.ok(multiplayer.snapshot(room,multiplayer.members.get(host.token)).players.every(player=>!player.wantsToPlay));
+  assert.equal((await post('/api/ready',{ready:true},guest.token)).status,409);
+});
 test('two browser players join one room, control separate karts, and see their own perspectives',async t=>{
   const {multiplayer,post}=await serverFor(t);
   const host=await post('/api/rooms',{name:'Oren',driver:0,arena:0});const guest=await post('/api/join',{name:'Friend',driver:2,code:host.code});

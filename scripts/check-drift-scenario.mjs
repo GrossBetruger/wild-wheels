@@ -33,5 +33,6 @@ export async function checkDrift(evaluate,room,id,sleep){
   const gaps=trace.filter(frame=>frame.drifting&&frame.sparkAge<.001&&frame.wheelGap!==null).map(frame=>frame.wheelGap);
   const freshWheelGapMax=gaps.length?+Math.max(...gaps).toFixed(4):null;
   const frameTimes=trace.map(frame=>frame.dt*1000).sort((a,b)=>a-b),frameP95Ms=+frameTimes[Math.floor(frameTimes.length*.95)].toFixed(2);
-  return {smokeMs,skidsMs,chargeMs,lateEmissions,freshWheelGapMax,frameP95Ms,pass:[smokeMs,skidsMs,...chargeMs].every(value=>value!==null&&value<=20)&&lateEmissions===0&&freshWheelGapMax!==null&&freshWheelGapMax<=.05&&frameP95Ms<=20,trace};
+  const behaviorPass=[smokeMs,skidsMs,...chargeMs].every(value=>value!==null&&value<=20)&&lateEmissions===0&&freshWheelGapMax!==null&&freshWheelGapMax<=.05;
+  return {smokeMs,skidsMs,chargeMs,lateEmissions,freshWheelGapMax,frameP95Ms,behaviorPass,frameBudgetPass:frameP95Ms<=20,pass:behaviorPass&&frameP95Ms<=20,trace};
 }

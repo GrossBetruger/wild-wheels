@@ -12,8 +12,8 @@ export const tracks = [
 ];
 export function curveAt(s, track = 0, route = 0) { return trackBend(s/LENGTH,route) * tracks[track].curve; }
 export function pickupType(row,lane){if(lane===0)return 'boost';if(lane>0&&row%2===0)return 'missile';return 'hedgehog';}
-export function selectItem(r,item){if(r.phase==='finished')return;const count={hedgehog:r.vulcan>0?1:r.ammo,missile:r.missiles,boost:r.turbos}[item];if(count>0)r.item=item;}
-export function cycleItem(r){const items=['hedgehog','missile','boost'].filter(item=>({hedgehog:r.vulcan>0?1:r.ammo,missile:r.missiles,boost:r.turbos}[item])>0);if(items.length)selectItem(r,items[(items.indexOf(r.item)+1)%items.length]);}
+export function selectItem(r,item){if(r.phase==='finished')return;const count={hedgehog:r.vulcan>0?1:r.ammo,missile:r.missiles}[item];if(count>0)r.item=item;}
+export function cycleItem(r){const items=['hedgehog','missile'].filter(item=>({hedgehog:r.vulcan>0?1:r.ammo,missile:r.missiles}[item])>0);if(items.length)selectItem(r,items[(items.indexOf(r.item)+1)%items.length]);}
 export function createRace(driver = 0, track = 0, random = Math.random) {
   // Two front-runners, a competitive midfield and one less consistent driver.
   // Shuffle the tiers so the same character does not always win.
@@ -31,10 +31,13 @@ function animalCall(r,kart,cue){
   kart.voiceCooldown=important?2:1.5;
   r.voices.push({driver:kart.driver,cue,pan:kart===r?0:Math.max(-.8,Math.min(.8,(kart.x-r.x)*.65)),volume:kart===r?1:Math.max(.35,.8-distance/2200)});
 }
+export function useTurbo(r){
+  if(r.phase!=='racing'||r.finishCountdown!==null||r.destroyed>0||r.turbos<=0||r.boost>0)return false;
+  r.turbos--;r.boost=2.5;effect(r,'boost');notify(r,'AFTERBURNERS ENGAGED!');return true;
+}
 export function useItem(r) {
   if (r.phase !== 'racing' || !r.item) return;
   switch (r.item) {
-    case 'boost': r.turbos=Math.max(0,r.turbos-1);r.boost = 2.5; effect(r,'boost'); notify(r, 'AFTERBURNERS ENGAGED!'); break;
     case 'hedgehog': if(r.ammo<=0)return;r.projectiles.push({ kind:'hedgehog',route:r.route,s: r.s + 100, x: r.x, vx:r.vx*.3, speed:1300+r.speed*.4, height:1.3, vy:4, bounces:0, life:4, trail:[] }); r.ammo--; effect(r,'fire'); notify(r, 'HEDGEHOG AWAY!'); break;
     case 'missile': {
       if(r.missiles<=0)return;
@@ -42,9 +45,9 @@ export function useItem(r) {
       r.projectiles.push({kind:'missile',route:r.route,s:r.s+85,x:r.x,speed:900,height:1.6,life:5,trail:[],target:candidates[0]?.i??null});r.missiles--;effect(r,'missile');notify(r,candidates.length?'MISSILE LOCKED · FOX THREE!':'MISSILE AWAY!');break;
     }
   }
-  const remaining={hedgehog:r.ammo,missile:r.missiles,boost:r.turbos}[r.item];
+  const remaining={hedgehog:r.ammo,missile:r.missiles}[r.item];
   if(remaining>0)return;
-  r.item = r.missiles>0?'missile':r.ammo>0?'hedgehog':r.turbos>0?'boost':null;
+  r.item = r.missiles>0?'missile':r.ammo>0?'hedgehog':null;
 }
 function explodeMissile(r,shot){
   shot.life=0;effect(r,'explosion',shot.s,shot.x,shot.route);let destroyed=0;
@@ -148,8 +151,8 @@ export function tick(r, keys, dt) {
   const row = Math.floor((r.s - 1000) / 1800);
   const rowS = row * 1800 + 1000;
   if (row >= 0 && before <= rowS && r.s >= rowS && row !== r.pickup && [-.65, 0, .65].some(x => Math.abs(x - r.x) < .23)) {
-    r.pickup = row; const lane=[-.65,0,.65].find(x=>Math.abs(x-r.x)<.23);r.item=pickupType(row,lane);
-    switch(r.item){case 'hedgehog':r.ammo=Math.min(6,r.ammo+3);notify(r,'+3 HEDGEHOGS · SPACE TO FIRE');break;case 'boost':r.turbos=Math.min(3,r.turbos+1);notify(r,'TURBO CELL · SPACE TO BOOST');break;case 'missile':r.missiles=Math.min(3,r.missiles+1);notify(r,'MISSILE ARMED · SPACE TO DESTROY');break;}effect(r,'pickup');
+    r.pickup = row; const lane=[-.65,0,.65].find(x=>Math.abs(x-r.x)<.23),kind=pickupType(row,lane);if(kind!=='boost')r.item=kind;
+    switch(kind){case 'hedgehog':r.ammo=Math.min(6,r.ammo+3);notify(r,'+3 HEDGEHOGS · SPACE TO FIRE');break;case 'boost':r.turbos=Math.min(3,r.turbos+1);notify(r,'TURBO CELL · B TO BOOST');break;case 'missile':r.missiles=Math.min(3,r.missiles+1);notify(r,'MISSILE ARMED · SPACE TO DESTROY');break;}effect(r,'pickup');
   }
   for (const shot of r.projectiles) {
     const previous=shot.s;shot.trail.push({s:shot.s,x:shot.x,height:shot.height,route:shot.route});if(shot.trail.length>(shot.kind==='missile'?30:12))shot.trail.shift();

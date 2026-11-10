@@ -3,6 +3,20 @@ import assert from 'node:assert/strict';
 import { createBattle, predictKartMovement, tickBattle } from './combat.js';
 import { LocalPrediction } from './prediction.js';
 
+test('a separate turbo accelerates immediately and replays once until acknowledged',()=>{
+  const world=createBattle();Object.assign(world,{phase:'racing',wx:-65,wz:70,heading:0,motionHeading:0,cameraHeading:0,speed:300,turbos:1});
+  const prediction=new LocalPrediction();prediction.accept(world,0);
+  prediction.turbo({id:0,afterMove:-1});
+  const boosted=prediction.sample(new Set(['arrowup']),1/60,1/60);
+  assert.ok(boosted.speed>315);assert.ok(boosted.boost>2.4);assert.equal(world.boost,0);
+  prediction.accept(world,.1,{sequence:-1,actionSequence:-1});
+  const replay=prediction.sample(new Set(),0,.1);
+  assert.equal(replay.speed,boosted.speed);assert.equal(replay.boost,boosted.boost);
+  prediction.accept({...world,speed:boosted.speed,wz:boosted.wz,boost:boosted.boost,turbos:0},.2,{sequence:0,actionSequence:0});
+  const settled=prediction.sample(new Set(),1/60,.2167);
+  assert.ok(settled.boost<2.48);assert.equal(world.turbos,1);
+});
+
 test('guest movement prediction matches the server while accelerating through a turn',()=>{
   const world=createBattle();world.phase='racing';world.destroyed=99;world.supplies=[];
   for(const bot of world.bots)bot.destroyed=99;

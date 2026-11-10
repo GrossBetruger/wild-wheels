@@ -60,9 +60,9 @@ export class LocalFeedback {
     for(const op of this.operations)switch(op.type){
       case 'pickup':applySupply(actor,op.kind);break;
       case 'select':selectItem(actor,op.item);break;
+      case 'turbo':actor.turbos=Math.max(0,actor.turbos-1);break;
       case 'fire':
         if(op.resource)actor[op.resource]=Math.max(0,actor[op.resource]-1);
-        if(op.kind==='boost')actor.item=actor.missiles>0?'missile':'hedgehog';
         if(op.kind==='missile'&&!actor.missiles)actor.item='hedgehog';
         break;
       case 'chaff':actor.chaff=Math.max(0,actor.chaff-1);break;
@@ -80,19 +80,23 @@ export class LocalFeedback {
       this.operations.push({id:this.nextId++,type:'select',item:actor.item,afterMove});return true;
     }
     if(actor.phase!=='racing'||actor.destroyed||actor.finishCountdown!==null||now-this.received>.5)return false;
+    if(type==='turbo'){
+      if(actor.turbos<=0||actor.boost>0||this.operations.some(op=>op.type==='turbo'))return false;
+      const id=this.nextId++;this.operations.push({id,type,afterMove});this.emit('boost',`action:${id}`);return true;
+    }
     if(type==='chaff'){
       if(sequence<this.chaffTick||actor.chaff<=0)return false;
       this.chaffTick=afterMove+39;this.operations.push({id:this.nextId++,type,afterMove,readyTick:this.chaffTick});this.emit('chaff');return true;
     }
     if(type!=='fire'||sequence<this.fireTick)return false;
-    const kind=actor.item==='boost'&&actor.turbos>0?'boost':actor.item==='missile'&&actor.missiles>0?'missile':'hedgehog';
-    const vulcan=kind==='hedgehog'&&actor.vulcan>0,resource=kind==='boost'?'turbos':kind==='missile'?'missiles':vulcan?null:'ammo';
+    const kind=actor.item==='missile'&&actor.missiles>0?'missile':'hedgehog';
+    const vulcan=kind==='hedgehog'&&actor.vulcan>0,resource=kind==='missile'?'missiles':vulcan?null:'ammo';
     if(resource&&actor[resource]<=0)return false;
-    const cooldown=kind==='boost'?.2:kind==='missile'?.9:vulcan?.075:.45,id=this.nextId++;
+    const cooldown=kind==='missile'?.9:vulcan?.075:.45,id=this.nextId++;
     this.fireTick=afterMove+Math.ceil(cooldown/MOVEMENT_DT-1e-8);
     this.operations.push({id,type:'fire',kind,resource,afterMove,readyTick:this.fireTick});
-    if(kind!=='boost')this.shots.set(id,{born:now,updated:now,model:{...makeProjectile({...this.world,...actor},actor),id:`local:${this.world.soundEpoch}:${id}`,actionId:id},error:{wx:0,wz:0}});
-    this.emit(kind==='boost'?'boost':kind==='missile'?'missile':vulcan?'vulcanFire':'fire',`action:${id}`);return true;
+    this.shots.set(id,{born:now,updated:now,model:{...makeProjectile({...this.world,...actor},actor),id:`local:${this.world.soundEpoch}:${id}`,actionId:id},error:{wx:0,wz:0}});
+    this.emit(kind==='missile'?'missile':vulcan?'vulcanFire':'fire',`action:${id}`);return true;
   }
   render(world,pose,now,sequence){
     if(!this.world)return {...world,...pose};

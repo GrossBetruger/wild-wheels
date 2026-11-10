@@ -1,0 +1,36 @@
+export async function checkControls(evaluate,app,room,id,sleep){
+  const host=room.members.get(room.host);
+  const guest=id===room.host?app.join(room,{name:'Ready Friend',driver:1}):room.members.get(id);
+  for(let i=0;i<100;i++){if(await evaluate("document.getElementById('start').disabled===false"))break;await sleep(25);}
+  if(id!==room.host)await evaluate("document.getElementById('start').click()");
+  if(id===room.host)await evaluate(`fetch('/api/ready',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer ${guest.token}'},body:JSON.stringify({ready:true})})`);
+  for(let i=0;i<100;i++){if(await evaluate(`__game.network.state.players.some(p=>p.id===${guest.id}&&p.wantsToPlay)&&(${id===room.host}||document.getElementById('start').textContent.includes('WAITING FOR HOST')&&document.getElementById('start').disabled)`))break;await sleep(25);}
+  const readyUI=await evaluate(`({status:__game.network.status.textContent,button:document.getElementById('start').textContent,disabled:document.getElementById('start').disabled,roster:__game.network.players.textContent})`);
+  const readyPass=Boolean(guest.wantsToPlay)&&(id===room.host?readyUI.status.includes('Ready Friend')&&readyUI.status.includes('wants to play'):readyUI.status.includes('Waiting for the host')&&readyUI.button.includes('WAITING FOR HOST')&&readyUI.disabled);
+  await evaluate(`fetch('/api/control',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer ${host.token}'},body:JSON.stringify({action:'start'})})`);
+  const readyCleared=[...room.members.values()].every(player=>!player.wantsToPlay)&&room.world.phase==='countdown';
+  Object.assign(room.world,{phase:'racing',supplies:[]});
+  const actor=[room.world,...room.world.bots][id];
+  Object.assign(actor,{wx:-65,wz:70,heading:Math.PI/2,motionHeading:Math.PI/2,cameraHeading:Math.PI/2,speed:300,vulcan:10,item:'hedgehog',missiles:0,ammo:5,turbos:1,boost:0,fireCooldown:0});
+  room.world.supplies=[{id:0,version:0,wx:-65,wz:70,kind:'missile',cooldown:0}];
+  if(id!==room.host)room.world.destroyed=999;
+  for(let i=0;i<100;i++){if(await evaluate('__game.network.state.world.phase==="racing"&&__game.network.state.world.vulcan>9&&__game.network.state.world.missiles===1&&__game.network.state.world.turbos===1'))break;await sleep(25);}
+  const pickupKeptVulcan=actor.item==='hedgehog'&&await evaluate("__game.network.state.world.item==='hedgehog'");
+  await evaluate(`{
+    const game=__game,render=game.network.render.bind(game.network),start=performance.now();let boosted=false,fired=false;
+    game.controlsTrace=[];game.controlsDone=false;game.keys.add('arrowup');
+    game.network.render=dt=>{
+      const time=(performance.now()-start)/1000;let request=false;
+      if(!boosted&&time>=.1){window.dispatchEvent(new KeyboardEvent('keydown',{key:'b'}));boosted=true;request=true;}
+      if(!fired&&time>=.3){window.dispatchEvent(new KeyboardEvent('keydown',{key:' '}));window.dispatchEvent(new KeyboardEvent('keyup',{key:' '}));fired=true;}
+      const view=render(dt);
+      game.controlsTrace.push({time,dt,request,boost:view.boost,speed:view.speed,turbos:view.turbos,item:view.item,vulcanShot:view.projectiles.some(p=>p.owner===view.id&&p.vulcan),turboSelected:document.getElementById('ammo-boost').classList.contains('selected')});
+      if(time>=1){game.controlsDone=true;game.network.render=render;game.keys.clear();game.network.input();}
+      return view;
+    };
+  }`);
+  for(let i=0;i<100;i++){if(await evaluate('__game.controlsDone'))break;await sleep(25);}
+  const trace=await evaluate('__game.controlsTrace'),request=trace.find(frame=>frame.request);
+  const turboPass=Boolean(request&&request.boost>2.4&&request.turbos===0)&&trace.every(frame=>frame.item==='hedgehog'&&!frame.turboSelected)&&trace.some(frame=>frame.vulcanShot)&&actor.turbos===0;
+  return {readyPass,readyCleared,readyUI,pickupKeptVulcan,turboPass,pass:readyPass&&readyCleared&&pickupKeptVulcan&&turboPass,trace};
+}
