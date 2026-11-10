@@ -38,6 +38,7 @@ export class Multiplayer {
         if(binary)throw problem(400,'Text messages required');const message=JSON.parse(data.toString());
         if(!member){if(message.type!=='authenticate'||typeof message.token!=='string')throw problem(401,'Authenticate first');member=this.members.get(message.token);if(!member)throw problem(401,'Invalid room session');clearTimeout(authTimer);member.socket?.close(1000,'Connection replaced');member.socket=socket;member.lastSeen=Date.now();this.send(member,this.snapshot(member.room,member));return;}
         const now=Date.now();if(now-since>=1000){since=now;count=0;}if(++count>100)throw problem(429,'Too many inputs');
+        if(message.type==='ping'){if(!Number.isFinite(message.sent)||message.sent<0)throw problem(400,'Invalid ping');socket.send(JSON.stringify({type:'pong',sent:message.sent}));return;}
         if(message.type!=='input')throw problem(400,'Unknown message');this.controls(member,message);member.lastSeen=now;
       }catch{socket.close(1008,'Invalid controls or session');}
     });

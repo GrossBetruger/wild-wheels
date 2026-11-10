@@ -34,6 +34,14 @@ export class NetworkPlayback {
       for(const field of ['heading','cameraHeading'])result[field]=a[field]+Math.atan2(Math.sin(b[field]-a[field]),Math.cos(b[field]-a[field]))*fraction;
       return result;
     };
-    return {...pose(latest.world),bots:latest.world.bots.map(pose)};
+    const previousShots=new Map((before.world.projectiles??[]).map(shot=>[shot.id,shot]));
+    const nextShots=new Map((after.world.projectiles??[]).map(shot=>[shot.id,shot]));
+    const projectiles=(latest.world.projectiles??[]).map(shot=>{
+      const a=previousShots.get(shot.id),b=nextShots.get(shot.id);
+      if(shot.id==null||!a||!b)return shot;
+      return {...shot,wx:a.wx+(b.wx-a.wx)*fraction,wz:a.wz+(b.wz-a.wz)*fraction,height:a.height+(b.height-a.height)*fraction,heading:a.heading+Math.atan2(Math.sin(b.heading-a.heading),Math.cos(b.heading-a.heading))*fraction};
+    });
+    const elapsed=latest.world.phase==='racing'&&Number.isFinite(latest.world.elapsed)?Math.max(0,latest.world.elapsed-Math.max(0,latest.time-this.presented)):latest.world.elapsed;
+    return {...pose(latest.world),elapsed,projectiles,bots:latest.world.bots.map(pose)};
   }
 }

@@ -2,6 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { NetworkPlayback } from './playback.js';
 
+test('projectiles and animation time advance between network updates',()=>{
+  const playback=new NetworkPlayback();
+  playback.push(0,{id:0,arena:0,phase:'racing',elapsed:5,wx:0,wz:0,heading:0,cameraHeading:0,destroyed:0,bots:[],projectiles:[{id:1,wx:0,wz:0,height:1,heading:0}]},0);
+  playback.push(.1,{id:0,arena:0,phase:'racing',elapsed:5.1,wx:0,wz:0,heading:0,cameraHeading:0,destroyed:0,bots:[],projectiles:[{id:1,wx:0,wz:10,height:2,heading:0}]},.1);
+  const view=playback.sample(.15);
+  assert.ok(Math.abs(view.projectiles[0].wz-5)<1e-9);
+  assert.ok(Math.abs(view.projectiles[0].height-1.5)<1e-9);
+  assert.ok(Math.abs(view.elapsed-5.05)<1e-9);
+});
+
 test('steady driving stays smooth when network updates arrive in bursts',()=>{
   const playback=new NetworkPlayback();
   // A kart moves one unit per server update; some updates arrive together.

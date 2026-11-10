@@ -57,7 +57,8 @@ export function fireBattle(r,actor=r){
   if(kind==='hedgehog'&&!vulcan&&actor.ammo<=0)return;
   const candidates=[r,...r.bots].filter(k=>k!==actor&&!k.destroyed&&k.shield<=0&&distance(actor,k)<100&&Math.abs(angleDelta(Math.atan2(k.wx-actor.wx,k.wz-actor.wz),actor.heading))<.65&&clearShot(arenas[r.arena],actor,k)).sort((a,b)=>distance(actor,a)-distance(actor,b));
   const tx=Math.sin(actor.heading),tz=Math.cos(actor.heading);
-  r.projectiles.push({kind,vulcan,owner:actor.id,target:candidates[0]?.id??null,wx:actor.wx+tx*3.5,wz:actor.wz+tz*3.5,heading:actor.heading,speed:kind==='missile'?70:vulcan?125:90,height:1.3,vy:3,life:kind==='missile'?3:vulcan?1.3:2.5,trail:[],bounces:0});
+  r.projectileSequence=(r.projectileSequence??0)+1;
+  r.projectiles.push({id:r.projectileSequence,kind,vulcan,owner:actor.id,target:candidates[0]?.id??null,wx:actor.wx+tx*3.5,wz:actor.wz+tz*3.5,heading:actor.heading,speed:kind==='missile'?70:vulcan?125:90,height:1.3,vy:3,life:kind==='missile'?3:vulcan?1.3:2.5,trail:[],bounces:0});
   if(kind==='missile')actor.missiles--;if(kind==='hedgehog'&&!vulcan)actor.ammo--;
   actor.fireCooldown=kind==='missile'?.9:vulcan?.075:.45;
   if(actor.item==='missile'&&!actor.missiles)actor.item='hedgehog';
@@ -114,13 +115,22 @@ function moveActor(r,actor,steer,gas,brake,dt,handbrake=false){
   if(actor.boost>0&&!drifting)actor.speed=Math.min(850,actor.speed+650*dt);
   actor.motionHeading+=angleDelta(actor.heading,actor.motionHeading)*(1-Math.exp(-(drifting?3.8:14)*dt));
   actor.cameraHeading+=angleDelta(actor.heading,actor.cameraHeading)*(1-Math.exp(-(drifting?5:9)*dt));
-  const travel=drifting||actor===r?actor.motionHeading:actor.heading;
+  const travel=drifting||actor===r||actor.human?actor.motionHeading:actor.heading;
   const nx=actor.wx+Math.sin(travel)*actor.speed*.085*dt,nz=actor.wz+Math.cos(travel)*actor.speed*.085*dt;
   const arena=arenas[r.arena];
   if(!blocked(arena,nx,nz)){actor.wx=nx;actor.wz=nz;if(drifting)driftTrail(r,actor,dt);return;}
   if(!blocked(arena,nx,actor.wz))actor.wx=nx;
   if(!blocked(arena,actor.wx,nz))actor.wz=nz;
   actor.speed*=.3;actor.drift=0;actor.wasDrifting=false;actor.driftTrail=null;actor.motionHeading=actor.heading;if(actor===r&&actor.wallCooldown<=0){fx(r,'crash',actor);actor.wallCooldown=.7;r.shake=.3;voice(r,actor,'hurt');}
+}
+export function predictKartMovement(world,actor,keys,dt){
+  if(world.phase!=='racing'||world.finishCountdown!==null||actor.destroyed>0)return;
+  // Reuse movement and wall collisions, without running weapons, damage or AI.
+  const scene={arena:world.arena,elapsed:world.elapsed,finishCountdown:null,events:[],effects:[],skids:[],driftParticles:[]};
+  actor.boost=Math.max(0,(actor.boost??0)-dt);actor.human=true;
+  const steer=Number(keys.has('arrowright')||keys.has('d'))-Number(keys.has('arrowleft')||keys.has('a'));
+  moveActor(scene,actor,steer,keys.has('arrowup')||keys.has('w'),keys.has('arrowdown')||keys.has('s'),dt,keys.has('shift'));
+  actor.yaw=steer*.12;
 }
 export function tickBattle(r,keys,dt,inputs=null){
   dt=clamp(dt,0,.05);if(!['racing','countdown'].includes(r.phase))return;

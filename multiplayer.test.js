@@ -105,6 +105,7 @@ test('persistent socket controls deploy chaff and move a kart without an HTTP in
   await new Promise((resolve,reject)=>{socket.once('open',resolve);socket.once('error',reject);});
   const state=()=>new Promise((resolve,reject)=>{const timeout=setTimeout(()=>reject(new Error('No shared state received')),2000);socket.once('message',data=>{clearTimeout(timeout);resolve(JSON.parse(data));});});
   const joined=state();socket.send(JSON.stringify({type:'authenticate',token:host.token}));assert.equal((await joined).you,0);
+  const ping=state();socket.send(JSON.stringify({type:'ping',sent:12.5}));assert.deepEqual(await ping,{type:'pong',sent:12.5});
   socket.send(JSON.stringify({type:'input',sequence:0,keys:['arrowup'],actions:[{type:'chaff'}]}));await new Promise(resolve=>setTimeout(resolve,20));const next=state();multiplayer.step(.05);const update=await next;
   assert.equal(update.world.chaff,3);assert.ok(update.world.speed>0);assert.equal(update.players.length,1);
 });
