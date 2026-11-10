@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { Multiplayer } from './multiplayer.js';
 import { createTunnelControl } from './tunnel-control.js';
-const files = new Map([['/', ['index.html', 'text/html']], ['/style.css', ['style.css', 'text/css']], ...['game.js','engine.js','renderer.js','audio.js','track.js','combat.js','network.js','playback.js','prediction.js'].map(file=>['/'+file,[file,'text/javascript']])]);
+const files = new Map([['/', ['index.html', 'text/html']], ['/style.css', ['style.css', 'text/css']], ...['game.js','engine.js','renderer.js','audio.js','track.js','combat.js','network.js','playback.js','prediction.js','action-audio.js'].map(file=>['/'+file,[file,'text/javascript']])]);
 export function createGameServer(){
 const multiplayer=new Multiplayer();
 const runtimeHash=createHash('sha256');for(const name of ['server.js','multiplayer.js','ngrok.js','tunnel-control.js','combat.js','engine.js','track.js','package-lock.json'])runtimeHash.update(name).update(readFileSync(new URL(name,import.meta.url)));const runtimeBuild=runtimeHash.digest('hex');

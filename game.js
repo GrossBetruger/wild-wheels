@@ -27,7 +27,7 @@ const mapButtons=Array.from({length:2},(_,index)=>{const button=document.createE
 const mapHelp=document.createElement('small');mapHelp.textContent='Choosing another map starts a fresh game.';mapSwitch.append(mapHelp);modeSwitch.after(mapSwitch);
 function resetMap(){race=newGame();lastPhase='';lastCount=-1;keys.clear();updateMapLabels();}
 function chooseMap(index){if(index===track)return;if(network.active){if(network.isHost)network.control('arena',index);return;}track=index;selectedMaps[mode]=index;resetMap();}
-const network=new NetworkGame({anchor:modeSwitch,keys,driver:()=>selected,arena:()=>track,unlock:()=>audio.unlock(),onState:world=>{
+const network=new NetworkGame({anchor:modeSwitch,keys,driver:()=>selected,arena:()=>track,unlock:()=>audio.unlock(),sound:type=>audio.event(type),onState:world=>{
   const changed=mode!=='combat'||track!==world.arena;
   const driverChanged=selected!==world.driver;
   race=world;mode='combat';track=world.arena;if(changed){lastPhase='';updateMapLabels();}

@@ -63,6 +63,18 @@ test('a remote player can hit and kill another human with server-scored missiles
   await post('/api/input',{sequence:1,keys:[],actions:[{type:'select',item:'missile'},{type:'fire'}]},guest.token);for(let frame=0;frame<30;frame++)multiplayer.step(1/30);assert.equal(r.health,0);assert.equal(r.deaths,1);assert.equal(attacker.kills,1);
   for(let frame=0;frame<100;frame++)multiplayer.step(1/30);assert.equal(r.health,3);assert.equal(r.chaff,4);
 });
+test('a distant guest receives their own shot sound even when the host cannot hear it',async t=>{
+  const {multiplayer,post}=await serverFor(t);
+  const host=await post('/api/rooms',{name:'Host',driver:0,arena:0,bots:0});
+  const guest=await post('/api/join',{name:'Guest',driver:1,code:host.code});
+  const room=multiplayer.rooms.get(host.code);Object.assign(room.world,{phase:'racing',wx:-65,wz:-65});
+  Object.assign(room.world.bots[0],{wx:65,wz:65,fireCooldown:0,item:'hedgehog'});
+  await post('/api/input',{sequence:0,keys:[],actions:[{type:'fire'}]},guest.token);multiplayer.step(1/60);
+  const guestView=multiplayer.snapshot(room,multiplayer.members.get(guest.token));
+  const hostView=multiplayer.snapshot(room,multiplayer.members.get(host.token));
+  assert.equal(guestView.world.events.find(event=>event.type==='fire').owner,guest.you);
+  assert.equal(hostView.world.events.some(event=>event.type==='fire'),false);
+});
 test('guests cannot start or change a match and invalid or cross-origin controls are rejected',async t=>{
   const {post}=await serverFor(t);const host=await post('/api/rooms',{name:'Host',driver:0,arena:0});const guest=await post('/api/join',{name:'Guest',driver:1,code:host.code});
   assert.equal((await post('/api/control',{action:'start'},guest.token)).status,403);assert.equal((await post('/api/control',{action:'arena',arena:1},guest.token)).status,403);

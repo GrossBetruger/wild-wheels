@@ -29,7 +29,8 @@ export function createBattle(driver=0,arena=0,random=Math.random){
 }
 export function standings(r){return [r,...r.bots].filter(actor=>!actor.inactive).sort((a,b)=>b.kills-a.kills||a.deaths-b.deaths||a.id-b.id);}
 function voice(r,actor,cue){if((actor.voiceCooldown??0)>0&&cue!=='win')return;actor.voiceCooldown=1.5;r.voices.push({driver:actor.driver,cue,pan:actor===r?0:clamp((actor.wx-r.wx)/70,-.8,.8),volume:actor===r?1:.6});}
-function fx(r,type,actor){r.events.push(type);r.effects.push({type,wx:actor.wx,wz:actor.wz,age:0,life:type==='explosion'?2.5:.65});}
+function sound(r,type,actor){r.events.push(r.multiplayer?{type,owner:actor.owner??actor.id,wx:actor.wx,wz:actor.wz,id:`${r.soundEpoch}:${r.soundSequence=(r.soundSequence??0)+1}`} :type);}
+function fx(r,type,actor){sound(r,type,actor);r.effects.push({type,wx:actor.wx,wz:actor.wz,age:0,life:type==='explosion'?2.5:.65});}
 function divertMissiles(r,cloud){
   let diverted=0;
   for(const shot of r.projectiles){
@@ -45,7 +46,7 @@ export function releaseChaff(r,actor=r){
   const point=candidates.find(p=>!blocked(arenas[r.arena],p.wx,p.wz,.5)&&clearShot(arenas[r.arena],actor,p))??{wx:actor.wx+tx*2,wz:actor.wz+tz*2};
   const cloud={...point,originX:actor.wx,originZ:actor.wz,id:r.chaffSequence++,owner:actor.id,age:0,life:8};
   actor.chaff--;actor.chaffCooldown=.65;r.chaffClouds.push(cloud);const diverted=divertMissiles(r,cloud);
-  if(distance(actor,r)<90)r.events.push('chaff');
+  if(r.multiplayer||distance(actor,r)<90)sound(r,'chaff',actor);
   actor.notice=diverted?`CHAFF · ${diverted} MISSILE${diverted===1?'':'S'} DIVERTED`:'CHAFF RELEASED';actor.noticeTime=2;
   return true;
 }
@@ -62,7 +63,7 @@ export function fireBattle(r,actor=r){
   if(kind==='missile')actor.missiles--;if(kind==='hedgehog'&&!vulcan)actor.ammo--;
   actor.fireCooldown=kind==='missile'?.9:vulcan?.075:.45;
   if(actor.item==='missile'&&!actor.missiles)actor.item='hedgehog';
-  if(distance(actor,r)<90)r.events.push(kind==='missile'?'missile':vulcan?'vulcanFire':'fire');
+  if(r.multiplayer||distance(actor,r)<90)sound(r,kind==='missile'?'missile':vulcan?'vulcanFire':'fire',actor);
 }
 export function damageBattle(r,victim,owner,amount){
   if(r.phase!=='racing'||r.finishCountdown!==null||victim.destroyed>0||victim.shield>0||victim.id===owner)return false;
@@ -104,7 +105,7 @@ function moveActor(r,actor,steer,gas,brake,dt,handbrake=false){
   // Chassis rotation and travel direction separate while the rear tires slide.
   const drifting=handbrake&&!brake&&Math.abs(steer)>.1&&actor.speed>(actor.wasDrifting?70:110);
   const before=actor.drift;
-  if(drifting){actor.drift=Math.min(1.2,actor.drift+dt);if(before<.45&&actor.drift>=.45)r.events.push('driftCharge');if(before<.85&&actor.drift>=.85)r.events.push('driftChargeMax');}
+  if(drifting){actor.drift=Math.min(1.2,actor.drift+dt);if(before<.45&&actor.drift>=.45)sound(r,'driftCharge',actor);if(before<.85&&actor.drift>=.85)sound(r,'driftChargeMax',actor);}
   if(!drifting&&actor.wasDrifting){
     if(!handbrake&&!brake&&actor.speed>90&&actor.drift>=.45&&r.finishCountdown===null){actor.boost=Math.max(actor.boost,actor.drift>=.85?1.35:.8);actor.motionHeading=actor.heading;fx(r,'boost',actor);}
     actor.drift=0;actor.driftTrail=null;
@@ -130,7 +131,7 @@ export function predictKartMovement(world,actor,keys,dt){
   actor.boost=Math.max(0,(actor.boost??0)-dt);actor.human=true;
   const steer=Number(keys.has('arrowright')||keys.has('d'))-Number(keys.has('arrowleft')||keys.has('a'));
   moveActor(scene,actor,steer,keys.has('arrowup')||keys.has('w'),keys.has('arrowdown')||keys.has('s'),dt,keys.has('shift'));
-  actor.yaw=steer*.12;
+  actor.yaw=steer*.12;return scene.events;
 }
 export function tickBattle(r,keys,dt,inputs=null){
   dt=clamp(dt,0,.05);if(!['racing','countdown'].includes(r.phase))return;

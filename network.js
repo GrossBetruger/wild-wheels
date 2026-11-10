@@ -1,6 +1,7 @@
 import { drivers } from './engine.js';
 import { NetworkPlayback } from './playback.js';
 import { LocalPrediction } from './prediction.js';
+import { ActionAudio } from './action-audio.js';
 
 export function invitationUrl(pageUrl,code,{publicOrigin,lan}={}){
   const page=new URL(pageUrl);
@@ -10,8 +11,8 @@ export function invitationUrl(pageUrl,code,{publicOrigin,lan}={}){
 
 export class NetworkGame {
   token=null;state=null;paused=false;sequence=0;actions=[];playback=new NetworkPlayback();prediction=new LocalPrediction();rtt=0;lastPing=-Infinity;
-  constructor({anchor,keys,driver,arena,onState,onLeave,unlock}){
-    Object.assign(this,{keys,driver,arena,onState,onLeave,unlock});
+  constructor({anchor,keys,driver,arena,onState,onLeave,unlock,sound=()=>{}}){
+    Object.assign(this,{keys,driver,arena,onState,onLeave,unlock,sound});this.actionAudio=new ActionAudio(sound);
     this.panel=document.createElement('section');this.panel.className='network-panel';this.panel.setAttribute('aria-label','Multiplayer arena lobby');
     const title=document.createElement('strong');title.textContent='PLAY TOGETHER · UP TO 6 PLAYERS';
     this.name=document.createElement('input');this.name.placeholder='Your name';this.name.value='Player';this.name.maxLength=24;this.name.setAttribute('aria-label','Player name');
@@ -88,6 +89,9 @@ export class NetworkGame {
   }
   accept(state){
     if(!this.active)return;
+    const now=performance.now()/1000;
+    this.actionAudio.accept(state.world,now,state.inputSequence);
+    state.world.events=this.actionAudio.confirmations(state.world.events,now);
     if(this.state&&state.world.elapsed<this.state.world.elapsed)this.playback.clear();
     this.playback.push(state.time,state.world);
     this.prediction.accept(state.world,performance.now()/1000,this.rtt/2);
@@ -110,11 +114,14 @@ export class NetworkGame {
   render(dt){
     const world=this.playback.sample()??this.view();if(!world)return null;
     const local=this.prediction.sample(this.paused?new Set():this.keys,dt,performance.now()/1000);
+    const now=performance.now()/1000;
+    for(const type of this.prediction.sounds.splice(0))this.actionAudio.emit(type,now);
+    if(!this.paused&&this.keys.has(' '))this.actionAudio.action('fire',undefined,now,this.sequence);
     const view={...world,...local};
     if(this.paused&&['countdown','racing'].includes(world.phase))return {...view,phase:'paused',resumePhase:world.phase};
     return view;
   }
-  action(type,item){if(!this.active)return;this.actions.push({type,...(item?{item}:{})});this.actions=this.actions.slice(-8);this.input();}
+  action(type,item){if(!this.active)return;if(!this.paused)this.actionAudio.action(type,item,performance.now()/1000,this.sequence);this.actions.push({type,...(item?{item}:{})});this.actions=this.actions.slice(-8);this.input();}
   input(){
     const now=performance.now()/1000;this.prediction.record(this.paused?new Set():this.keys,now);
     if(this.active&&this.socket?.readyState===WebSocket.OPEN){
@@ -138,7 +145,7 @@ export class NetworkGame {
   pause(){this.paused=!this.paused;this.keys.clear();this.actions=[];this.input();this.onState(this.view());}
   leave(message='You left the room.'){
     if(!this.active)return;
-    this.request('/api/leave',{}).catch(()=>{});this.token=null;this.socket?.close();this.state=null;this.pending=null;this.actions=[];this.keys.clear();this.playback.clear();this.prediction.clear();this.rtt=0;this.lastPing=-Infinity;
+    this.request('/api/leave',{}).catch(()=>{});this.token=null;this.socket?.close();this.state=null;this.pending=null;this.actions=[];this.keys.clear();this.playback.clear();this.prediction.clear();this.actionAudio=new ActionAudio(this.sound);this.rtt=0;this.lastPing=-Infinity;
     this.internetError=false;this.hostButton.disabled=false;this.name.disabled=false;this.botCount.disabled=false;for(const option of this.botCount.options)option.disabled=false;this.leaveButton.classList.add('hidden');this.copyButton.classList.add('hidden');this.internetButton.classList.add('hidden');this.animalChoice.classList.add('hidden');this.share.classList.add('hidden');this.help.classList.add('hidden');this.players.replaceChildren();this.status.textContent=message;this.onLeave();
   }
 }

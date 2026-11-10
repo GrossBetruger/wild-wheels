@@ -4,8 +4,8 @@ const fields=['wx','wz','speed','heading','motionHeading','cameraHeading','drift
 const angle=(a,b)=>Math.atan2(Math.sin(a-b),Math.cos(a-b));
 const copy=world=>({...world,driftTrail:null,driftEmit:0});
 export class LocalPrediction {
-  actor=null;world=null;received=0;history=[];error={wx:0,wz:0,heading:0,cameraHeading:0};
-  clear(){this.actor=null;this.world=null;this.history=[];this.error={wx:0,wz:0,heading:0,cameraHeading:0};}
+  actor=null;world=null;received=0;history=[];sounds=[];error={wx:0,wz:0,heading:0,cameraHeading:0};
+  clear(){this.actor=null;this.world=null;this.history=[];this.sounds=[];this.error={wx:0,wz:0,heading:0,cameraHeading:0};}
   record(keys,now){
     const held=[...keys].filter(key=>['arrowup','arrowdown','arrowleft','arrowright','w','a','s','d','shift'].includes(key)).sort();
     if(this.history.at(-1)?.keys.join('|')===held.join('|'))return;
@@ -31,7 +31,7 @@ export class LocalPrediction {
     this.record(keys,now);
     if(now-this.received<.25){
       let remaining=Math.min(.05,Math.max(0,dt));
-      while(remaining>1e-8){const step=Math.min(1/60,remaining);predictKartMovement(this.world,this.actor,keys,step);remaining-=step;}
+      while(remaining>1e-8){const step=Math.min(1/60,remaining);this.sounds.push(...(predictKartMovement(this.world,this.actor,keys,step)??[]));remaining-=step;}
     }
     const decay=Math.exp(-Math.max(0,dt)*15);
     const result=Object.fromEntries(fields.map(field=>[field,this.actor[field]]));

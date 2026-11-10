@@ -50,7 +50,7 @@ export class Multiplayer {
     if(body.sequence>member.sequence){member.sequence=body.sequence;member.keys=new Set(body.keys);member.inputAt=Date.now();member.actions.push(...body.actions);member.actions=member.actions.slice(-16);}
   }
   makeWorld(room){
-    room.world=createBattle(0,room.arena);room.world.human=true;room.world.skill=.85;room.world.multiplayer=true;room.events=[];room.voices=[];
+    room.world=createBattle(0,room.arena);room.world.human=true;room.world.skill=.85;room.world.multiplayer=true;room.world.soundEpoch=room.soundEpoch=(room.soundEpoch??0)+1;room.events=[];room.voices=[];
     for(const member of room.members.values())this.assign(room,member);
     this.roster(room);
   }
@@ -79,12 +79,12 @@ export class Multiplayer {
     const world=room.world,actors=[world,...world.bots],actor=actors[member.id],order=standings(world),rank=order.findIndex(k=>k.id===member.id)+1;
     const {bots,...globals}=world;
     const view={...globals,...actorData(actor),bots:actors.filter(k=>k.id!==member.id&&!k.inactive).map(actorData),rank,finishRank:world.finishRank===null?null:rank};
-    view.events=room.events.filter(event=>event!=='victory'&&event!=='finish');
+    view.events=room.events.filter(event=>event!=='victory'&&event!=='finish').filter(event=>typeof event==='string'||event.owner===member.id||Math.hypot(event.wx-actor.wx,event.wz-actor.wz)<90);
     if(room.events.some(event=>event==='victory'||event==='finish'))view.events.push(rank===1?'victory':'finish');
     view.voices=room.voices;view.name=member.name;
     const label=id=>id===member.id?'YOU':actors[id]?.name??drivers[actors[id]?.driver??0].name.split(' ')[0];
     view.killFeed=world.killFeed.map(entry=>({...entry,text:`${label(entry.attacker)} → ${label(entry.victim)}`}));
-    return {type:'state',time:room.networkTime??0,code:room.code,you:member.id,host:room.host,arena:room.arena,bots:room.botCount,players:[...room.members.values()].map(p=>({id:p.id,name:p.name,driver:p.driver,color:p.color})),world:view};
+    return {type:'state',time:room.networkTime??0,inputSequence:member.sequence,code:room.code,you:member.id,host:room.host,arena:room.arena,bots:room.botCount,players:[...room.members.values()].map(p=>({id:p.id,name:p.name,driver:p.driver,color:p.color})),world:view};
   }
   send(member,data){
     if(member.socket?.readyState===1){if(member.socket.bufferedAmount>256*1024){member.socket.close(1013,'Connection too slow');return;}member.socket.send(JSON.stringify(data));return;}
