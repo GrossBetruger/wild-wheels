@@ -223,7 +223,13 @@ export class Renderer {
     if(this.track!==`arena-${r.arena}`)this.arenaScenery(r.arena);
     const gl=this.gl,canvas=this.canvas,width=Math.round(canvas.clientWidth*this.pixelRatio()),height=Math.round(canvas.clientHeight*this.pixelRatio());if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;}gl.viewport(0,0,width,height);
     const sky=rgb(arenas[r.arena].sky);gl.clearColor(...sky,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(this.program);
-    const p=combatPose(r),cx=Math.sin(r.cameraHeading),cz=Math.cos(r.cameraHeading),overview=r.bomber?bomberCamera(width,height,arenas[r.arena].size,this.bomberView??'3d'):null,eye=overview?.eye??[p.x-cx*17,10+(r.destroyed?5:0),p.z-cz*17],view=overview?.matrix??cameraMatrix(eye,[p.x+cx*18,1.5,p.z+cz*18],width/height,r.boost>0?1.2:r.wasDrifting?1.13:1.07);
+    if(r.bomber){
+      const scene=`${r.arena}:${r.id}:${r.soundEpoch??0}`;
+      if(scene!==this.bomberScene||r.elapsed<(this.bomberElapsed??0)){this.bomberScene=scene;this.bomberFocus=null;}
+      const target=r.bots.find(actor=>!actor.bomber&&!actor.inactive&&!actor.destroyed);
+      this.bomberFocus??={wx:target?.wx??0,wz:target?.wz??0};this.bomberElapsed=r.elapsed;
+    }
+    const p=combatPose(r),cx=Math.sin(r.cameraHeading),cz=Math.cos(r.cameraHeading),overview=r.bomber?bomberCamera(width,height,arenas[r.arena].size,this.bomberView??'3d',this.bomberFocus,this.bomberZoom??1):null,eye=overview?.eye??[p.x-cx*17,10+(r.destroyed?5:0),p.z-cz*17],view=overview?.matrix??cameraMatrix(eye,[p.x+cx*18,1.5,p.z+cz*18],width/height,r.boost>0?1.2:r.wasDrifting?1.13:1.07);
     this.bomberMatrix=overview?.matrix??null;
     gl.uniform1f(this.fogScale,overview?.fogScale??1);
     this.nameplates=kartNameplates(r,view,eye);

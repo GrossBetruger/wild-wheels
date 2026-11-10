@@ -6,7 +6,7 @@ import { createBattle, tickBattle, fireBattle, releaseChaff, useBattleTurbo, som
 import { NetworkGame } from './network.js';
 import { matchResults } from './results.js';
 import { KillCelebration, ChaffNotice } from './combat-notices.js';
-import { usesMobileControls, bombTarget } from './mobile.js';
+import { usesMobileControls, bombTarget, panBomber } from './mobile.js';
 const $ = id => document.getElementById(id);
 const canvas = $('game'), map = $('map').getContext('2d');
 const keys = new Set(), audio = new RaceAudio(), renderer = new Renderer(canvas);
@@ -35,22 +35,49 @@ const mobileHint=document.createElement('span');
 try{if(localStorage.getItem('wild-wheels:bomber-view')==='map')renderer.bomberView='map';}catch{}
 renderer.bomberView??='3d';
 const cameraSwitch=document.createElement('div');cameraSwitch.className='bomber-camera-switch';cameraSwitch.setAttribute('role','group');cameraSwitch.setAttribute('aria-label','Bomber camera');cameraSwitch.classList.toggle('hidden',!mobile);
+const cameraTools=document.createElement('div');cameraTools.className='bomber-camera-tools';cameraTools.classList.toggle('hidden',!mobile||renderer.bomberView==='map');
+for(const [id,label,title,action] of [
+  ['bomber-zoom-in','+','Zoom in',()=>{renderer.bomberZoom=Math.min(2.5,(renderer.bomberZoom??1)*1.35);}],
+  ['bomber-zoom-out','−','Zoom out',()=>{renderer.bomberZoom=Math.max(.75,(renderer.bomberZoom??1)/1.35);}],
+  ['bomber-center','⌖','Center on an opponent',()=>{const target=race.bots.find(actor=>!actor.bomber&&!actor.inactive&&!actor.destroyed);renderer.bomberFocus={wx:target?.wx??0,wz:target?.wz??0};}]
+]){const button=document.createElement('button');button.id=id;button.type='button';button.textContent=label;button.title=title;button.setAttribute('aria-label',title);button.onclick=action;cameraTools.append(button);}
+document.querySelector('.viewport').append(cameraTools);
 for(const [value,label] of [['3d','3D VIEW'],['map','2D MAP']]){
   const button=document.createElement('button');button.type='button';button.id=`bomber-view-${value}`;button.textContent=label;button.setAttribute('aria-pressed',String(renderer.bomberView===value));
-  button.onclick=()=>{renderer.bomberView=value;for(const choice of cameraSwitch.children)choice.setAttribute('aria-pressed',String(choice===button));try{localStorage.setItem('wild-wheels:bomber-view',value);}catch{}};cameraSwitch.append(button);
+  button.onclick=()=>{renderer.bomberView=value;cameraTools.classList.toggle('hidden',value==='map');for(const choice of cameraSwitch.children)choice.setAttribute('aria-pressed',String(choice===button));try{localStorage.setItem('wild-wheels:bomber-view',value);}catch{}};cameraSwitch.append(button);
 }
 document.querySelector('.viewport').append(cameraSwitch);
 const mobileScreenButton=document.createElement('button');mobileScreenButton.id='mobile-fullscreen';mobileScreenButton.textContent='FULL SCREEN';mobileScreenButton.onclick=()=>mobileImmersive?exitMobileFullscreen():enterMobileFullscreen();
 const bombHud=document.createElement('div');bombHud.id='bomb-hud';bombHud.className='bomb-hud';const bombCount=document.createElement('strong'),bombRefill=document.createElement('span');bombCount.id='bomb-count';bombRefill.id='bomb-refill';bombCount.textContent='2 A-BOMBS';bombRefill.textContent='+1 / 5s OR KILL';bombHud.append(bombCount,bombRefill);
-mobileHint.textContent='BOMBER · Tap the arena to drop an A-bomb.';mobilePanel.append(bombHud,mobileHint,mobileScreenButton);racePanel.append(mobilePanel);
-canvas.addEventListener('pointerdown',event=>{
-  if(!race.bomber||race.phase!=='racing'||race.finishCountdown!==null||!event.isPrimary||event.button!==0)return;
-  event.preventDefault();audio.unlock().catch(()=>{});
-  const target=bombTarget(event.clientX,event.clientY,canvas.getBoundingClientRect(),arenas[race.arena].size,renderer.bomberView);if(!target)return;
+mobileHint.textContent='Tap to bomb · Drag to explore · + / − to zoom.';mobilePanel.append(bombHud,mobileHint,mobileScreenButton);racePanel.append(mobilePanel);
+let bomberPointer=null;
+function dropAt(clientX,clientY){
+  const target=bombTarget(clientX,clientY,canvas.getBoundingClientRect(),arenas[race.arena].size,renderer.bomberView,renderer.bomberFocus,renderer.bomberZoom??1);if(!target)return;
   const dropped=network.active?network.action('bomb',target):dropBomb(race,race,target);
   if(!dropped){mobileHint.textContent='Rearming… +1 A-bomb every 5 seconds or kill.';return;}
   mobileHint.textContent='Bomb away! Tap another target when ready.';
+}
+canvas.addEventListener('pointerdown',event=>{
+  if(bomberPointer&&bomberPointer.id!==event.pointerId){bomberPointer.cancelled=true;return;}
+  if(!race.bomber||race.phase!=='racing'||race.finishCountdown!==null||!event.isPrimary||event.button!==0)return;
+  event.preventDefault();audio.unlock().catch(()=>{});canvas.setPointerCapture(event.pointerId);
+  bomberPointer={id:event.pointerId,start:{x:event.clientX,y:event.clientY},focus:{...(renderer.bomberFocus??{wx:0,wz:0})},view:renderer.bomberView,zoom:renderer.bomberZoom??1,dragged:false};
 });
+canvas.addEventListener('pointermove',event=>{
+  if(!bomberPointer||bomberPointer.id!==event.pointerId||bomberPointer.cancelled)return;
+  const pointer=bomberPointer,current={x:event.clientX,y:event.clientY};
+  pointer.dragged ||= Math.hypot(current.x-pointer.start.x,current.y-pointer.start.y)>8;
+  if(!pointer.dragged||pointer.view!=='3d')return;
+  event.preventDefault();renderer.bomberFocus=panBomber(pointer.start,current,canvas.getBoundingClientRect(),pointer.focus,pointer.zoom,arenas[race.arena].size);
+});
+canvas.addEventListener('pointerup',event=>{
+  if(!bomberPointer||bomberPointer.id!==event.pointerId)return;
+  const pointer=bomberPointer;bomberPointer=null;
+  if(!pointer.dragged&&!pointer.cancelled&&race.phase==='racing'&&race.finishCountdown===null)dropAt(event.clientX,event.clientY);
+});
+for(const event of ['pointercancel','lostpointercapture'])canvas.addEventListener(event,()=>{bomberPointer=null;});
+for(const event of ['blur','resize'])window.addEventListener(event,()=>{bomberPointer=null;});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)bomberPointer=null;});
 const modeSwitch=document.createElement('nav');modeSwitch.className='mode-switch';modeSwitch.setAttribute('aria-label','Game mode');
 const selectedMaps={race:0,combat:0};
 for(const [value,label] of [['race','🏁 GRAND PRIX'],['combat',mobile?'✈ BOMBER ARENA':'⚔ ARENA BATTLE']]){const button=document.createElement('button');button.id=`mode-${value}`;button.textContent=label;button.classList.toggle('hidden',mobile&&value==='race');button.setAttribute('aria-pressed',String(value===mode));button.onclick=()=>{if(mode===value)return;mode=value;track=selectedMaps[mode];resetMap();};modeSwitch.append(button);}

@@ -84,7 +84,8 @@ try{
       const capture=async label=>{const screenshot=await call('Page.captureScreenshot',{format:'png'},session);await writeFile(`${output}.${profile.run}.${profile.name}.${label}.mobile.png`,Buffer.from(screenshot.data,'base64'));};
       const rotate=angle=>call('Emulation.setDeviceMetricsOverride',{width:angle?900:430,height:angle?430:900,deviceScaleFactor:1,mobile:true,screenOrientation:{type:angle===90?'landscapePrimary':angle===270?'landscapeSecondary':'portraitPrimary',angle}},session);
       const tap=async(x,y)=>{await call('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y,id:1,radiusX:1,radiusY:1,force:1}]},session);await call('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]},session);};
-      const result={profile:profile.name,run:profile.run,...await checkMobile(evaluate,app.multiplayer,room,identity.you,sleep,capture,rotate,tap)};results.push(result);console.log(JSON.stringify(result));
+      const drag=async(start,end)=>{await call('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{...start,id:1,radiusX:1,radiusY:1,force:1}]},session);for(let step=1;step<=6;step++)await call('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:start.x+(end.x-start.x)*step/6,y:start.y+(end.y-start.y)*step/6,id:1,radiusX:1,radiusY:1,force:1}]},session);await call('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]},session);};
+      const result={profile:profile.name,run:profile.run,...await checkMobile(evaluate,app.multiplayer,room,identity.you,sleep,capture,rotate,tap,drag)};results.push(result);console.log(JSON.stringify(result));
       await evaluate('__game.network.leave()');await call('Target.closeTarget',{targetId});for(const member of [...room.members.values()])app.multiplayer.remove(member);continue;
     }
     if(process.argv.includes('--controls')){
