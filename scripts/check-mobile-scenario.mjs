@@ -24,7 +24,7 @@ export async function checkMobile(evaluate,app,room,id,sleep,capture,rotate,tap,
   const actor=[room.world,...room.world.bots][id],other=[room.world,...room.world.bots][enemy.id];
   Object.assign(room.world,{phase:'racing',supplies:[],projectiles:[]});
   Object.assign(other,{wx:-65,wz:30,speed:0,shield:0,health:3,destroyed:0,name:'Target <img>'});
-  const initialAmmo=actor.bomber&&actor.bombAmmo===2;
+  const initialAmmo=actor.bomber&&actor.bombAmmo===2&&actor.stinkAmmo===2;
   for(let i=0;i<100;i++){if(await evaluate("__game.race.phase==='racing'&&__game.race.bomber&&document.getElementById('bomb-count').textContent==='2 A-BOMBS'"))break;await sleep(10);}
   const fullscreen=await evaluate(`(()=>{const panel=document.querySelector('.race-panel'),r=panel.getBoundingClientRect();return panel.classList.contains('mobile-fullscreen')&&Math.abs(r.width-innerWidth)<2&&Math.abs(r.height-innerHeight)<2;})()`);
   const overhead=await evaluate("document.querySelector('.viewport').classList.contains('bomber-view')&&!document.getElementById('enable-tilt')&&!document.getElementById('auto-fire')&&getComputedStyle(document.querySelector('.touch-controls')).display==='none'");
@@ -52,24 +52,24 @@ export async function checkMobile(evaluate,app,room,id,sleep,capture,rotate,tap,
   if(capture)await capture('portrait-3d-drop');
   for(let i=0;i<150;i++){if(other.deaths===1)break;await sleep(10);}
   const blast=other.deaths===1&&actor.kills===1&&app.snapshot(room,enemy).world.effects.some(effect=>effect.type==='abomb');
-  const noKillBonus=actor.bombAmmo===0&&actor.stinkAmmo===0&&room.world.elapsed<5;
+  const noKillBonus=actor.bombAmmo===0&&actor.stinkAmmo===2&&room.world.elapsed<5;
   if(capture){await sleep(350);await capture('portrait-3d-blast');}
   const feedback=await evaluate("__game.bombTrace[0]??null");
   const immediate=Boolean(feedback&&feedback.ammo===1&&feedback.bombs.some(bomb=>bomb.owner===id));
-  for(let i=0;i<600;i++){if(actor.stinkAmmo===1)break;await sleep(10);}
-  const stinkRefill=actor.stinkAmmo===1&&actor.bombAmmo===0&&room.world.elapsed>=4.999;
+  for(let i=0;i<600;i++){if(actor.stinkAmmo===3)break;await sleep(10);}
+  const stinkRefill=actor.stinkAmmo===3&&actor.bombAmmo===0&&room.world.elapsed>=4.999;
   Object.assign(other,{wx:-65,wz:30,health:3,shield:0,destroyed:0,speed:0});
   await evaluate("document.getElementById('bomber-weapon-stink').click()");
-  for(let i=0;i<100;i++){if(await evaluate('__game.race.stinkAmmo===1&&__game.race.bots.some(actor=>actor.wx===-65&&actor.wz===30)'))break;await sleep(10);}
+  for(let i=0;i<100;i++){if(await evaluate('__game.race.stinkAmmo===3&&__game.race.bots.some(actor=>actor.wx===-65&&actor.wz===30)'))break;await sleep(10);}
   const stinkPoint=await targetPixel(-65,30);await tap(stinkPoint.x,stinkPoint.y);
   for(let i=0;i<100;i++){if(room.world.bombs.some(bomb=>bomb.kind==='stink'))break;await sleep(10);}
-  const stinkShot=room.world.bombs.some(bomb=>bomb.kind==='stink'&&bomb.owner===id)&&actor.bombAmmo===0&&actor.stinkAmmo===0;
+  const stinkShot=room.world.bombs.some(bomb=>bomb.kind==='stink'&&bomb.owner===id)&&actor.bombAmmo===0&&actor.stinkAmmo===2;
   for(let i=0;i<150;i++){if(other.dizzy>0)break;await sleep(10);}
   const stinkWorks=other.dizzy>0&&other.health===3&&actor.kills===1&&room.world.stinkClouds.length>0;
-  const stinkFeedback=await evaluate('__game.lastTapFrames[0]??null'),stinkImmediate=Boolean(stinkFeedback&&stinkFeedback.ammo===0&&stinkFeedback.stinkAmmo===0&&stinkFeedback.bombs.some(bomb=>bomb.kind==='stink'));
+  const stinkFeedback=await evaluate('__game.lastTapFrames[0]??null'),stinkImmediate=Boolean(stinkFeedback&&stinkFeedback.ammo===0&&stinkFeedback.stinkAmmo===2&&stinkFeedback.bombs.some(bomb=>bomb.kind==='stink'));
   if(capture)await capture('stink-cloud');
   for(let i=0;i<1000;i++){if(actor.bombAmmo===1&&other.dizzy===0)break;await sleep(10);}
-  const refillAt=room.world.elapsed,refill=actor.bombAmmo===1&&actor.stinkAmmo===1&&refillAt>=9.999,dizzyExpired=other.dizzy===0&&other.health===3;
+  const refillAt=room.world.elapsed,refill=actor.bombAmmo===1&&actor.stinkAmmo===3&&refillAt>=9.999,dizzyExpired=other.dizzy===0&&other.health===3;
   await evaluate("document.getElementById('bomber-weapon-abomb').click()");
   const margin=await evaluate("(()=>{const r=document.getElementById('game').getBoundingClientRect();return {x:r.left+2,y:r.top+2};})()");
   const before=room.world.bombSequence;await tap(margin.x,margin.y);await sleep(200);

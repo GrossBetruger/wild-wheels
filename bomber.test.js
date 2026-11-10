@@ -7,13 +7,13 @@ import { LocalFeedback } from './feedback.js';
 test('stinkbombs refill every five seconds and A-bombs every ten',()=>{
   const world=equipBomber(createBattle());Object.assign(world,{phase:'racing',bots:[],supplies:[]});
   assert.equal(world.bombAmmo,2);
-  assert.equal(world.stinkAmmo,0);
-  for(let i=0;i<299;i++)tickBattle(world,new Set(),1/60);assert.equal(world.bombAmmo,2);assert.equal(world.stinkAmmo,0);
-  tickBattle(world,new Set(),1/60);assert.equal(world.bombAmmo,2);assert.equal(world.stinkAmmo,1);
-  for(let i=0;i<300;i++)tickBattle(world,new Set(),1/60);assert.equal(world.bombAmmo,3);assert.equal(world.stinkAmmo,2);
-  for(let i=0;i<300;i++)tickBattle(world,new Set(),1/60);assert.equal(world.bombAmmo,3);assert.equal(world.stinkAmmo,3);
-  for(let i=0;i<300;i++)tickBattle(world,new Set(),1/60);assert.equal(world.bombAmmo,4);assert.equal(world.stinkAmmo,4);
-  world.phase='paused';for(let i=0;i<600;i++)tickBattle(world,new Set(),1/60);assert.equal(world.bombAmmo,4);assert.equal(world.stinkAmmo,4);
+  assert.equal(world.stinkAmmo,2);
+  for(let i=0;i<299;i++)tickBattle(world,new Set(),1/60);assert.equal(world.bombAmmo,2);assert.equal(world.stinkAmmo,2);
+  tickBattle(world,new Set(),1/60);assert.equal(world.bombAmmo,2);assert.equal(world.stinkAmmo,3);
+  for(let i=0;i<300;i++)tickBattle(world,new Set(),1/60);assert.equal(world.bombAmmo,3);assert.equal(world.stinkAmmo,4);
+  for(let i=0;i<300;i++)tickBattle(world,new Set(),1/60);assert.equal(world.bombAmmo,3);assert.equal(world.stinkAmmo,5);
+  for(let i=0;i<300;i++)tickBattle(world,new Set(),1/60);assert.equal(world.bombAmmo,4);assert.equal(world.stinkAmmo,6);
+  world.phase='paused';for(let i=0;i<600;i++)tickBattle(world,new Set(),1/60);assert.equal(world.bombAmmo,4);assert.equal(world.stinkAmmo,6);
 });
 test('a falling A-bomb explodes after 0.9 seconds and kills nearby karts without rewarding ammunition',()=>{
   const world=equipBomber(createBattle());Object.assign(world,{phase:'racing',supplies:[]});
@@ -23,16 +23,16 @@ test('a falling A-bomb explodes after 0.9 seconds and kills nearby karts without
   for(let i=0;i<53;i++)tickBattle(world,new Set(),1/60);
   assert.equal(nearby.health,3);assert.equal(edge.health,3);assert.equal(world.bombs.length,1);
   tickBattle(world,new Set(),1/60);
-  assert.equal(nearby.health,0);assert.equal(edge.health,0);assert.equal(outside.health,3);assert.equal(world.kills,2);assert.equal(world.bombAmmo,1);assert.equal(world.stinkAmmo,0);assert.equal(world.vulcan,0);assert.equal(world.bombs.length,0);
+  assert.equal(nearby.health,0);assert.equal(edge.health,0);assert.equal(outside.health,3);assert.equal(world.kills,2);assert.equal(world.bombAmmo,1);assert.equal(world.stinkAmmo,2);assert.equal(world.vulcan,0);assert.equal(world.bombs.length,0);
   assert.ok(world.effects.some(effect=>effect.type==='abomb'&&effect.wx===-65&&effect.wz===0));
 });
 test('kills do not grant either bomb type or restart the ten-second refill clock',()=>{
   const world=equipBomber(createBattle());Object.assign(world,{phase:'racing',supplies:[]});
   const victim=world.bots[0];world.bots=[victim];Object.assign(victim,{wx:-65,wz:0,health:3,shield:0,speed:0,human:true});
   for(let i=0;i<594;i++)tickBattle(world,new Set(),1/60);
-  damageBattle(world,victim,world.id,3);assert.equal(world.bombAmmo,2);assert.equal(world.stinkAmmo,1);assert.equal(world.kills,1);
+  damageBattle(world,victim,world.id,3);assert.equal(world.bombAmmo,2);assert.equal(world.stinkAmmo,3);assert.equal(world.kills,1);
   assert.equal(damageBattle(world,victim,world.id,3),false);assert.equal(world.bombAmmo,2);
-  for(let i=0;i<6;i++)tickBattle(world,new Set(),1/60);assert.equal(world.bombAmmo,3);assert.equal(world.stinkAmmo,2);
+  for(let i=0;i<6;i++)tickBattle(world,new Set(),1/60);assert.equal(world.bombAmmo,3);assert.equal(world.stinkAmmo,4);
 });
 test('bombers cannot drive, collect kart supplies, fire kart weapons, or be hit by karts',()=>{
   const world=equipBomber(createBattle());Object.assign(world,{phase:'racing',wx:-65,wz:0,bots:[],supplies:[{wx:-65,wz:0,kind:'missile',cooldown:0}]});
@@ -56,6 +56,7 @@ test('only a bomber with ammunition can drop bombs during an active match',()=>{
   const world=createBattle();Object.assign(world,{phase:'racing',bots:[]});
   assert.equal(dropBomb(world,world,{wx:0,wz:0}),false);
   equipBomber(world);assert.ok(dropBomb(world,world,{wx:0,wz:0}));assert.ok(dropBomb(world,world,{wx:10,wz:10}));assert.equal(dropBomb(world,world,{wx:20,wz:20}),false);assert.equal(world.bombAmmo,0);
+  assert.ok(dropBomb(world,world,{wx:0,wz:0,kind:'stink'}));assert.ok(dropBomb(world,world,{wx:10,wz:10,kind:'stink'}));assert.equal(dropBomb(world,world,{wx:20,wz:20,kind:'stink'}),false);assert.equal(world.stinkAmmo,0);
   world.bombAmmo=1;world.phase='paused';assert.equal(dropBomb(world,world,{wx:0,wz:0}),false);
   world.phase='racing';world.finishCountdown=3;assert.equal(dropBomb(world,world,{wx:0,wz:0}),false);assert.equal(world.bombAmmo,1);
 });
@@ -69,7 +70,7 @@ test('the server rejects invalid bomb targets and prevents duplicate drops or fo
   app.controls(bomber,{sequence:1,keys:[],actions:[{type:'bomb',id:0,afterMove:-1,wx:30,wz:40},{type:'bomb',id:1,afterMove:-1,wx:30,wz:40},{type:'bomb',id:2,afterMove:-1,wx:30,wz:40}],epoch});app.step(1/60);
   assert.equal(room.world.bombs.length,2);assert.equal(room.world.bombAmmo,0);assert.equal(room.world.bombs[0].wx,30);assert.equal(room.world.bombs[0].wz,40);
   app.makeWorld(room);assert.equal(room.world.bomber,true);assert.equal(room.world.bombAmmo,2);
-  assert.equal(room.world.stinkAmmo,0);
+  assert.equal(room.world.stinkAmmo,2);
 });
 test('a tap shows its bomb and spends its ammunition immediately, then confirmation keeps one bomb',()=>{
   const world=equipBomber(createBattle());Object.assign(world,{phase:'racing',soundEpoch:1,bots:[],supplies:[]});

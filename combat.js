@@ -38,7 +38,7 @@ export function createBattle(driver=0,arena=0,random=Math.random){
   return r;
 }
 export function standings(r){return [r,...r.bots].filter(actor=>!actor.inactive).sort((a,b)=>b.kills-a.kills||a.deaths-b.deaths||a.id-b.id);}
-export function equipBomber(actor){Object.assign(actor,{bomber:true,bombAmmo:BOMB_START_AMMO,stinkAmmo:0,bombReload:0,speed:0,shield:0,destroyed:0,dizzy:0});return actor;}
+export function equipBomber(actor){Object.assign(actor,{bomber:true,bombAmmo:BOMB_START_AMMO,stinkAmmo:2,bombReload:0,speed:0,shield:0,destroyed:0,dizzy:0});return actor;}
 export function validBombTarget(world,point){return Boolean(point)&&Number.isFinite(point.wx)&&Number.isFinite(point.wz)&&Math.abs(point.wx)<=arenas[world.arena].size&&Math.abs(point.wz)<=arenas[world.arena].size;}
 export function dropBomb(world,actor,point,actionId){
   const kind=point?.kind??'abomb',resource=kind==='stink'?'stinkAmmo':'bombAmmo';
