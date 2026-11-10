@@ -12,7 +12,22 @@ export function invitationUrl(pageUrl,code,{publicOrigin,lan}={}){
   return new URL(`/?room=${encodeURIComponent(code)}`,origin).href;
 }
 
+export class PlayRequestPrompt {
+  identity=null;dismissed=new Set();
+  sample(state){
+    if(!state)return [];
+    const identity=[state.code,state.world.soundEpoch,state.host,state.you].join(':');
+    if(identity!==this.identity){this.identity=identity;this.dismissed.clear();}
+    const waiting=state.players.filter(player=>player.id!==state.host&&player.wantsToPlay);
+    this.dismissed=new Set([...this.dismissed].filter(id=>waiting.some(player=>player.id===id)));
+    if(state.host!==state.you||!['ready','finished'].includes(state.world.phase))return [];
+    return waiting.some(player=>!this.dismissed.has(player.id))?waiting:[];
+  }
+  dismiss(state){for(const player of state.players)if(player.wantsToPlay)this.dismissed.add(player.id);}
+}
+
 export class NetworkGame {
+  playRequestPrompt=new PlayRequestPrompt();
   token=null;state=null;paused=false;sequence=0;actions=[];playback=new NetworkPlayback();prediction=new LocalPrediction();driftFeedback=new LocalDrift();rtt=0;lastPing=-Infinity;
   constructor({anchor,keys,driver,arena,onState,onLeave,unlock,sound=()=>{}}){
     Object.assign(this,{keys,driver,arena,onState,onLeave,unlock,sound});this.actionAudio=new ActionAudio(sound);this.feedback=new LocalFeedback((type,key)=>this.actionAudio.emit(type,performance.now()/1000,null,key));
@@ -37,6 +52,24 @@ export class NetworkGame {
     const invite=document.createElement('div');invite.className='network-invite';invite.append(this.share,this.internetButton,this.copyButton);
     this.help=document.createElement('p');this.help.className='network-help hidden';
     this.panel.append(title,row,this.status,this.players,invite,this.help);anchor.before(this.panel);
+    this.readyDialog=document.createElement('dialog');this.readyDialog.id='play-request-popup';this.readyDialog.className='play-request-popup';this.readyDialog.setAttribute('aria-labelledby','play-request-title');
+    const art=document.createElement('div');art.className='play-request-art';art.textContent='🏁';art.setAttribute('aria-hidden','true');
+    this.readyTitle=document.createElement('h2');this.readyTitle.id='play-request-title';
+    const detail=document.createElement('p');detail.textContent='Your friends are on the grid. Ready to make some trouble?';
+    this.readyPeople=document.createElement('div');this.readyPeople.className='play-request-people';
+    this.readyError=document.createElement('p');this.readyError.setAttribute('role','status');
+    this.readyStartButton=this.button('LET’S BATTLE ↗',async()=>{
+      if(!this.isHost||this.readyStartButton.disabled)return;
+      this.readyStartButton.disabled=true;this.readyError.textContent='';
+      try{await this.request('/api/control',{action:'start'});this.paused=false;this.dismissPlayRequest();}
+      catch(error){this.readyError.textContent=error.message;}
+      finally{this.readyStartButton.disabled=false;}
+    });this.readyStartButton.className='primary';this.readyStartButton.autofocus=true;
+    this.readyLaterButton=this.button('NOT YET',()=>this.dismissPlayRequest());
+    const actions=document.createElement('div');actions.className='play-request-actions';actions.append(this.readyStartButton,this.readyLaterButton);
+    this.readyDialog.append(art,this.readyTitle,detail,this.readyPeople,actions,this.readyError);document.querySelector('.viewport').append(this.readyDialog);
+    this.readyDialog.addEventListener('cancel',event=>{event.preventDefault();this.dismissPlayRequest();});
+    this.readyDialog.addEventListener('keydown',event=>event.stopPropagation());
     this.refreshInfo();
     this.infoTimer=setInterval(()=>{if(this.active&&this.isHost)this.refreshInfo();},5000);
     this.timer=setInterval(()=>this.input(),1000/30);
@@ -45,6 +78,21 @@ export class NetworkGame {
   get active(){return Boolean(this.token);}
   get isHost(){return this.state?.host===this.state?.you;}
   get wantsToPlay(){return Boolean(this.state?.players.find(player=>player.id===this.state.you)?.wantsToPlay);}
+  dismissPlayRequest(){if(this.state)this.playRequestPrompt.dismiss(this.state);this.readyDialog.close();}
+  updatePlayRequest(){
+    const waiting=this.playRequestPrompt.sample(this.state);
+    if(!waiting.length){this.readyDialog.close();return;}
+    const title=waiting.length===1?`${waiting[0].name} wants to play!`:`${waiting.length} players are ready!`;
+    if(this.readyTitle.textContent!==title)this.readyTitle.textContent=title;
+    const key=JSON.stringify(waiting.map(player=>[player.id,player.name,player.driver,player.color]));
+    if(key!==this.readyPeopleKey){
+      this.readyPeopleKey=key;this.readyPeople.replaceChildren(...waiting.map(player=>{
+        const chip=document.createElement('div');chip.className='play-request-person';chip.style.borderColor=player.color;
+        const animal=document.createElement('span'),name=document.createElement('strong');animal.textContent=drivers[player.driver].emoji;animal.setAttribute('aria-hidden','true');name.textContent=player.name;chip.append(animal,name);return chip;
+      }));
+    }
+    if(!this.readyDialog.open){this.readyError.textContent='';this.readyDialog.showModal();}
+  }
   async saveName(){
     if(!this.active||this.namePending||!this.name.value.trim())return;
     const token=this.token;this.namePending=true;this.saveNameButton.disabled=true;this.name.disabled=true;this.nameFeedback.textContent='Saving…';
@@ -136,6 +184,7 @@ export class NetworkGame {
     }
     if(['countdown','racing'].includes(state.world.phase))this.status.textContent=`MATCH LIVE · ${state.players.length} players + ${state.bots} bots`;
     if(rosterKey!==this.rosterKey){this.rosterKey=rosterKey;this.players.replaceChildren(...state.players.map(player=>{const label=document.createElement('span');label.textContent=`${drivers[player.driver].emoji} ${player.name}${player.id===state.host?' · HOST':''}${player.id===state.you?' · YOU':''}${player.wantsToPlay?' · READY ✓':''}`;label.style.borderLeft=`4px solid ${player.color}`;return label;}));}
+    this.updatePlayRequest();
     this.onState(this.view());
   }
   view(){
@@ -189,6 +238,7 @@ export class NetworkGame {
   pause(){this.paused=!this.paused;this.keys.clear();this.actions=[];this.input();this.onState(this.view());}
   leave(message='You left the room.'){
     if(!this.active)return;
+    this.readyDialog.close();this.playRequestPrompt=new PlayRequestPrompt();
     this.saveNameButton.classList.add('hidden');this.nameFeedback.textContent='';this.nameDirty=false;this.namePending=false;
     this.driftFeedback=new LocalDrift();
     this.request('/api/leave',{}).catch(()=>{});this.token=null;this.socket?.close();this.state=null;this.pending=null;this.actions=[];this.keys.clear();this.playback.clear();this.prediction.clear();this.actionAudio=new ActionAudio(this.sound);this.feedback=new LocalFeedback((type,key)=>this.actionAudio.emit(type,performance.now()/1000,null,key));this.lastLocal=null;this.rtt=0;this.lastPing=-Infinity;

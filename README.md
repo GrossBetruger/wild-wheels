@@ -39,7 +39,7 @@ Open http://localhost:5173. Use arrow keys or WASD to drive, Shift + steering to
 
 During either game mode, press **Tab** or **Q** to cycle between hedgehogs and missiles, or tap their ammo cards to select directly. Press **X** or tap **X · TURBO** to spend a turbo cell without changing your weapon. Turbo is separate from firing and cannot be stacked while a boost is active. Tab keeps its normal keyboard-navigation behavior in menus and while paused; Shift+Tab always navigates controls.
 
-In multiplayer, guests press **Let’s Play** to tell the host they want to start. The guest sees **Waiting for host**, and the host sees their name and a **READY ✓** badge. Only the host starts the countdown. Requests clear when a new match or map starts.
+In multiplayer, guests press **Let’s Play** to tell the host they want to start. The guest sees **Waiting for host**, and the host gets a large centered popup with ready players’ animals and names, plus **LET’S BATTLE** and **NOT YET** buttons. Dismissing it preserves ready status without reopening on every update; a new request can bring it back. Ready badges remain in the room roster. The popup appears only for the host in the lobby or after a match, and closes when play starts. Only the host starts the countdown. Requests clear when a new match or map starts.
 
 After joining a room, edit **Player name** and click **Save Name** (or press Enter). Names update for everyone and carry into the next match. At the end, a full leaderboard shows placement, player names, kills and deaths, highlighting your row. Solo race results show recorded finish times and mark unfinished racers as DNF.
 
