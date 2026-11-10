@@ -1,7 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createBattle, damageBattle } from './combat.js';
+import { createBattle, damageBattle, equipBomber, tickBattle } from './combat.js';
 import { KillCelebration, ChaffNotice } from './combat-notices.js';
+
+test('stinkbomb assists say co-whacked while the bomber’s own killing blow still says you whacked',()=>{
+  const world=equipBomber(createBattle());Object.assign(world,{phase:'racing',supplies:[]});
+  const [killer,victimA,victimB]=world.bots;world.bots=[killer,victimA,victimB];
+  for(const victim of [victimA,victimB])Object.assign(victim,{name:'Sam <img>',wx:-65,wz:0,shield:0,health:3,human:true,speed:0});
+  const feedback=new KillCelebration();feedback.sample(world,0);
+  world.stinkClouds=[{owner:world.id,wx:-65,wz:0,age:0,life:2.5,hits:[]}];tickBattle(world,new Set(),1/60);
+  damageBattle(world,victimA,killer.id,3);
+  const assist=feedback.sample(world,.1);
+  assert.equal(assist.title,'✦ CO-WHACKED ✦');assert.equal(assist.assist,true);assert.equal(assist.name,'Sam <img>');assert.equal(world.kills,.5);
+  damageBattle(world,victimB,world.id,3);
+  const direct=feedback.sample(world,2.2);
+  assert.equal(direct.title,'✦ YOU WHACKED ✦');assert.equal(direct.assist,false);assert.equal(world.kills,1.5);
+});
 
 test('solo rematches can celebrate fresh kills and chaff diversions even when their IDs start over',()=>{
   const world=createBattle();Object.assign(world,{phase:'racing',elapsed:5});

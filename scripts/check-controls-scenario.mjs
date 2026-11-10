@@ -156,16 +156,19 @@ export async function checkControls(evaluate,app,room,id,sleep,captureFlip,captu
     if(animation)animation.currentTime=0;const start=card?.getBoundingClientRect().top;
     if(animation)animation.currentTime=325;const peak=card?.getBoundingClientRect().top;
     const viewport=document.querySelector('.viewport').getBoundingClientRect();
-    return {text:banner.textContent,visible:!banner.classList.contains('hidden'),jumps:matchMedia('(prefers-reduced-motion: reduce)').matches||peak<start-5,aboveAction:card?.getBoundingClientRect().bottom<viewport.top+viewport.height*.4,safe:!banner.querySelector('img')};
+    return {background:getComputedStyle(card).backgroundImage,text:banner.textContent,visible:!banner.classList.contains('hidden'),jumps:matchMedia('(prefers-reduced-motion: reduce)').matches||peak<start-5,aboveAction:card?.getBoundingClientRect().bottom<viewport.top+viewport.height*.4,safe:!banner.querySelector('img')};
   })()`);
   if(captureNotices)await captureNotices();
   await sleep(2100);
   const whackPass=whack.visible&&whack.text.includes('YOU WHACKED')&&whack.text.includes('Rival <img>')&&whack.jumps&&whack.aboveAction&&whack.safe&&await evaluate("document.getElementById('whack-banner').classList.contains('hidden')&&document.getElementById('averted-notice').classList.contains('hidden')");
+  room.world.killFeed.unshift({id:++room.world.killSequence,attacker:id,victim:other.id,victimName:other.name,assist:true,time:room.world.elapsed});
+  for(let i=0;i<100;i++){if(await evaluate("document.getElementById('whack-banner').textContent.includes('CO-WHACKED')"))break;await sleep(10);}
+  const coWhackPass=await evaluate("(()=>{const banner=document.getElementById('whack-banner'),card=banner.firstElementChild;return !banner.classList.contains('hidden')&&banner.textContent.includes('CO-WHACKED')&&banner.textContent.includes('Rival <img>')&&!banner.querySelector('img')&&getComputedStyle(card).backgroundImage!=="+JSON.stringify(whack.background)+"})()");
   Object.assign(actor,{kills:3,deaths:4});Object.assign(other,{kills:10,deaths:2});
   Object.assign(room.world,{phase:'finished',finishRank:1,finishTime:20,finishCountdown:0});
   for(let i=0;i<100;i++){if(await evaluate("!document.getElementById('match-results').classList.contains('hidden')&&document.querySelectorAll('#match-results tbody tr').length===2"))break;await sleep(25);}
   const leaderboard=await evaluate("[...document.querySelectorAll('#match-results tbody tr')].map(row=>[...row.cells].map(cell=>cell.textContent))");
   const resultsPass=JSON.stringify(leaderboard)===JSON.stringify([['1',other.name,'10','2'],['2',displayName+' · YOU','3','4']])&&await evaluate("document.querySelectorAll('#match-results tbody .you').length===1&&!document.querySelector('#match-results b')");
-  return {readyPass,readyCleared,readyUI,popupPass,popup,refusalPass,autoStartPass,namePass,pickupKeptVulcan,turboPass,flipPass,cameraPass,remoteSawFlip,flipTrace,desktopManual,warningPass,warning,chaffPass,chaffColor:ownCloud?.color,chaffSoundCount,greenNoticePass,orbitPass,orbitRotation,orbitTrace,desktopBombPass,stinkPass,whackPass,whack,resultsPass,leaderboard,pass:readyPass&&readyCleared&&popupPass&&refusalPass&&autoStartPass&&namePass&&pickupKeptVulcan&&turboPass&&flipPass&&desktopManual&&warningPass&&chaffPass&&greenNoticePass&&orbitPass&&desktopBombPass&&stinkPass&&whackPass&&resultsPass,trace};
+  return {readyPass,readyCleared,readyUI,popupPass,popup,refusalPass,autoStartPass,namePass,pickupKeptVulcan,turboPass,flipPass,cameraPass,remoteSawFlip,flipTrace,desktopManual,warningPass,warning,chaffPass,chaffColor:ownCloud?.color,chaffSoundCount,greenNoticePass,orbitPass,orbitRotation,orbitTrace,desktopBombPass,stinkPass,whackPass,coWhackPass,whack,resultsPass,leaderboard,pass:readyPass&&readyCleared&&popupPass&&refusalPass&&autoStartPass&&namePass&&pickupKeptVulcan&&turboPass&&flipPass&&desktopManual&&warningPass&&chaffPass&&greenNoticePass&&orbitPass&&desktopBombPass&&stinkPass&&whackPass&&coWhackPass&&resultsPass,trace};
   }finally{clearInterval(fixtureHeartbeat);}
 }

@@ -17,7 +17,7 @@ export class KillCelebration {
       this.seen.add(id);if(this.seen.size>256)this.seen.delete(this.seen.values().next().value);
       if(entry.attacker!==world.id||world.elapsed-entry.time>3)continue;
       const victim=[world,...world.bots].find(actor=>actor.id===entry.victim);
-      this.queue.push({key:id,name:entry.victimName??victim?.name??'RIVAL',color:entry.victimColor??victim?.color??'#7251d2'});
+      this.queue.push({key:id,assist:entry.assist===true,title:entry.assist===true?'✦ CO-WHACKED ✦':'✦ YOU WHACKED ✦',name:entry.victimName??victim?.name??'RIVAL',color:entry.victimColor??victim?.color??'#7251d2'});
     }
     this.queue=this.queue.slice(-16);
     if(this.active&&now>=this.active.until)this.active=null;

@@ -182,8 +182,8 @@ function hud(){
   const whack=killCelebration.sample(race,performance.now()/1000);whackBanner.classList.toggle('hidden',!whack);
   if(!whack)whackKey=null;
   if(whack&&whackKey!==whack.key){
-    whackKey=whack.key;const card=document.createElement('div');card.className='whack-card';card.style.setProperty('--victim-color',whack.color);
-    const title=document.createElement('span'),name=document.createElement('strong');title.textContent='✦ YOU WHACKED ✦';name.textContent=`“${whack.name}”`;card.append(title,name);whackBanner.replaceChildren(card);
+    whackKey=whack.key;const card=document.createElement('div');card.className=whack.assist?'whack-card co-whack':'whack-card';card.style.setProperty('--victim-color',whack.color);
+    const title=document.createElement('span'),name=document.createElement('strong');title.textContent=whack.title;name.textContent=`“${whack.name}”`;card.append(title,name);whackBanner.replaceChildren(card);
   }
   const threats=incomingMissiles(race);
   avertedBanner.classList.toggle('hidden',!chaffNotice.sample(race,performance.now()/1000)||threats>0);
