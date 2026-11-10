@@ -1,122 +1,60 @@
 # Wild Wheels
 
-A playable, original browser tribute to classic Wacky Wheels kart racing. Four animal drivers, five computer opponents, branching three-lap circuits, two combat arenas, drifting boosts, collectible turbo and hedgehog projectiles. Original 3D WebGL geometry and synthesized Web Audio; players only need a browser with WebGL enabled. The host uses Node.js and the pinned `ws` WebSocket dependency; players install nothing and need no accounts.
+A browser kart game with animal drivers, solo racing, and multiplayer arena battles. Drive on desktop or play as a bomber on mobile. Players need only a browser with WebGL enabled—no accounts or installation.
 
-Run with Node.js 18 or newer:
+## Run the game
+
+Install Node.js 18 or newer, then run these commands in the project directory:
 
 ```sh
 npm install --ignore-scripts
 npm start
 ```
 
-**Multiplayer Arena Battle:** the host runs the server once; friends only need a browser, with no installation or accounts. The server listens on all network interfaces at port **5173**. Enter a name, choose an animal, click **Host Arena**, and copy the invitation shown above the game. Room codes are always two digits, from 00 to 99, for example `?room=07`; active rooms never share a code. Friends open that link to join automatically; no room code, signup, or Join button is needed. Guests start with an unused animal when one is available, and can choose another from the animal picker in the lobby before the host starts. All six kart slots have distinct colors, including when players choose the same animal. The host presses **Let's Battle** when everyone is ready. Rooms support up to six total karts. The bot selector defaults to **1 bot** and allows the host to choose 0–5 before a match. Joining humans take priority over bots when the six-kart limit is reached. Both Scrapyard and Crossfire Court are available; Grand Prix remains a solo mode.
+Open [localhost:5173](http://localhost:5173). Keep the terminal open while playing.
 
-For internet play from your computer, install and sign in to [ngrok](https://ngrok.com/docs/start) once. Then start the game:
+## Play with friends
 
-```sh
-npm start
-```
+1. Enter your name, choose an animal, and click **Host Arena**.
+2. On the same Wi-Fi, copy the invitation and send it to your friends.
+3. For internet play, [install ngrok and connect your account](https://ngrok.com/docs/start) once, then click **Start Internet Link** and **Copy Invite**.
+4. Friends open the link to join. The host can start directly; a guest’s **Let’s Play** request starts automatically after three seconds unless the host refuses.
 
-Open `http://localhost:5173`, click **Host Arena**, then **Start Internet Link**. When the HTTPS invitation appears, click **Copy Invite** and send it to a friend. They open the link and join without installing anything. The game starts the ngrok agent for its own port and stops it when the game server exits. If ngrok is already running for that port, the invitation uses its existing HTTPS address. Keep the game terminal open while you play. The button is only available in the host's local browser; public visitors cannot start a tunnel. For local network play, the invitation uses your LAN address. The invitation field remains editable for other hosting setups.
+Arena rooms support up to six participants. Choose a map and bot count in the lobby. Phones join as bombers automatically, and everyone can edit their player name.
 
-The server controls movement, pickups, health, kills, missiles, Vulcan, chaff, respawns, and match results. Browsers send bounded control messages and receive shared updates; clients cannot submit positions or scores. All participants see their own camera, health, inventory, and placement. Only the room host can start, reset, or change maps. Invitation links also work during a live match; new players arrive with fresh health, equipment, and spawn protection. Escape pauses your controls locally while the shared match continues. Leaving transfers hosting to another player; the active roster follows the chosen bot count, stale inputs stop, and empty rooms are removed. Rooms and scores are kept in memory and reset when the server restarts.
+## Basic gameplay
 
-Multiplayer uses an authenticated persistent WebSocket: controls are sent immediately on changes and refreshed at 30 Hz, with shared snapshots at 30 Hz. The server runs a 60 Hz simulation with elapsed-time catch-up, and each update includes simulation time. Browsers buffer about 100 ms of updates for other karts and projectiles. Your own kart simulates numbered 60 Hz movement commands immediately. The server acknowledges commands only after simulating them, and the browser replays unacknowledged commands instead of estimating movement from ping. Rendering includes partial ticks so uneven frame intervals stay smooth. Small corrections settle gradually; gameplay positions and timers retain full precision. Health, hits and inventory remain server-controlled. Your own firing, chaff, boost and drift sounds play locally; server sound events identify the player and suppress duplicate confirmations. Engine pitch follows local acceleration with a short response time. Animation time advances between packets, and the FPS display includes connection ping. Large connection stalls hold the last known position; respawns and match resets clear old movement. Lobby and score rows update when their contents change. HTTP handles invitations and host settings; it is not used to poll gameplay controls. HTTPS deployments use `wss://` automatically; reverse proxies must pass WebSocket upgrades. Input messages are size-limited and validated, connections require same-origin checks, and players can only control their own kart.
+**Grand Prix:** race three laps against computer opponents. Collect weapons and turbo cells, drift for boosts, and use alternate routes to get ahead. This mode is solo.
 
-Every browser renders the graphics locally using WebGL. Kart and projectile meshes are cached in GPU buffers and reused; animation and effects remain live. Rendering targets 60 FPS. **Graphics → Auto** below the game starts at a lower pixel density than full Retina resolution and lowers it further if frame rate stays below 45 FPS. High restores up to 2× pixel density, Balanced uses 1×, and Low uses 0.65×. The FPS readout shows the local rendering rate and current pixel density. A **SOFTWARE GPU** warning means the browser reports software rendering; its tooltip includes the renderer name. These graphics settings affect only that browser, including during multiplayer matches.
+**Arena Battle:** fight other players and computer opponents. First to ten points wins, or the highest score after three minutes. Destroyed drivers respawn; collect ammo, health, and turbos around the arena. Two consecutive kills unlock the rapid-fire Hedgehog Vulcan.
 
-Multiplayer snapshots use compact coordinates for skid marks, smoke, sparks and projectile trails, plus lightweight WebSocket compression when supported. Gameplay state, including boost and drift timers, retains full precision on both ends. A busy connection keeps only the newest waiting snapshot, retaining recent action sounds, so old positions do not accumulate in the application's send queue. Run `npm run profile:network` for reproducible payload estimates: a simulated two-player drifting match with one bot drops from about **13.4 Mbps to 1.42 Mbps per guest**. This benchmark excludes transport overhead and does not measure real connection latency or rendering FPS.
+### Desktop controls
 
-Your own hedgehogs and missiles appear locally on the next rendered frame and fly continuously while awaiting confirmation. Numbered actions tie each projectile to its server confirmation, avoiding duplicate shots; confirmed impacts and damage remain authoritative. Pickups disappear, update the local inventory and play their cue as soon as your predicted kart touches them. The server confirms ownership, and contested pickups or rejected shots are corrected. Pickup checks run on every movement step, including delayed batches, so fast movement cannot skip an item between updates. Guests receive the same pickup cues as the host.
+| Key | Action |
+| --- | --- |
+| Arrow keys / WASD | Drive and steer; Down / S brakes and reverses in arenas |
+| Shift + steering | Drift; release for a boost |
+| Space | Fire the selected weapon |
+| Q / Tab | Switch hedgehogs and missiles |
+| X | Use a turbo |
+| C | Deploy chaff to divert incoming missiles in arenas |
+| Z | Somersault and turn 180° in arenas |
+| Escape | Pause; multiplayer continues for everyone else |
 
-Reproduce action feedback with `npm run test:browser-netcode -- --feedback --repeat 3 --output /private/tmp/wild-wheels-feedback.json`. It checks hedgehog/missile visibility and pickup feedback within one rendered frame, no duplicated shots or pickup cues, and continuous projectile motion through confirmation at up to 160 ms RTT with jitter. Recorded results are in [the action feedback report](diagnostics/feedback-report.html).
+You can also click the ammo cards to select weapons. Watch for the incoming missile warning and use chaff to break the lock.
 
-Your own drift smoke, sparks and tire tracks follow the rendered kart immediately, including blue and purple charge milestones. Effects age locally and stop emitting on release; ownership tags suppress delayed duplicates while preserving other players' trails. Reproduce with `npm run test:browser-netcode -- --drift --repeat 3 --output /private/tmp/wild-wheels-drift.json`. The [drift feedback report](diagnostics/drift-report.html) records the before/after results, including wheel alignment and movement/action regressions.
+### Mobile bombers
 
-The **BUILD** identifier below the game fingerprints the browser assets and running server code. Refresh both computers and compare these IDs to confirm they loaded the same release. Build information and game assets are served with `Cache-Control: no-store` so refreshes request current files.
+Tap the arena to drop the selected bomb. Drag to pan, use **+ / −** to zoom, and **⌖** to recenter. Switch between **3D VIEW** and **2D MAP** at any time. **Let’s Bomb / Let’s Play** opens the game in fullscreen.
 
-Open http://localhost:5173. Use arrow keys or WASD to drive, Shift + steering to drift (release after 0.7 seconds for a boost), Space to use an item, and Escape to pause. Touch controls are available on small screens. Choose a driver before starting. The named **Choose Map** buttons above the game and **Next Map** button beside the minimap work before, during, and after a game, including while paused. Selecting a different map returns to its start screen with a fresh game; each mode remembers its selected map. Sound starts when you click Let's Race; use Sound On to mute it. The engine uses a low 28–66 Hz fundamental with a filtered harmonic.
+Start with two A-bombs. A-bombs refill every ten seconds; stinkbombs refill every five seconds. Select **A-BOMBS** for explosions or **STINK** to make drivers dizzy. If an affected driver dies, the killer and each contributing bomber receive a point. Bombers cannot be hit by drivers.
 
-During either game mode, press **Tab** or **Q** to cycle between hedgehogs and missiles, or tap their ammo cards to select directly. Press **X** or tap **X · TURBO** to spend a turbo cell without changing your weapon. Turbo is separate from firing and cannot be stacked while a boost is active. Tab keeps its normal keyboard-navigation behavior in menus and while paused; Shift+Tab always navigates controls.
+## Troubleshooting
 
-Phones and tablets with touch input play as **bombers**. The default **3D VIEW** uses a close, elevated camera, with the same 3D karts, cover, falling bombs and mushroom clouds as the desktop game. It starts focused on an opponent. **Drag** across the arena to move the camera, use **+ / −** to zoom, and tap **⌖** to center on an opponent again. Panning stays inside the arena, and dragging never drops a bomb. A completed tap drops the selected **bomb** at that ground location, including after panning or zooming. **2D MAP** keeps the original full-arena view from directly above. Switch between them during play; the choice is saved in your browser, and switching preserves ammunition, kills and the current match. Both modes support portrait and landscape.
+- **Slow graphics:** try **Graphics → Balanced** or **Low**, and check that your browser has hardware acceleration enabled.
+- **Different behavior between computers:** restart the server, refresh both browsers, and compare the **BUILD** identifiers below the game.
+- **Friends cannot connect:** keep the server running and use **Start Internet Link** for friends outside your Wi-Fi.
 
-You start each match with **two A-bombs** and no stinkbombs. **Stinkbombs refill every five seconds** of match time (5, 10, 15, 20…), independently of A-bombs (10, 20, 30…). At each ten-second mark you receive both types. A-bombs therefore refill once every ten seconds, with **no ammunition reward for kills**. Unused bombs accumulate. Tap an **A-BOMBS / STINK** ammo card to choose which type to drop; each has its own inventory and refill countdown. Switching types preserves both inventories.
+For development checks and browser benchmarks, see [Testing](docs/testing.md).
 
-A target ring warns everyone while a bomb falls for **0.9 seconds**. A-bombs explode with a shockwave, mushroom cloud and deep boom, dealing **three damage within 22 arena units**, including through cover. Stinkbombs release a green gas cloud with a cartoon splutter. The gas lingers for **2.5 seconds** and makes unshielded karts within **14 units** dizzy for **four seconds**, including karts that drive into it later. Dizzy karts weave and have reduced steering accuracy, with orbiting stars and a countdown notice. A driver's camera sways mildly unless reduced motion is enabled. Gas does **no health damage**. If a kart dies while affected, the killer and each bomber whose gas hit it within the last **four seconds** receive one point each. Multiple clouds from one bomber and a bomber landing the killing blow never award duplicate points. New gas does not extend another bomber’s credit window; one cloud affects each kart once, and a new cloud refreshes rather than stacks the effect. Death and respawn clear dizziness. Both computer opponents and human drivers are affected.
-
-Spawn shields protect against both bomb types. A-bomb kills count toward the same leaderboard and ten-kill victory. Bombers have no ground kart and cannot be hit or collect kart supplies. Desktop players keep driving and see the bombs and effects in their normal view. Opening the same invitation joins phones as bombers automatically; rooms still support six total participants, and solo mobile play bombs computer opponents.
-
-**Let’s Bomb / Let’s Play** fills the mobile screen with the arena and bomb controls. The game requests native fullscreen where available and uses a screen-filling layout otherwise; **Exit Full Screen** restores the page. Taps outside the arena, including sky in the 3D view, do not spend ammunition. Mobile bombing replaces tilt steering and automatic kart firing, so no motion permission is needed. Pausing solo play freezes refills; multiplayer continues while a player pauses locally. Starting another match resets the bomber to two bombs.
-
-In multiplayer, a guest presses **Let’s Play** to request a match. Both players see a **three-second auto-start countdown**, and the host gets a large centered popup with ready players’ animals and names, **START NOW** and **REFUSE** buttons. If the host takes no action, the server starts the normal match countdown after three seconds, even when the host’s tab is in the background. **REFUSE** or **Escape** cancels the pending start, clears the ready requests, and tells guests they can ask again. Only the current host can refuse; an old refusal cannot cancel a newer request. Repeated requests and additional ready guests keep the original deadline. Withdrawing or leaving cancels a request when no requesting guests remain. A replacement host gets a fresh three-second refusal window. Starting, resetting or changing the match clears pending requests. The popup appears in the lobby and after a match, and closes when play starts.
-
-After joining a room, edit **Player name** and click **Save Name** (or press Enter). Names update for everyone and carry into the next match. At the end, a full leaderboard shows placement, player names, kills and deaths, highlighting your row. Solo race results show recorded finish times and mark unfinished racers as DNF.
-
-In arenas, distant visible opponents have their names above their karts, marked with their kart color. Labels follow jumps and disappear for nearby, wrecked, offscreen or concealed karts.
-
-A blinking **INCOMING MISSILE** warning appears when an enemy missile is locked onto your kart in an arena. Use **C / CHAFF** to break the lock when a charge is ready. The warning clears when no live missiles target you, including after chaff diversion or impact; it hides while wrecked or outside a live match. Reduced-motion settings keep the warning steady.
-
-Chaff flakes, sparkles, smoke and the deployment trail use your kart’s color. Successfully diverting a missile plays a descending whoosh and lock-break chirp, separate from the launch hiss. Existing clouds also give this cue when they catch a later missile; an already diverted missile does not repeat it.
-
-Sound and voice cues survive bursts of network updates between rendered frames, so jitter does not discard the chaff success sound. Starting a new match clears unplayed cues from the previous match.
-
-Successful chaff defence also shows a small, translucent green **MISSILE AVERTED** notice in the warning position for two seconds, keeping the missile effect visible. Scoring a kill shows a colorful, bouncing **YOU WHACKED “name”** card. Confirmed kills queue their messages once each, preserving the victim’s name at the time of the kill. Repeated network updates do not restart either notice, and reduced-motion settings keep the cards steady.
-
-Press **Z** or tap **Z · SOMERSAULT** in combat to jump and immediately turn 180 degrees. Travel and weapon aim reverse immediately while the kart completes a 0.55-second airborne flip. The camera rotates continuously through the half turn over the flip so you can follow the reversal. Afterburner flames and jet audio power the maneuver; the exhaust follows the kart through the flip without spending a turbo cell. The move has a one-second cooldown, keeps your equipped weapon, and responds locally in multiplayer while the server confirms it.
-
-You start with five hedgehogs. Brown hedgehog pickups refill three shots; yellow turbo cells give a boost. Shots have forward velocity, gravity, ground bounce, wall reflection, trails and impact bursts. Hits spin and slow opponents. Kart collisions transfer sideways impulses; barriers rebound the player and reduce speed. Drifting leaves skid marks, tire smoke and charge sparks before releasing a boost. The circuit and minimap use the same road geometry. These are arcade physics, not a vehicle simulator.
-
-Red missile pickups appear in the right lane of alternating pickup rows. Missiles lock onto the nearest rival ahead with limited steering, accelerate, leave smoke trails and explode on impact. Their blast can destroy multiple nearby karts, which disappear for four seconds before respawning. Inventory holds up to six hedgehogs, three missiles and three turbo cells. Large HUD counters always show each quantity; press Q or tap a weapon counter to switch and Space to fire; press X or tap the turbo counter to boost. Afterburners have animated additive flame plumes, blue-white cores, shock diamonds, sparks and a sustained jet sound.
-
-Successful hedgehog or missile hits make your driver turn toward the camera, grin and raise their paws for 1.6 seconds, then face forward again. The kart keeps driving and steering throughout the celebration.
-
-Each animal has a distinct synthesized cartoon voice: panda peeps, raccoon trills, fox yips and bear-cub wuffs. Drivers call when overtaking, landing or receiving hits, crossing a lap and winning. Nearby opponents are quieter and panned toward their side of the road. Short cooldowns keep the calls from becoming constant chatter; the sound toggle mutes voices along with other game audio.
-
-Every race randomizes opponent skill and assigns the strongest profiles to different characters. Each field has two strong rivals, two midfield racers, and one less consistent driver. Skill affects acceleration, cornering, reaction time, racing lines, overtaking and boost timing. Rivals collect turbo cells and earn drift boosts, with visible exhaust flames. The best racers approach the player's normal top speed and share the 850 boost limit; their pace does not rubber-band to the player's position. Hits still cancel their boosts and slow them for three seconds.
-
-When you complete three laps, the game announces your actual finishing position (1st through 6th). Finish order is recorded at each crossing, including close finishes within the same frame; passing someone after they finish cannot change the result. Racing continues for three seconds, then stops with your position, finish time, and a Race Again button. Only first place plays the victory fanfare. Audio includes layered launch and impact effects, pickup chimes and turbo sweeps, with compression to tame overlapping effects and the same quiet, low-pitched engine.
-
-Both race tracks have two alternate routes: keep left at the Woodland Way fork or right at the Lakeside Loop fork. Gold road edges, signs, on-screen prompts, and the minimap mark the branches. Stay near the center to follow the main circuit. Rivals also choose routes; each branch rejoins the circuit before the lap ends. Travel speed accounts for the route's physical length, and weapons only hit racers on the same route.
-
-Choose **Arena Battle** before starting for free-for-all combat. The map selector switches between **Scrapyard**, with shipping-container cover and wide flanking lanes, and **Crossfire Court**, with a central fortress and four surrounding corridors. All six karts fight each other; computer opponents navigate around cover, aim, fire, and collect supplies. Each kill earns one point. First to ten kills wins, or the highest score wins after three minutes; fewer deaths breaks a score tie. The leaderboard shows kills and deaths. Your actual placement appears for three seconds before the match stops.
-
-In arenas, arrow keys/WASD drive and steer freely; Down/S brakes and reverses. Hold Space (or the touch ITEM button) to keep firing, and Q or the ammo cards to switch weapons. You start with three hearts and can collect health pickups for one extra heart each, up to six: hedgehogs deal one damage, missiles deal three with an explosive blast, and cover blocks shots. You respawn after three seconds with three hearts, five hedgehogs, one missile, one turbo, and two seconds of protection. A hedgehog regenerates every two seconds; arena pickups refill ammunition, missiles, turbos, or health. Successful hits keep the animal celebrations and voice effects.
-
-Arena drifting is a combat maneuver: build some speed, hold **Shift + Left/Right** (or touch **DRIFT + a direction**) and the rear tires slide while the kart pivots into a tight U-turn in roughly two thirds of a second. You can keep firing in the direction the kart faces throughout the slide. Tire trails, soft smoke, glowing sparks, tire squeal, and a charge meter show the drift. Sparks turn blue after 0.45 seconds and purple after 0.85 seconds; releasing Shift/DRIFT launches you in the new direction with a free 0.8- or 1.35-second boost. Inventory turbos are preserved. Crashing or braking cancels the charge; stationary turning and brief taps cannot earn it. Mobile controls provide separate DRIFT and BRAKE buttons.
-
-Press **C** or tap the **CHAFF** HUD button in an arena to launch a large, bright cloud of foil in your kart’s color ahead of your kart, with a visible launch trail and a deployment hiss. Each kart starts and respawns with **four charges**. The decoy floats visibly for eight seconds, staying bright until its final fade. Throughout its lifetime it draws incoming missiles locked onto its owner from up to 70 units away, permanently breaking their lock, including missiles launched after deployment. Missiles reaching the cloud circle its center three times over 1.8 seconds, then spiral downward and explode on the ground with a fireball, blast ring and explosion sound. This animation completes even if the cloud expires; chaff interceptions do not damage karts. Deploy before a missile reaches you and keep moving; chaff does not block hedgehogs or grant invulnerability. There is a short cooldown between deployments, and holding C spends only one charge per press. The HUD always shows remaining charges. Pausing freezes active clouds.
-
-Score **two kills without dying** in an arena to automatically equip the **Hedgehog Vulcan for fifteen seconds**. Earning or refreshing Vulcan heals you to four hearts if you have fewer, preserving any higher health. Hold Space/ITEM for roughly twelve fast hedgehogs per second with unlimited ammunition; your carried hedgehogs are preserved. An amber screen border, large countdown banner, gold kart trim and a glowing orbit remain visible throughout the upgrade. A low mechanical rotor hum continues even between shots or while another weapon is selected; firing speeds it up. The final three seconds have warning tones and an ending banner, followed by a power-down sound. The rotating barrel, muzzle flashes and golden tracers show each burst. The ammo card shows ∞ and a fifteen-second countdown bar. Collecting missiles keeps an equipped Vulcan selected. You can deliberately switch to missiles and back while the timer runs, and use X for turbo without switching. Every second consecutive kill refreshes the reward to fifteen seconds, without stacking duration. Death clears the streak and upgrade; pausing freezes the timer and silences the rotor. The sound toggle mutes it with the other audio. Opponents can earn the same reward.
-
-```sh
-npm test
-```
-
-Run all automated tests plus the permanent browser benchmarks with one command:
-
-```sh
-npm run test:regression
-```
-
-This runs movement, projectile/pickup feedback, drift visuals, lobby/item controls and mobile controls across host, guest, 160 ms latency and jitter profiles, repeated three times (60 browser scenarios). It fails on any failed group and prints a directory containing JSON results and full traces. Use `-- --repeat 1` for a shorter check. Existing before/after reports and compressed baseline traces remain committed under `diagnostics/`.
-
-The controls scenarios also verify distant nameplates, manual desktop firing, the chaff orbit/fall sequence, incoming bomber attacks and dizziness notices in the desktop view. Mobile scenarios emulate touch input in Chrome, checking fullscreen, first-frame feedback after a completed tap, accurate targets through the actual rendered 3D and 2D camera matrices in portrait and both landscape orientations, dragging without bombing, zooming, recentering and view switching without resetting the match. The 3D scenarios require a four-unit kart width to occupy at least 16 pixels in portrait and 8 pixels in landscape before extra zoom. They also cover empty-ammo rejection, independent five- and ten-second supplies, no kill bonuses, stinkbomb selection and feedback, temporary dizziness without health damage, and shared explosions for both host and guest roles. Automated movement checks compare dizzy guest prediction with the server. These browser checks do not establish support on physical iOS/Android hardware.
-
-The **Multiplayer regressions** GitHub Actions workflow runs the automated tests and all five browser groups on every push and pull request, retaining traces for 30 days even on failure. Shared CI uses `--functional --repeat 1`: behavioral thresholds stay enforced; frame time is recorded without enforcing the hardware-dependent FPS budget. The default local command retains the strict ≤20 ms frame budget and host/guest comparison. A green CI result establishes behavior, not equivalent GPU performance.
-
-Multiplayer regression checks compare the same driving inputs locally and through simulated latency, jitter, asymmetric delays and 300 ms upload/download stalls. They cover both player roles, wall collisions, drift boosts, uneven rendering, reconnect replay, stale match commands and server movement limits. Acceptance requires position error ≤0.15 units at the 95th percentile (≤0.5 maximum), camera error ≤1° at the 95th percentile (≤3° maximum), and no unexplained frozen or backward frames. Controls must respond within one simulation frame. These checks run in `npm test`, or separately:
-
-```sh
-npm run test:netcode
-```
-
-The browser harness launches Chrome, the real WebSocket server and the WebGL renderer on localhost. It injects ordered two-way latency and jitter, then compares displayed motion with an independent replay of the same inputs. Browser frame time must stay below 20 ms at the 95th percentile, with the guest within 2 ms of the host. Set `CHROME_PATH` when Chrome is installed somewhere other than the default macOS location. The test exits with a failure status when its criteria fail:
-
-```sh
-npm run test:browser-netcode -- --repeat 3 --output /private/tmp/wild-wheels-browser.json
-```
-
-Open [the recorded comparison report](diagnostics/netcode-report.html) for criteria, graphs and links to full compressed traces. The unchanged published commit `86c7389` was tested with the same harness using `--source` to point to an isolated checkout. The report establishes the recorded driving scenarios, not zero network latency or immunity to legitimate corrections from other players' impacts.
-
-This is an independent homage with original graphics, not an exact reproduction or an official release. The two tracks share a circuit layout; Sunset Scramble increases corner difficulty and changes the scenery palette.
+An independent homage with original graphics and synthesized audio; not an official Wacky Wheels release.
