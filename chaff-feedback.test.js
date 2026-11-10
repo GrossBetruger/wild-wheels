@@ -3,6 +3,18 @@ import assert from 'node:assert/strict';
 import { createBattle, releaseChaff, tickBattle } from './combat.js';
 import { encodeSnapshot, decodeSnapshot } from './wire.js';
 import { ActionAudio } from './action-audio.js';
+import { ChaffNotice } from './combat-notices.js';
+
+test('the green notice confirms only this player’s successful chaff diversion and expires once',()=>{
+  const world=createBattle();Object.assign(world,{id:1,phase:'racing',soundEpoch:1,elapsed:2,chaffClouds:[]});
+  const notice=new ChaffNotice();assert.equal(notice.sample(world,0),null);
+  world.chaffClouds=[{id:0,owner:1,diversions:0}];assert.equal(notice.sample(world,.1),null);
+  world.chaffClouds.push({id:1,owner:0,diversions:1,divertedAt:2});assert.equal(notice.sample(world,.2),null);
+  world.chaffClouds[0]={id:0,owner:1,diversions:1,divertedAt:2};assert.ok(notice.sample(world,.3));
+  assert.ok(notice.sample(world,1));assert.equal(notice.sample(world,2.31),null);assert.equal(notice.sample(world,3),null);
+  world.chaffClouds[0].diversions=2;assert.ok(notice.sample(world,3.1));
+  assert.equal(notice.sample({...world,phase:'finished'},3.2),null);
+});
 
 test('guest chaff keeps its kart color and emits one success cue when it diverts a missile',()=>{
   const world=createBattle();Object.assign(world,{phase:'racing',multiplayer:true,soundEpoch:1,destroyed:999,supplies:[]});

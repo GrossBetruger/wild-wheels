@@ -5,6 +5,7 @@ import { sampleTrack, branches } from './track.js';
 import { createBattle, tickBattle, fireBattle, releaseChaff, useBattleTurbo, somersaultBattle, arenas, standings, incomingMissiles, VULCAN_DURATION, MAX_HEALTH } from './combat.js';
 import { NetworkGame } from './network.js';
 import { matchResults } from './results.js';
+import { KillCelebration, ChaffNotice } from './combat-notices.js';
 const $ = id => document.getElementById(id);
 const canvas = $('game'), map = $('map').getContext('2d');
 const keys = new Set(), audio = new RaceAudio(), renderer = new Renderer(canvas);
@@ -56,6 +57,8 @@ const chaffButton=document.createElement('button');chaffButton.id='release-chaff
 const somersaultButton=document.createElement('button');somersaultButton.id='somersault';somersaultButton.className='chaff-button somersault-button hidden';somersaultButton.type='button';somersaultButton.onclick=somersault;document.querySelector('.viewport').append(somersaultButton);
 const incomingWarning=document.createElement('div');incomingWarning.id='incoming-warning';incomingWarning.className='incoming-warning hidden';incomingWarning.setAttribute('role','alert');incomingWarning.setAttribute('aria-atomic','true');
 const incomingTitle=document.createElement('strong'),incomingHelp=document.createElement('span');incomingWarning.append(incomingTitle,incomingHelp);document.querySelector('.viewport').append(incomingWarning);
+const killCelebration=new KillCelebration(),whackBanner=document.createElement('div');whackBanner.id='whack-banner';whackBanner.className='whack-banner hidden';whackBanner.setAttribute('role','status');whackBanner.setAttribute('aria-atomic','true');document.querySelector('.viewport').append(whackBanner);let whackKey=null;
+const chaffNotice=new ChaffNotice(),avertedBanner=document.createElement('div');avertedBanner.id='averted-notice';avertedBanner.className='incoming-warning averted-notice hidden';avertedBanner.setAttribute('role','status');avertedBanner.setAttribute('aria-atomic','true');const avertedTitle=document.createElement('strong'),avertedHelp=document.createElement('span');avertedTitle.textContent='✓ MISSILE AVERTED';avertedHelp.textContent='CHAFF BROKE THE LOCK';avertedBanner.append(avertedTitle,avertedHelp);document.querySelector('.viewport').append(avertedBanner);
 function updateMapLabels(){const maps=mode==='combat'?arenas:tracks,info=maps[track];$('track-name').textContent=info.name;$('track-label').textContent=info.name.toUpperCase();$('track-desc').textContent=info.desc;$('difficulty').textContent=mode==='combat'?'MELEE':info.difficulty;document.querySelector('.race-meta').textContent=mode==='combat'?'10 KILLS · 3 MIN · 6 FIGHTERS':'3 LAPS · 6 RACERS';document.querySelector('.race-bar .divider').nextElementSibling.textContent=mode==='combat'?'DEATHMATCH':'GRAND PRIX';for(const button of modeSwitch.children)button.setAttribute('aria-pressed',String(button.id===`mode-${mode}`));for(const [index,button] of mapButtons.entries()){button.textContent=maps[index].name;button.setAttribute('aria-pressed',String(index===track));}const next=maps[(track+1)%maps.length];$('change-track').textContent='NEXT MAP →';$('change-track').setAttribute('aria-label',`Switch to ${next.name}`);}
 const ammoRack=document.createElement('div');ammoRack.className='ammo-rack';const ammoCards=new Map();
 for(const [type,icon,label] of [['hedgehog','🦔','HEDGEHOGS'],['missile','🚀','MISSILES'],['boost','ϟ','TURBOS']]){
@@ -92,7 +95,14 @@ let scoreboardKey='';
 function put(id,value){const node=$(id);if(node.textContent!==String(value))node.textContent=value;}
 function hud(){
   showResults();
+  const whack=killCelebration.sample(race,performance.now()/1000);whackBanner.classList.toggle('hidden',!whack);
+  if(!whack)whackKey=null;
+  if(whack&&whackKey!==whack.key){
+    whackKey=whack.key;const card=document.createElement('div');card.className='whack-card';card.style.setProperty('--victim-color',whack.color);
+    const title=document.createElement('span'),name=document.createElement('strong');title.textContent='✦ YOU WHACKED ✦';name.textContent=`“${whack.name}”`;card.append(title,name);whackBanner.replaceChildren(card);
+  }
   const threats=incomingMissiles(race);
+  avertedBanner.classList.toggle('hidden',!chaffNotice.sample(race,performance.now()/1000)||threats>0);
   incomingWarning.classList.toggle('hidden',threats===0);
   if(threats){
     const title=threats===1?'⚠ INCOMING MISSILE':'⚠ INCOMING MISSILES';

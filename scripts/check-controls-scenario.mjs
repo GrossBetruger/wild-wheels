@@ -1,4 +1,6 @@
-export async function checkControls(evaluate,app,room,id,sleep,captureFlip,captureChaff){
+import { damageBattle } from '../combat.js';
+
+export async function checkControls(evaluate,app,room,id,sleep,captureFlip,captureChaff,captureNotices){
   const host=room.members.get(room.host);
   const guest=id===room.host?app.join(room,{name:'Ready Friend',driver:1}):room.members.get(id);
   const displayName=id===room.host?'Alex <b>':'Sam <b>';
@@ -93,10 +95,24 @@ export async function checkControls(evaluate,app,room,id,sleep,captureFlip,captu
   if(captureChaff)await captureChaff();
   await sleep(150);
   const chaffSoundCount=await evaluate('__game.chaffSounds.length'),chaffPass=colorPass&&chaffSoundCount===1;
+  const greenNoticePass=await evaluate("!document.getElementById('averted-notice').classList.contains('hidden')&&document.getElementById('averted-notice').textContent.includes('MISSILE AVERTED')&&document.getElementById('incoming-warning').classList.contains('hidden')");
+  await evaluate(`fetch('/api/name',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer ${shooter.token}'},body:JSON.stringify({name:'Rival <img>'})})`);
+  room.world.projectiles=[];Object.assign(other,{health:3,shield:0,destroyed:0});damageBattle(room.world,other,id,3);
+  for(let i=0;i<100;i++){if(await evaluate("!document.getElementById('whack-banner').classList.contains('hidden')"))break;await sleep(10);}
+  const whack=await evaluate(`(()=>{
+    const banner=document.getElementById('whack-banner'),card=banner.firstElementChild,animation=card?.getAnimations()[0];
+    if(animation)animation.currentTime=0;const start=card?.getBoundingClientRect().top;
+    if(animation)animation.currentTime=325;const peak=card?.getBoundingClientRect().top;
+    const viewport=document.querySelector('.viewport').getBoundingClientRect();
+    return {text:banner.textContent,visible:!banner.classList.contains('hidden'),jumps:matchMedia('(prefers-reduced-motion: reduce)').matches||peak<start-5,aboveAction:card?.getBoundingClientRect().bottom<viewport.top+viewport.height*.4,safe:!banner.querySelector('img')};
+  })()`);
+  if(captureNotices)await captureNotices();
+  await sleep(2100);
+  const whackPass=whack.visible&&whack.text.includes('YOU WHACKED')&&whack.text.includes('Rival <img>')&&whack.jumps&&whack.aboveAction&&whack.safe&&await evaluate("document.getElementById('whack-banner').classList.contains('hidden')&&document.getElementById('averted-notice').classList.contains('hidden')");
   Object.assign(actor,{kills:3,deaths:4});Object.assign(other,{kills:10,deaths:2});
   Object.assign(room.world,{phase:'finished',finishRank:1,finishTime:20,finishCountdown:0});
   for(let i=0;i<100;i++){if(await evaluate("!document.getElementById('match-results').classList.contains('hidden')&&document.querySelectorAll('#match-results tbody tr').length===2"))break;await sleep(25);}
   const leaderboard=await evaluate("[...document.querySelectorAll('#match-results tbody tr')].map(row=>[...row.cells].map(cell=>cell.textContent))");
   const resultsPass=JSON.stringify(leaderboard)===JSON.stringify([['1',other.name,'10','2'],['2',displayName+' · YOU','3','4']])&&await evaluate("document.querySelectorAll('#match-results tbody .you').length===1&&!document.querySelector('#match-results b')");
-  return {readyPass,readyCleared,readyUI,namePass,pickupKeptVulcan,turboPass,flipPass,cameraPass,remoteSawFlip,flipTrace,warningPass,warning,chaffPass,chaffColor:ownCloud?.color,chaffSoundCount,resultsPass,leaderboard,pass:readyPass&&readyCleared&&namePass&&pickupKeptVulcan&&turboPass&&flipPass&&warningPass&&chaffPass&&resultsPass,trace};
+  return {readyPass,readyCleared,readyUI,namePass,pickupKeptVulcan,turboPass,flipPass,cameraPass,remoteSawFlip,flipTrace,warningPass,warning,chaffPass,chaffColor:ownCloud?.color,chaffSoundCount,greenNoticePass,whackPass,whack,resultsPass,leaderboard,pass:readyPass&&readyCleared&&namePass&&pickupKeptVulcan&&turboPass&&flipPass&&warningPass&&chaffPass&&greenNoticePass&&whackPass&&resultsPass,trace};
 }
