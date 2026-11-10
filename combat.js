@@ -3,6 +3,8 @@ export const VULCAN_DURATION=15;
 export const MAX_HEALTH=6;
 export const MOVEMENT_DT=1/60;
 export const SOMERSAULT_DURATION=.55;
+export const BOMB_FALL_TIME=.9;
+export const BOMB_RADIUS=22;
 
 export const arenas=[
   {name:'Scrapyard',desc:'Container cover. Wide flanking lanes.',size:96,ground:'#8b927d',wall:'#d7794d',sky:'#b5d3d9',blocks:[[-40,-35,34,10],[40,35,34,10],[-35,35,10,34],[35,-35,10,34],[0,0,14,14]]},
@@ -24,13 +26,21 @@ function spawn(r,actor,initial=false){
   actor.somersault=0;actor.somersaultCooldown=0;actor.somersaultCameraStart=actor.cameraHeading;
 }
 export function createBattle(driver=0,arena=0,random=Math.random){
-  const r=createRace(driver,0,random);r.mode='combat';r.arena=arena;r.duration=180;r.targetScore=10;r.id=0;r.color=drivers[driver].color;r.killFeed=[];r.driftParticles=[];r.chaffClouds=[];r.chaffSequence=0;
-  const actors=[r,...r.bots];for(const [id,actor] of actors.entries())Object.assign(actor,{id,wx:0,wz:0,heading:0,kills:0,deaths:0,health:3,destroyed:0,shield:0,celebrate:0,fireCooldown:0,reload:0,brain:0,path:[]});
+  const r=createRace(driver,0,random);r.mode='combat';r.arena=arena;r.duration=180;r.targetScore=10;r.id=0;r.color=drivers[driver].color;r.killFeed=[];r.driftParticles=[];r.chaffClouds=[];r.chaffSequence=0;r.bombs=[];r.bombSequence=0;
+  const actors=[r,...r.bots];for(const [id,actor] of actors.entries())Object.assign(actor,{id,wx:0,wz:0,heading:0,kills:0,deaths:0,health:3,destroyed:0,shield:0,celebrate:0,fireCooldown:0,reload:0,brain:0,path:[],bomber:false,bombAmmo:0,bombReload:0});
   for(const actor of actors)spawn(r,actor,true);
   r.supplies=[[-70,-65,'missile'],[70,65,'missile'],[-65,70,'hedgehog'],[65,-70,'hedgehog'],[-12,48,'boost'],[12,-48,'boost'],[-70,0,'health'],[70,0,'health']].map(([wx,wz,kind],id)=>({id,version:0,wx,wz,kind,cooldown:0}));
   return r;
 }
 export function standings(r){return [r,...r.bots].filter(actor=>!actor.inactive).sort((a,b)=>b.kills-a.kills||a.deaths-b.deaths||a.id-b.id);}
+export function equipBomber(actor){Object.assign(actor,{bomber:true,bombAmmo:1,bombReload:0,speed:0,shield:0,destroyed:0});return actor;}
+export function validBombTarget(world,point){return Boolean(point)&&Number.isFinite(point.wx)&&Number.isFinite(point.wz)&&Math.abs(point.wx)<=arenas[world.arena].size&&Math.abs(point.wz)<=arenas[world.arena].size;}
+export function dropBomb(world,actor,point,actionId){
+  if(!actor.bomber||actor.inactive||world.phase!=='racing'||world.finishCountdown!==null||actor.bombAmmo<1||!validBombTarget(world,point))return false;
+  actor.bombAmmo--;world.bombSequence++;
+  const bomb={id:world.bombSequence,owner:actor.id,wx:point.wx,wz:point.wz,age:0,color:actor.color,...(actionId==null?{}:{actionId})};world.bombs.push(bomb);
+  sound(world,'bombDrop',{...point,owner:actor.id},actionId==null?undefined:`action:${actionId}`);return bomb;
+}
 export function incomingMissiles(world){
   if(world.mode!=='combat'||world.phase!=='racing'||world.finishCountdown!==null||world.destroyed>0)return 0;
   return world.projectiles.filter(shot=>shot.kind==='missile'&&shot.target===world.id&&shot.owner!==world.id&&shot.life>0&&shot.decoy==null&&!shot.chaffed).length;
@@ -48,7 +58,7 @@ function divertMissiles(r,cloud){
   return diverted;
 }
 export function releaseChaff(r,actor=r){
-  if(r.mode!=='combat'||r.phase!=='racing'||r.finishCountdown!==null||actor.destroyed>0||actor.chaff<=0||actor.chaffCooldown>0)return false;
+  if(actor.bomber||r.mode!=='combat'||r.phase!=='racing'||r.finishCountdown!==null||actor.destroyed>0||actor.chaff<=0||actor.chaffCooldown>0)return false;
   const tx=Math.sin(actor.heading),tz=Math.cos(actor.heading),side=r.chaffSequence%2?1:-1;
   const candidates=[18,12,6].flatMap(ahead=>[side,-side].map(s=>({wx:actor.wx+tx*ahead+tz*s*ahead*.55,wz:actor.wz+tz*ahead-tx*s*ahead*.55})));
   const point=candidates.find(p=>!blocked(arenas[r.arena],p.wx,p.wz,.5)&&clearShot(arenas[r.arena],actor,p))??{wx:actor.wx+tx*2,wz:actor.wz+tz*2};
@@ -63,15 +73,15 @@ export function makeProjectile(r,actor){
   return {kind,vulcan,owner:actor.id,target:targetAhead(r,actor)?.id??null,wx:actor.wx+Math.sin(actor.heading)*3.5,wz:actor.wz+Math.cos(actor.heading)*3.5,heading:actor.heading,speed:kind==='missile'?70:vulcan?125:90,height:1.3,vy:3,life:kind==='missile'?3:vulcan?1.3:2.5,age:0,trail:[],bounces:0};
 }
 export function targetAhead(world,actor=world,cone=.65){
-  return [world,...world.bots].filter(other=>other.id!==actor.id&&!other.inactive&&!other.destroyed&&other.shield<=0&&distance(other,actor)<100&&Math.abs(angleDelta(Math.atan2(other.wx-actor.wx,other.wz-actor.wz),actor.heading))<cone&&clearShot(arenas[world.arena],actor,other)).sort((a,b)=>distance(actor,a)-distance(actor,b))[0]??null;
+  return [world,...world.bots].filter(other=>other.id!==actor.id&&!other.bomber&&!other.inactive&&!other.destroyed&&other.shield<=0&&distance(other,actor)<100&&Math.abs(angleDelta(Math.atan2(other.wx-actor.wx,other.wz-actor.wz),actor.heading))<cone&&clearShot(arenas[world.arena],actor,other)).sort((a,b)=>distance(actor,a)-distance(actor,b))[0]??null;
 }
 export function commandKeys(command){const keys=new Set(command.keys);if(Number.isFinite(command.steer))keys.steer=command.steer;return keys;}
 export function useBattleTurbo(r,actor=r,actionId){
-  if(r.phase!=='racing'||r.finishCountdown!==null||actor.destroyed>0||actor.turbos<=0||actor.boost>0)return false;
+  if(actor.bomber||r.phase!=='racing'||r.finishCountdown!==null||actor.destroyed>0||actor.turbos<=0||actor.boost>0)return false;
   actor.turbos--;actor.boost=2.5;fx(r,'boost',actor,actionId==null?undefined:`action:${actionId}`);return true;
 }
 export function somersaultBattle(world,actor=world){
-  if(world.mode!=='combat'||world.phase!=='racing'||world.finishCountdown!==null||actor.destroyed>0||(actor.somersaultCooldown??0)>1e-8)return false;
+  if(actor.bomber||world.mode!=='combat'||world.phase!=='racing'||world.finishCountdown!==null||actor.destroyed>0||(actor.somersaultCooldown??0)>1e-8)return false;
   actor.somersaultCameraStart=actor.cameraHeading;
   actor.heading+=Math.PI;actor.motionHeading=actor.heading;
   actor.drift=0;actor.wasDrifting=false;actor.driftTrail=null;
@@ -83,7 +93,7 @@ export function somersaultPose(actor){
   return {height:Math.sin(progress*Math.PI)*5,pitch:-progress*Math.PI*2};
 }
 export function fireBattle(r,actor=r,actionId){
-  if(r.phase!=='racing'||r.finishCountdown!==null||actor.destroyed>0||actor.fireCooldown>0)return;
+  if(actor.bomber||r.phase!=='racing'||r.finishCountdown!==null||actor.destroyed>0||actor.fireCooldown>0)return;
   const cueKey=actionId==null?undefined:`action:${actionId}`;
   const kind=actor.item==='missile'&&actor.missiles>0?'missile':'hedgehog';
   const vulcan=kind==='hedgehog'&&actor.vulcan>0;
@@ -105,7 +115,7 @@ export function applySupply(actor,kind){
   }
 }
 function collectSupplies(r,actor){
-  if(actor.destroyed)return;
+  if(actor.bomber||actor.destroyed)return;
   for(const supply of r.supplies){
     if(supply.cooldown>0||distance(actor,supply)>=4||supply.kind==='health'&&actor.health>=MAX_HEALTH)continue;
     applySupply(actor,supply.kind);supply.cooldown=8;supply.version=(supply.version??0)+1;supply.collector=actor.id;
@@ -138,14 +148,14 @@ export function advanceProjectile(r,shot,dt){
       return orbitChaff(shot,decoy,dt);
     }
     impact=blocked(arena,shot.wx,shot.wz,.3);
-    victim=decoy?undefined:actors.find(k=>k.id!==shot.owner&&!k.destroyed&&k.shield<=0&&distance(k,shot)<2.7);
+    victim=decoy?undefined:actors.find(k=>k.id!==shot.owner&&!k.bomber&&!k.destroyed&&k.shield<=0&&distance(k,shot)<2.7);
     if(victim)impact=true;
   }
   if(impact)shot.life=0;
   return {impact,victim,decoy};
 }
 export function damageBattle(r,victim,owner,amount){
-  if(r.phase!=='racing'||r.finishCountdown!==null||victim.destroyed>0||victim.shield>0||victim.id===owner)return false;
+  if(victim.bomber||victim.inactive||r.phase!=='racing'||r.finishCountdown!==null||victim.destroyed>0||victim.shield>0||victim.id===owner)return false;
   victim.health=Math.max(0,victim.health-amount);voice(r,victim,'hurt');
   if(victim===r)r.shake=.5;
   const attacker=[r,...r.bots].find(k=>k.id===owner);
@@ -153,7 +163,7 @@ export function damageBattle(r,victim,owner,amount){
   victim.destroyed=3;victim.speed=0;victim.boost=0;victim.deaths++;fx(r,'explosion',victim);
   victim.drift=0;victim.wasDrifting=false;victim.driftTrail=null;victim.killStreak=0;victim.vulcan=0;victim.somersault=0;
   if(attacker){attacker.kills++;attacker.celebrate=1.6;voice(r,attacker,'cheer');r.killFeed.unshift({id:r.killSequence=(r.killSequence??0)+1,attacker:attacker.id,victim:victim.id,victimName:victim.name??drivers[victim.driver].name,victimColor:victim.color??drivers[victim.driver].color,text:`${attacker===r?'YOU':attacker.name??drivers[attacker.driver].name.split(' ')[0]} → ${victim===r?'YOU':victim.name??drivers[victim.driver].name.split(' ')[0]}`,time:r.elapsed});r.killFeed=r.killFeed.slice(0,16);}
-  if(attacker&&!attacker.destroyed){
+  if(attacker&&!attacker.bomber&&!attacker.destroyed){
     attacker.killStreak++;
     if(attacker.killStreak%2===0){attacker.vulcan=VULCAN_DURATION;attacker.health=Math.max(attacker.health,4);attacker.item='hedgehog';attacker.fireCooldown=0;fx(r,'vulcanReady',attacker);attacker.notice='2-KILL STREAK · HEDGEHOG VULCAN!';attacker.noticeTime=3;}
   }
@@ -217,7 +227,7 @@ function moveActor(r,actor,steer,gas,brake,dt,handbrake=false){
   actor.speed*=.3;actor.drift=0;actor.wasDrifting=false;actor.driftTrail=null;actor.motionHeading=actor.heading;if(actor===r&&actor.wallCooldown<=0){fx(r,'crash',actor);actor.wallCooldown=.7;r.shake=.3;voice(r,actor,'hurt');}
 }
 export function predictKartMovement(world,actor,keys,dt){
-  if(world.phase!=='racing'||world.finishCountdown!==null||actor.destroyed>0)return;
+  if(actor.bomber||world.phase!=='racing'||world.finishCountdown!==null||actor.destroyed>0)return;
   // Reuse movement and wall collisions, without running weapons, damage or AI.
   const scene={mode:'combat',phase:world.phase,arena:world.arena,elapsed:world.elapsed,finishCountdown:null,events:[],effects:[],skids:[],driftParticles:[]};
   advanceKartMovement(scene,actor,keys,dt);return scene.events;
@@ -243,6 +253,10 @@ export function tickBattle(r,keys,dt,inputs=null){
   for(const actor of actors){
     if(actor!==r)actor.noticeTime=Math.max(0,(actor.noticeTime??0)-dt);
     for(const key of ['fireCooldown','shield','celebrate','voiceCooldown','wallCooldown','vulcan','chaffCooldown']){if(inputs?.get(actor.id)?.actionClock&&['fireCooldown','chaffCooldown'].includes(key))continue;actor[key]=Math.max(0,(actor[key]??0)-dt);}
+    if(actor.bomber){
+      if(!actor.inactive&&!ending){actor.bombReload+=dt;while(actor.bombReload>=2-1e-8){actor.bombAmmo++;actor.bombReload=Math.max(0,actor.bombReload-2);}}
+      continue;
+    }
     if(actor.destroyed>0){actor.destroyed=Math.max(0,actor.destroyed-dt);if(actor.destroyed===0&&!ending)spawn(r,actor);continue;}
     actor.reload+=dt;if(actor.reload>=2){actor.ammo=Math.min(6,actor.ammo+1);actor.reload=0;}
     if((actor===r&&!r.multiplayer)||actor.human){
@@ -257,7 +271,7 @@ export function tickBattle(r,keys,dt,inputs=null){
     }
     actor.somersault=Math.max(0,(actor.somersault??0)-dt);actor.somersaultCooldown=Math.max(0,(actor.somersaultCooldown??0)-dt);
     actor.boost=Math.max(0,actor.boost-dt);
-    const target=actors.filter(k=>k!==actor&&!k.destroyed).sort((a,b)=>distance(actor,a)-distance(actor,b))[0];if(!target)continue;
+    const target=actors.filter(k=>k!==actor&&!k.bomber&&!k.inactive&&!k.destroyed).sort((a,b)=>distance(actor,a)-distance(actor,b))[0];if(!target)continue;
     actor.brain-=dt;const visible=clearShot(arena,actor,target);
     if(actor.brain<=0){actor.path=visible?[]:navigate(arena,actor,target);actor.brain=.4+(1-actor.skill)*.4;}
     while(actor.path.length&&distance(actor,actor.path[0])<7)actor.path.shift();
@@ -269,7 +283,7 @@ export function tickBattle(r,keys,dt,inputs=null){
     if(visible&&Math.abs(aim)<.18+(1-actor.skill)*.12&&distance(actor,target)<85){actor.item=actor.vulcan>0?'hedgehog':actor.missiles>0?'missile':'hedgehog';fireBattle(r,actor);}
   }
   for(let i=0;i<actors.length;i++)for(let j=i+1;j<actors.length;j++){
-    const a=actors[i],b=actors[j],d=distance(a,b);if(a.destroyed||b.destroyed||d>=3.8)continue;
+    const a=actors[i],b=actors[j],d=distance(a,b);if(a.bomber||b.bomber||a.destroyed||b.destroyed||d>=3.8)continue;
     const dx=(a.wx-b.wx)/(d||1),dz=d===0?1:(a.wz-b.wz)/d,push=(3.8-d)/2;
     if(!blocked(arena,a.wx+dx*push,a.wz+dz*push)){a.wx+=dx*push;a.wz+=dz*push;}
     if(!blocked(arena,b.wx-dx*push,b.wz-dz*push)){b.wx-=dx*push;b.wz-=dz*push;}
@@ -289,6 +303,13 @@ export function tickBattle(r,keys,dt,inputs=null){
     }
   }
   r.projectiles=r.projectiles.filter(p=>p.life>0);
+  for(const bomb of r.bombs){
+    bomb.age+=dt;if(bomb.age<BOMB_FALL_TIME-1e-8)continue;
+    sound(r,'bombExplosion',bomb);r.effects.push({type:'abomb',wx:bomb.wx,wz:bomb.wz,age:0,life:3,color:bomb.color});
+    for(const victim of actors)if(distance(victim,bomb)<=BOMB_RADIUS)damageBattle(r,victim,bomb.owner,3);
+    if(!r.bomber&&distance(r,bomb)<BOMB_RADIUS*2)r.shake=Math.max(r.shake,.7);
+  }
+  r.bombs=r.bombs.filter(bomb=>bomb.age<BOMB_FALL_TIME-1e-8);
   const order=standings(r);r.rank=order.findIndex(k=>k.id===0)+1;
   if(!ending&&(order[0].kills>=r.targetScore||r.elapsed>=r.duration)){
     r.winner=order[0].id===0?'player':order[0].id-1;r.finishRank=r.rank;r.finishTime=Math.min(r.elapsed,r.duration);r.finishCountdown=3;r.events.push(r.rank===1?'victory':'finish');voice(r,order[0],'win');

@@ -2,6 +2,18 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createBattle, predictKartMovement, tickBattle } from './combat.js';
 import { LocalPrediction } from './prediction.js';
+import { Multiplayer } from './multiplayer.js';
+
+test('analog steering stays identical in prediction and server movement and rejects values beyond full lock',t=>{
+  const app=new Multiplayer();t.after(()=>app.close());clearInterval(app.timer);
+  const room={code:'07',arena:0,botCount:0,host:0,members:new Map()};app.makeWorld(room);app.rooms.set('07',room);app.join(room,{name:'Host',driver:0});const member=app.join(room,{name:'Driver',driver:1});
+  Object.assign(room.world,{phase:'racing',supplies:[],destroyed:999});const actor=room.world.bots[0];Object.assign(actor,{wx:-65,wz:0,heading:0,motionHeading:0,cameraHeading:0,speed:200});
+  const state=app.snapshot(room,member),prediction=new LocalPrediction();prediction.accept(state.world,0);
+  const keys=new Set(['arrowup']);keys.steer=.35;for(let i=1;i<=8;i++)prediction.sample(keys,1/60,i/60);
+  const view=prediction.sample(keys,0,8/60);app.controls(member,{sequence:0,keys:[],actions:[],epoch:room.world.soundEpoch,moves:prediction.commands()});for(let i=0;i<8;i++)app.step(1/60);
+  assert.ok(Math.abs(actor.wx-view.wx)<1e-9);assert.ok(Math.abs(actor.wz-view.wz)<1e-9);assert.equal(actor.heading,view.heading);
+  assert.throws(()=>app.controls(member,{sequence:1,keys:[],actions:[],moves:[{sequence:8,keys:[],steer:2}],epoch:room.world.soundEpoch}),/Invalid steering/);
+});
 
 test('a separate turbo accelerates immediately and replays once until acknowledged',()=>{
   const world=createBattle();Object.assign(world,{phase:'racing',wx:-65,wz:70,heading:0,motionHeading:0,cameraHeading:0,speed:300,turbos:1});

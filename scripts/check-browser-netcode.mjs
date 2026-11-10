@@ -61,7 +61,6 @@ try{
     if(process.argv.includes('--mobile')){
       await call('Emulation.setDeviceMetricsOverride',{width:430,height:900,deviceScaleFactor:1,mobile:true,screenOrientation:{type:'portraitPrimary',angle:0}},session);
       await call('Emulation.setTouchEmulationEnabled',{enabled:true},session);
-      await call('Page.addScriptToEvaluateOnNewDocument',{source:"window.__motionPermission='denied';Object.defineProperty(DeviceOrientationEvent,'requestPermission',{configurable:true,value:async()=>window.__motionPermission});"},session);
     }
     await call('Page.addScriptToEvaluateOnNewDocument',{source:`{
       const Original=window.WebSocket;let seed=71;
@@ -82,9 +81,10 @@ try{
     const identity=await evaluate(`(async()=>{__game.network.botCount.value='0';__game.network.invitation='07';await __game.network.connect('${profile.guest?'/api/join':'/api/rooms'}');return {code:__game.network.state.code,you:__game.network.state.you};})()`);
     const room=app.multiplayer.rooms.get(identity.code);
     if(process.argv.includes('--mobile')){
-      const capture=async()=>{const screenshot=await call('Page.captureScreenshot',{format:'png'},session);await writeFile(`${output}.${profile.run}.${profile.name}.mobile.png`,Buffer.from(screenshot.data,'base64'));};
+      const capture=async label=>{const screenshot=await call('Page.captureScreenshot',{format:'png'},session);await writeFile(`${output}.${profile.run}.${profile.name}.${label}.mobile.png`,Buffer.from(screenshot.data,'base64'));};
       const rotate=angle=>call('Emulation.setDeviceMetricsOverride',{width:angle?900:430,height:angle?430:900,deviceScaleFactor:1,mobile:true,screenOrientation:{type:angle===90?'landscapePrimary':angle===270?'landscapeSecondary':'portraitPrimary',angle}},session);
-      const result={profile:profile.name,run:profile.run,...await checkMobile(evaluate,app.multiplayer,room,identity.you,sleep,capture,rotate)};results.push(result);console.log(JSON.stringify(result));
+      const tap=async(x,y)=>{await call('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y,id:1,radiusX:1,radiusY:1,force:1}]},session);await call('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]},session);};
+      const result={profile:profile.name,run:profile.run,...await checkMobile(evaluate,app.multiplayer,room,identity.you,sleep,capture,rotate,tap)};results.push(result);console.log(JSON.stringify(result));
       await evaluate('__game.network.leave()');await call('Target.closeTarget',{targetId});for(const member of [...room.members.values()])app.multiplayer.remove(member);continue;
     }
     if(process.argv.includes('--controls')){
@@ -97,7 +97,8 @@ try{
       const captureChaff=process.argv.includes('--chaff-screenshots')?captureScene('chaff'):undefined;
       const captureNotices=process.argv.includes('--notice-screenshots')?captureScene('notices'):undefined;
       const captureReady=process.argv.includes('--ready-screenshots')?captureScene('ready'):undefined;
-      const result={profile:profile.name,run:profile.run,...await checkControls(evaluate,app.multiplayer,room,identity.you,sleep,captureFlip,captureChaff,captureNotices,captureReady)};
+      const captureBomb=process.argv.includes('--bomb-screenshots')?captureScene('bomb'):undefined;
+      const result={profile:profile.name,run:profile.run,...await checkControls(evaluate,app.multiplayer,room,identity.you,sleep,captureFlip,captureChaff,captureNotices,captureReady,captureBomb)};
       results.push(result);console.log(JSON.stringify({...result,trace:undefined,flipTrace:undefined,orbitTrace:undefined}));
       await evaluate("document.querySelector('.viewport').scrollIntoView({block:'center'})");
       const screenshot=await call('Page.captureScreenshot',{format:'png'},session);

@@ -29,8 +29,8 @@ export class PlayRequestPrompt {
 export class NetworkGame {
   playRequestPrompt=new PlayRequestPrompt();
   token=null;state=null;paused=false;sequence=0;actions=[];playback=new NetworkPlayback();prediction=new LocalPrediction();driftFeedback=new LocalDrift();rtt=0;lastPing=-Infinity;
-  constructor({anchor,keys,driver,arena,onState,onLeave,unlock,sound=()=>{}}){
-    Object.assign(this,{keys,driver,arena,onState,onLeave,unlock,sound});this.actionAudio=new ActionAudio(sound);this.feedback=new LocalFeedback((type,key)=>this.actionAudio.emit(type,performance.now()/1000,null,key));
+  constructor({anchor,keys,driver,arena,onState,onLeave,unlock,sound=()=>{},role='driver'}){
+    Object.assign(this,{keys,driver,arena,onState,onLeave,unlock,sound,role});this.actionAudio=new ActionAudio(sound);this.feedback=new LocalFeedback((type,key)=>this.actionAudio.emit(type,performance.now()/1000,null,key));
     this.panel=document.createElement('section');this.panel.className='network-panel';this.panel.setAttribute('aria-label','Multiplayer arena lobby');
     const title=document.createElement('strong');title.textContent='PLAY TOGETHER · UP TO 6 PLAYERS';
     this.name=document.createElement('input');this.name.placeholder='Your name';this.name.value='Player';this.name.maxLength=24;this.name.setAttribute('aria-label','Player name');
@@ -153,7 +153,7 @@ export class NetworkGame {
     if(this.active)return;
     this.hostButton.disabled=true;this.status.textContent='Connecting…';
     try{
-      this.unlock().catch(()=>{});if(path==='/api/rooms')await this.refreshInfo();const reply=await this.request(path,{name:this.name.value.trim(),driver:path==='/api/join'?null:this.driver(),arena:this.arena(),bots:Number(this.botCount.value),code:this.invitation.toUpperCase()});
+      this.unlock().catch(()=>{});if(path==='/api/rooms')await this.refreshInfo();const reply=await this.request(path,{name:this.name.value.trim(),driver:path==='/api/join'?null:this.driver(),role:this.role,arena:this.arena(),bots:Number(this.botCount.value),code:this.invitation.toUpperCase()});
       this.token=reply.token;this.nameDirty=false;this.namePending=false;this.sequence=0;this.pending=null;this.failures=0;this.shareEdited=false;this.actions=[];this.keys.clear();this.paused=false;this.accept(reply);this.stream();
     }catch(error){this.status.textContent=error.message;}
     this.hostButton.disabled=this.active;this.name.disabled=false;
@@ -183,7 +183,7 @@ export class NetworkGame {
       if(!this.isHost&&this.wantsToPlay)this.status.textContent='You’re ready! Waiting for the host to start.';
     }
     if(['countdown','racing'].includes(state.world.phase))this.status.textContent=`MATCH LIVE · ${state.players.length} players + ${state.bots} bots`;
-    if(rosterKey!==this.rosterKey){this.rosterKey=rosterKey;this.players.replaceChildren(...state.players.map(player=>{const label=document.createElement('span');label.textContent=`${drivers[player.driver].emoji} ${player.name}${player.id===state.host?' · HOST':''}${player.id===state.you?' · YOU':''}${player.wantsToPlay?' · READY ✓':''}`;label.style.borderLeft=`4px solid ${player.color}`;return label;}));}
+    if(rosterKey!==this.rosterKey){this.rosterKey=rosterKey;this.players.replaceChildren(...state.players.map(player=>{const label=document.createElement('span');label.textContent=`${player.role==='bomber'?'✈':drivers[player.driver].emoji} ${player.name}${player.role==='bomber'?' · BOMBER':''}${player.id===state.host?' · HOST':''}${player.id===state.you?' · YOU':''}${player.wantsToPlay?' · READY ✓':''}`;label.style.borderLeft=`4px solid ${player.color}`;return label;}));}
     this.updatePlayRequest();
     this.onState(this.view());
   }
@@ -195,6 +195,11 @@ export class NetworkGame {
   }
   render(dt,keys=this.keys){
     const world=this.playback.sample()??this.view();if(!world)return null;
+    if(world.bomber){
+      const view=this.feedback.render(world,world,performance.now()/1000,-1);
+      if(this.paused&&['countdown','racing'].includes(world.phase))return {...view,phase:'paused',resumePhase:world.phase};
+      return view;
+    }
     const local=this.prediction.sample(this.paused?new Set():keys,dt,performance.now()/1000);
     const now=performance.now()/1000;
     for(const type of this.prediction.sounds.splice(0))this.actionAudio.emit(type,now);

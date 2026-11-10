@@ -1,14 +1,14 @@
 import { randomBytes, randomInt } from 'node:crypto';
 import { networkInterfaces } from 'node:os';
 import { WebSocketServer } from 'ws';
-import { createBattle, tickBattle, fireBattle, releaseChaff, useBattleTurbo, somersaultBattle, standings } from './combat.js';
+import { createBattle, tickBattle, fireBattle, releaseChaff, useBattleTurbo, somersaultBattle, standings, equipBomber, dropBomb, validBombTarget } from './combat.js';
 import { drivers, selectItem, cycleItem } from './engine.js';
 import { ngrokOrigin } from './ngrok.js';
 import { encodeSnapshot } from './wire.js';
 
 const KEYS=new Set(['arrowup','arrowdown','arrowleft','arrowright','w','a','s','d','shift',' ']);
 const PLAYER_COLORS=['#8456cf','#df7053','#67a99c','#edb84f','#777cbb','#db8daf'];
-const FIELDS='id driver color wx wz heading motionHeading cameraHeading speed health kills deaths killStreak vulcan chaff chaffCooldown destroyed shield ammo missiles turbos item fireCooldown boost drift wasDrifting yaw spin celebrate stun voiceCooldown human name notice noticeTime inactive somersault somersaultCooldown somersaultCameraStart'.split(' ');
+const FIELDS='id driver color wx wz heading motionHeading cameraHeading speed health kills deaths killStreak vulcan chaff chaffCooldown destroyed shield ammo missiles turbos item fireCooldown boost drift wasDrifting yaw spin celebrate stun voiceCooldown human name notice noticeTime inactive somersault somersaultCooldown somersaultCameraStart bomber bombAmmo bombReload'.split(' ');
 const actorData=actor=>Object.fromEntries(FIELDS.map(key=>[key,actor[key]]));
 const problem=(status,message)=>Object.assign(new Error(message),{status});
 export function allocateRoomCode(rooms){
@@ -18,7 +18,8 @@ export function allocateRoomCode(rooms){
 }
 const person=body=>{
   if(!body||typeof body.name!=='string'||body.name.trim().length<1||body.name.length>24||(body.driver!==null&&(!Number.isInteger(body.driver)||body.driver<0||body.driver>=drivers.length)))throw problem(400,'Enter a name (1–24 characters) and choose a driver.');
-  return {name:body.name.trim(),driver:body.driver};
+  if(body.role!==undefined&&!['driver','bomber'].includes(body.role))throw problem(400,'Choose a driver or bomber role.');
+  return {name:body.name.trim(),driver:body.driver,role:body.role??'driver'};
 };
 export class Multiplayer {
   rooms=new Map();members=new Map();limits=new Map();
@@ -47,7 +48,7 @@ export class Multiplayer {
   }
   controls(member,body){
     if(!Number.isSafeInteger(body.sequence)||body.sequence<0||!Array.isArray(body.keys)||body.keys.length>10||body.keys.some(k=>!KEYS.has(k))||!Array.isArray(body.actions)||body.actions.length>8)throw problem(400,'Invalid controls.');
-    for(const action of body.actions)if(!action||!['fire','turbo','somersault','chaff','cycle','select'].includes(action.type)||(action.type==='select'&&!['hedgehog','missile'].includes(action.item)))throw problem(400,'Invalid action.');
+    for(const action of body.actions)if(!action||!['fire','turbo','somersault','chaff','cycle','select','bomb'].includes(action.type)||(action.type==='select'&&!['hedgehog','missile'].includes(action.item))||(action.type==='bomb'&&!validBombTarget(member.room.world,action)))throw problem(400,'Invalid action.');
     for(const action of body.actions)if(action.id!==undefined&&(!Number.isSafeInteger(action.id)||action.id<0||!Number.isSafeInteger(action.afterMove)||action.afterMove< -1||action.afterMove>(member.acceptedMove??-1)+128))throw problem(400,'Invalid action sequence.');
     if(body.epoch!==undefined&&body.epoch!==member.room.world.soundEpoch)return;
     if(body.moves!==undefined){
@@ -75,7 +76,7 @@ export class Multiplayer {
     const actor=[room.world,...room.world.bots][member.id];
     while(member.actions.length&&(member.actions[0].afterMove??-1)<=sequence){
       const action=member.actions.shift();
-      switch(action.type){case 'fire':fireBattle(room.world,actor,action.id);break;case 'turbo':useBattleTurbo(room.world,actor,action.id);break;case 'somersault':somersaultBattle(room.world,actor);break;case 'chaff':releaseChaff(room.world,actor);break;case 'cycle':cycleItem(actor);break;case 'select':selectItem(actor,action.item);break;}
+      switch(action.type){case 'bomb':dropBomb(room.world,actor,action,action.id);break;case 'fire':fireBattle(room.world,actor,action.id);break;case 'turbo':useBattleTurbo(room.world,actor,action.id);break;case 'somersault':somersaultBattle(room.world,actor);break;case 'chaff':releaseChaff(room.world,actor);break;case 'cycle':if(!actor.bomber)cycleItem(actor);break;case 'select':if(!actor.bomber)selectItem(actor,action.item);break;}
       if(action.id!==undefined)member.actionAck=action.id;
     }
   }
@@ -85,11 +86,11 @@ export class Multiplayer {
     for(const member of room.members.values()){this.assign(room,member);member.moveQueue=[];member.acceptedMove=-1;member.lastMove=-1;member.moveCredit=0;member.acceptedAction=-1;member.actionAck=-1;}
     this.roster(room);
   }
-  assign(room,member){const actor=[room.world,...room.world.bots][member.id];if(actor.inactive||actor.destroyed||room.world.phase==='racing'){const fresh=createBattle(member.driver,room.arena);Object.assign(actor,actorData([fresh,...fresh.bots][member.id]),{reload:0,brain:0,path:[]});}Object.assign(actor,{human:true,inactive:false,name:member.name,driver:member.driver,color:member.color,notice:'',noticeTime:0});member.keys=new Set();member.actions=[];}
+  assign(room,member){const actor=[room.world,...room.world.bots][member.id];if(actor.inactive||actor.destroyed||room.world.phase==='racing'){const fresh=createBattle(member.driver,room.arena);Object.assign(actor,actorData([fresh,...fresh.bots][member.id]),{reload:0,brain:0,path:[]});}Object.assign(actor,{human:true,inactive:false,name:member.name,driver:member.driver,color:member.color,notice:'',noticeTime:0,bomber:member.role==='bomber'});if(actor.bomber)equipBomber(actor);member.keys=new Set();member.actions=[];}
   roster(room){
     room.botCount=Math.min(room.botCount,6-room.members.size);
     const actors=[room.world,...room.world.bots],bots=actors.filter(actor=>!room.members.has(actor.id)).slice(0,room.botCount);
-    for(const actor of actors){const human=room.members.has(actor.id),active=human||bots.includes(actor);if(active&&actor.inactive){actor.destroyed=0;actor.health=3;actor.shield=2;actor.speed=0;}actor.human=human;actor.color=PLAYER_COLORS[actor.id];actor.inactive=!active;if(!active){actor.destroyed=1e9;actor.speed=0;}if(!human)actor.name=undefined;}
+    for(const actor of actors){const human=room.members.has(actor.id),active=human||bots.includes(actor);if(active&&actor.inactive){actor.destroyed=0;actor.health=3;actor.shield=2;actor.speed=0;}actor.human=human;actor.bomber=human&&room.members.get(actor.id).role==='bomber';actor.color=PLAYER_COLORS[actor.id];actor.inactive=!active;if(!active){actor.destroyed=1e9;actor.speed=0;}if(!human)actor.name=undefined;}
   }
   join(room,body){
     const identity=person(body);if(room.members.size>=6)throw problem(409,'This room is full (6 players).');
@@ -110,12 +111,12 @@ export class Multiplayer {
     const world=room.world,actors=[world,...world.bots],actor=actors[member.id],order=standings(world),rank=order.findIndex(k=>k.id===member.id)+1;
     const {bots,...globals}=world;
     const view={...globals,...actorData(actor),bots:actors.filter(k=>k.id!==member.id&&!k.inactive).map(actorData),rank,finishRank:world.finishRank===null?null:rank};
-    view.events=room.events.filter(event=>event!=='victory'&&event!=='finish').filter(event=>typeof event==='string'||event.owner===member.id||Math.hypot(event.wx-actor.wx,event.wz-actor.wz)<90);
+    view.events=room.events.filter(event=>event!=='victory'&&event!=='finish').filter(event=>actor.bomber||typeof event==='string'||event.type==='bombExplosion'||event.owner===member.id||Math.hypot(event.wx-actor.wx,event.wz-actor.wz)<90);
     if(room.events.some(event=>event==='victory'||event==='finish'))view.events.push(rank===1?'victory':'finish');
     view.voices=room.voices;view.name=member.name;
     const label=id=>id===member.id?'YOU':actors[id]?.name??drivers[actors[id]?.driver??0].name.split(' ')[0];
     view.killFeed=world.killFeed.map(entry=>({...entry,text:`${label(entry.attacker)} → ${label(entry.victim)}`}));
-    return {type:'state',time:room.networkTime??0,inputSequence:member.sequence,movementSequence:member.lastMove??-1,actionSequence:member.actionAck??-1,code:room.code,you:member.id,host:room.host,arena:room.arena,bots:room.botCount,players:[...room.members.values()].map(p=>({id:p.id,name:p.name,driver:p.driver,color:p.color,wantsToPlay:Boolean(p.wantsToPlay)})),world:view};
+    return {type:'state',time:room.networkTime??0,inputSequence:member.sequence,movementSequence:member.lastMove??-1,actionSequence:member.actionAck??-1,code:room.code,you:member.id,host:room.host,arena:room.arena,bots:room.botCount,players:[...room.members.values()].map(p=>({id:p.id,name:p.name,driver:p.driver,color:p.color,role:p.role,wantsToPlay:Boolean(p.wantsToPlay)})),world:view};
   }
   send(member,data){
     const socket=member.socket;

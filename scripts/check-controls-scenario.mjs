@@ -1,6 +1,6 @@
 import { damageBattle } from '../combat.js';
 
-export async function checkControls(evaluate,app,room,id,sleep,captureFlip,captureChaff,captureNotices,captureReady){
+export async function checkControls(evaluate,app,room,id,sleep,captureFlip,captureChaff,captureNotices,captureReady,captureBomb){
   const host=room.members.get(room.host);
   const guest=id===room.host?app.join(room,{name:'Ready Friend',driver:1}):room.members.get(id);
   const displayName=id===room.host?'Alex <b>':'Sam <b>';
@@ -127,6 +127,14 @@ export async function checkControls(evaluate,app,room,id,sleep,captureFlip,captu
   let orbitRotation=0,previousAngle=null;
   for(const shot of orbitTrace.filter(shot=>shot.age!==null&&shot.age<=1.8)){const angle=Math.atan2(shot.wx-ownCloud.wx,shot.wz-ownCloud.wz);if(previousAngle!==null)orbitRotation+=Math.atan2(Math.sin(angle-previousAngle),Math.cos(angle-previousAngle));previousAngle=angle;}
   const orbitPass=sawOrbit&&orbitRotation>Math.PI*4.8&&orbitTrace.some(shot=>shot.height>3.5)&&orbitTrace.some(shot=>shot.age>1.8&&shot.height<2)&&room.world.projectiles.every(shot=>shot.decoy==null);
+  const bomber=app.join(room,{name:'Phone Bomber',driver:2,role:'bomber'});
+  app.controls(bomber,{sequence:0,keys:[],actions:[{type:'bomb',id:0,afterMove:-1,wx:-65,wz:30}],epoch:room.world.soundEpoch});
+  for(let i=0;i<100;i++){if(await evaluate('__game.race.bombs.some(bomb=>bomb.wx===-65&&bomb.wz===30)'))break;await sleep(10);}
+  const desktopSawBomb=await evaluate("!__game.race.bomber&&!document.querySelector('.viewport').classList.contains('bomber-view')&&__game.race.bombs.some(bomb=>bomb.wx===-65&&bomb.wz===30)");
+  if(captureBomb)await captureBomb();
+  for(let i=0;i<150;i++){if(await evaluate("__game.race.effects.some(effect=>effect.type==='abomb'&&effect.wx===-65&&effect.wz===30)"))break;await sleep(10);}
+  const desktopBombPass=desktopSawBomb&&await evaluate("__game.race.effects.some(effect=>effect.type==='abomb'&&effect.wx===-65&&effect.wz===30)");
+  if(captureBomb)await captureBomb();app.remove(bomber);
   await evaluate(`fetch('/api/name',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer ${shooter.token}'},body:JSON.stringify({name:'Rival <img>'})})`);
   room.world.projectiles=[];Object.assign(other,{health:3,shield:0,destroyed:0});damageBattle(room.world,other,id,3);
   for(let i=0;i<100;i++){if(await evaluate("!document.getElementById('whack-banner').classList.contains('hidden')"))break;await sleep(10);}
@@ -145,5 +153,5 @@ export async function checkControls(evaluate,app,room,id,sleep,captureFlip,captu
   for(let i=0;i<100;i++){if(await evaluate("!document.getElementById('match-results').classList.contains('hidden')&&document.querySelectorAll('#match-results tbody tr').length===2"))break;await sleep(25);}
   const leaderboard=await evaluate("[...document.querySelectorAll('#match-results tbody tr')].map(row=>[...row.cells].map(cell=>cell.textContent))");
   const resultsPass=JSON.stringify(leaderboard)===JSON.stringify([['1',other.name,'10','2'],['2',displayName+' · YOU','3','4']])&&await evaluate("document.querySelectorAll('#match-results tbody .you').length===1&&!document.querySelector('#match-results b')");
-  return {readyPass,readyCleared,readyUI,popupPass,popup,namePass,pickupKeptVulcan,turboPass,flipPass,cameraPass,remoteSawFlip,flipTrace,desktopManual,warningPass,warning,chaffPass,chaffColor:ownCloud?.color,chaffSoundCount,greenNoticePass,orbitPass,orbitRotation,orbitTrace,whackPass,whack,resultsPass,leaderboard,pass:readyPass&&readyCleared&&popupPass&&namePass&&pickupKeptVulcan&&turboPass&&flipPass&&desktopManual&&warningPass&&chaffPass&&greenNoticePass&&orbitPass&&whackPass&&resultsPass,trace};
+  return {readyPass,readyCleared,readyUI,popupPass,popup,namePass,pickupKeptVulcan,turboPass,flipPass,cameraPass,remoteSawFlip,flipTrace,desktopManual,warningPass,warning,chaffPass,chaffColor:ownCloud?.color,chaffSoundCount,greenNoticePass,orbitPass,orbitRotation,orbitTrace,desktopBombPass,whackPass,whack,resultsPass,leaderboard,pass:readyPass&&readyCleared&&popupPass&&namePass&&pickupKeptVulcan&&turboPass&&flipPass&&desktopManual&&warningPass&&chaffPass&&greenNoticePass&&orbitPass&&desktopBombPass&&whackPass&&resultsPass,trace};
 }

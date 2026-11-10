@@ -1,4 +1,4 @@
-import { applySupply, makeProjectile, advanceProjectile, MOVEMENT_DT, MAX_HEALTH } from './combat.js';
+import { applySupply, makeProjectile, advanceProjectile, MOVEMENT_DT, MAX_HEALTH, validBombTarget } from './combat.js';
 import { selectItem, cycleItem } from './engine.js';
 
 const poseFields=['wx','wz','heading','motionHeading','cameraHeading','speed','drift','wasDrifting','boost','yaw','somersault','somersaultCooldown'];
@@ -26,7 +26,7 @@ export class LocalFeedback {
   commands(){
     const actions=this.operations.filter(op=>op.type!=='pickup'&&op.id>this.lastSent).slice(0,8);
     if(actions.length)this.lastSent=actions.at(-1).id;
-    return actions.map(({id,type,item,afterMove})=>({id,type,afterMove,...(item?{item}:{})}));
+    return actions.map(({id,type,item,afterMove,wx,wz})=>({id,type,afterMove,...(item?{item}:{}),...(type==='bomb'?{wx,wz}:{})}));
   }
   resend(){this.lastSent=-1;}
   accept(state,now){
@@ -66,12 +66,17 @@ export class LocalFeedback {
         if(op.kind==='missile'&&!actor.missiles)actor.item='hedgehog';
         break;
       case 'chaff':actor.chaff=Math.max(0,actor.chaff-1);break;
+      case 'bomb':actor.bombAmmo=Math.max(0,actor.bombAmmo-1);break;
     }
     return actor;
   }
   action(type,item,pose,now,sequence){
     if(!this.world||this.operations.length>=64)return false;
     const actor=this.inventory(pose);
+    if(actor.bomber){
+      if(type!=='bomb'||actor.phase!=='racing'||actor.finishCountdown!==null||now-this.received>.5||actor.bombAmmo<1||!validBombTarget(actor,item))return false;
+      const id=this.nextId++;this.operations.push({id,type,afterMove:-1,wx:item.wx,wz:item.wz,born:now});this.emit('bombDrop',`action:${id}`);return true;
+    }
     // A rendered fractional tick can touch a pickup just before the next full movement tick.
     const afterMove=Math.max(sequence,...this.operations.filter(op=>op.type==='pickup').map(op=>op.afterMove));
     if(type==='select'||type==='cycle'){
@@ -105,6 +110,7 @@ export class LocalFeedback {
   render(world,pose,now,sequence){
     if(!this.world)return {...world,...pose};
     let actor=this.inventory(pose);
+    if(actor.bomber)return {...world,bombAmmo:actor.bombAmmo,bombs:[...(world.bombs??[]),...this.operations.filter(op=>op.type==='bomb'&&!world.bombs?.some(bomb=>bomb.owner===world.id&&bomb.actionId===op.id)).map(op=>({id:`local:${op.id}`,actionId:op.id,owner:world.id,wx:op.wx,wz:op.wz,age:Math.max(0,now-op.born),color:world.color}))]};
     if(actor.phase==='racing'&&!actor.destroyed&&actor.finishCountdown===null&&now-this.received<.5){
       for(const [index,supply] of this.world.supplies.entries()){
         const supplyId=supply.id??index,version=supply.version??0,key=`pickup:${supplyId}:${version+1}`,distance=Math.hypot(actor.wx-supply.wx,actor.wz-supply.wz);

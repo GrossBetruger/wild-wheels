@@ -1,53 +1,55 @@
-export async function checkMobile(evaluate,app,room,id,sleep,capture,rotate){
-  await evaluate("document.getElementById('auto-fire').click();document.getElementById('start').click()");
-  const host=room.members.get(room.host);
+export async function checkMobile(evaluate,app,room,id,sleep,capture,rotate,tap){
+  const host=room.members.get(room.host),enemy=id===host.id?app.join(room,{name:'Target <img>',driver:1}):host;
+  enemy.name='Target <img>';
+  await evaluate("document.getElementById('start').click()");
   if(id!==room.host)await evaluate(`fetch('/api/control',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer ${host.token}'},body:JSON.stringify({action:'start'})})`);
   for(let i=0;i<100;i++){if(room.world.phase==='countdown')break;await sleep(25);}
-  const fullscreen=await evaluate(`(()=>{const panel=document.querySelector('.race-panel'),r=panel.getBoundingClientRect();return panel.classList.contains('mobile-fullscreen')&&Math.abs(r.width-innerWidth)<2&&Math.abs(r.height-innerHeight)<2&&panel.contains(document.querySelector('.touch-controls'));})()`);
-  const enemy=id===host.id?app.join(room,{name:'Far <img>',driver:1}):host;
   const actor=[room.world,...room.world.bots][id],other=[room.world,...room.world.bots][enemy.id];
   Object.assign(room.world,{phase:'racing',supplies:[],projectiles:[]});
-  const reset=()=>{Object.assign(actor,{wx:-65,wz:0,heading:0,motionHeading:0,cameraHeading:0,speed:0,shield:0,health:6,ammo:5,reload:0,vulcan:0,item:'hedgehog',fireCooldown:0});Object.assign(other,{wx:-65,wz:60,heading:Math.PI,motionHeading:Math.PI,cameraHeading:Math.PI,speed:0,shield:0,health:6,destroyed:0,name:'Far <img>'});};
-  reset();enemy.name='Far <img>';
-  for(let i=0;i<100;i++){if(await evaluate("[...document.querySelectorAll('.kart-nameplate')].some(node=>node.textContent==='Far <img>')"))break;await sleep(25);}
-  const farName=await evaluate("[...document.querySelectorAll('.kart-nameplate')].some(node=>node.textContent==='Far <img>')&&!document.querySelector('.kart-nameplates img')");
-  other.wz=15;await sleep(350);const nearHidden=await evaluate("![...document.querySelectorAll('.kart-nameplate')].some(node=>node.textContent==='Far <img>')");other.wz=60;
-  await evaluate("document.getElementById('enable-tilt').click()");
-  for(let i=0;i<100;i++){if(await evaluate("document.querySelector('.mobile-panel').textContent.includes('declined')"))break;await sleep(10);}
-  const denied=await evaluate("document.querySelector('.mobile-panel').textContent.includes('declined')&&document.getElementById('enable-tilt').textContent==='ENABLE TILT'");
-  await evaluate("__motionPermission='granted';document.getElementById('enable-tilt').click()");
-  for(let i=0;i<100;i++){if(await evaluate("document.getElementById('enable-tilt').textContent==='TILT: ON'"))break;await sleep(10);}
-  await evaluate("window.dispatchEvent(new DeviceOrientationEvent('deviceorientation',{beta:35,gamma:0}));window.dispatchEvent(new DeviceOrientationEvent('deviceorientation',{beta:35,gamma:14}))");
-  for(let i=0;i<100;i++){if(actor.heading<-.02)break;await sleep(10);}
-  const steering=actor.heading<-.02&&actor.speed>0;
-  await evaluate("document.getElementById('enable-tilt').click()");await sleep(200);
+  Object.assign(other,{wx:-65,wz:30,speed:0,shield:0,health:3,destroyed:0,name:'Target <img>'});
+  const initialAmmo=actor.bomber&&actor.bombAmmo===1;
+  for(let i=0;i<100;i++){if(await evaluate("__game.race.phase==='racing'&&__game.race.bomber&&document.getElementById('bomb-count').textContent==='1 A-BOMB'"))break;await sleep(10);}
+  const fullscreen=await evaluate(`(()=>{const panel=document.querySelector('.race-panel'),r=panel.getBoundingClientRect();return panel.classList.contains('mobile-fullscreen')&&Math.abs(r.width-innerWidth)<2&&Math.abs(r.height-innerHeight)<2;})()`);
+  const overhead=await evaluate("document.querySelector('.viewport').classList.contains('bomber-view')&&!document.getElementById('enable-tilt')&&!document.getElementById('auto-fire')&&getComputedStyle(document.querySelector('.touch-controls')).display==='none'");
+  for(let i=0;i<100;i++){if(await evaluate("[...document.querySelectorAll('.kart-nameplate')].some(node=>node.textContent==='Target <img>')"))break;await sleep(10);}
+  const namedTarget=await evaluate("[...document.querySelectorAll('.kart-nameplate')].some(node=>node.textContent==='Target <img>')&&!document.querySelector('.kart-nameplates img')");
+  await evaluate(`{
+    __game.bombTrace=[];__game.bombTap=null;
+    document.getElementById('game').addEventListener('pointerdown',()=>{__game.bombTap=performance.now();});
+    const render=__game.network.render.bind(__game.network);__game.network.render=(...args)=>{const view=render(...args);if(__game.bombTap!==null)__game.bombTrace.push({delay:performance.now()-__game.bombTap,ammo:view.bombAmmo,bombs:view.bombs.map(b=>({wx:b.wx,wz:b.wz,owner:b.owner}))});return view;};
+  }`);
+  const targetPixel=async(wx,wz)=>evaluate(`(()=>{const r=document.getElementById('game').getBoundingClientRect(),scale=Math.min(r.width,r.height)/208;return {x:r.left+r.width/2+${wx}*scale,y:r.top+r.height/2+${wz}*scale};})()`);
+  const point=await targetPixel(-65,30);await tap(point.x,point.y);
+  for(let i=0;i<100;i++){if(room.world.bombs.length)break;await sleep(10);}
+  const dropped=room.world.bombs.find(bomb=>bomb.owner===id),accurate=Boolean(dropped&&Math.abs(dropped.wx+65)<.6&&Math.abs(dropped.wz-30)<.6),spent=actor.bombAmmo===0;
+  const desktopSawDrop=app.snapshot(room,enemy).world.bombs.some(bomb=>bomb.owner===id)&&!app.snapshot(room,enemy).world.bomber;
+  if(capture)await capture('portrait-drop');
+  await tap(point.x,point.y);
+  const singleDrop=room.world.bombs.filter(bomb=>bomb.owner===id).length===1;
+  for(let i=0;i<150;i++){if(other.deaths===1)break;await sleep(10);}
+  const blast=other.deaths===1&&actor.kills===1&&app.snapshot(room,enemy).world.effects.some(effect=>effect.type==='abomb');
+  if(capture)await capture('portrait-blast');
+  const feedback=await evaluate("__game.bombTrace[0]??null");
+  const immediate=Boolean(feedback&&feedback.ammo===0&&feedback.bombs.some(bomb=>bomb.owner===id));
+  for(let i=0;i<200;i++){if(actor.bombAmmo===1)break;await sleep(10);}
+  const refill=actor.bombAmmo===1;
+  const margin=await evaluate("(()=>{const r=document.getElementById('game').getBoundingClientRect();return {x:r.left+2,y:r.top+2};})()");
+  const before=room.world.bombSequence;await tap(margin.x,margin.y);await sleep(200);
+  const marginsIgnored=room.world.bombSequence===before&&actor.bombAmmo===1;
   const landscape=[];
-  for(const {angle,gamma,rightBeta,leftBeta} of [{angle:90,gamma:35,rightBeta:14,leftBeta:-14},{angle:270,gamma:-35,rightBeta:-14,leftBeta:14}]){
-    await rotate(angle);reset();
-    for(let i=0;i<100;i++){if(await evaluate("Math.abs(__game.race.heading)<.005&&__game.network.state.world.heading===0"))break;await sleep(25);}
-    await evaluate("document.getElementById('enable-tilt').click()");
-    for(let i=0;i<100;i++){if(await evaluate("document.getElementById('enable-tilt').textContent==='TILT: ON'"))break;await sleep(10);}
-    await evaluate(`window.dispatchEvent(new DeviceOrientationEvent('deviceorientation',{beta:0,gamma:${gamma}}));window.dispatchEvent(new DeviceOrientationEvent('deviceorientation',{beta:${rightBeta},gamma:${gamma}}))`);
-    for(let i=0;i<100;i++){if(actor.heading<-.02)break;await sleep(10);}
-    const right=actor.heading<-.02&&actor.speed>0;
-    await evaluate(`window.dispatchEvent(new DeviceOrientationEvent('deviceorientation',{beta:${leftBeta},gamma:${gamma}}))`);
-    for(let i=0;i<100;i++){if(actor.heading>.02)break;await sleep(10);}
-    const left=actor.heading>.02,screenAngle=await evaluate('screen.orientation.angle');
-    landscape.push({angle,screenAngle,right,left});
-    await evaluate("document.getElementById('enable-tilt').click()");await sleep(200);
+  for(const angle of [90,270]){
+    await rotate(angle);
+    for(let i=0;i<250;i++){if(actor.bombAmmo>0)break;await sleep(10);}
+    for(let i=0;i<100;i++){if(await evaluate('__game.race.bombAmmo>0'))break;await sleep(10);}
+    const location=await targetPixel(65,-30),sequence=room.world.bombSequence;
+    await tap(location.x,location.y);
+    for(let i=0;i<100;i++){if(room.world.bombSequence>sequence)break;await sleep(10);}
+    const bomb=room.world.bombs.find(bomb=>bomb.id>sequence);
+    const hit=Boolean(bomb&&Math.abs(bomb.wx-65)<.6&&Math.abs(bomb.wz+30)<.6);
+    landscape.push({angle,hit});if(capture)await capture(`landscape-${angle}`);
   }
-  const landscapePass=landscape.every(test=>test.screenAngle===test.angle&&test.right&&test.left);
-  await rotate(0);reset();
-  for(let i=0;i<100;i++){if(await evaluate("Math.abs(__game.race.heading)<.05&&__game.network.state.world.ammo===5"))break;await sleep(25);}
-  await evaluate("document.getElementById('auto-fire').click()");
-  for(let i=0;i<100;i++){if(actor.ammo<5)break;await sleep(25);}
-  const autoShot=actor.ammo<5&&await evaluate("!document.getElementById('mobile-lock').classList.contains('hidden')");
-  if(capture)await capture();
-  await evaluate("document.getElementById('auto-fire').click()");await sleep(300);reset();other.wz=-65;room.world.projectiles=[];
-  for(let i=0;i<100;i++){if(await evaluate("__game.network.state.world.bots.some(p=>p.wz===-65)&&__game.network.state.world.ammo===5"))break;await sleep(25);}
-  await evaluate("document.getElementById('auto-fire').click()");await sleep(650);
-  const noBlindFire=actor.ammo===5&&await evaluate("document.getElementById('mobile-lock').classList.contains('hidden')");
-  await evaluate("document.getElementById('auto-fire').click();document.getElementById('mobile-fullscreen').click()");
+  const landscapePass=landscape.every(test=>test.hit);
+  await evaluate("document.getElementById('mobile-fullscreen').click()");
   const exited=await evaluate("!document.querySelector('.race-panel').classList.contains('mobile-fullscreen')");
-  return {fullscreen,farName,nearHidden,denied,steering,landscape,landscapePass,autoShot,noBlindFire,noTargetAmmo:actor.ammo,exited,pass:fullscreen&&farName&&nearHidden&&denied&&steering&&landscapePass&&autoShot&&noBlindFire&&exited};
+  return {initialAmmo,fullscreen,overhead,namedTarget,accurate,spent,immediate,feedbackDelayMs:feedback?.delay,singleDrop,desktopSawDrop,blast,refill,marginsIgnored,landscape,landscapePass,exited,pass:initialAmmo&&fullscreen&&overhead&&namedTarget&&accurate&&spent&&immediate&&singleDrop&&desktopSawDrop&&blast&&refill&&marginsIgnored&&landscapePass&&exited};
 }

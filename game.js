@@ -2,15 +2,15 @@ import { LENGTH, drivers, tracks, createRace, tick, useItem, useTurbo, selectIte
 import { Renderer } from './renderer.js';
 import { RaceAudio } from './audio.js';
 import { sampleTrack, branches } from './track.js';
-import { createBattle, tickBattle, fireBattle, releaseChaff, useBattleTurbo, somersaultBattle, arenas, standings, incomingMissiles, VULCAN_DURATION, MAX_HEALTH } from './combat.js';
+import { createBattle, tickBattle, fireBattle, releaseChaff, useBattleTurbo, somersaultBattle, arenas, standings, incomingMissiles, VULCAN_DURATION, MAX_HEALTH, equipBomber, dropBomb } from './combat.js';
 import { NetworkGame } from './network.js';
 import { matchResults } from './results.js';
 import { KillCelebration, ChaffNotice } from './combat-notices.js';
-import { TiltSteering, allowTilt, usesMobileControls, mobileLockTarget } from './mobile.js';
+import { usesMobileControls, bombTarget } from './mobile.js';
 const $ = id => document.getElementById(id);
 const canvas = $('game'), map = $('map').getContext('2d');
 const keys = new Set(), audio = new RaceAudio(), renderer = new Renderer(canvas);
-const mobile=usesMobileControls(navigator.maxTouchPoints,matchMedia('(pointer:coarse)').matches),tilt=new TiltSteering();let autoFire=mobile;
+const mobile=usesMobileControls(navigator.maxTouchPoints,matchMedia('(pointer:coarse)').matches);document.body.classList.toggle('mobile-bomber',mobile);
 const racePanel=document.querySelector('.race-panel');let mobileImmersive=false,mobileNativeFullscreen=false;
 function exitMobileFullscreen(){mobileImmersive=false;mobileNativeFullscreen=false;racePanel.classList.remove('mobile-fullscreen');document.body.classList.remove('mobile-playing');mobileScreenButton.textContent='FULL SCREEN';if(document.fullscreenElement===racePanel)document.exitFullscreen().catch(()=>{});}
 function enterMobileFullscreen(){
@@ -18,37 +18,34 @@ function enterMobileFullscreen(){
   if(!document.fullscreenElement&&racePanel.requestFullscreen)racePanel.requestFullscreen().then(()=>{mobileNativeFullscreen=true;}).catch(()=>{});
 }
 document.addEventListener('fullscreenchange',()=>{if(document.fullscreenElement===racePanel)mobileNativeFullscreen=true;if(mobileNativeFullscreen&&!document.fullscreenElement)exitMobileFullscreen();});
-let race = createRace(), lastTime = 0, selected = 0, track = 0, mode='race', lastPhase = '', lastCount = -1;
+let race = mobile?equipBomber(createBattle()):createRace(), lastTime = 0, selected = 0, track = 0, mode=mobile?'combat':'race', lastPhase = '', lastCount = -1;
 const renderControls=document.createElement('div');renderControls.className='render-controls';const graphicsLabel=document.createElement('label');graphicsLabel.textContent='GRAPHICS ';
 const qualitySelect=document.createElement('select');qualitySelect.setAttribute('aria-label','Graphics quality');for(const [value,label] of [['auto','Auto'],['high','High'],['balanced','Balanced'],['low','Low']]){const option=document.createElement('option');option.value=value;option.textContent=label;qualitySelect.append(option);}qualitySelect.onchange=()=>renderer.setQuality(qualitySelect.value);graphicsLabel.append(qualitySelect);
 const fpsMeter=document.createElement('span');fpsMeter.id='render-fps';fpsMeter.textContent='Measuring FPS…';fpsMeter.title=renderer.gpuName;renderControls.append(graphicsLabel,fpsMeter);if(renderer.softwareGPU){const warning=document.createElement('span');warning.textContent='SOFTWARE GPU';warning.title='Chrome is rendering graphics without hardware acceleration.';renderControls.append(warning);}document.querySelector('.race-panel').append(renderControls);
 const buildLabel=document.createElement('span');buildLabel.id='build-version';buildLabel.textContent='BUILD …';buildLabel.title='Compare this build ID on both computers after refreshing.';renderControls.append(buildLabel);
 fetch('/build.json',{cache:'no-store',signal:AbortSignal.timeout(4000)}).then(response=>{if(!response.ok)throw new Error();return response.json();}).then(info=>{buildLabel.textContent=`BUILD ${info.build}`;}).catch(()=>{buildLabel.textContent='BUILD UNAVAILABLE';});
-const newGame=()=>mode==='combat'?createBattle(selected,track):createRace(selected,track);
+const newGame=()=>mode==='combat'?(mobile?equipBomber(createBattle(selected,track)):createBattle(selected,track)):createRace(selected,track);
 const useWeapon=()=>network.active?network.action('fire'):mode==='combat'?fireBattle(race):useItem(race);
 const switchWeapon=()=>network.active?network.action('cycle'):cycleItem(race);
 const chaff=()=>network.active?network.action('chaff'):mode==='combat'?releaseChaff(race):false;
 const turbo=()=>network.active?network.action('turbo'):mode==='combat'?useBattleTurbo(race):useTurbo(race);
 const somersault=()=>network.active?network.action('somersault'):mode==='combat'?somersaultBattle(race):false;
 const mobilePanel=document.createElement('div');mobilePanel.className='mobile-panel';mobilePanel.classList.toggle('hidden',!mobile);
-const tiltButton=document.createElement('button'),centerButton=document.createElement('button'),autoButton=document.createElement('button'),mobileHint=document.createElement('span');
+const mobileHint=document.createElement('span');
 const mobileScreenButton=document.createElement('button');mobileScreenButton.id='mobile-fullscreen';mobileScreenButton.textContent='FULL SCREEN';mobileScreenButton.onclick=()=>mobileImmersive?exitMobileFullscreen():enterMobileFullscreen();
-tiltButton.id='enable-tilt';tiltButton.textContent='ENABLE TILT';centerButton.textContent='RECENTER';autoButton.id='auto-fire';autoButton.textContent='AUTO FIRE: ON';autoButton.setAttribute('aria-pressed',String(autoFire));mobileHint.textContent='Tilt mode steers and drives. Brake and other touch controls stay available.';
-const orientation=event=>{if(!document.hidden)tilt.sample(event.beta,event.gamma,screen.orientation?.angle??0);};
-tiltButton.onclick=async()=>{
-  if(tilt.enabled){tilt.enabled=false;tilt.recenter();window.removeEventListener('deviceorientation',orientation);tiltButton.textContent='ENABLE TILT';mobileHint.textContent='Tilt off. Use the touch controls.';return;}
-  try{
-    await allowTilt({mobile,secure:isSecureContext,orientation:window.DeviceOrientationEvent});
-    tilt.enabled=true;tilt.recenter();window.addEventListener('deviceorientation',orientation);tiltButton.textContent='TILT: ON';mobileHint.textContent='Hold your phone comfortably, then tilt left or right. Brake to slow down.';
-    setTimeout(()=>{if(tilt.enabled&&tilt.baseline===null)mobileHint.textContent='No motion data yet. Tilt your phone or use the touch controls.';},2500);
-  }catch(error){mobileHint.textContent=error.message;}
-};
-centerButton.onclick=()=>{tilt.recenter();mobileHint.textContent='Hold your phone in your preferred position to recenter.';};
-autoButton.onclick=()=>{autoFire=!autoFire;autoButton.textContent=`AUTO FIRE: ${autoFire?'ON':'OFF'}`;autoButton.setAttribute('aria-pressed',String(autoFire));};
-mobilePanel.append(tiltButton,centerButton,autoButton,mobileScreenButton,mobileHint);racePanel.append(mobilePanel);if(mobile)racePanel.append(document.querySelector('.touch-controls'));
+const bombHud=document.createElement('div');bombHud.id='bomb-hud';bombHud.className='bomb-hud';const bombCount=document.createElement('strong'),bombRefill=document.createElement('span');bombCount.id='bomb-count';bombRefill.id='bomb-refill';bombCount.textContent='1 A-BOMB';bombRefill.textContent='+1 EVERY 2s';bombHud.append(bombCount,bombRefill);
+mobileHint.textContent='BOMBER · Tap the arena to drop an A-bomb.';mobilePanel.append(bombHud,mobileHint,mobileScreenButton);racePanel.append(mobilePanel);
+canvas.addEventListener('pointerdown',event=>{
+  if(!race.bomber||race.phase!=='racing'||race.finishCountdown!==null||!event.isPrimary||event.button!==0)return;
+  event.preventDefault();audio.unlock().catch(()=>{});
+  const target=bombTarget(event.clientX,event.clientY,canvas.getBoundingClientRect(),arenas[race.arena].size);if(!target)return;
+  const dropped=network.active?network.action('bomb',target):dropBomb(race,race,target);
+  if(!dropped){mobileHint.textContent='Rearming… +1 A-bomb every 2 seconds.';return;}
+  mobileHint.textContent='Bomb away! Tap another target when ready.';
+});
 const modeSwitch=document.createElement('nav');modeSwitch.className='mode-switch';modeSwitch.setAttribute('aria-label','Game mode');
 const selectedMaps={race:0,combat:0};
-for(const [value,label] of [['race','🏁 GRAND PRIX'],['combat','⚔ ARENA BATTLE']]){const button=document.createElement('button');button.id=`mode-${value}`;button.textContent=label;button.setAttribute('aria-pressed',String(value===mode));button.onclick=()=>{if(mode===value)return;mode=value;track=selectedMaps[mode];resetMap();};modeSwitch.append(button);}
+for(const [value,label] of [['race','🏁 GRAND PRIX'],['combat',mobile?'✈ BOMBER ARENA':'⚔ ARENA BATTLE']]){const button=document.createElement('button');button.id=`mode-${value}`;button.textContent=label;button.classList.toggle('hidden',mobile&&value==='race');button.setAttribute('aria-pressed',String(value===mode));button.onclick=()=>{if(mode===value)return;mode=value;track=selectedMaps[mode];resetMap();};modeSwitch.append(button);}
 document.querySelector('.game-layout').before(modeSwitch);
 const mapSwitch=document.createElement('nav');mapSwitch.className='map-switch';mapSwitch.setAttribute('aria-label','Choose map');
 const mapCaption=document.createElement('strong');mapCaption.textContent='CHOOSE MAP';mapSwitch.append(mapCaption);
@@ -56,7 +53,7 @@ const mapButtons=Array.from({length:2},(_,index)=>{const button=document.createE
 const mapHelp=document.createElement('small');mapHelp.textContent='Choosing another map starts a fresh game.';mapSwitch.append(mapHelp);modeSwitch.after(mapSwitch);
 function resetMap(){race=newGame();lastPhase='';lastCount=-1;keys.clear();updateMapLabels();}
 function chooseMap(index){if(index===track)return;if(network.active){if(network.isHost)network.control('arena',index);return;}track=index;selectedMaps[mode]=index;resetMap();}
-const network=new NetworkGame({anchor:modeSwitch,keys,driver:()=>selected,arena:()=>track,unlock:()=>audio.unlock(),sound:type=>audio.event(type),onState:world=>{
+const network=new NetworkGame({anchor:modeSwitch,keys,role:mobile?'bomber':'driver',driver:()=>selected,arena:()=>track,unlock:()=>audio.unlock(),sound:type=>audio.event(type),onState:world=>{
   const changed=mode!=='combat'||track!==world.arena;
   const driverChanged=selected!==world.driver;
   race=world;mode='combat';track=world.arena;if(changed){lastPhase='';updateMapLabels();}
@@ -77,7 +74,6 @@ function showResults(){
 }
 const routeHint=document.createElement('div');routeHint.className='route-hint';document.querySelector('.viewport').append(routeHint);
 const nameplateLayer=document.createElement('div');nameplateLayer.className='kart-nameplates';nameplateLayer.setAttribute('aria-hidden','true');document.querySelector('.viewport').append(nameplateLayer);const nameplateNodes=new Map();
-const mobileLock=document.createElement('div');mobileLock.id='mobile-lock';mobileLock.className='mobile-lock hidden';document.querySelector('.viewport').append(mobileLock);
 const driftMeter=document.createElement('div');driftMeter.className='drift-meter hidden';const driftLabel=document.createElement('strong'),driftCharge=document.createElement('progress'),driftHelp=document.createElement('small');driftCharge.max=1.2;driftCharge.setAttribute('aria-label','Drift boost charge');driftHelp.textContent='RELEASE DRIFT TO BOOST';driftMeter.append(driftLabel,driftCharge,driftHelp);document.querySelector('.viewport').append(driftMeter);
 const brakeButton=document.createElement('button');brakeButton.dataset.key='arrowdown';brakeButton.textContent='BRAKE';brakeButton.className='hidden';document.querySelector('.touch-controls').append(brakeButton);
 const chaffButton=document.createElement('button');chaffButton.id='release-chaff';chaffButton.className='chaff-button hidden';chaffButton.type='button';chaffButton.onclick=chaff;document.querySelector('.viewport').append(chaffButton);
@@ -119,7 +115,7 @@ function drawMap(){
   map.clearRect(0,0,280,126);
   if(mode==='combat'){
     map.fillStyle='#e5e0d9';map.fillRect(78,3,124,120);map.fillStyle='#92839d';for(const [x,z,w,d] of arenas[track].blocks)map.fillRect(140+(x-w/2)*.6,63+(z-d/2)*.6,w*.6,d*.6);
-    for(const actor of [race,...race.bots]){if(actor.destroyed)continue;map.fillStyle=actor.color;map.beginPath();map.arc(140+actor.wx*.6,63+actor.wz*.6,actor===race?4:3,0,7);map.fill();}return;
+    for(const actor of [race,...race.bots]){if(actor.bomber||actor.destroyed)continue;map.fillStyle=actor.color;map.beginPath();map.arc(140+actor.wx*.6,63+actor.wz*.6,actor===race?4:3,0,7);map.fill();}return;
   }
   map.beginPath();for(let i=0;i<=120;i++){const [x,y]=mapPoint(i/120*Math.PI*2);if(i===0)map.moveTo(x,y);if(i>0)map.lineTo(x,y);}map.closePath();map.strokeStyle='#ded9cf';map.lineWidth=17;map.stroke();map.strokeStyle='#faf8f0';map.lineWidth=10;map.stroke();
   for(const [i,branch] of branches.entries()){map.beginPath();for(let j=0;j<=40;j++){const[x,y]=mapPoint((branch.start+(branch.end-branch.start)*j/40)*Math.PI*2,i+1);if(j===0)map.moveTo(x,y);if(j>0)map.lineTo(x,y);}map.strokeStyle='#c6a258';map.lineWidth=4;map.stroke();}
@@ -131,6 +127,8 @@ function timeLabel(t){return `${String(Math.floor(t/60)).padStart(2,'0')}:${(t%6
 let scoreboardKey='';
 function put(id,value){const node=$(id);if(node.textContent!==String(value))node.textContent=value;}
 function hud(){
+  document.querySelector('.viewport').classList.toggle('bomber-view',Boolean(race.bomber));
+  if(race.bomber){bombCount.textContent=`${race.bombAmmo} A-BOMB${race.bombAmmo===1?'':'S'}`;bombHud.classList.toggle('empty',race.bombAmmo<1);bombRefill.textContent=race.phase==='racing'&&race.finishCountdown===null?`+1 IN ${Math.max(0,2-race.bombReload).toFixed(1)}s`:'+1 EVERY 2s';}
   showResults();
   const whack=killCelebration.sample(race,performance.now()/1000);whackBanner.classList.toggle('hidden',!whack);
   if(!whack)whackKey=null;
@@ -164,8 +162,8 @@ function hud(){
   const speedNode=$('speed').querySelector('b'),speedText=String(Math.round(race.speed*.24));if(speedNode.textContent!==speedText)speedNode.textContent=speedText;put('toast',race.finishRank===null&&race.noticeTime>0?race.notice:'');
   document.querySelector('.position small').textContent=mode==='combat'?'KILLS':'POSITION';document.querySelector('.lap small').textContent=mode==='combat'?'HEALTH':'LAP';document.querySelector('.timer small').textContent=mode==='combat'?'TIME LEFT':'RACE TIME';
   leaderboard.classList.toggle('hidden',mode!=='combat');
-  chaffButton.classList.toggle('hidden',mode!=='combat');chaffButton.textContent=`C · CHAFF ${race.chaff??0}`;chaffButton.disabled=mode!=='combat'||race.phase!=='racing'||race.finishCountdown!==null||race.destroyed>0||race.chaff<=0||race.chaffCooldown>0;chaffButton.setAttribute('aria-label',`Release chaff, ${race.chaff??0} charges remaining. Keyboard C.`);
-  somersaultButton.classList.toggle('hidden',mode!=='combat');somersaultButton.disabled=race.phase!=='racing'||race.finishCountdown!==null||race.destroyed>0||(race.somersaultCooldown??0)>1e-8;somersaultButton.textContent=(race.somersaultCooldown??0)>1e-8?`Z · ${race.somersaultCooldown.toFixed(1)}s`:'Z · SOMERSAULT';somersaultButton.setAttribute('aria-label','Somersault: jump and turn 180 degrees. Keyboard Z.');
+  chaffButton.classList.toggle('hidden',mode!=='combat'||race.bomber);chaffButton.textContent=`C · CHAFF ${race.chaff??0}`;chaffButton.disabled=mode!=='combat'||race.phase!=='racing'||race.finishCountdown!==null||race.destroyed>0||race.chaff<=0||race.chaffCooldown>0;chaffButton.setAttribute('aria-label',`Release chaff, ${race.chaff??0} charges remaining. Keyboard C.`);
+  somersaultButton.classList.toggle('hidden',mode!=='combat'||race.bomber);somersaultButton.disabled=race.phase!=='racing'||race.finishCountdown!==null||race.destroyed>0||(race.somersaultCooldown??0)>1e-8;somersaultButton.textContent=(race.somersaultCooldown??0)>1e-8?`Z · ${race.somersaultCooldown.toFixed(1)}s`:'Z · SOMERSAULT';somersaultButton.setAttribute('aria-label','Somersault: jump and turn 180 degrees. Keyboard Z.');
   routeHint.textContent='';
   driftMeter.classList.toggle('hidden',mode!=='combat'||!race.wasDrifting||race.phase!=='racing');driftCharge.value=race.drift;driftLabel.textContent=race.drift>=.85?'SUPER BOOST READY':race.drift>=.45?'BOOST READY':'DRIFT CHARGING';driftMeter.classList.toggle('charged',race.drift>=.45);driftMeter.classList.toggle('super',race.drift>=.85);
   if(mode==='combat'){
@@ -173,7 +171,7 @@ function hud(){
     const order=standings(race),version=JSON.stringify(order.map(actor=>[actor.id,actor.name,actor.driver,actor.kills,actor.deaths,actor===race]));
     if(version!==scoreboardKey){scoreboardKey=version;const title=document.createElement('strong');title.textContent='LEADERBOARD · KILLS / DEATHS';leaderboard.replaceChildren(title,...order.map(actor=>{const line=document.createElement('div');line.textContent=`${actor===race?'YOU':actor.name??drivers[actor.driver].name.split(' ')[0]}  ${actor.kills} / ${actor.deaths}`;line.classList.toggle('you',actor===race);return line;}));}
     if(race.destroyed>0)routeHint.textContent=`WRECKED · RESPAWN IN ${Math.ceil(race.destroyed)}`;
-    if(race.shield>0&&!race.destroyed)routeHint.textContent='SPAWN SHIELD';
+    if(!race.bomber&&race.shield>0&&!race.destroyed)routeHint.textContent='SPAWN SHIELD';
     const latest=race.killFeed[0];if(latest&&race.elapsed-latest.time<3&&!(race.vulcan>0&&race.noticeTime>0&&race.notice.startsWith('2-KILL')))$('toast').textContent=latest.text;
   }
   if(mode==='race'&&race.phase==='racing'){
@@ -198,6 +196,7 @@ function hud(){
   controls[1].querySelector('kbd').textContent='SHIFT';controls[1].querySelector('strong').textContent=battle?'Slide into a U-turn':'Drift the corners';controls[1].querySelector('span').textContent=battle?'Hold + steer, release to launch':'Hold + steer, release to boost';
   controls[2].querySelector('span').textContent=battle?'Q weapons · X turbo · C chaff · Z flip':'Space fires · Q weapons · X turbo';controls[3].querySelector('span').textContent=battle?'Pause your battle':'Pause your race';
   canvas.setAttribute('aria-label',battle?'Combat arena. Arrow keys drive, Shift and steering drift into a U-turn, release Shift to boost. Hold Space to shoot, Tab or Q changes weapons, X uses turbo, Z jumps and turns 180 degrees, C releases chaff to distract missiles.':'Kart racing track. Arrow keys drive, Shift drifts, Space fires, Tab or Q changes weapons, X uses turbo.');
+  if(race.bomber)canvas.setAttribute('aria-label','Arena from above. Tap a target to drop an A-bomb. Start with one bomb and gain one every two seconds.');
   $('map').setAttribute('aria-label',battle?'Arena map with cover and fighter positions':'Track map with alternate routes and racer positions');
   if(['ready','countdown','finished','paused'].includes(race.phase))finishFlash.classList.add('hidden');
   if(race.phase==='racing'&&race.finishRank!==null)finishFlash.classList.remove('hidden');
@@ -205,8 +204,8 @@ function hud(){
   const button=$('start'),message=$('message');button.classList.toggle('hidden',race.phase==='countdown');
   $('pause').textContent=race.phase==='paused'?'▶':'Ⅱ';
   switch(race.phase){
-    case 'ready':message.querySelector('.pill').textContent=mode==='combat'?'EVERY KART FOR ITSELF':'THE GRID IS WAITING';message.querySelector('h2').textContent=mode==='combat'?'Small karts. Big trouble.':'Born to be wild.';message.querySelector('p').textContent=mode==='combat'?'First to 10 kills · 3 minutes · Hold Space to fire':'Six racers. Three laps. Two alternate routes.';message.querySelector('small').textContent=`${mode==='combat'?arenas[track].name:tracks[track].name} · Press Enter to start`;button.textContent=mode==='combat'?'LET’S BATTLE ↗':'LET’S RACE ↗';$('status').textContent='READY WHEN YOU ARE';break;
-    case 'countdown':message.querySelector('.pill').textContent='ON YOUR MARKS';message.querySelector('p').textContent='Hold ↑ or W to accelerate';message.querySelector('small').textContent='';$('status').textContent='LIGHTS OUT IN 3…';break;
+    case 'ready':message.querySelector('.pill').textContent=race.bomber?'YOU HAVE AIR SUPPORT':mode==='combat'?'EVERY KART FOR ITSELF':'THE GRID IS WAITING';message.querySelector('h2').textContent=race.bomber?'Trouble from above.':mode==='combat'?'Small karts. Big trouble.':'Born to be wild.';message.querySelector('p').textContent=race.bomber?'Tap to drop A-bombs · Start with 1 · +1 every 2 seconds':mode==='combat'?'First to 10 kills · 3 minutes · Hold Space to fire':'Six racers. Three laps. Two alternate routes.';message.querySelector('small').textContent=`${mode==='combat'?arenas[track].name:tracks[track].name} · ${race.bomber?'First to 10 kills':'Press Enter to start'}`;button.textContent=race.bomber?'LET’S BOMB ↗':mode==='combat'?'LET’S BATTLE ↗':'LET’S RACE ↗';$('status').textContent='READY WHEN YOU ARE';break;
+    case 'countdown':message.querySelector('.pill').textContent='ON YOUR MARKS';message.querySelector('p').textContent=race.bomber?'Pick your target. Tap when the battle starts.':'Hold ↑ or W to accelerate';message.querySelector('small').textContent='';$('status').textContent='LIGHTS OUT IN 3…';break;
     case 'racing':tone(850,.3);$('status').textContent='MAKE SOME PIXEL DUST';break;
     case 'paused':message.querySelector('.pill').textContent='PIT STOP';message.querySelector('h2').textContent='Catch your breath.';message.querySelector('p').textContent=network.active?'The match continues while you are away.':'Your rivals can wait.';button.textContent='BACK TO THE RACE ↗';$('status').textContent='RACE PAUSED';break;
     case 'finished':keys.clear();message.querySelector('.pill').textContent=mode==='combat'?'BATTLE COMPLETE':'RACE COMPLETE';message.querySelector('h2').textContent=`${race.finishRank}${ordinal(race.finishRank)} PLACE`;message.querySelector('p').textContent=mode==='combat'?`${race.kills} kills · ${race.deaths} deaths · ${timeLabel(race.finishTime)}`:`Finished ${race.finishRank}${ordinal(race.finishRank).toLowerCase()} of 6 · ${timeLabel(race.finishTime)}`;message.querySelector('small').textContent='';button.textContent='PLAY AGAIN ↗';$('status').textContent='MATCH COMPLETE';break;
@@ -236,9 +235,8 @@ window.addEventListener('keydown',e=>{
   switch(key){case 'enter':start();break;case 'escape':case 'p':pause();break;case ' ':useWeapon();break;case 'q':switchWeapon();break;case 'x':if(!e.ctrlKey&&!e.metaKey&&!e.altKey)turbo();break;case 'z':if(!e.ctrlKey&&!e.metaKey&&!e.altKey)somersault();break;case 'c':if(!e.ctrlKey&&!e.metaKey&&!e.altKey)chaff();break;}
 });
 window.addEventListener('keyup',e=>{keys.delete(e.key.toLowerCase());if(network.active)network.input();});window.addEventListener('blur',()=>{keys.clear();if(['racing','countdown'].includes(race.phase))pause();});document.addEventListener('visibilitychange',()=>{if(document.hidden&&['racing','countdown'].includes(race.phase))pause();});
-window.addEventListener('blur',()=>tilt.recenter());document.addEventListener('visibilitychange',()=>{if(document.hidden)tilt.recenter();});
 for(const event of ['pointerdown','keydown'])window.addEventListener(event,()=>{if(network.active)audio.unlock().catch(()=>{});},{once:true});
 document.querySelectorAll('[data-key]').forEach(b=>{b.addEventListener('pointerdown',e=>{e.preventDefault();b.setPointerCapture(e.pointerId);keys.add(b.dataset.key);if(b.dataset.key===' ')useWeapon();if(network.active)network.input();});for(const name of ['pointerup','pointercancel','lostpointercapture'])b.addEventListener(name,()=>{keys.delete(b.dataset.key);if(network.active)network.input();});});
 selectDriver(0);updateMapLabels();
 let nextVisualFrame=0;
-function frame(t){if(t+1<nextVisualFrame){requestAnimationFrame(frame);return;}nextVisualFrame=Math.max(nextVisualFrame+1000/60,t+1);const dt=lastTime?Math.min((t-lastTime)/1000,.05):0;lastTime=t;renderer.recordFrame(t);const performanceText=`${renderer.fps||'…'} FPS · ${renderer.pixelRatio().toFixed(2)}×${network.active?` · ${network.rtt?Math.round(network.rtt*1000):'…'} ms ping`:''}`;if(fpsMeter.textContent!==performanceText)fpsMeter.textContent=performanceText;const driving=tilt.keys(keys,mobile&&race.phase==='racing'&&!document.hidden);if(network.active){race=network.render(dt,driving)??race;}if(!network.active&&mode==='combat')tickBattle(race,driving,dt);if(!network.active&&mode==='race')tick(race,driving,dt);const lock=mobileLockTarget(race,mobile,autoFire&&!document.hidden);mobileLock.classList.toggle('hidden',!lock);if(lock){mobileLock.textContent='LOCKED · AUTO FIRE';if(useWeapon()&&network.active)race=network.render(0,driving)??race;}for(const event of race.events){audio.event(event);if(event==='victory'||event==='finish')announceFinish();}race.events.length=0;const priority={win:5,lap:4,cheer:3,hurt:2,pass:1};race.voices.sort((a,b)=>priority[b.cue]-priority[a.cue]);for(const call of race.voices)audio.voice(call);race.voices.length=0;audio.update(race);draw();hud();requestAnimationFrame(frame);}requestAnimationFrame(frame);
+function frame(t){if(t+1<nextVisualFrame){requestAnimationFrame(frame);return;}nextVisualFrame=Math.max(nextVisualFrame+1000/60,t+1);const dt=lastTime?Math.min((t-lastTime)/1000,.05):0;lastTime=t;renderer.recordFrame(t);const performanceText=`${renderer.fps||'…'} FPS · ${renderer.pixelRatio().toFixed(2)}×${network.active?` · ${network.rtt?Math.round(network.rtt*1000):'…'} ms ping`:''}`;if(fpsMeter.textContent!==performanceText)fpsMeter.textContent=performanceText;if(network.active){race=network.render(dt)??race;}if(!network.active&&mode==='combat')tickBattle(race,keys,dt);if(!network.active&&mode==='race')tick(race,keys,dt);for(const event of race.events){audio.event(event);if(event==='victory'||event==='finish')announceFinish();}race.events.length=0;const priority={win:5,lap:4,cheer:3,hurt:2,pass:1};race.voices.sort((a,b)=>priority[b.cue]-priority[a.cue]);for(const call of race.voices)audio.voice(call);race.voices.length=0;audio.update(race);draw();hud();requestAnimationFrame(frame);}requestAnimationFrame(frame);

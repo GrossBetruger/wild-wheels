@@ -95,6 +95,8 @@ export class RaceAudio {
     case 'driftCharge':this.note(392,.16,{type:'sine',end:588,volume:.16});this.note(784,.18,{delay:.08,volume:.1});break;
     case 'driftChargeMax':this.note(588,.2,{type:'sine',end:880,volume:.18});this.note(1175,.2,{delay:.09,volume:.1});break;
     case 'missile':this.burst(.7,600,.65,0,2400);this.note(95,.3,{type:'sine',end:40,volume:.6});this.note(240,.4,{end:900,volume:.14});break;
+    case 'bombDrop':this.note(1100,.8,{type:'sine',end:100,volume:.2});this.burst(.6,2000,.12,0,400);break;
+    case 'bombExplosion':this.note(65,1.5,{type:'sine',end:18,volume:1});this.burst(2,2200,.9,0,70);this.burst(.8,5000,.5,.08,200);break;
     case 'explosion':this.note(85,.8,{type:'sine',end:22,volume:1});this.burst(1.3,3500,.9,0,90);this.burst(.5,5500,.45,.09,300);this.note(160,.2,{end:38,volume:.4});break;
     case 'respawn':this.note(330,.3,{type:'sine',end:660,volume:.1});break;
     case 'victory':this.fanfare();break;
@@ -102,7 +104,7 @@ export class RaceAudio {
   }}
   update(r){
     if(!this.context)return;
-    const c=this.context,t=c.currentTime,active=r.phase==='racing';this.engineGain.gain.setTargetAtTime(active?.09:0,t,.03);const rpm=28+r.speed*.045+Math.sin(r.elapsed*18)*.6;this.engine.frequency.setTargetAtTime(rpm,t,.03);this.harmonic.frequency.setTargetAtTime(rpm*2,t,.03);this.skidGain.gain.setTargetAtTime(active&&r.wasDrifting?.07:0,t,.02);this.jetGain.gain.setTargetAtTime(active&&(r.boost>0||r.somersault>0)?.18:0,t,.025);
+    const c=this.context,t=c.currentTime,active=r.phase==='racing';this.engineGain.gain.setTargetAtTime(active&&!r.bomber?.09:0,t,.03);const rpm=28+r.speed*.045+Math.sin(r.elapsed*18)*.6;this.engine.frequency.setTargetAtTime(rpm,t,.03);this.harmonic.frequency.setTargetAtTime(rpm*2,t,.03);this.skidGain.gain.setTargetAtTime(active&&r.wasDrifting?.07:0,t,.02);this.jetGain.gain.setTargetAtTime(active&&(r.boost>0||r.somersault>0)?.18:0,t,.025);
     const remaining=r.vulcan??0,powered=this.enabled&&active&&remaining>0&&!r.destroyed&&r.finishCountdown==null,firing=powered&&r.item==='hedgehog'&&r.fireCooldown>0;
     this.vulcanGain.gain.setTargetAtTime(powered?.18:0,t,.07);this.vulcanRotor.frequency.setTargetAtTime(firing?130:94,t,.1);this.vulcanBass.frequency.setTargetAtTime(firing?65:47,t,.1);this.vulcanPulse.frequency.setTargetAtTime(firing?24:12,t,.1);
     const warning=Math.ceil(remaining);
