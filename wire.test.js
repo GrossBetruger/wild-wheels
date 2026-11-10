@@ -4,6 +4,13 @@ import { createBattle, predictKartMovement } from './combat.js';
 import { Multiplayer } from './multiplayer.js';
 import { encodeSnapshot, decodeSnapshot } from './wire.js';
 
+test('older compact snapshots still display their drift effects',()=>{
+  const world=createBattle();world.skids=[[1,2,3,4,5]];world.driftParticles=[[1,2,.3,4,5,6,.1,.9,1,2]];
+  const decoded=decodeSnapshot({wireVersion:1,world}).world;
+  assert.deepEqual(decoded.skids,[{ax:1,az:2,bx:3,bz:4,time:5}]);
+  assert.equal(decoded.driftParticles[0].kind,'spark');assert.equal(decoded.driftParticles[0].level,2);
+});
+
 test('compact updates preserve game outcomes and reconstruct the visible effects',()=>{
   const world=createBattle(3,1);Object.assign(world,{wx:12.3456789,health:4,kills:2,ammo:3});
   world.skids=[{ax:1.234,az:2.345,bx:3.456,bz:4.567,time:5.6789}];

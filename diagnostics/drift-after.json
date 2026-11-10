@@ -1,0 +1,176 @@
+{
+  "errors": [],
+  "transportErrors": [],
+  "serverGaps": [],
+  "results": [
+    {
+      "profile": "local-host",
+      "run": 1,
+      "smokeMs": 0,
+      "skidsMs": 0,
+      "chargeMs": [
+        0,
+        0
+      ],
+      "lateEmissions": 0,
+      "freshWheelGapMax": 0,
+      "frameP95Ms": 16.7,
+      "pass": true
+    },
+    {
+      "profile": "local-guest",
+      "run": 1,
+      "smokeMs": 0,
+      "skidsMs": 0,
+      "chargeMs": [
+        0,
+        0
+      ],
+      "lateEmissions": 0,
+      "freshWheelGapMax": 0,
+      "frameP95Ms": 16.7,
+      "pass": true
+    },
+    {
+      "profile": "160ms-guest",
+      "run": 1,
+      "smokeMs": 0,
+      "skidsMs": 0,
+      "chargeMs": [
+        0,
+        0
+      ],
+      "lateEmissions": 0,
+      "freshWheelGapMax": 0,
+      "frameP95Ms": 16.7,
+      "pass": true
+    },
+    {
+      "profile": "160ms-jitter-guest",
+      "run": 1,
+      "smokeMs": 0,
+      "skidsMs": 0,
+      "chargeMs": [
+        0,
+        0
+      ],
+      "lateEmissions": 0,
+      "freshWheelGapMax": 0,
+      "frameP95Ms": 16.8,
+      "pass": true
+    },
+    {
+      "profile": "local-host",
+      "run": 2,
+      "smokeMs": 0,
+      "skidsMs": 0,
+      "chargeMs": [
+        0,
+        0
+      ],
+      "lateEmissions": 0,
+      "freshWheelGapMax": 0,
+      "frameP95Ms": 16.8,
+      "pass": true
+    },
+    {
+      "profile": "local-guest",
+      "run": 2,
+      "smokeMs": 0,
+      "skidsMs": 0,
+      "chargeMs": [
+        0,
+        0
+      ],
+      "lateEmissions": 0,
+      "freshWheelGapMax": 0,
+      "frameP95Ms": 16.8,
+      "pass": true
+    },
+    {
+      "profile": "160ms-guest",
+      "run": 2,
+      "smokeMs": 0,
+      "skidsMs": 0,
+      "chargeMs": [
+        0,
+        0
+      ],
+      "lateEmissions": 0,
+      "freshWheelGapMax": 0,
+      "frameP95Ms": 16.8,
+      "pass": true
+    },
+    {
+      "profile": "160ms-jitter-guest",
+      "run": 2,
+      "smokeMs": 0,
+      "skidsMs": 0,
+      "chargeMs": [
+        0,
+        0
+      ],
+      "lateEmissions": 0,
+      "freshWheelGapMax": 0,
+      "frameP95Ms": 16.7,
+      "pass": true
+    },
+    {
+      "profile": "local-host",
+      "run": 3,
+      "smokeMs": 0,
+      "skidsMs": 0,
+      "chargeMs": [
+        0,
+        0
+      ],
+      "lateEmissions": 0,
+      "freshWheelGapMax": 0,
+      "frameP95Ms": 16.7,
+      "pass": true
+    },
+    {
+      "profile": "local-guest",
+      "run": 3,
+      "smokeMs": 0,
+      "skidsMs": 0,
+      "chargeMs": [
+        0,
+        0
+      ],
+      "lateEmissions": 0,
+      "freshWheelGapMax": 0,
+      "frameP95Ms": 16.7,
+      "pass": true
+    },
+    {
+      "profile": "160ms-guest",
+      "run": 3,
+      "smokeMs": 0,
+      "skidsMs": 0,
+      "chargeMs": [
+        0,
+        0
+      ],
+      "lateEmissions": 0,
+      "freshWheelGapMax": 0,
+      "frameP95Ms": 16.8,
+      "pass": true
+    },
+    {
+      "profile": "160ms-jitter-guest",
+      "run": 3,
+      "smokeMs": 0,
+      "skidsMs": 0,
+      "chargeMs": [
+        0,
+        0
+      ],
+      "lateEmissions": 0,
+      "freshWheelGapMax": 0,
+      "frameP95Ms": 16.8,
+      "pass": true
+    }
+  ],
+  "baselineCommit": "3dd04d8"
+}

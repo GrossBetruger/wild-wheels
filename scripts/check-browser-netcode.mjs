@@ -6,6 +6,7 @@ import { spawn } from 'node:child_process';
 import WebSocket from 'ws';
 import { pathToFileURL } from 'node:url';
 import { checkFeedback } from './check-feedback-scenario.mjs';
+import { checkDrift } from './check-drift-scenario.mjs';
 
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const quantile=(values,p)=>[...values].sort((a,b)=>a-b)[Math.min(values.length-1,Math.floor(values.length*p))]??0;
@@ -76,8 +77,9 @@ try{
     if(profile.guest)room.world.destroyed=999;
     Object.assign([room.world,...room.world.bots][identity.you],{wx:-65,wz:70,heading:Math.PI/2,motionHeading:Math.PI/2,cameraHeading:Math.PI/2,speed:0});
     for(let attempt=0;attempt<100;attempt++){if(await evaluate("__game.network.state?.world.phase==='racing'"))break;await sleep(50);}
-    if(process.argv.includes('--feedback')){
-      const result={profile:profile.name,run:profile.run,...await checkFeedback(evaluate,room,identity.you,sleep)};
+    if(process.argv.includes('--feedback')||process.argv.includes('--drift')){
+      const check=process.argv.includes('--drift')?checkDrift:checkFeedback;
+      const result={profile:profile.name,run:profile.run,...await check(evaluate,room,identity.you,sleep)};
       results.push(result);console.log(JSON.stringify({...result,trace:undefined,requests:undefined,sounds:undefined}));
       await evaluate('__game.network.leave()');await call('Target.closeTarget',{targetId});
       for(const member of [...room.members.values()])app.multiplayer.remove(member);

@@ -4,6 +4,7 @@ import { LocalPrediction } from './prediction.js';
 import { ActionAudio } from './action-audio.js';
 import { decodeSnapshot } from './wire.js';
 import { LocalFeedback } from './feedback.js';
+import { LocalDrift } from './drift-feedback.js';
 
 export function invitationUrl(pageUrl,code,{publicOrigin,lan}={}){
   const page=new URL(pageUrl);
@@ -12,7 +13,7 @@ export function invitationUrl(pageUrl,code,{publicOrigin,lan}={}){
 }
 
 export class NetworkGame {
-  token=null;state=null;paused=false;sequence=0;actions=[];playback=new NetworkPlayback();prediction=new LocalPrediction();rtt=0;lastPing=-Infinity;
+  token=null;state=null;paused=false;sequence=0;actions=[];playback=new NetworkPlayback();prediction=new LocalPrediction();driftFeedback=new LocalDrift();rtt=0;lastPing=-Infinity;
   constructor({anchor,keys,driver,arena,onState,onLeave,unlock,sound=()=>{}}){
     Object.assign(this,{keys,driver,arena,onState,onLeave,unlock,sound});this.actionAudio=new ActionAudio(sound);this.feedback=new LocalFeedback((type,key)=>this.actionAudio.emit(type,performance.now()/1000,null,key));
     this.panel=document.createElement('section');this.panel.className='network-panel';this.panel.setAttribute('aria-label','Multiplayer arena lobby');
@@ -124,6 +125,7 @@ export class NetworkGame {
     const movement=this.prediction.nextSequence-1;
     let view=this.feedback.render(world,local??world,now,movement);
     if(!this.paused&&this.keys.has(' ')&&this.feedback.action('fire',undefined,local??world,now,movement)){this.input();view=this.feedback.render(world,local??world,now,movement);}
+    view=this.driftFeedback.render(view,now,!this.paused&&now-this.prediction.received<.5);
     if(this.paused&&['countdown','racing'].includes(world.phase))return {...view,phase:'paused',resumePhase:world.phase};
     return view;
   }
@@ -151,6 +153,7 @@ export class NetworkGame {
   pause(){this.paused=!this.paused;this.keys.clear();this.actions=[];this.input();this.onState(this.view());}
   leave(message='You left the room.'){
     if(!this.active)return;
+    this.driftFeedback=new LocalDrift();
     this.request('/api/leave',{}).catch(()=>{});this.token=null;this.socket?.close();this.state=null;this.pending=null;this.actions=[];this.keys.clear();this.playback.clear();this.prediction.clear();this.actionAudio=new ActionAudio(this.sound);this.feedback=new LocalFeedback((type,key)=>this.actionAudio.emit(type,performance.now()/1000,null,key));this.lastLocal=null;this.rtt=0;this.lastPing=-Infinity;
     this.internetError=false;this.hostButton.disabled=false;this.name.disabled=false;this.botCount.disabled=false;for(const option of this.botCount.options)option.disabled=false;this.leaveButton.classList.add('hidden');this.copyButton.classList.add('hidden');this.internetButton.classList.add('hidden');this.animalChoice.classList.add('hidden');this.share.classList.add('hidden');this.help.classList.add('hidden');this.players.replaceChildren();this.status.textContent=message;this.onLeave();
   }

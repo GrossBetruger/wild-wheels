@@ -1,0 +1,64 @@
+{
+  "errors": [],
+  "transportErrors": [],
+  "serverGaps": [],
+  "results": [
+    {
+      "profile": "local-host",
+      "run": 1,
+      "smokeMs": 99.9,
+      "skidsMs": 133,
+      "chargeMs": [
+        83.2,
+        66.5
+      ],
+      "lateEmissions": 0,
+      "freshWheelGapMax": 2.0677,
+      "frameP95Ms": 16.8,
+      "pass": false
+    },
+    {
+      "profile": "local-guest",
+      "run": 1,
+      "smokeMs": 100,
+      "skidsMs": 133.4,
+      "chargeMs": [
+        83.3,
+        66.8
+      ],
+      "lateEmissions": 0,
+      "freshWheelGapMax": 2.0602,
+      "frameP95Ms": 16.7,
+      "pass": false
+    },
+    {
+      "profile": "160ms-guest",
+      "run": 1,
+      "smokeMs": 233.1,
+      "skidsMs": 266.4,
+      "chargeMs": [
+        250,
+        216.5
+      ],
+      "lateEmissions": 3,
+      "freshWheelGapMax": 6.0746,
+      "frameP95Ms": 16.7,
+      "pass": false
+    },
+    {
+      "profile": "160ms-jitter-guest",
+      "run": 1,
+      "smokeMs": 166.1,
+      "skidsMs": 216.2,
+      "chargeMs": [
+        200,
+        183.5
+      ],
+      "lateEmissions": 3,
+      "freshWheelGapMax": 6.7532,
+      "frameP95Ms": 16.8,
+      "pass": false
+    }
+  ],
+  "baselineCommit": "3dd04d8"
+}

@@ -129,16 +129,25 @@ function navigate(arena,actor,target){
   if(!prev.has(goal))return [];
   const path=[];for(let n=goal;n!==start&&n!==-1;n=prev.get(n))path.unshift({wx:(n%size)*cell-85,wz:Math.floor(n/size)*cell-85});return path;
 }
-function driftTrail(r,actor,dt){
+export function driftWheels(actor){
+  const tx=Math.sin(actor.heading),tz=Math.cos(actor.heading);
+  return [-1,1].map(side=>({wx:actor.wx-tx*1.5+tz*side*1.6,wz:actor.wz-tz*1.5-tx*side*1.6}));
+}
+export function emitDriftTrail(r,actor,dt){
   actor.driftEmit+=dt;if(actor.driftEmit<.035)return;actor.driftEmit=0;
   const tx=Math.sin(actor.heading),tz=Math.cos(actor.heading),level=actor.drift>=.85?2:actor.drift>=.45?1:0;
-  const wheels=[-1,1].map(side=>({wx:actor.wx-tx*1.5+tz*side*1.6,wz:actor.wz-tz*1.5-tx*side*1.6}));
+  const wheels=driftWheels(actor);
   for(const [index,wheel] of wheels.entries()){
-    const previous=actor.driftTrail?.[index];if(previous&&distance(previous,wheel)<6)r.skids.push({ax:previous.wx,az:previous.wz,bx:wheel.wx,bz:wheel.wz,time:r.elapsed});
-    r.driftParticles.push({...wheel,height:.35,vx:-tx*2,vz:-tz*2,vy:1.8,age:0,life:.9,kind:'smoke',level});
-    for(let i=0;i<3;i++){const a=r.elapsed*31+i*2.4+index*3;r.driftParticles.push({...wheel,height:.2,vx:Math.cos(a)*(3+i*2)-tx*5,vz:Math.sin(a)*(3+i*2)-tz*5,vy:2+i,age:0,life:.3+i*.07,kind:'spark',level});}
+    const previous=actor.driftTrail?.[index];if(previous&&distance(previous,wheel)<6)r.skids.push({owner:actor.id,ax:previous.wx,az:previous.wz,bx:wheel.wx,bz:wheel.wz,time:r.elapsed});
+    r.driftParticles.push({...wheel,owner:actor.id,height:.35,vx:-tx*2,vz:-tz*2,vy:1.8,age:0,life:.9,kind:'smoke',level});
+    for(let i=0;i<3;i++){const a=r.elapsed*31+i*2.4+index*3;r.driftParticles.push({...wheel,owner:actor.id,height:.2,vx:Math.cos(a)*(3+i*2)-tx*5,vz:Math.sin(a)*(3+i*2)-tz*5,vy:2+i,age:0,life:.3+i*.07,kind:'spark',level});}
   }
   actor.driftTrail=wheels;
+}
+export function ageDriftEffects(r,dt){
+  r.skids=r.skids.filter(s=>r.elapsed-s.time<6).slice(-420);
+  for(const particle of r.driftParticles){particle.age+=dt;particle.wx+=particle.vx*dt;particle.wz+=particle.vz*dt;particle.height=Math.max(.08,particle.height+particle.vy*dt);if(particle.kind==='spark')particle.vy-=12*dt;}
+  r.driftParticles=r.driftParticles.filter(p=>p.age<p.life).slice(-240);
 }
 function moveActor(r,actor,steer,gas,brake,dt,handbrake=false){
   // Chassis rotation and travel direction separate while the rear tires slide.
@@ -158,7 +167,7 @@ function moveActor(r,actor,steer,gas,brake,dt,handbrake=false){
   const travel=drifting||actor===r||actor.human?actor.motionHeading:actor.heading;
   const nx=actor.wx+Math.sin(travel)*actor.speed*.085*dt,nz=actor.wz+Math.cos(travel)*actor.speed*.085*dt;
   const arena=arenas[r.arena];
-  if(!blocked(arena,nx,nz)){actor.wx=nx;actor.wz=nz;if(drifting)driftTrail(r,actor,dt);return;}
+  if(!blocked(arena,nx,nz)){actor.wx=nx;actor.wz=nz;if(drifting)emitDriftTrail(r,actor,dt);return;}
   if(!blocked(arena,nx,actor.wz))actor.wx=nx;
   if(!blocked(arena,actor.wx,nz))actor.wz=nz;
   actor.speed*=.3;actor.drift=0;actor.wasDrifting=false;actor.driftTrail=null;actor.motionHeading=actor.heading;if(actor===r&&actor.wallCooldown<=0){fx(r,'crash',actor);actor.wallCooldown=.7;r.shake=.3;voice(r,actor,'hurt');}
@@ -184,9 +193,7 @@ export function tickBattle(r,keys,dt,inputs=null){
   for(const effect of r.effects)effect.age+=dt;r.effects=r.effects.filter(f=>f.age<f.life);
   for(const cloud of r.chaffClouds)cloud.age+=dt;
   r.chaffClouds=r.chaffClouds.filter(c=>c.age<c.life);
-  r.skids=r.skids.filter(s=>r.elapsed-s.time<6).slice(-420);
-  for(const particle of r.driftParticles){particle.age+=dt;particle.wx+=particle.vx*dt;particle.wz+=particle.vz*dt;particle.height=Math.max(.08,particle.height+particle.vy*dt);if(particle.kind==='spark')particle.vy-=12*dt;}
-  r.driftParticles=r.driftParticles.filter(p=>p.age<p.life).slice(-240);
+  ageDriftEffects(r,dt);
   const actors=[r,...r.bots],arena=arenas[r.arena];
   for(const actor of actors){
     if(actor!==r)actor.noticeTime=Math.max(0,(actor.noticeTime??0)-dt);
