@@ -83,7 +83,8 @@ try{
     const room=app.multiplayer.rooms.get(identity.code);
     if(process.argv.includes('--mobile')){
       const capture=async()=>{const screenshot=await call('Page.captureScreenshot',{format:'png'},session);await writeFile(`${output}.${profile.run}.${profile.name}.mobile.png`,Buffer.from(screenshot.data,'base64'));};
-      const result={profile:profile.name,run:profile.run,...await checkMobile(evaluate,app.multiplayer,room,identity.you,sleep,capture)};results.push(result);console.log(JSON.stringify(result));
+      const rotate=angle=>call('Emulation.setDeviceMetricsOverride',{width:angle?900:430,height:angle?430:900,deviceScaleFactor:1,mobile:true,screenOrientation:{type:angle===90?'landscapePrimary':angle===270?'landscapeSecondary':'portraitPrimary',angle}},session);
+      const result={profile:profile.name,run:profile.run,...await checkMobile(evaluate,app.multiplayer,room,identity.you,sleep,capture,rotate)};results.push(result);console.log(JSON.stringify(result));
       await evaluate('__game.network.leave()');await call('Target.closeTarget',{targetId});for(const member of [...room.members.values()])app.multiplayer.remove(member);continue;
     }
     if(process.argv.includes('--controls')){

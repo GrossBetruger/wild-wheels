@@ -24,9 +24,21 @@ test('tilt has a neutral dead zone, proportional steering, auto drive, and a wor
   assert.equal(tilt.keys(new Set(),false).size,0);
   tilt.recenter();assert.equal(tilt.keys(new Set(),true).size,0);tilt.sample(35,14,0);assert.equal(tilt.steer,0);
 });
-test('tilt adapts to both landscape directions and recenters when the screen rotates',()=>{
-  const tilt=new TiltSteering();tilt.enabled=true;tilt.sample(0,0,90);tilt.sample(-14,0,90);assert.ok(Math.abs(tilt.steer-.5)<1e-9);
-  tilt.sample(0,0,-90);assert.equal(tilt.steer,0);tilt.sample(14,0,-90);assert.ok(Math.abs(tilt.steer-.5)<1e-9);
+test('landscape at 90 degrees steers toward the lowered edge of the screen',()=>{
+  const tilt=new TiltSteering();tilt.enabled=true;tilt.sample(0,35,90);
+  tilt.sample(14,35,90);assert.equal(tilt.keys(new Set(),true).steer,.5);
+  tilt.sample(-14,35,90);assert.equal(tilt.keys(new Set(),true).steer,-.5);
+});
+test('landscape at 270 degrees steers toward the lowered edge of the screen',()=>{
+  const tilt=new TiltSteering();tilt.enabled=true;tilt.sample(0,-35,270);
+  tilt.sample(-14,-35,270);assert.equal(tilt.keys(new Set(),true).steer,.5);
+  tilt.sample(14,-35,270);assert.equal(tilt.keys(new Set(),true).steer,-.5);
+});
+test('rotating from portrait to landscape recenters steering at the new holding position',()=>{
+  const tilt=new TiltSteering();tilt.enabled=true;tilt.sample(35,0,0);tilt.sample(35,14,0);
+  assert.equal(tilt.keys(new Set(),true).steer,.5);
+  tilt.sample(8,35,90);assert.equal(tilt.keys(new Set(),true).steer,0);
+  tilt.sample(22,35,90);assert.equal(tilt.keys(new Set(),true).steer,.5);
 });
 test('tilting right steers the kart right in solo Grand Prix',()=>{
   const race=createRace();Object.assign(race,{phase:'racing',speed:300,x:0});

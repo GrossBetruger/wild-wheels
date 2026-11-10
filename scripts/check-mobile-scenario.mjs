@@ -1,4 +1,4 @@
-export async function checkMobile(evaluate,app,room,id,sleep,capture){
+export async function checkMobile(evaluate,app,room,id,sleep,capture,rotate){
   await evaluate("document.getElementById('auto-fire').click();document.getElementById('start').click()");
   const host=room.members.get(room.host);
   if(id!==room.host)await evaluate(`fetch('/api/control',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer ${host.token}'},body:JSON.stringify({action:'start'})})`);
@@ -20,7 +20,24 @@ export async function checkMobile(evaluate,app,room,id,sleep,capture){
   await evaluate("window.dispatchEvent(new DeviceOrientationEvent('deviceorientation',{beta:35,gamma:0}));window.dispatchEvent(new DeviceOrientationEvent('deviceorientation',{beta:35,gamma:14}))");
   for(let i=0;i<100;i++){if(actor.heading<-.02)break;await sleep(10);}
   const steering=actor.heading<-.02&&actor.speed>0;
-  await evaluate("document.getElementById('enable-tilt').click()");await sleep(200);reset();
+  await evaluate("document.getElementById('enable-tilt').click()");await sleep(200);
+  const landscape=[];
+  for(const {angle,gamma,rightBeta,leftBeta} of [{angle:90,gamma:35,rightBeta:14,leftBeta:-14},{angle:270,gamma:-35,rightBeta:-14,leftBeta:14}]){
+    await rotate(angle);reset();
+    for(let i=0;i<100;i++){if(await evaluate("Math.abs(__game.race.heading)<.005&&__game.network.state.world.heading===0"))break;await sleep(25);}
+    await evaluate("document.getElementById('enable-tilt').click()");
+    for(let i=0;i<100;i++){if(await evaluate("document.getElementById('enable-tilt').textContent==='TILT: ON'"))break;await sleep(10);}
+    await evaluate(`window.dispatchEvent(new DeviceOrientationEvent('deviceorientation',{beta:0,gamma:${gamma}}));window.dispatchEvent(new DeviceOrientationEvent('deviceorientation',{beta:${rightBeta},gamma:${gamma}}))`);
+    for(let i=0;i<100;i++){if(actor.heading<-.02)break;await sleep(10);}
+    const right=actor.heading<-.02&&actor.speed>0;
+    await evaluate(`window.dispatchEvent(new DeviceOrientationEvent('deviceorientation',{beta:${leftBeta},gamma:${gamma}}))`);
+    for(let i=0;i<100;i++){if(actor.heading>.02)break;await sleep(10);}
+    const left=actor.heading>.02,screenAngle=await evaluate('screen.orientation.angle');
+    landscape.push({angle,screenAngle,right,left});
+    await evaluate("document.getElementById('enable-tilt').click()");await sleep(200);
+  }
+  const landscapePass=landscape.every(test=>test.screenAngle===test.angle&&test.right&&test.left);
+  await rotate(0);reset();
   for(let i=0;i<100;i++){if(await evaluate("Math.abs(__game.race.heading)<.05&&__game.network.state.world.ammo===5"))break;await sleep(25);}
   await evaluate("document.getElementById('auto-fire').click()");
   for(let i=0;i<100;i++){if(actor.ammo<5)break;await sleep(25);}
@@ -32,5 +49,5 @@ export async function checkMobile(evaluate,app,room,id,sleep,capture){
   const noBlindFire=actor.ammo===5&&await evaluate("document.getElementById('mobile-lock').classList.contains('hidden')");
   await evaluate("document.getElementById('auto-fire').click();document.getElementById('mobile-fullscreen').click()");
   const exited=await evaluate("!document.querySelector('.race-panel').classList.contains('mobile-fullscreen')");
-  return {fullscreen,farName,nearHidden,denied,steering,autoShot,noBlindFire,noTargetAmmo:actor.ammo,exited,pass:fullscreen&&farName&&nearHidden&&denied&&steering&&autoShot&&noBlindFire&&exited};
+  return {fullscreen,farName,nearHidden,denied,steering,landscape,landscapePass,autoShot,noBlindFire,noTargetAmmo:actor.ammo,exited,pass:fullscreen&&farName&&nearHidden&&denied&&steering&&landscapePass&&autoShot&&noBlindFire&&exited};
 }

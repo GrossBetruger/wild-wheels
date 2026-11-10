@@ -13,7 +13,7 @@ export class TiltSteering {
   sample(beta,gamma,angle=0){
     if(!this.enabled||!Number.isFinite(beta)||!Number.isFinite(gamma))return;
     if(this.angle!==angle){this.angle=angle;this.recenter();}
-    const radians=angle*Math.PI/180,roll=gamma*Math.cos(radians)-beta*Math.sin(radians);
+    const radians=angle*Math.PI/180,roll=gamma*Math.cos(radians)+beta*Math.sin(radians);
     this.baseline??=roll;
     const delta=roll-this.baseline;
     this.steer=Math.sign(delta)*Math.min(1,Math.max(0,Math.abs(delta)-4)/20);
