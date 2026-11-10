@@ -11,14 +11,13 @@ npm start
 
 **Multiplayer Arena Battle:** the host runs the server once; friends only need a browser, with no installation or accounts. The server listens on all network interfaces at port **5173**. Enter a name, choose an animal, click **Host Arena**, and copy the invitation shown above the game. Room codes are always two digits, from 00 to 99, for example `?room=07`; active rooms never share a code. Friends open that link to join automatically; no room code, signup, or Join button is needed. The host presses **Let's Battle** when everyone is ready. Rooms support up to six total karts. The bot selector defaults to **1 bot** and allows the host to choose 0–5 before a match. Joining humans take priority over bots when the six-kart limit is reached. Both Scrapyard and Crossfire Court are available; Grand Prix remains a solo mode.
 
-For internet play from your computer, install and sign in to [ngrok](https://ngrok.com/docs/start), then run the game and tunnel in separate terminals:
+For internet play from your computer, install and sign in to [ngrok](https://ngrok.com/docs/start) once. Then start the game:
 
 ```sh
 npm start
-ngrok http 5173
 ```
 
-Open `http://localhost:5173`, click **Host Arena**, then **Copy Invite**. The game detects the ngrok HTTPS address for its port and puts it in the invitation automatically. Friends open the link and join without installing anything. You can start ngrok after hosting; the invitation updates within five seconds. Keep both terminal processes running while you play. The host uses the local game; guests use the public HTTPS address. ngrok carries the game's WebSocket connection as well as its page and API requests. If you use a different `PORT`, pass the same port to `ngrok http`. For local network play, the invitation uses your LAN address. The invitation field remains editable for other hosting setups.
+Open `http://localhost:5173`, click **Host Arena**, then **Start Internet Link**. When the HTTPS invitation appears, click **Copy Invite** and send it to a friend. They open the link and join without installing anything. The game starts the ngrok agent for its own port and stops it when the game server exits. If ngrok is already running for that port, the invitation uses its existing HTTPS address. Keep the game terminal open while you play. The button is only available in the host's local browser; public visitors cannot start a tunnel. For local network play, the invitation uses your LAN address. The invitation field remains editable for other hosting setups.
 
 The server controls movement, pickups, health, kills, missiles, Vulcan, chaff, respawns, and match results. Browsers send bounded control messages and receive shared updates; clients cannot submit positions or scores. All participants see their own camera, health, inventory, and placement. Only the room host can start, reset, or change maps. Invitation links also work during a live match; new players arrive with fresh health, equipment, and spawn protection. Escape pauses your controls locally while the shared match continues. Leaving transfers hosting to another player; the active roster follows the chosen bot count, stale inputs stop, and empty rooms are removed. Rooms and scores are kept in memory and reset when the server restarts.
 

@@ -18,9 +18,10 @@ export class NetworkGame {
     this.status=document.createElement('p');this.status.setAttribute('role','status');this.status.textContent='Host an arena and share the link. Opening it joins the game automatically.';
     this.players=document.createElement('div');this.players.className='network-players';
     this.share=document.createElement('input');this.share.className='hidden';this.share.setAttribute('aria-label','Room invitation link');this.share.addEventListener('input',()=>{this.shareEdited=true;});
+    this.internetButton=this.button('START INTERNET LINK',()=>this.startInternetLink());this.internetButton.classList.add('hidden');
     this.copyButton=this.button('COPY INVITE',async()=>{try{await navigator.clipboard.writeText(this.share.value);this.status.textContent='Invitation copied.';}catch{this.share.focus();this.share.select();this.status.textContent='Copy the selected invitation link.';}});this.copyButton.classList.add('hidden');
     const row=document.createElement('div');row.className='network-controls';row.append(this.name,this.botCount,this.hostButton,this.leaveButton);
-    const invite=document.createElement('div');invite.className='network-invite';invite.append(this.share,this.copyButton);
+    const invite=document.createElement('div');invite.className='network-invite';invite.append(this.share,this.internetButton,this.copyButton);
     this.help=document.createElement('p');this.help.className='network-help hidden';
     this.panel.append(title,row,this.status,this.players,invite,this.help);anchor.before(this.panel);
     this.refreshInfo();
@@ -34,14 +35,38 @@ export class NetworkGame {
   async refreshInfo(){
     try{
       const response=await fetch('/api/info',{signal:AbortSignal.timeout(2000)});if(!response.ok)return;
-      const info=await response.json();this.lan=info.addresses?.[0];this.publicOrigin=info.publicOrigin;this.updateShare();
+      const info=await response.json();this.lan=info.addresses?.[0];this.publicOrigin=info.publicOrigin;this.controlPort=info.controlPort;this.updateShare();
     }catch{}
   }
   updateShare(){
     if(!this.state)return;
     const local=['localhost','127.0.0.1'].includes(location.hostname);
     if(!this.shareEdited)this.share.value=invitationUrl(location.href,this.state.code,{publicOrigin:this.publicOrigin,lan:this.lan});
-    this.help.textContent=location.protocol==='https:'||local&&this.publicOrigin?'Share this HTTPS link with a friend to play over the internet.':`Same Wi-Fi: share this link. Internet: start ngrok http ${location.port||5173}; the invitation updates automatically.`;
+    this.internetButton.classList.toggle('hidden',!local||!this.isHost||!this.controlPort||Boolean(this.publicOrigin));
+    this.help.textContent=this.internetError?'Could not start ngrok. Install it and sign in once, then try again.':location.protocol==='https:'||local&&this.publicOrigin?'Share this HTTPS link with a friend to play over the internet.':local&&this.controlPort?'To play with a friend elsewhere, click START INTERNET LINK, then COPY INVITE.':'Same Wi-Fi: share this link.';
+  }
+  async startInternetLink(){
+    if(!this.active||!this.isHost||!this.controlPort||!['localhost','127.0.0.1'].includes(location.hostname))return;
+    this.internetError=false;this.updateShare();
+    this.internetButton.disabled=true;this.internetButton.textContent='STARTING…';
+    const base=`http://127.0.0.1:${this.controlPort}`;
+    try{
+      const response=await fetch(`${base}/start`,{method:'POST',signal:AbortSignal.timeout(3000)});
+      if(!response.ok)throw new Error();
+      for(let attempt=0;attempt<15;attempt++){
+        await new Promise(resolve=>setTimeout(resolve,1000));
+        if(!this.active||!this.isHost)return;
+        await this.refreshInfo();
+        if(this.publicOrigin){this.status.textContent='Internet link ready. Copy the invite and send it to a friend.';return;}
+        const status=await fetch(`${base}/status`,{signal:AbortSignal.timeout(2000)}).then(reply=>reply.json());
+        if(status.state==='failed')throw new Error();
+      }
+      throw new Error();
+    }catch{
+      this.internetError=true;this.updateShare();
+    }finally{
+      this.internetButton.disabled=false;this.internetButton.textContent='START INTERNET LINK';
+    }
   }
   async request(path,body){
     const response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json',...(this.token?{Authorization:`Bearer ${this.token}`}:{})},body:JSON.stringify(body),signal:AbortSignal.timeout(3000)});
@@ -104,6 +129,6 @@ export class NetworkGame {
   leave(message='You left the room.'){
     if(!this.active)return;
     this.request('/api/leave',{}).catch(()=>{});this.token=null;this.socket?.close();this.state=null;this.pending=null;this.actions=[];this.keys.clear();this.poses.clear();
-    this.hostButton.disabled=false;this.name.disabled=false;this.botCount.disabled=false;for(const option of this.botCount.options)option.disabled=false;this.leaveButton.classList.add('hidden');this.copyButton.classList.add('hidden');this.share.classList.add('hidden');this.help.classList.add('hidden');this.players.replaceChildren();this.status.textContent=message;this.onLeave();
+    this.internetError=false;this.hostButton.disabled=false;this.name.disabled=false;this.botCount.disabled=false;for(const option of this.botCount.options)option.disabled=false;this.leaveButton.classList.add('hidden');this.copyButton.classList.add('hidden');this.internetButton.classList.add('hidden');this.share.classList.add('hidden');this.help.classList.add('hidden');this.players.replaceChildren();this.status.textContent=message;this.onLeave();
   }
 }

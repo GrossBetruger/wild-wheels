@@ -125,7 +125,7 @@ export class Multiplayer {
       if(path==='/api/info'&&req.method==='GET'){
         this.limit(req,'info',20);const port=this.port??5173;
         const addresses=Object.values(networkInterfaces()).flat().filter(n=>n&&!n.internal&&n.family==='IPv4').map(n=>`http://${n.address}:${port}`);
-        json(200,{addresses,publicOrigin:await ngrokOrigin(port)});return true;
+        json(200,{addresses,publicOrigin:await ngrokOrigin(port),controlPort:this.controlPort??null});return true;
       }
       if(path==='/api/rooms'||path==='/api/join'){
         if(req.method!=='POST')throw problem(405,'Use POST.');this.limit(req,'join',20,60000);const body=await this.body(req);person(body);
