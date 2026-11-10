@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createBattle } from './combat.js';
+import { createBattle, predictKartMovement } from './combat.js';
 import { Multiplayer } from './multiplayer.js';
 import { encodeSnapshot, decodeSnapshot } from './wire.js';
 
@@ -11,10 +11,19 @@ test('compact updates preserve game outcomes and reconstruct the visible effects
   world.projectiles=[{id:7,owner:1,kind:'missile',wx:4,wz:5,trail:[{wx:1.234,wz:2.345,height:.456}]}];
   const decoded=decodeSnapshot(JSON.parse(encodeSnapshot({type:'state',code:'07',world})));
   assert.equal(decoded.code,'07');assert.equal(decoded.world.driver,3);assert.equal(decoded.world.health,4);assert.equal(decoded.world.kills,2);assert.equal(decoded.world.ammo,3);
-  assert.equal(decoded.world.wx,12.346);assert.equal(world.wx,12.3456789);
+  assert.equal(decoded.world.wx,12.3456789);assert.equal(world.wx,12.3456789);
   assert.deepEqual(decoded.world.skids,[{ax:1.23,az:2.35,bx:3.46,bz:4.57,time:5.679}]);
   assert.deepEqual(decoded.world.driftParticles,[{wx:1.23,wz:2.35,height:.46,vx:3.46,vz:4.57,vy:5.68,age:.123,life:.8,kind:'spark',level:2}]);
   assert.deepEqual(decoded.world.projectiles[0].trail,[{wx:1.23,wz:2.35,height:.46}]);
+});
+
+test('a boost expiring on the next tick has the same speed on the server and guest',()=>{
+  const world=createBattle();Object.assign(world,{phase:'racing',boost:1/60,speed:700,wx:0,wz:70,heading:0,motionHeading:0,cameraHeading:0});
+  const decoded=decodeSnapshot(JSON.parse(encodeSnapshot({world}))).world;
+  predictKartMovement(world,world,new Set(['arrowup']),1/60);
+  predictKartMovement(decoded,decoded,new Set(['arrowup']),1/60);
+  assert.equal(world.speed,520);assert.equal(decoded.speed,520);
+  assert.equal(world.boost,0);assert.equal(decoded.boost,0);
 });
 
 test('a busy connection sends the latest position and retains intervening action sounds',t=>{

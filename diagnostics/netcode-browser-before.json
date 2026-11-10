@@ -1,0 +1,67 @@
+{
+  "errors": [],
+  "transportErrors": [],
+  "results": [
+    {
+      "profile": "local-host",
+      "run": 1,
+      "frames": 481,
+      "frameP95Ms": 16.7,
+      "frameP99Ms": 16.8,
+      "positionP95": 0.7152,
+      "positionMax": 0.9773,
+      "cameraP95Degrees": 2.9903,
+      "cameraMaxDegrees": 3.767,
+      "freezeFrames": 0,
+      "backwardFrames": 0,
+      "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+      "pass": false
+    },
+    {
+      "profile": "local-guest",
+      "run": 1,
+      "frames": 481,
+      "frameP95Ms": 16.7,
+      "frameP99Ms": 16.8,
+      "positionP95": 1.9792,
+      "positionMax": 1.9862,
+      "cameraP95Degrees": 4.489,
+      "cameraMaxDegrees": 4.9535,
+      "freezeFrames": 0,
+      "backwardFrames": 0,
+      "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+      "pass": false
+    },
+    {
+      "profile": "160ms-guest",
+      "run": 1,
+      "frames": 481,
+      "frameP95Ms": 16.8,
+      "frameP99Ms": 16.8,
+      "positionP95": 3.5537,
+      "positionMax": 3.8399,
+      "cameraP95Degrees": 12.8081,
+      "cameraMaxDegrees": 14.8068,
+      "freezeFrames": 0,
+      "backwardFrames": 0,
+      "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+      "pass": false
+    },
+    {
+      "profile": "160ms-jitter-guest",
+      "run": 1,
+      "frames": 481,
+      "frameP95Ms": 16.7,
+      "frameP99Ms": 16.8,
+      "positionP95": 3.89,
+      "positionMax": 4.5631,
+      "cameraP95Degrees": 14.8027,
+      "cameraMaxDegrees": 18.2996,
+      "freezeFrames": 0,
+      "backwardFrames": 0,
+      "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+      "pass": false
+    }
+  ],
+  "baselineCommit": "86c7389"
+}

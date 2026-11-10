@@ -95,7 +95,7 @@ export class NetworkGame {
     state.world.events=this.actionAudio.confirmations(state.world.events,now);
     if(this.state&&state.world.elapsed<this.state.world.elapsed)this.playback.clear();
     this.playback.push(state.time,state.world);
-    this.prediction.accept(state.world,performance.now()/1000,this.rtt/2);
+    this.prediction.accept(state.world,now,{sequence:state.movementSequence??-1});
     const rosterKey=JSON.stringify([state.host,state.you,state.players]);
     this.state=state;this.leaveButton.classList.remove('hidden');this.share.classList.remove('hidden');this.copyButton.classList.remove('hidden');this.animalChoice.classList.remove('hidden');
     this.updateShare();this.help.classList.remove('hidden');
@@ -124,16 +124,16 @@ export class NetworkGame {
   }
   action(type,item){if(!this.active)return;if(!this.paused)this.actionAudio.action(type,item,performance.now()/1000,this.sequence);this.actions.push({type,...(item?{item}:{})});this.actions=this.actions.slice(-8);this.input();}
   input(){
-    const now=performance.now()/1000;this.prediction.record(this.paused?new Set():this.keys,now);
+    const now=performance.now()/1000;
     if(this.active&&this.socket?.readyState===WebSocket.OPEN){
       if(this.socket.bufferedAmount>16384)return;
       if(now-this.lastPing>=1){this.lastPing=now;this.socket.send(JSON.stringify({type:'ping',sent:now}));}
-      this.socket.send(JSON.stringify({type:'input',sequence:this.sequence++,keys:this.paused?[]:[...this.keys].filter(key=>['arrowup','arrowdown','arrowleft','arrowright','w','a','s','d','shift',' '].includes(key)),actions:this.actions.splice(0,8)}));return;
+      this.socket.send(JSON.stringify({type:'input',sequence:this.sequence++,keys:this.paused?[]:[...this.keys].filter(key=>['arrowup','arrowdown','arrowleft','arrowright','w','a','s','d','shift',' '].includes(key)),actions:this.actions.splice(0,8),epoch:this.state.world.soundEpoch,moves:this.prediction.commands()}));return;
     }
   }
   stream(){
     const token=this.token,url=new URL('/api/socket',location.href);url.protocol=location.protocol==='https:'?'wss:':'ws:';const socket=this.socket=new WebSocket(url);
-    socket.onopen=()=>{if(this.token===token)socket.send(JSON.stringify({type:'authenticate',token}));};
+    socket.onopen=()=>{if(this.token===token){this.prediction.resend();socket.send(JSON.stringify({type:'authenticate',token}));}};
     socket.onmessage=event=>{try{if(typeof event.data!=='string'||event.data.length>512*1024)throw new Error();const state=JSON.parse(event.data);if(this.token!==token)return;if(state.type==='state')this.accept(decodeSnapshot(state));if(state.type==='pong'&&state.sent===this.lastPing)this.rtt=Math.max(0,Math.min(.3,performance.now()/1000-state.sent));}catch{socket.close();}};
     socket.onerror=()=>{};
     socket.onclose=()=>{if(this.token===token){this.keys.clear();this.status.textContent='Reconnecting to the room…';setTimeout(()=>{if(this.token===token)this.stream();},500);}};

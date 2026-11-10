@@ -44,18 +44,20 @@ test('prediction stops advancing when the connection stalls and snaps to a respa
   const moving=prediction.sample(new Set(['arrowup']),1/60,.1);
   const stalled=prediction.sample(new Set(['arrowup']),1/60,.5);
   assert.equal(stalled.wz,moving.wz);
-  prediction.accept({...world,destroyed:1},.6);
-  prediction.accept({...world,wx:-60,wz:-60,destroyed:0,speed:0},.7);
+  prediction.accept({...world,destroyed:1},.6,{sequence:0});
+  prediction.accept({...world,wx:-60,wz:-60,destroyed:0,speed:0},.7,{sequence:0});
   const respawn=prediction.sample(new Set(),0,.7);
   assert.equal(respawn.wx,-60);assert.equal(respawn.wz,-60);
 });
 
-test('a late snapshot replays recent input without changing health or weapon inventory',()=>{
+test('a delayed acknowledgment preserves the second movement without replaying the first or spending ammunition',()=>{
   const world=createBattle();Object.assign(world,{phase:'racing',wx:0,wz:60,heading:0,motionHeading:0,cameraHeading:0,speed:0});
-  const prediction=new LocalPrediction();prediction.record(new Set(['arrowup',' ']),0);
-  prediction.accept(world,.1,.1);
-  const view=prediction.sample(new Set(['arrowup']),0,.1);
-  assert.ok(view.wz>60);
-  assert.ok(Math.abs(view.speed-30)<1e-9);
+  const prediction=new LocalPrediction();prediction.accept(world,0);
+  prediction.sample(new Set(['arrowup',' ']),1/60,1/60);
+  prediction.sample(new Set(['arrowup',' ']),1/60,2/60);
+  prediction.accept({...world,wz:60.00708333333333,speed:5},.1,{sequence:0});
+  const view=prediction.sample(new Set(),0,.1);
+  assert.ok(Math.abs(view.wz-60.02125)<1e-9);
+  assert.equal(view.speed,10);
   assert.equal(world.health,3);assert.equal(world.ammo,5);assert.equal(world.projectiles.length,0);
 });

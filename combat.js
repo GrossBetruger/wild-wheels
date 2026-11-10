@@ -1,6 +1,7 @@
 import { createRace, drivers } from './engine.js';
 export const VULCAN_DURATION=15;
 export const MAX_HEALTH=6;
+export const MOVEMENT_DT=1/60;
 
 export const arenas=[
   {name:'Scrapyard',desc:'Container cover. Wide flanking lanes.',size:96,ground:'#8b927d',wall:'#d7794d',sky:'#b5d3d9',blocks:[[-40,-35,34,10],[40,35,34,10],[-35,35,10,34],[35,-35,10,34],[0,0,14,14]]},
@@ -128,10 +129,13 @@ export function predictKartMovement(world,actor,keys,dt){
   if(world.phase!=='racing'||world.finishCountdown!==null||actor.destroyed>0)return;
   // Reuse movement and wall collisions, without running weapons, damage or AI.
   const scene={arena:world.arena,elapsed:world.elapsed,finishCountdown:null,events:[],effects:[],skids:[],driftParticles:[]};
+  advanceKartMovement(scene,actor,keys,dt);return scene.events;
+}
+function advanceKartMovement(world,actor,keys,dt){
   actor.boost=Math.max(0,(actor.boost??0)-dt);actor.human=true;
   const steer=Number(keys.has('arrowright')||keys.has('d'))-Number(keys.has('arrowleft')||keys.has('a'));
-  moveActor(scene,actor,steer,keys.has('arrowup')||keys.has('w'),keys.has('arrowdown')||keys.has('s'),dt,keys.has('shift'));
-  actor.yaw=steer*.12;return scene.events;
+  moveActor(world,actor,steer,keys.has('arrowup')||keys.has('w'),keys.has('arrowdown')||keys.has('s'),dt,keys.has('shift'));
+  actor.yaw=steer*.12;
 }
 export function tickBattle(r,keys,dt,inputs=null){
   dt=clamp(dt,0,.05);if(!['racing','countdown'].includes(r.phase))return;
@@ -147,15 +151,17 @@ export function tickBattle(r,keys,dt,inputs=null){
   const actors=[r,...r.bots],arena=arenas[r.arena];
   for(const actor of actors){
     if(actor!==r)actor.noticeTime=Math.max(0,(actor.noticeTime??0)-dt);
-    for(const key of ['fireCooldown','shield','boost','celebrate','voiceCooldown','wallCooldown','vulcan','chaffCooldown'])actor[key]=Math.max(0,(actor[key]??0)-dt);
+    for(const key of ['fireCooldown','shield','celebrate','voiceCooldown','wallCooldown','vulcan','chaffCooldown'])actor[key]=Math.max(0,(actor[key]??0)-dt);
     if(actor.destroyed>0){actor.destroyed=Math.max(0,actor.destroyed-dt);if(actor.destroyed===0&&!ending)spawn(r,actor);continue;}
     actor.reload+=dt;if(actor.reload>=2){actor.ammo=Math.min(6,actor.ammo+1);actor.reload=0;}
     if((actor===r&&!r.multiplayer)||actor.human){
       const control=inputs?.get(actor.id)??(actor===r?keys:new Set());
-      const steering=Number(control.has('arrowright')||control.has('d'))-Number(control.has('arrowleft')||control.has('a'));
-      moveActor(r,actor,steering,control.has('arrowup')||control.has('w'),control.has('arrowdown')||control.has('s'),dt,control.has('shift'));
-      actor.yaw=steering*.12;if(control.has(' '))fireBattle(r,actor);continue;
+      const held=control.keys instanceof Set?control.keys:control;
+      if(Array.isArray(control.moves))for(const command of control.moves)advanceKartMovement(r,actor,new Set(command.keys),MOVEMENT_DT);
+      if(!Array.isArray(control.moves))advanceKartMovement(r,actor,held,dt);
+      if(held.has(' '))fireBattle(r,actor);continue;
     }
+    actor.boost=Math.max(0,actor.boost-dt);
     const target=actors.filter(k=>k!==actor&&!k.destroyed).sort((a,b)=>distance(actor,a)-distance(actor,b))[0];if(!target)continue;
     actor.brain-=dt;const visible=clearShot(arena,actor,target);
     if(actor.brain<=0){actor.path=visible?[]:navigate(arena,actor,target);actor.brain=.4+(1-actor.skill)*.4;}
