@@ -274,7 +274,7 @@ export function tickBattle(r,keys,dt,inputs=null){
       if(!actor.inactive&&!ending){
         const before=actor.bombReload;actor.bombReload+=dt;
         if(before<5-1e-8&&actor.bombReload>=5-1e-8){actor.stinkAmmo++;actor.bombReload=Math.max(5,actor.bombReload);}
-        if(actor.bombReload>=BOMB_RECHARGE-1e-8){actor.bombAmmo++;actor.bombReload=Math.max(0,actor.bombReload-BOMB_RECHARGE);}
+        if(actor.bombReload>=BOMB_RECHARGE-1e-8){actor.bombAmmo++;actor.stinkAmmo++;actor.bombReload=Math.max(0,actor.bombReload-BOMB_RECHARGE);}
       }
       continue;
     }

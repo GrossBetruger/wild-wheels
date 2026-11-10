@@ -69,7 +69,7 @@ export async function checkMobile(evaluate,app,room,id,sleep,capture,rotate,tap,
   const stinkFeedback=await evaluate('__game.lastTapFrames[0]??null'),stinkImmediate=Boolean(stinkFeedback&&stinkFeedback.ammo===0&&stinkFeedback.stinkAmmo===0&&stinkFeedback.bombs.some(bomb=>bomb.kind==='stink'));
   if(capture)await capture('stink-cloud');
   for(let i=0;i<1000;i++){if(actor.bombAmmo===1&&other.dizzy===0)break;await sleep(10);}
-  const refillAt=room.world.elapsed,refill=actor.bombAmmo===1&&actor.stinkAmmo===0&&refillAt>=9.999,dizzyExpired=other.dizzy===0&&other.health===3;
+  const refillAt=room.world.elapsed,refill=actor.bombAmmo===1&&actor.stinkAmmo===1&&refillAt>=9.999,dizzyExpired=other.dizzy===0&&other.health===3;
   await evaluate("document.getElementById('bomber-weapon-abomb').click()");
   const margin=await evaluate("(()=>{const r=document.getElementById('game').getBoundingClientRect();return {x:r.left+2,y:r.top+2};})()");
   const before=room.world.bombSequence;await tap(margin.x,margin.y);await sleep(200);

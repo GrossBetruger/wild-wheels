@@ -171,8 +171,8 @@ function hud(){
   document.querySelector('.viewport').classList.toggle('bomber-view',Boolean(race.bomber));
   if(race.bomber){
     put('bomb-count',`${race.bombAmmo} A-BOMB${race.bombAmmo===1?'':'S'}`);put('stink-count',`${race.stinkAmmo} STINK`);
-    const live=race.phase==='racing'&&race.finishCountdown===null,stinkWait=(race.bombReload<5?5:15)-race.bombReload;
-    put('bomb-refill',live?`+1 IN ${Math.max(0,BOMB_RECHARGE-race.bombReload).toFixed(1)}s`:'+1 / 10s');put('stink-refill',live?`+1 IN ${stinkWait.toFixed(1)}s`:'BETWEEN A-BOMBS');
+    const live=race.phase==='racing'&&race.finishCountdown===null,stinkWait=(race.bombReload<5?5:10)-race.bombReload;
+    put('bomb-refill',live?`+1 IN ${Math.max(0,BOMB_RECHARGE-race.bombReload).toFixed(1)}s`:'+1 / 10s');put('stink-refill',live?`+1 IN ${Math.max(0,stinkWait).toFixed(1)}s`:'+1 / 5s');
     bombChoice.setAttribute('aria-pressed',String(bomberWeapon==='abomb'));stinkChoice.setAttribute('aria-pressed',String(bomberWeapon==='stink'));bombChoice.classList.toggle('empty',race.bombAmmo<1);stinkChoice.classList.toggle('empty',race.stinkAmmo<1);
     if(race[bomberWeapon==='stink'?'stinkAmmo':'bombAmmo']>0&&mobileHint.textContent.startsWith('Rearming'))mobileHint.textContent='Ready! Tap the arena to drop your selected bomb.';
   }
