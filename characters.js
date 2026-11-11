@@ -72,3 +72,14 @@ export function drawRoadsterJets(glow,smoke,p,angle,clock,jump=null){
   const front=-jump.pitch/(Math.PI*2)<.5,z=front?1.8:-1.8;
   for(const side of [-1,1])for(let i=0;i<12;i++){const t=(clock*4+i/12)%1;smoke.particle(side*(1.27+t*.13),.33-t*3.7,z+Math.sin(i*6)*t*.2,(.23+t)*Math.sqrt(1-t),[.86,.92,.98]);}
 }
+
+export function drawCricketHaze(glow,smoke,p,angle,clock,jump=null){
+  for(const mesh of [glow,smoke]){mesh.at(p.x,.13+(jump?.height??0),p.z,angle);mesh.pitch=jump?.pitch??0;mesh.pivot=1.87;}
+  for(const side of [-1,1]){
+    glow.particle(side*1.2,.75,-2.87,.65,[.035,.16,.018]);
+    for(let i=0;i<22;i++){
+      const t=(clock*1.6+i/22)%1,spread=t*1.1;
+      smoke.particle(side*1.2+Math.sin(i*2.399+clock*.6)*spread,.75+t*.8+Math.cos(i*3.7)*spread*.2,-2.9-t*6.5,(.6+t*2.7)*Math.sqrt(1-t),[.24,.64,.14]);
+    }
+  }
+}

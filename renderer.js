@@ -3,7 +3,7 @@ import { LENGTH, drivers, pickupType } from './engine.js';
 import { arenas, combatPose, somersaultPose, BOMB_FALL_TIME, BOMB_RADIUS, STINK_RADIUS, DIZZY_DURATION } from './combat.js';
 import { kartNameplates } from './nameplates.js';
 import { bomberCamera } from './mobile.js';
-import {drawNewDriver,drawRoadster,drawRoadsterJets} from './characters.js';
+import {drawNewDriver,drawRoadster,drawRoadsterJets,drawCricketHaze} from './characters.js';
 const rgb=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255);
 const sub=(a,b)=>a.map((v,i)=>v-b[i]);
 const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
@@ -147,9 +147,10 @@ export class Renderer {
     m.box(-1,1.15,-2.1,.55,.3,.12,'#ff765a');m.box(1,1.15,-2.1,.55,.3,.12,'#ff765a');
     m.box(0,1.2,-2.25,.8,.35,.12,'#f7edce');m.box(0,1.26,-2.33,.12,.25,.03,'#33364b');
     for(const side of [-1,1]){m.ball(side*1.2,.75,-2.45,.31,.31,.5,'#69788b',10,5);m.ball(side*1.2,.75,-2.85,.24,.24,.08,'#161d2a',10,4);}
-    if(boost)this.afterburner(p,angle,clock);
+    if(boost)this.afterburner(p,angle,clock,null,driver);
   }
   afterburner(p,angle,clock,jump=null,driver=0){
+    if(driver===5){drawCricketHaze(this.glow,this.smoke,p,angle,clock,jump);return;}
     if(driver===6){drawRoadsterJets(this.glow,this.smoke,p,angle,clock,jump);return;}
     const g=this.glow;g.at(p.x,.13+(jump?.height??0),p.z,angle);g.pitch=jump?.pitch??0;g.pivot=1.87;
     for(const side of [-1,1]){

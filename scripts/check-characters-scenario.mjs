@@ -13,6 +13,7 @@ export async function checkCharacters(evaluate,app,room,id,sleep,capture){
     __game.keys.clear();
   }`);
   for(const [driver,name]of[[4,'Ellie the Elephant'],[5,'Tamar the Cricket'],[6,'Elon Musk']]){
+    await evaluate('__game.characterAngle=Math.PI');
     app.makeWorld(room);app.broadcast(room);
     await wait(()=>evaluate("__game.network.state.world.phase==='ready'"));
     await evaluate(`__game.network.chooseDriver(${driver})`);
@@ -27,7 +28,14 @@ export async function checkCharacters(evaluate,app,room,id,sleep,capture){
     const remote=app.snapshot(room,observer).world.bots.find(actor=>actor.id===id);
     await capture(name.split(' ')[0].toLowerCase());
     const paint=driver!==6||remote?.color==='#e8edf2'&&pixels.white>30&&await evaluate("__game.race.color==='#e8edf2'");
-    characters.push({driver,name,selected,rendered:pixels.colors>20&&pixels.glError===0,remote:remote?.driver===driver,paint,pixels});
+    let boostHaze=true,flipHaze=true;
+    if(driver===5){
+      await evaluate('__game.characterAngle=0');
+      const green=()=>evaluate("(()=>{const points=__game.renderer.smoke.sprites;for(let i=0;i<points.length;i+=7)if(points[i+5]>.4&&points[i+5]>points[i+4]*1.5&&points[i+5]>points[i+6]*2)return true;return false;})()");
+      boostHaze=await evaluate("__game.network.action('turbo')===true")&&await wait(green);await capture('tamar-haze');
+      flipHaze=await evaluate("__game.network.action('somersault')===true")&&await wait(async()=>await evaluate('__game.race.somersault>0')&&await green());await capture('tamar-haze-flip');
+    }
+    characters.push({driver,name,selected,rendered:pixels.colors>20&&pixels.glError===0,remote:remote?.driver===driver,paint,pixels,boostHaze,flipHaze});
   }
   await evaluate('__game.characterAngle=0');
   const boostAccepted=await evaluate("__game.network.action('turbo')===true");
@@ -38,5 +46,5 @@ export async function checkCharacters(evaluate,app,room,id,sleep,capture){
   const remoteFlip=await wait(()=>{const actor=app.snapshot(room,observer).world.bots.find(actor=>actor.id===id);return actor?.driver===6&&actor.somersault>0;});
   await capture('roadster-flip');
   const voicePass=await evaluate("[4,5,6].every(driver=>__game.audio.voice({driver,cue:'win'}))");
-  return {menuPass,characters,boostAccepted,boostVapor,flipAccepted,flipVapor,remoteFlip,voicePass,pass:menuPass&&characters.every(character=>character.selected&&character.rendered&&character.remote&&character.paint)&&boostAccepted&&boostVapor&&flipAccepted&&flipVapor&&remoteFlip&&voicePass};
+  return {menuPass,characters,boostAccepted,boostVapor,flipAccepted,flipVapor,remoteFlip,voicePass,pass:menuPass&&characters.every(character=>character.selected&&character.rendered&&character.remote&&character.paint&&character.boostHaze&&character.flipHaze)&&boostAccepted&&boostVapor&&flipAccepted&&flipVapor&&remoteFlip&&voicePass};
 }
