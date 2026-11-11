@@ -79,7 +79,7 @@ impl Client{
         let pending=|kind:&str|self.ops.iter().any(|op|matches!(op,Op::Action{action,..}if action.kind==kind));
         let (kind,resource,ready)=match action.kind.as_str(){
             "somersault"=>{if actor.somersault_cooldown>1e-8||pending("somersault"){return false;}action.after_move=sequence;self.pred.flip(self.viewer);self.error[2]=0.0;self.error[3]=0.0;(String::new(),String::new(),0)},
-            "turbo"=>{if actor.turbos==0||actor.boost>0.0||pending("turbo"){return false;}if action.after_move<self.next_sequence{self.pred.actors[self.viewer].boost=2.5;}self.emit("boost",now,Some(format!("action:{}",id)),true);(String::new(),"turbos".into(),0)},
+            "turbo"=>{if actor.turbos==0||actor.boost>0.0||pending("turbo"){return false;}if action.after_move<self.next_sequence{self.pred.actors[self.viewer].boost=boost_duration(actor.driver);}self.emit("boost",now,Some(format!("action:{}",id)),true);(String::new(),"turbos".into(),0)},
             "chaff"=>{if sequence<self.chaff_tick||actor.chaff==0{return false;}self.chaff_tick=after+39;self.emit("chaff",now,None,true);(String::new(),"chaff".into(),self.chaff_tick)},
             "fire"=>{
                 if sequence<self.fire_tick{return false;}let missile=actor.item=="missile"&&actor.missiles>0;let vulcan=!missile&&actor.vulcan>0.0;let resource=match(missile,vulcan){(true,_)=>"missiles",(_,true)=>"",_=>"ammo"};if resource=="ammo"&&actor.ammo==0{return false;}
@@ -93,7 +93,7 @@ impl Client{
         self.next_action+=1;self.ops.push(Op::Action{action,kind,resource,ready,born:now});true
     }
     pub(super) fn replay_maneuvers(&mut self,sequence:i64,inclusive:bool){
-        for op in &self.ops{if let Op::Action{action,..}=op{if match inclusive{true=>action.after_move<=sequence,false=>action.after_move==sequence}{match action.kind.as_str(){"turbo"=>self.pred.actors[self.viewer].boost=2.5,"somersault"=>self.pred.flip(self.viewer),_=>{}}}}}
+        for op in &self.ops{if let Op::Action{action,..}=op{if match inclusive{true=>action.after_move<=sequence,false=>action.after_move==sequence}{match action.kind.as_str(){"turbo"=>self.pred.actors[self.viewer].boost=boost_duration(self.pred.actors[self.viewer].driver),"somersault"=>self.pred.flip(self.viewer),_=>{}}}}}
     }
     pub(super) fn feedback_commands(&mut self)->Vec<serde_json::Value>{
         let mut last=self.last_sent_action;

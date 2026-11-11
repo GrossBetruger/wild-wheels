@@ -1,4 +1,4 @@
-import { createRace, drivers, START_HEDGEHOGS, itemCapacity } from './engine.js';
+import {boostDuration, createRace, drivers, START_HEDGEHOGS, itemCapacity } from './engine.js';
 export const VULCAN_DURATION=15;
 export const HEDGEGUARD_DURATION=25;
 export const MAX_HEALTH=6;
@@ -94,7 +94,7 @@ export function targetAhead(world,actor=world,cone=.65){
 export function commandKeys(command){const keys=new Set(command.keys);if(Number.isFinite(command.steer))keys.steer=command.steer;return keys;}
 export function useBattleTurbo(r,actor=r,actionId){
   if(!canAct(r,actor)||actor.turbos<=0||actor.boost>0)return false;
-  actor.turbos--;actor.boost=2.5;fx(r,'boost',actor,actionId==null?undefined:`action:${actionId}`);return true;
+  actor.turbos--;actor.boost=boostDuration(actor.driver);fx(r,'boost',actor,actionId==null?undefined:`action:${actionId}`);return true;
 }
 export function somersaultBattle(world,actor=world){
   if(!canAct(world,actor)||(actor.somersaultCooldown??0)>1e-8)return false;

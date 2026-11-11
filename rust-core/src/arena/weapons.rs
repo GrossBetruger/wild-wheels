@@ -18,7 +18,7 @@ impl Game{
     }
     pub(super) fn turbo(&mut self,id:usize,action_id:Option<u32>){
         if !self.active(id)||self.actors[id].turbos==0||self.actors[id].boost>0.0{return;}
-        let a=&mut self.actors[id];a.turbos-=1;a.boost=2.5;effect(&mut self.global,"boost",id,a.wx,a.wz,action_id.map(|id|format!("action:{}",id)));
+        let a=&mut self.actors[id];a.turbos-=1;a.boost=boost_duration(a.driver);effect(&mut self.global,"boost",id,a.wx,a.wz,action_id.map(|id|format!("action:{}",id)));
     }
     pub(super) fn flip(&mut self,id:usize){
         if !self.active(id)||self.actors[id].somersault_cooldown>1e-8{return;}

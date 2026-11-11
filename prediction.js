@@ -1,9 +1,10 @@
+import {boostDuration} from './engine.js';
 import { predictKartMovement, somersaultBattle, commandKeys, MOVEMENT_DT } from './combat.js';
 
 const fields=['wx','wz','speed','heading','motionHeading','cameraHeading','drift','wasDrifting','boost','yaw','somersault','somersaultCooldown','dizzy'];
 const angle=(a,b)=>Math.atan2(Math.sin(a-b),Math.cos(a-b));
 const copy=world=>({...world,driftTrail:null,driftEmit:0});
-const applyManeuver=(world,actor,action)=>{if(action.type==='somersault'){somersaultBattle(world,actor);return;}actor.boost=2.5;};
+const applyManeuver=(world,actor,action)=>{if(action.type==='somersault'){somersaultBattle(world,actor);return;}actor.boost=boostDuration(actor.driver);};
 export class LocalPrediction {
   maneuvers=[];
   actor=null;world=null;received=0;history=[];sounds=[];nextSequence=0;lastSent=-1;accumulator=0;error={wx:0,wz:0,heading:0,cameraHeading:0};
