@@ -4,14 +4,14 @@ import { createRace, tick, useItem, useTurbo, selectItem, cycleItem, LENGTH } fr
 import { sampleTrack } from './track.js';
 test('a paused race keeps the player, opponents and clock still',()=>{const r=createRace();r.phase='paused';r.speed=400;tick(r,new Set(['arrowup']),.05);assert.equal(r.s,0);assert.equal(r.elapsed,0);assert.equal(r.bots[0].s,140);});
 test('accelerating moves the kart and braking slows it',()=>{const r=createRace();r.phase='racing';for(let i=0;i<40;i++)tick(r,new Set(['arrowup']),.05);assert.ok(r.s>100);const speed=r.speed;tick(r,new Set(['arrowdown']),.05);assert.ok(r.speed<speed);});
-test('the center turbo cell stores a separate boost and preserves the equipped weapon',()=>{const r=createRace();r.phase='racing';r.s=990;r.speed=400;tick(r,new Set(['arrowup']),.05);assert.equal(r.item,'hedgehog');assert.equal(r.turbos,1);useTurbo(r);assert.equal(r.item,'hedgehog');assert.equal(r.turbos,0);assert.equal(r.ammo,5);assert.equal(r.boost,2.5);});
+test('the center turbo cell stores a separate boost and preserves the equipped weapon',()=>{const r=createRace();r.phase='racing';r.s=990;r.speed=400;tick(r,new Set(['arrowup']),.05);assert.equal(r.item,'hedgehog');assert.equal(r.turbos,1);useTurbo(r);assert.equal(r.item,'hedgehog');assert.equal(r.turbos,0);assert.equal(r.ammo,10);assert.equal(r.boost,2.5);});
 test('missing every pickup lane awards no item',()=>{const r=createRace();r.phase='racing';r.item=null;r.ammo=0;r.s=990;r.speed=400;r.x=1.1;tick(r,new Set(['arrowup']),.05);assert.equal(r.item,null);assert.equal(r.ammo,0);});
 test('three full laps records second place and keeps the kart moving',()=>{const r=createRace();r.phase='racing';r.s=LENGTH*3-10;r.speed=400;r.bots[0].s=LENGTH*3+30;tick(r,new Set(['arrowup']),.05);assert.equal(r.phase,'racing');assert.equal(r.finishRank,2);assert.ok(r.speed>0);});
-test('a hedgehog hit consumes one shot and spins the opponent',()=>{const r=createRace();r.phase='racing';r.bots[0].s=170;r.bots[0].x=0;useItem(r);tick(r,new Set(),.05);assert.equal(r.ammo,4);assert.equal(r.bots[0].stun,3);assert.ok(r.bots[0].spin>6);assert.equal(r.projectiles.length,0);});
+test('a hedgehog hit consumes one shot and spins the opponent',()=>{const r=createRace();r.phase='racing';r.bots[0].s=170;r.bots[0].x=0;useItem(r);tick(r,new Set(),.05);assert.equal(r.ammo,9);assert.equal(r.bots[0].stun,3);assert.ok(r.bots[0].spin>6);assert.equal(r.projectiles.length,0);});
 test('a barrier impact rebounds the kart and removes speed',()=>{const r=createRace();r.phase='racing';r.x=1.21;r.vx=2;r.speed=500;tick(r,new Set(['arrowright','arrowup']),.05);assert.equal(r.x,1.22);assert.ok(r.vx<0);assert.ok(r.speed<400);assert.ok(r.shake>0);});
 test('kart contact pushes both racers apart',()=>{const r=createRace();r.phase='racing';r.speed=500;r.x=.05;r.bots[0].s=10;r.bots[0].x=0;tick(r,new Set(['arrowup']),.05);assert.ok(r.vx>0);assert.ok(r.bots[0].vx<0);assert.ok(r.speed<450);});
 test('a missed projectile falls and bounces off the road',()=>{const r=createRace();r.phase='racing';r.x=1;useItem(r);for(let i=0;i<24;i++)tick(r,new Set(),.05);assert.equal(r.projectiles.length,1);assert.ok(r.projectiles[0].bounces>=1);assert.ok(r.projectiles[0].height>=.5);});
-test('five shots exhaust the starting ammo',()=>{const r=createRace();r.phase='racing';assert.equal(r.ammo,5);useItem(r);useItem(r);useItem(r);useItem(r);useItem(r);useItem(r);assert.equal(r.ammo,0);assert.equal(r.item,null);assert.equal(r.projectiles.length,5);});
+test('ten shots exhaust the starting ammo',()=>{const r=createRace();r.phase='racing';assert.equal(r.ammo,10);for(let shot=0;shot<11;shot++)useItem(r);assert.equal(r.ammo,0);assert.equal(r.item,null);assert.equal(r.projectiles.length,10);});
 test('releasing a charged drift awards a temporary turbo',()=>{const r=createRace();r.phase='racing';r.s=3000;r.speed=500;r.x=-.7;for(let i=0;i<18;i++)tick(r,new Set(['arrowup','arrowright','shift']),.05);tick(r,new Set(['arrowup']),.05);assert.equal(r.boost,1.2);});
 test('right arrow moves toward the camera right side of the road',()=>{const r=createRace();r.phase='racing';r.speed=300;const initial=sampleTrack(0);tick(r,new Set(['arrowright','arrowup']),.05);const center=sampleTrack(r.s/LENGTH),p=sampleTrack(r.s/LENGTH,r.x);const towardScreenRight=(p.x-center.x)*(-initial.tz)+(p.z-center.z)*initial.tx;assert.ok(towardScreenRight>0);});
 test('left arrow moves toward the camera left side of the road',()=>{const r=createRace();r.phase='racing';r.speed=300;const initial=sampleTrack(0);tick(r,new Set(['arrowleft','arrowup']),.05);const center=sampleTrack(r.s/LENGTH),p=sampleTrack(r.s/LENGTH,r.x);const towardScreenRight=(p.x-center.x)*(-initial.tz)+(p.z-center.z)*initial.tx;assert.ok(towardScreenRight<0);});
@@ -109,14 +109,14 @@ test('the earlier finish crossing wins even when another kart travels farther in
 test('the red pickup in the first right lane arms a missile without consuming hedgehogs',()=>{
   const r=createRace(0,0,()=>.5);r.phase='racing';r.s=990;r.x=.65;r.speed=400;
   tick(r,new Set(['arrowup']),.05);
-  assert.equal(r.item,'missile');assert.equal(r.missiles,1);assert.equal(r.ammo,5);
-  useItem(r);assert.equal(r.missiles,0);assert.equal(r.ammo,5);assert.equal(r.item,'hedgehog');assert.equal(r.projectiles[0].kind,'missile');
+  assert.equal(r.item,'missile');assert.equal(r.missiles,1);assert.equal(r.ammo,10);
+  useItem(r);assert.equal(r.missiles,0);assert.equal(r.ammo,10);assert.equal(r.item,'hedgehog');assert.equal(r.projectiles[0].kind,'missile');
 });
 test('switching weapons keeps all collected ammunition and turbo cells',()=>{
   const r=createRace();r.phase='racing';r.missiles=2;r.turbos=1;
   cycleItem(r);assert.equal(r.item,'missile');cycleItem(r);assert.equal(r.item,'hedgehog');selectItem(r,'boost');assert.equal(r.item,'hedgehog');
   selectItem(r,'hedgehog');useItem(r);
-  assert.equal(r.ammo,4);assert.equal(r.missiles,2);assert.equal(r.turbos,1);
+  assert.equal(r.ammo,9);assert.equal(r.missiles,2);assert.equal(r.turbos,1);
 });
 test('an empty missile inventory cannot be selected or fired',()=>{
   const r=createRace();r.phase='racing';selectItem(r,'missile');assert.equal(r.item,'hedgehog');

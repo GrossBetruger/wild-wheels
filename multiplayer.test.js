@@ -181,9 +181,9 @@ test('irrelevant action fields cannot corrupt a match and action identifiers sta
   const {multiplayer,post}=await serverFor(t);const host=await post('/api/rooms',{name:'Host',driver:0,arena:0,bots:0});const room=multiplayer.rooms.get(host.code);
   Object.assign(room.world,{phase:'racing',fireCooldown:0});
   assert.equal((await post('/api/input',{sequence:0,keys:[],actions:[{type:'fire',wx:'unused',wz:{},item:42}]},host.token)).status,200);
-  multiplayer.step(1/60);assert.equal(room.world.ammo,4);assert.equal(room.world.projectiles.length,1);
+  multiplayer.step(1/60);assert.equal(room.world.ammo,9);assert.equal(room.world.projectiles.length,1);
   assert.equal((await post('/api/input',{sequence:1,keys:[],actions:[{type:'fire',id:4294967296,afterMove:-1}]},host.token)).status,400);
-  multiplayer.step(1/60);assert.equal(room.world.ammo,4);
+  multiplayer.step(1/60);assert.equal(room.world.ammo,9);
 });
 test('a rematch accepts the new client command sequence immediately after the previous game',async t=>{
   const {multiplayer,post}=await serverFor(t);const host=await post('/api/rooms',{name:'Host',driver:0,arena:0,bots:0});const room=multiplayer.rooms.get(host.code);
@@ -194,7 +194,7 @@ test('a rematch accepts the new client command sequence immediately after the pr
   const epoch=room.world.soundEpoch;
   assert.equal((await post('/api/input',{sequence:0,epoch,keys:['arrowup'],moves:[{sequence:0,keys:['arrowup']}],actions:[{type:'fire',id:0,afterMove:0}]},host.token)).status,200);
   multiplayer.step(1/60);
-  assert.equal(room.world.ammo,4);assert.equal(room.world.projectiles.length,1);assert.equal(multiplayer.snapshot(room,multiplayer.members.get(host.token)).movementSequence,0);
+  assert.equal(room.world.ammo,9);assert.equal(room.world.projectiles.length,1);assert.equal(multiplayer.snapshot(room,multiplayer.members.get(host.token)).movementSequence,0);
 });
 test('a guest cannot change bots while the original host is AFK',async t=>{
   const {multiplayer,post}=await serverFor(t);const host=await post('/api/rooms',{name:'Host',driver:0,arena:0});const guest=await post('/api/join',{name:'Guest',driver:1,code:host.code});await post('/api/leave',{},host.token);

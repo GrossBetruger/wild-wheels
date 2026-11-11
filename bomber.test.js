@@ -12,9 +12,9 @@ test('stinkbombs refill every five seconds and A-bombs every ten',()=>{
   for(let i=0;i<299;i++)tickBattle(world,new Set(),1/60);assert.equal(world.bombAmmo,2);assert.equal(world.stinkAmmo,2);
   tickBattle(world,new Set(),1/60);assert.equal(world.bombAmmo,2);assert.equal(world.stinkAmmo,3);
   for(let i=0;i<300;i++)tickBattle(world,new Set(),1/60);assert.equal(world.bombAmmo,3);assert.equal(world.stinkAmmo,4);
-  for(let i=0;i<300;i++)tickBattle(world,new Set(),1/60);assert.equal(world.bombAmmo,3);assert.equal(world.stinkAmmo,5);
-  for(let i=0;i<300;i++)tickBattle(world,new Set(),1/60);assert.equal(world.bombAmmo,4);assert.equal(world.stinkAmmo,6);
-  world.phase='paused';for(let i=0;i<600;i++)tickBattle(world,new Set(),1/60);assert.equal(world.bombAmmo,4);assert.equal(world.stinkAmmo,6);
+  for(let i=0;i<300;i++)tickBattle(world,new Set(),1/60);assert.equal(world.bombAmmo,3);assert.equal(world.stinkAmmo,4);
+  for(let i=0;i<300;i++)tickBattle(world,new Set(),1/60);assert.equal(world.bombAmmo,4);assert.equal(world.stinkAmmo,4);
+  world.phase='paused';for(let i=0;i<600;i++)tickBattle(world,new Set(),1/60);assert.equal(world.bombAmmo,4);assert.equal(world.stinkAmmo,4);
 });
 test('a falling A-bomb explodes after 0.9 seconds and kills nearby karts without rewarding ammunition',()=>{
   const world=equipBomber(createBattle());Object.assign(world,{phase:'racing',supplies:[]});

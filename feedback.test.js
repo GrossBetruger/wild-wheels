@@ -44,7 +44,7 @@ test('an empty turbo inventory cannot trigger a boost or a local cue',()=>{
 });
 
 test('firing shows one projectile and spends one displayed round before a server reply',()=>{
-  const world=createBattle();Object.assign(world,{phase:'racing',wx:0,wz:60,heading:0,fireCooldown:0});
+  const world=createBattle();Object.assign(world,{phase:'racing',wx:0,wz:60,heading:0,fireCooldown:0,ammo:5});
   const heard=[],feedback=new LocalFeedback(type=>heard.push(type));feedback.accept({world,movementSequence:-1,actionSequence:-1},0);
   feedback.action('fire',undefined,world,0,-1);
   const view=feedback.render(world,world,0,-1);
@@ -80,7 +80,7 @@ test('touching a pickup immediately hides it, updates inventory, and sounds once
 test('a contested pickup and rejected shot revert without awarding damage or inventory',()=>{
   const world=createBattle();Object.assign(world,{phase:'racing',wx:0,wz:60,ammo:0,fireCooldown:0});world.supplies=[{id:0,version:0,kind:'hedgehog',wx:0,wz:62,cooldown:0}];
   const feedback=new LocalFeedback(()=>{});feedback.accept({world,movementSequence:-1,actionSequence:-1},0);
-  assert.equal(feedback.render(world,world,0,0).ammo,6);feedback.action('fire',undefined,world,0,0);
+  assert.equal(feedback.render(world,world,0,0).ammo,14);feedback.action('fire',undefined,world,0,0);
   const rejected={...world,supplies:[{...world.supplies[0],version:1,collector:1,cooldown:8}]};feedback.accept({world:rejected,movementSequence:1,actionSequence:0},.16);
   const view=feedback.render(rejected,world,.16,1);
   assert.equal(view.ammo,0);assert.equal(view.projectiles.length,0);assert.equal(world.kills,0);assert.equal(world.bots[0].health,3);
@@ -105,7 +105,7 @@ test('held Vulcan fire produces twelve authoritative shots per second and keeps 
     app.controls(member,{sequence:frame,epoch:room.world.soundEpoch,keys:[],moves:[{sequence:frame,keys:[]}],actions:feedback.commands()});app.step(1/60);
     feedback.accept(decodeSnapshot(JSON.parse(encodeSnapshot(app.snapshot(room,member)))),(frame+1)/60);
   }
-  assert.equal(room.world.projectiles.length,12);assert.equal(room.world.ammo,6);assert.equal(room.world.kills,0);
+  assert.equal(room.world.projectiles.length,12);assert.equal(room.world.ammo,11);assert.equal(room.world.kills,0);
 });
 
 test('a delayed movement batch collects a passed pickup and can fire its missile at the contact position',t=>{
@@ -116,7 +116,7 @@ test('a delayed movement batch collects a passed pickup and can fire its missile
   app.controls(member,{sequence:0,epoch:room.world.soundEpoch,keys:[],moves:Array.from({length:8},(_,sequence)=>({sequence,keys:['arrowup']})),actions:[{type:'fire',id:0,afterMove:0}]});app.step(1/60);
   assert.ok(room.world.wx>-56);assert.equal(room.world.supplies[0].collector,0);assert.equal(room.world.supplies[0].version,1);
   assert.equal(room.world.projectiles.length,1);assert.equal(room.world.projectiles[0].kind,'missile');assert.ok(room.world.projectiles[0].wx< -58);
-  assert.equal(room.world.missiles,0);assert.equal(room.world.ammo,5);
+  assert.equal(room.world.missiles,0);assert.equal(room.world.ammo,10);
 });
 
 test('duplicate and excessive fire requests cannot duplicate a projectile or bypass cooldown',t=>{
@@ -125,7 +125,7 @@ test('duplicate and excessive fire requests cannot duplicate a projectile or byp
   const member=app.join(room,{name:'Driver',driver:0});Object.assign(room.world,{phase:'racing',wx:0,wz:60,heading:0,fireCooldown:0,supplies:[]});
   const request={sequence:0,epoch:room.world.soundEpoch,keys:[],moves:[{sequence:0,keys:[]}],actions:Array.from({length:8},(_,id)=>({type:'fire',id,afterMove:0}))};
   app.controls(member,request);app.step(1/60);app.controls(member,{...request,sequence:1});app.step(1/60);
-  assert.equal(room.world.projectiles.length,1);assert.equal(room.world.ammo,4);assert.equal(app.snapshot(room,member).actionSequence,7);
+  assert.equal(room.world.projectiles.length,1);assert.equal(room.world.ammo,9);assert.equal(app.snapshot(room,member).actionSequence,7);
 });
 
 test('an authoritative Vulcan reward clears the old cooldown and allows immediate fire',()=>{
@@ -173,5 +173,5 @@ test('a missile picked up between movement ticks can be fired immediately withou
   assert.equal(feedback.render(room.world,displayed,0,-1).missiles,1);
   feedback.action('fire',undefined,displayed,0,-1);
   app.controls(member,{sequence:0,epoch:room.world.soundEpoch,keys:[],moves:[{sequence:0,keys:['arrowup']}],actions:feedback.commands()});app.step(1/60);
-  assert.equal(room.world.projectiles.length,1);assert.equal(room.world.projectiles[0].kind,'missile');assert.equal(room.world.ammo,5);assert.equal(room.world.missiles,0);
+  assert.equal(room.world.projectiles.length,1);assert.equal(room.world.projectiles[0].kind,'missile');assert.equal(room.world.ammo,10);assert.equal(room.world.missiles,0);
 });

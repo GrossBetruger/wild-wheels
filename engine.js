@@ -1,15 +1,20 @@
 import { trackBend, branches, chooseRoute, routeSpeedScale } from './track.js';
 export const LENGTH = 18000;
+export const START_HEDGEHOGS=10;
 export const drivers = [
-  { name: 'Pip the Panda', emoji: '🐼', color: '#8456cf', desc: 'Small paws. Big podium energy.', speed: 4, handling: 5, accel: 4, cuteness: 5 },
-  { name: 'Rocco the Raccoon', emoji: '🦝', color: '#df7053', desc: 'Your racing line? Consider it stolen.', speed: 5, handling: 3, accel: 4, cuteness: 3 },
-  { name: 'Felix the Fox', emoji: '🦊', color: '#edb84f', desc: 'Quick on the corners. Quicker with trouble.', speed: 4, handling: 4, accel: 5, cuteness: 4 },
-  { name: 'Benny the Bear', emoji: '🐻', color: '#67a99c', desc: 'Big bear. Tiny kart. Absolutely no brakes.', speed: 5, handling: 4, accel: 3, cuteness: 4 },
-  { name: 'Ellie the Elephant', emoji: '🐘', color: '#81a5bc', desc: 'Big ears. Bigger corner exits.', speed: 4, handling: 4, accel: 5, cuteness: 5 },
-  { name: 'Tamar the Cricket', emoji: '🦗', color: '#83b64d', desc: 'Six legs. One accelerator. Maximum chirp.', speed: 3, handling: 5, accel: 5, cuteness: 5 },
-  { name: 'Elon Musk', emoji: '🚘', color: '#e8edf2', desc: 'New Roadster. Cold-gas thrusters. Zero chill.', speed: 5, handling: 3, accel: 5, cuteness: 1 },
-  { name: 'Houston the RTPL', emoji: '🦥', color: '#69a9c7', desc: 'One small nap. One giant leap for slothkind.', speed: 2, handling: 4, accel: 2, cuteness: 5 },
+  { name: 'Pip the Panda', emoji: '🐼', color: '#8456cf', desc: 'Small paws. Big podium energy.', speed: 4, handling: 5, accel: 4, cuteness: 5, intelligence: 3 },
+  { name: 'Rocco the Raccoon', emoji: '🦝', color: '#df7053', desc: 'Your racing line? Consider it stolen.', speed: 5, handling: 3, accel: 4, cuteness: 3, intelligence: 5 },
+  { name: 'Felix the Fox', emoji: '🦊', color: '#edb84f', desc: 'Quick on the corners. Quicker with trouble.', speed: 4, handling: 4, accel: 5, cuteness: 4, intelligence: 4 },
+  { name: 'Benny the Bear', emoji: '🐻', color: '#67a99c', desc: 'Big bear. Tiny kart. Absolutely no brakes.', speed: 5, handling: 4, accel: 3, cuteness: 4, intelligence: 2 },
+  { name: 'Ellie the Elephant', emoji: '🐘', color: '#81a5bc', desc: 'Big ears. Bigger corner exits.', speed: 4, handling: 4, accel: 5, cuteness: 5, intelligence: 4 },
+  { name: 'Tamar the Cricket', emoji: '🦗', color: '#83b64d', desc: 'Six legs. One accelerator. Maximum chirp.', speed: 3, handling: 5, accel: 5, cuteness: 5, intelligence: 3 },
+  { name: 'Elon Musk', emoji: '🚘', color: '#e8edf2', desc: 'New Roadster. Cold-gas thrusters. Zero chill.', speed: 5, handling: 3, accel: 5, cuteness: 1, intelligence: 4 },
+  { name: 'Houston the RTPL', emoji: '🦥', color: '#69a9c7', desc: 'One small nap. One giant leap for slothkind.', speed: 2, handling: 4, accel: 2, cuteness: 5, intelligence: 5 },
 ];
+export function itemCapacity(driver,kind){
+  const intelligence=drivers[driver].intelligence;
+  switch(kind){case 'hedgehog':return 10+2*(intelligence-1);case 'missile':case 'boost':case 'abomb':case 'stink':return intelligence+1;default:return 0;}
+}
 export const tracks = [
   { name: 'Sunny Side Circuit', difficulty: 'ROOKIE', desc: 'Rolling hills. Questionable shortcuts.', sky: '#afdadd', grass: '#91b96d', darkGrass: '#88ad65', mountain: '#8ea69b', curve: 1 },
   { name: 'Sunset Scramble', difficulty: 'WILD', desc: 'Golden skies. A few sharper surprises.', sky: '#e9b6b0', grass: '#b2a574', darkGrass: '#a89a69', mountain: '#ad8fa0', curve: 1.5 },
@@ -23,7 +28,7 @@ export function createRace(driver = 0, track = 0, random = Math.random) {
   // Shuffle the tiers so the same character does not always win.
   const skills = [[.94,1],[.86,.93],[.70,.83],[.53,.68],[.35,.51]].map(([low,high])=>low+random()*(high-low));
   for(let i=skills.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[skills[i],skills[j]]=[skills[j],skills[i]];}
-  return { phase: 'ready', driver, track, s: 0, x: 0, vx:0, yaw:0, spin:0, shake:0, celebrate:0, events:[], voices:[], effects:[], skids:[], ammo:5, missiles:0, turbos:0, speed: 0, elapsed: 0, countdown: 3, item: 'hedgehog', boost: 0, drift: 0, wasDrifting: false, stun: 0, pickup: -1, notice: '', noticeTime: 0, rank: 6, finishRank: null, finishTime:null, finishOrder:[], finishCountdown:null, winner:null,
+  return { phase: 'ready', driver, track, s: 0, x: 0, vx:0, yaw:0, spin:0, shake:0, celebrate:0, events:[], voices:[], effects:[], skids:[], ammo:START_HEDGEHOGS, missiles:0, turbos:0, speed: 0, elapsed: 0, countdown: 3, item: 'hedgehog', boost: 0, drift: 0, wasDrifting: false, stun: 0, pickup: -1, notice: '', noticeTime: 0, rank: 6, finishRank: null, finishTime:null, finishOrder:[], finishCountdown:null, winner:null,
     bots: Array.from({ length: 5 }, (_, i) => ({ s: 140 + i * 170, x: [-.62, .55, -.35, .65, 0][i], vx:0, spin:0, cooldown:0, speed:0, skill:skills[i], laneBias:(random()-.5)*.9, rhythm:random()*Math.PI*2, reaction:.12+(1-skills[i])*.65, decisionIn:0, targetLane:[-.62,.55,-.35,.65,0][i], yaw:0, boost:0, boostCooldown:0, turbo:0, drift:0, driftCooldown:0, pickup:-1, color: ['#edb84f', '#df7053', '#67a99c', '#db8daf', '#777cbb'][i], driver: (i + 1) % drivers.length, stun: 0, finished: false })), projectiles: [] };
 }
 export function notify(r, text) { r.notice = text; r.noticeTime = 2; }
@@ -156,7 +161,7 @@ export function tick(r, keys, dt) {
   const rowS = row * 1800 + 1000;
   if (row >= 0 && before <= rowS && r.s >= rowS && row !== r.pickup && [-.65, 0, .65].some(x => Math.abs(x - r.x) < .23)) {
     r.pickup = row; const lane=[-.65,0,.65].find(x=>Math.abs(x-r.x)<.23),kind=pickupType(row,lane);if(kind!=='boost')r.item=kind;
-    switch(kind){case 'hedgehog':r.ammo=Math.min(6,r.ammo+3);notify(r,'+3 HEDGEHOGS · SPACE TO FIRE');break;case 'boost':r.turbos=Math.min(3,r.turbos+1);notify(r,'TURBO CELL · X TO BOOST');break;case 'missile':r.missiles=Math.min(3,r.missiles+1);notify(r,'MISSILE ARMED · SPACE TO DESTROY');break;}effect(r,'pickup');
+    switch(kind){case 'hedgehog':r.ammo=Math.min(itemCapacity(r.driver,'hedgehog'),r.ammo+3);notify(r,'+3 HEDGEHOGS · SPACE TO FIRE');break;case 'boost':r.turbos=Math.min(itemCapacity(r.driver,'boost'),r.turbos+1);notify(r,'TURBO CELL · X TO BOOST');break;case 'missile':r.missiles=Math.min(itemCapacity(r.driver,'missile'),r.missiles+1);notify(r,'MISSILE ARMED · SPACE TO DESTROY');break;}effect(r,'pickup');
   }
   for (const shot of r.projectiles) {
     const previous=shot.s;shot.trail.push({s:shot.s,x:shot.x,height:shot.height,route:shot.route});if(shot.trail.length>(shot.kind==='missile'?30:12))shot.trail.shift();

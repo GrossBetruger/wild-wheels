@@ -102,7 +102,7 @@ export class LocalFeedback {
     const kind=actor.item==='missile'&&actor.missiles>0?'missile':'hedgehog';
     const vulcan=kind==='hedgehog'&&actor.vulcan>0,resource=kind==='missile'?'missiles':vulcan?null:'ammo';
     if(resource&&actor[resource]<=0)return false;
-    const cooldown=kind==='missile'?.9:vulcan?.075:.45,id=this.nextId++;
+    const cooldown=kind==='missile'?.9:vulcan?.075:.225,id=this.nextId++;
     this.fireTick=afterMove+Math.ceil(cooldown/MOVEMENT_DT-1e-8);
     this.operations.push({id,type:'fire',kind,resource,afterMove,readyTick:this.fireTick});
     this.shots.set(id,{born:now,updated:now,model:{...makeProjectile({...this.world,...actor},actor),id:`local:${this.world.soundEpoch}:${id}`,actionId:id},error:{wx:0,wz:0}});

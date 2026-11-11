@@ -1,4 +1,4 @@
-import { createRace, drivers } from './engine.js';
+import { createRace, drivers, START_HEDGEHOGS, itemCapacity } from './engine.js';
 export const VULCAN_DURATION=15;
 export const MAX_HEALTH=6;
 export const RECOVERY_HEALTH=3;
@@ -26,7 +26,7 @@ function clearShot(arena,a,b){const d=distance(a,b);for(let t=3;t<d;t+=3)if(bloc
 function spawn(r,actor,initial=false){
   const actors=[r,...r.bots],candidates=Array.from({length:8},(_,i)=>{const angle=i*Math.PI/4;return {wx:Math.sin(angle)*78,wz:Math.cos(angle)*78};});
   const choice=initial?candidates[Math.floor(actor.id*8/6)]:candidates.sort((a,b)=>Math.min(...actors.filter(k=>k!==actor&&!k.destroyed).map(k=>distance(b,k)),999)-Math.min(...actors.filter(k=>k!==actor&&!k.destroyed).map(k=>distance(a,k)),999))[0];
-  actor.wx=choice.wx;actor.wz=choice.wz;actor.heading=Math.atan2(-choice.wx,-choice.wz);actor.speed=0;actor.health=3;actor.destroyed=0;actor.shield=2;actor.ammo=5;actor.missiles=1;actor.turbos=1;actor.item='hedgehog';actor.fireCooldown=.5;actor.vx=0;actor.boost=0;actor.path=[];
+  actor.wx=choice.wx;actor.wz=choice.wz;actor.heading=Math.atan2(-choice.wx,-choice.wz);actor.speed=0;actor.health=3;actor.destroyed=0;actor.shield=2;actor.ammo=START_HEDGEHOGS;actor.missiles=1;actor.turbos=1;actor.item='hedgehog';actor.fireCooldown=.5;actor.vx=0;actor.boost=0;actor.path=[];
   actor.motionHeading=actor.heading;actor.cameraHeading=actor.heading;actor.drift=0;actor.wasDrifting=false;actor.driftTrail=null;actor.driftEmit=0;
   actor.killStreak=0;actor.vulcan=0;actor.healTimer=0;
   actor.chaff=4;actor.chaffCooldown=0;
@@ -113,7 +113,7 @@ export function fireBattle(r,actor=r,actionId){
   r.projectileSequence=(r.projectileSequence??0)+1;
   const shot={...makeProjectile(r,actor),id:r.projectileSequence,...(actionId==null?{}:{actionId})};r.projectiles.push(shot);
   if(kind==='missile')actor.missiles--;if(kind==='hedgehog'&&!vulcan)actor.ammo--;
-  actor.fireCooldown=kind==='missile'?.9:vulcan?.075:.45;
+  actor.fireCooldown=kind==='missile'?.9:vulcan?.075:.225;
   if(actor.item==='missile'&&!actor.missiles)actor.item='hedgehog';
   if(r.multiplayer||distance(actor,r)<90)sound(r,kind==='missile'?'missile':vulcan?'vulcanFire':'fire',actor,cueKey);
   return shot;
@@ -121,9 +121,9 @@ export function fireBattle(r,actor=r,actionId){
 export function applySupply(actor,kind){
   switch(kind){
     case 'health':actor.health=Math.min(MAX_HEALTH,actor.health+1);actor.notice=`+1 HEART · ${actor.health} / ${MAX_HEALTH}`;actor.noticeTime=2;break;
-    case 'missile':actor.missiles=Math.min(3,actor.missiles+1);if(!(actor.vulcan>0&&actor.item==='hedgehog'))actor.item='missile';break;
-    case 'hedgehog':actor.ammo=6;break;
-    case 'boost':actor.turbos=Math.min(3,actor.turbos+1);break;
+    case 'missile':actor.missiles=Math.min(itemCapacity(actor.driver,'missile'),actor.missiles+1);if(!(actor.vulcan>0&&actor.item==='hedgehog'))actor.item='missile';break;
+    case 'hedgehog':actor.ammo=itemCapacity(actor.driver,'hedgehog');break;
+    case 'boost':actor.turbos=Math.min(itemCapacity(actor.driver,'boost'),actor.turbos+1);break;
   }
 }
 function collectSupplies(r,actor){
@@ -283,8 +283,8 @@ export function tickBattle(r,keys,dt,inputs=null){
     if(actor.bomber){
       if(!actor.inactive&&!ending){
         const before=actor.bombReload;actor.bombReload+=dt;
-        if(before<5-1e-8&&actor.bombReload>=5-1e-8){actor.stinkAmmo++;actor.bombReload=Math.max(5,actor.bombReload);}
-        if(actor.bombReload>=BOMB_RECHARGE-1e-8){actor.bombAmmo++;actor.stinkAmmo++;actor.bombReload=Math.max(0,actor.bombReload-BOMB_RECHARGE);}
+        if(before<5-1e-8&&actor.bombReload>=5-1e-8){actor.stinkAmmo=Math.min(itemCapacity(actor.driver,'stink'),actor.stinkAmmo+1);actor.bombReload=Math.max(5,actor.bombReload);}
+        if(actor.bombReload>=BOMB_RECHARGE-1e-8){actor.bombAmmo=Math.min(itemCapacity(actor.driver,'abomb'),actor.bombAmmo+1);actor.stinkAmmo=Math.min(itemCapacity(actor.driver,'stink'),actor.stinkAmmo+1);actor.bombReload=Math.max(0,actor.bombReload-BOMB_RECHARGE);}
       }
       continue;
     }
@@ -294,7 +294,7 @@ export function tickBattle(r,keys,dt,inputs=null){
       if(actor.healTimer>=interval-1e-8){actor.health=Math.min(RECOVERY_HEALTH,actor.health+1);actor.healTimer=actor.health>=RECOVERY_HEALTH?0:Math.max(0,actor.healTimer-interval);}
     }
     if(actor.health>=RECOVERY_HEALTH)actor.healTimer=0;
-    actor.reload+=dt;const reloadInterval=hedgehogRecoveryInterval(actor.driver);if(actor.reload>=reloadInterval-1e-8){actor.ammo=Math.min(6,actor.ammo+1);actor.reload=Math.max(0,actor.reload-reloadInterval);}
+    actor.reload+=dt;const reloadInterval=hedgehogRecoveryInterval(actor.driver);if(actor.reload>=reloadInterval-1e-8){actor.ammo=Math.min(itemCapacity(actor.driver,'hedgehog'),actor.ammo+1);actor.reload=Math.max(0,actor.reload-reloadInterval);}
     if((actor===r&&!r.multiplayer)||actor.human){
       const control=inputs?.get(actor.id)??(actor===r?keys:new Set());
       const held=control.keys instanceof Set?control.keys:control;

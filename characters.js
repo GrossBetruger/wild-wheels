@@ -14,7 +14,14 @@ export function drawCricketProjectile(m,phase){
   }
 }
 
-export function drawNewDriver(m,driver,turn,progress){
+export function drawHoustonHelmet(m){
+  m.ball(0,3.71,.03,1.08,1.09,.99,'#f2f3ea',14,8);
+  m.ball(0,3.73,.6,.93,.87,.57,'#628798',12,7);
+  for(const side of [-1,1])m.ball(side*1.04,3.57,.16,.18,.28,.25,'#86a9b7',8,5);
+  m.box(-.45,4.61,.03,.055,.4,.055,'#8ca5af');m.ball(-.45,5.03,.03,.1,.1,.1,'#e79a50',7,4);
+}
+
+export function drawNewDriver(m,driver,turn,progress,helmet=true){
   if(driver<4)return false;
   const skin=['#91a9bc','#78ad41','#edc5ab','#a99074'][driver-4];
   const suit=driver===7?'#eef0e9':driver===6?'#20232d':skin;
@@ -55,8 +62,9 @@ export function drawNewDriver(m,driver,turn,progress){
       m.box(0,2.25,-.82,1.32,1.18,.5,'#ced9dc');
       for(const side of [-1,1])m.ball(side*.53,2.42,-1.07,.24,.64,.24,'#87acb9',8,5);
       m.ball(0,2.99,.02,.85,.19,.79,'#647d8b',12,4);
-      m.ball(0,3.71,.03,1.08,1.09,.99,'#f2f3ea',14,8);
-      m.ball(0,3.73,.6,.93,.87,.57,'#628798',12,7);
+      m.ball(0,3.65,.13,.86,.89,.78,skin,12,7);
+      for(const side of [-1,1])m.ball(side*.78,3.67,.14,.23,.25,.2,skin,8,5);
+      if(helmet)drawHoustonHelmet(m);
       m.ball(0,3.68,.96,.73,.72,.36,skin,12,7);
       m.ball(0,3.63,1.15,.65,.6,.2,'#e0ceb0',12,7);
       for(const side of [-1,1]){
@@ -64,12 +72,10 @@ export function drawNewDriver(m,driver,turn,progress){
         m.box(side*.31,3.82,1.38,.23,.045,.035,'#261f25');
         m.ball(side*.29,3.88,1.38,.055,.035,.025,'#f4ead9',5,3);
         m.ball(side*.44,3.47,1.31,.14,.08,.025,'#cf9e88',7,4);
-        m.ball(side*1.04,3.57,.16,.18,.28,.25,'#86a9b7',8,5);
       }
       m.ball(0,3.57,1.43,.15,.1,.09,'#322a2c');m.box(0,3.35,1.34,.3,.04,.025,'#755b47');
       m.box(0,2.2,.73,.68,.46,.1,'#6b91a4');m.box(-.14,2.53,.76,.24,.1,.035,'#e89a4c');
       m.ball(.19,2.56,.8,.065,.065,.03,'#d7ef8d',6,4);
-      m.box(-.45,4.61,.03,.055,.4,.055,'#8ca5af');m.ball(-.45,5.03,.03,.1,.1,.1,'#e79a50',7,4);
       break;
   }
   for(const side of [-1,1]){

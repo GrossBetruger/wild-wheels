@@ -34,7 +34,7 @@ test('Rust-owned weapons consume ammo once and a missile hit awards its killer a
   const core=new ArenaCore(seed);core.step(1/60,[{actor:0,keys:[],actions:[{type:'fire',id:0,afterMove:-1}]}]);
   assert.equal(core.snapshot().missiles,0);
   for(let i=0;i<40;i++)core.step(1/60,[{actor:0,keys:[],actions:[{type:'fire',id:0,afterMove:-1}]}]);
-  assert.equal(core.snapshot().kills,1);assert.equal(core.snapshot().bots[0].deaths,1);assert.equal(core.snapshot().ammo,5);
+  assert.equal(core.snapshot().kills,1);assert.equal(core.snapshot().bots[0].deaths,1);assert.equal(core.snapshot().ammo,10);
 });
 
 test('invalid Rust frame commands do not advance or mutate the arena',()=>{

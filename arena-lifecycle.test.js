@@ -36,5 +36,5 @@ test('test scenarios can reuse filtered entity lists without replacing their ent
   const room={code:'07',arena:0,botCount:0,host:0,members:new Map()};app.makeWorld(room);app.rooms.set(room.code,room);app.join(room,{name:'Host',driver:0});
   Object.assign(room.world,{phase:'racing',fireCooldown:0});app.controls(room.members.get(0),{sequence:0,keys:[],actions:[{type:'fire'}]});app.step(1/60);
   room.world.projectiles=room.world.projectiles.filter(shot=>shot.owner===0);
-  assert.equal(room.world.projectiles.length,1);assert.equal(room.world.projectiles[0].kind,'hedgehog');app.step(1/60);assert.equal(room.world.ammo,4);
+  assert.equal(room.world.projectiles.length,1);assert.equal(room.world.projectiles[0].kind,'hedgehog');app.step(1/60);assert.equal(room.world.ammo,9);
 });

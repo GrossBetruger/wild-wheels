@@ -49,13 +49,13 @@ test('spawn protection prevents damage and self-hits never award kills',()=>{
 test('a killed player respawns with health, weapons, and temporary protection',()=>{
   const r=createBattle(0,0,()=>.5);r.phase='racing';r.shield=0;r.bots=[];
   damageBattle(r,r,99,3);for(let i=0;i<61;i++)tickBattle(r,new Set(),.05);
-  assert.equal(r.destroyed,0);assert.equal(r.health,3);assert.equal(r.ammo,5);assert.equal(r.missiles,1);assert.ok(r.shield>1);assert.equal(blocked(arenas[0],r.wx,r.wz),false);
+  assert.equal(r.destroyed,0);assert.equal(r.health,3);assert.equal(r.ammo,10);assert.equal(r.missiles,1);assert.ok(r.shield>1);assert.equal(blocked(arenas[0],r.wx,r.wz),false);
 });
 test('hedgehogs fired in an arena can hit an opponent and consume ammo',()=>{
   const r=createBattle(0,0,()=>.5);r.phase='racing';r.wx=-70;r.wz=-70;r.heading=0;r.fireCooldown=0;r.shield=0;
   const victim=r.bots[0];victim.wx=-70;victim.wz=-60;victim.shield=0;victim.health=1;victim.fireCooldown=10;
   fireBattle(r);for(let i=0;i<6;i++)tickBattle(r,new Set(),.05);
-  assert.equal(r.ammo,4);assert.equal(victim.destroyed>0,true);assert.equal(r.kills,1);
+  assert.equal(r.ammo,9);assert.equal(victim.destroyed>0,true);assert.equal(r.kills,1);
 });
 test('cover blocks direct shots in both arena layouts',()=>{
   for(const arena of [0,1]){const r=createBattle(0,arena,()=>.5);r.phase='racing';r.wx=0;r.wz=-25;r.heading=0;r.fireCooldown=0;r.shield=0;r.bots=[];fireBattle(r);for(let i=0;i<10;i++)tickBattle(r,new Set(),.05);assert.equal(r.projectiles.length,0);}
@@ -107,7 +107,7 @@ test('weapons fire in the facing direction during a sideways arena drift',()=>{
   const r=createBattle(0,0,()=>.5);Object.assign(r,{phase:'racing',wx:-65,wz:0,heading:0,motionHeading:0,cameraHeading:0,speed:400,bots:[],supplies:[],fireCooldown:0,item:'hedgehog'});
   for(let frame=0;frame<40;frame++)tickBattle(r,new Set(['arrowup','shift','arrowleft']),1/60);
   fireBattle(r);const shot=r.projectiles[0];
-  assert.ok(Math.cos(shot.heading)<-.99,'The shot aims behind the original direction of travel');assert.ok(shot.wz<r.wz);assert.equal(r.ammo,4);assert.equal(r.wasDrifting,true);
+  assert.ok(Math.cos(shot.heading)<-.99,'The shot aims behind the original direction of travel');assert.ok(shot.wz<r.wz);assert.equal(r.ammo,9);assert.equal(r.wasDrifting,true);
 });
 test('stationary turns, straight driving, and brief drift taps cannot earn a boost',()=>{
   for(const [speed,keys,frames] of [[0,['shift','arrowleft'],40],[400,['shift','arrowup'],20],[400,['shift','arrowleft','arrowup'],6]]){
@@ -140,10 +140,10 @@ test('Vulcan fires twelve free shots per second while carried hedgehogs regenera
   assert.equal(r.events.filter(e=>e==='vulcanFire').length,12);assert.equal(r.ammo,3);assert.ok(r.vulcan>13.99&&r.vulcan<14.01);
 });
 test('Vulcan expires after fifteen seconds and ordinary shots spend ammo again',()=>{
-  const r=createBattle(0,0,()=>.5);Object.assign(r,{phase:'racing',vulcan:15,ammo:5,bots:[],supplies:[]});
+  const r=createBattle(0,0,()=>.5);Object.assign(r,{phase:'racing',vulcan:15,ammo:14,bots:[],supplies:[]});
   for(let frame=0;frame<299;frame++)tickBattle(r,new Set(),.05);
   assert.ok(r.vulcan>0);tickBattle(r,new Set(),.05);tickBattle(r,new Set(),.05);assert.equal(r.vulcan,0);
-  fireBattle(r);assert.equal(r.ammo,5);assert.equal(r.projectiles[0].vulcan,false);assert.equal(r.fireCooldown,.45);
+  fireBattle(r);assert.equal(r.ammo,13);assert.equal(r.projectiles[0].vulcan,false);assert.equal(r.fireCooldown,.225);
 });
 test('dying breaks the kill streak and removes the Vulcan before respawning',()=>{
   const r=createBattle(0,0,()=>.5);Object.assign(r,{phase:'racing',killStreak:2,vulcan:6,shield:0});r.bots[0].shield=0;

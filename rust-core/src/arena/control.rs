@@ -31,7 +31,7 @@ impl Room {
 fn initial_actor(id:usize,skill:f64)->Actor {
     let angle=(id*8/6)as f64*std::f64::consts::FRAC_PI_4;let x=angle.sin()*78.0;let z=angle.cos()*78.0;let heading=(-x).atan2(-z);
     Actor{id,driver:id%DRIVER_NAMES.len(),color:COLORS[id].into(),wx:x,wz:z,heading,motion_heading:heading,camera_heading:heading,somersault_camera_start:heading,
-        health:3.0,shield:2.0,ammo:5,missiles:1,turbos:1,item:"hedgehog".into(),fire_cooldown:0.5,chaff:4,skill,..Actor::default()}
+        health:3.0,shield:2.0,ammo:START_HEDGEHOGS,missiles:1,turbos:1,item:"hedgehog".into(),fire_cooldown:0.5,chaff:4,skill,..Actor::default()}
 }
 impl Game {
     fn create_room(room:&Room)->Result<Self,()> {
@@ -59,6 +59,7 @@ impl Game {
             match person {
                 Some(p)=>{
                     actor.name=Some(p.name.trim().into());actor.driver=p.driver;actor.bomber=p.role=="bomber";
+                    actor.ammo=actor.ammo.min(item_capacity(p.driver,"hedgehog"));actor.missiles=actor.missiles.min(item_capacity(p.driver,"missile"));actor.turbos=actor.turbos.min(item_capacity(p.driver,"boost"));actor.bomb_ammo=actor.bomb_ammo.min(item_capacity(p.driver,"abomb"));actor.stink_ammo=actor.stink_ammo.min(item_capacity(p.driver,"stink"));
                     if !was_human{actor.notice.clear();actor.notice_time=0.0;}
                     if actor.bomber&&(!was_human||!was_bomber){actor.bomb_ammo=2;actor.stink_ammo=2;actor.bomb_reload=0.0;actor.speed=0.0;actor.shield=0.0;actor.destroyed=0.0;actor.dizzy=0.0;}
                 },

@@ -51,7 +51,7 @@ test('driving and steering respond on the next frame without another server upda
   assert.ok(view.heading<0);
   assert.equal(world.wz,60);
   assert.equal(world.health,3);
-  assert.equal(world.ammo,5);
+  assert.equal(world.ammo,10);
 });
 
 test('small server corrections settle smoothly without a sudden position jump',()=>{
@@ -86,5 +86,5 @@ test('a delayed acknowledgment preserves the second movement without replaying t
   const view=prediction.sample(new Set(),0,.1);
   assert.ok(Math.abs(view.wz-60.02125)<1e-9);
   assert.equal(view.speed,10);
-  assert.equal(world.health,3);assert.equal(world.ammo,5);assert.equal(world.projectiles.length,0);
+  assert.equal(world.health,3);assert.equal(world.ammo,10);assert.equal(world.projectiles.length,0);
 });

@@ -1,9 +1,9 @@
 import { sampleTrack, branches } from './track.js';
 import { LENGTH, drivers, pickupType } from './engine.js';
-import { arenas, combatPose, somersaultPose, BOMB_FALL_TIME, BOMB_RADIUS, STINK_RADIUS, DIZZY_DURATION } from './combat.js';
+import { arenas, combatPose, somersaultPose, BOMB_FALL_TIME, BOMB_RADIUS, STINK_RADIUS, DIZZY_DURATION, VULCAN_DURATION } from './combat.js';
 import { kartNameplates } from './nameplates.js';
 import { bomberCamera } from './mobile.js';
-import {drawNewDriver,drawRoadster,drawRoadsterJets,drawCricketHaze,drawCricketProjectile} from './characters.js';
+import {drawNewDriver,drawRoadster,drawRoadsterJets,drawCricketHaze,drawCricketProjectile,drawHoustonHelmet} from './characters.js';
 const rgb=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255);
 const sub=(a,b)=>a.map((v,i)=>v-b[i]);
 const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
@@ -107,9 +107,9 @@ export class Renderer {
     const stand=sampleTrack(.025,-2.05);m.at(stand.x,0,stand.z,Math.atan2(stand.tx,stand.tz));for(let i=0;i<4;i++){m.box(-i*2,0,0,2,1+i*1.5,24,'#ded3b8');for(let j=0;j<12;j++){m.ball(-i*2,2+i*1.5,-11+j*2,.5,.8,.5,['#edbf60','#865dbc','#e07862','#659fae'][(i+j)%4],6,4);}}
     m.at(0,0,0);this.gl.bindBuffer(this.gl.ARRAY_BUFFER,this.staticBuffer);this.gl.bufferData(this.gl.ARRAY_BUFFER,new Float32Array(m.data),this.gl.STATIC_DRAW);this.staticCount=m.data.length/9;this.track=track;
   }
-  kart(m,p,color,driver,yaw=0,spin=0,boost=false,clock=0,celebrate=0,jump=null){
+  kart(m,p,color,driver,yaw=0,spin=0,boost=false,clock=0,celebrate=0,jump=null,helmet=true){
     if(driver===6)color='#e8edf2';
-    if(!this.buildingModel&&(celebrate<=0||jump)){const angle=Math.atan2(p.tx,p.tz)-yaw+spin;m.at(p.x,.13,p.z,angle);m.disc(.2,0,.25,2.3,3,'#3a4147');this.model(`kart:${driver}:${color}`,p.x,jump?.height??0,p.z,angle,mesh=>this.kart(mesh,{x:0,z:0,tx:0,tz:1},color,driver),jump?.pitch??0);if(boost||jump)this.afterburner(p,angle,clock,jump,driver);return;}
+    if(!this.buildingModel&&(celebrate<=0||jump)){const angle=Math.atan2(p.tx,p.tz)-yaw+spin;m.at(p.x,.13,p.z,angle);m.disc(.2,0,.25,2.3,3,'#3a4147');this.model(`kart:${driver}:${color}${driver===7&&!helmet?':bare':''}`,p.x,jump?.height??0,p.z,angle,mesh=>this.kart(mesh,{x:0,z:0,tx:0,tz:1},color,driver,0,0,false,0,0,null,helmet),jump?.pitch??0);if(boost||jump)this.afterburner(p,angle,clock,jump,driver);return;}
     const angle=Math.atan2(p.tx,p.tz)-yaw+spin;m.at(p.x,.13,p.z,angle);if(!this.buildingModel)m.disc(.2,0,.25,2.3,3,'#3a4147');
     if(driver===6)drawRoadster(m);
     if(driver!==6){
@@ -121,7 +121,7 @@ export class Renderer {
     const progress=1.6-celebrate,envelope=celebrate>0?Math.min(1,progress/.25,celebrate/.4):0;
     const turn=envelope*envelope*(3-2*envelope),bounce=turn*Math.sin(progress*15)*.1;
     m.at(p.x,.13+bounce,p.z,angle+Math.PI*turn);
-    if(!drawNewDriver(m,driver,turn,progress)){
+    if(!drawNewDriver(m,driver,turn,progress,helmet)){
     m.ball(0,2.2,0,1,1.1,.8,driver===0?'#252b36':['#9a9ba0','#d3883f','#8c5f42'][driver-1]);
     const fur=['#eee8d8','#969798','#e69a43','#9b7250'][driver];
     m.ball(0,3.55,.15,1.05,1.05,.94,fur,12,7);
@@ -148,6 +148,15 @@ export class Renderer {
     m.box(0,1.2,-2.25,.8,.35,.12,'#f7edce');m.box(0,1.26,-2.33,.12,.25,.03,'#33364b');
     for(const side of [-1,1]){m.ball(side*1.2,.75,-2.45,.31,.31,.5,'#69788b',10,5);m.ball(side*1.2,.75,-2.85,.24,.24,.08,'#161d2a',10,4);}
     if(boost)this.afterburner(p,angle,clock,null,driver);
+  }
+  houstonHelmet(p,actor,time,jump){
+    if(actor.vulcan<=0){this.helmetFlights.delete(actor.id);return;}
+    let flight=this.helmetFlights.get(actor.id);
+    if(!flight||actor.vulcan>flight.remaining+.05){flight={start:time-Math.max(0,VULCAN_DURATION-actor.vulcan),remaining:actor.vulcan};this.helmetFlights.set(actor.id,flight);}
+    flight.remaining=actor.vulcan;
+    const age=Math.max(0,time-flight.start);if(age>=1.1)return;
+    const progress=age/1.1,behind=progress*3;
+    this.model('houston:helmet',p.x-Math.sin(actor.heading)*behind,.13+(jump?.height??0)+progress*6+progress*progress*4,p.z-Math.cos(actor.heading)*behind,actor.heading+progress*Math.PI*2,drawHoustonHelmet);
   }
   afterburner(p,angle,clock,jump=null,driver=0){
     if(driver===5){drawCricketHaze(this.glow,this.smoke,p,angle,clock,jump);return;}
@@ -231,6 +240,8 @@ export class Renderer {
     m.at(0,0,0);this.gl.bindBuffer(this.gl.ARRAY_BUFFER,this.staticBuffer);this.gl.bufferData(this.gl.ARRAY_BUFFER,new Float32Array(m.data),this.gl.STATIC_DRAW);this.staticCount=m.data.length/9;this.track=`arena-${index}`;
   }
   drawBattle(r,time){
+    const helmetScene=`${r.arena}:${r.soundEpoch}:${r.id}`;
+    if(this.helmetScene!==helmetScene||time<(this.helmetTime??0)){this.helmetScene=helmetScene;this.helmetFlights=new Map();}this.helmetTime=time;
     if(this.track!==`arena-${r.arena}`)this.arenaScenery(r.arena);
     const gl=this.gl,canvas=this.canvas,width=Math.round(canvas.clientWidth*this.pixelRatio()),height=Math.round(canvas.clientHeight*this.pixelRatio());if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;}gl.viewport(0,0,width,height);
     const sky=rgb(arenas[r.arena].sky);gl.clearColor(...sky,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(this.program);
@@ -257,7 +268,8 @@ export class Renderer {
       const pose=combatPose(actor);if(actor.destroyed){m.at(pose.x,.1,pose.z);m.disc(0,0,0,2,3,'#343344');continue;}
       if(overview){m.at(pose.x,.08,pose.z);m.disc(0,0,0,3.6,3.6,actor.color??drivers[actor.driver].color);}
       const jump=somersaultPose(actor);
-      this.kart(m,pose,actor.color??drivers[actor.driver].color,actor.driver,0,0,actor.boost>0,time,actor.celebrate,jump);
+      this.kart(m,pose,actor.color??drivers[actor.driver].color,actor.driver,0,0,actor.boost>0,time,actor.celebrate,jump,actor.driver!==7||actor.vulcan<=0);
+      if(actor.driver===7)this.houstonHelmet(pose,actor,time,jump);
       if(actor.dizzy>0)for(let i=0;i<4;i++){const angle=time*3+i*Math.PI/2;m.at(pose.x+Math.sin(angle)*3.2,6.8+Math.sin(angle*2)*.5,pose.z+Math.cos(angle)*3.2,angle);m.box(0,0,0,1.2,.22,.3,'#fff08b');m.box(0,0,0,.3,.22,1.2,'#fff08b');this.glow.at(m.origin[0],m.origin[1],m.origin[2]);this.glow.particle(0,0,0,.8,[.7,.6,.05]);}
       if(actor.vulcan>0){
         const pulse=.8+.2*Math.sin(time*4);this.glow.at(pose.x,.15,pose.z);

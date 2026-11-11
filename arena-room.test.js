@@ -8,7 +8,7 @@ test('a Rust-created multiplayer room spawns distinct drivers and two of each bo
   const core=ArenaCore.room({code:'07',host:0,arena:1,bots:2,epoch:3,seed:41,players:[{id:0,name:'Oren',driver:0,role:'driver'},{id:1,name:'Bomber',driver:2,role:'bomber'}]});
   const host=decodeBinarySnapshot(core.packet(0)),guest=decodeBinarySnapshot(core.packet(1));
   assert.equal(host.code,'07');assert.equal(host.host,0);assert.equal(host.bots,2);assert.equal(host.players.length,2);assert.equal(host.world.bots.length,3);
-  assert.equal(host.world.phase,'ready');assert.equal(host.world.soundEpoch,3);assert.equal(host.world.health,3);assert.equal(host.world.ammo,5);assert.equal(host.world.chaff,4);
+  assert.equal(host.world.phase,'ready');assert.equal(host.world.soundEpoch,3);assert.equal(host.world.health,3);assert.equal(host.world.ammo,10);assert.equal(host.world.chaff,4);
   assert.equal(guest.world.name,'Bomber');assert.equal(guest.world.driver,2);assert.equal(guest.world.bomber,true);assert.equal(guest.world.bombAmmo,2);assert.equal(guest.world.stinkAmmo,2);
   assert.notEqual(host.world.color,guest.world.color);assert.notEqual(host.world.wx,guest.world.wx);
   assert.equal(host.world.supplies.length,8);assert.equal(host.world.duration,180);assert.equal(host.world.targetScore,10);
@@ -20,7 +20,7 @@ test('lobby names, animal choices and guest play requests reach every player wit
   config.players[1]={id:1,name:'Fox 🦊',driver:2,role:'driver',wantsToPlay:true};config.startRequest={id:1,remainingMs:3000};core.configure(config);
   const packet=decodeBinarySnapshot(core.packet(1));
   assert.equal(packet.world.name,'Fox 🦊');assert.equal(packet.world.driver,2);assert.equal(packet.players[1].wantsToPlay,true);assert.equal(packet.startRequest.remainingMs,3000);
-  assert.equal(packet.world.wx,before.wx);assert.equal(packet.world.wz,before.wz);assert.equal(packet.world.ammo,5);
+  assert.equal(packet.world.wx,before.wx);assert.equal(packet.world.wz,before.wz);assert.equal(packet.world.ammo,10);
   config.players[1].wantsToPlay=false;config.players[1].playRequestRefused=true;config.startRequest=null;core.configure(config);
   const refused=decodeBinarySnapshot(core.packet(1));assert.equal(refused.startRequest,null);assert.equal(refused.players[1].playRequestRefused,true);
 });
@@ -37,7 +37,7 @@ test('a player joining a running Rust room gets a live protected kart and depart
   const config={code:'33',host:0,arena:0,bots:0,epoch:1,players:[{id:0,name:'Host',driver:0,role:'driver'}]};
   const core=ArenaCore.room(config);core.start();for(let i=0;i<181;i++)core.step(1/60);
   config.players.push({id:1,name:'Friend',driver:1,role:'driver'});core.configure(config);
-  const guest=decodeBinarySnapshot(core.packet(1));assert.equal(guest.world.phase,'racing');assert.equal(guest.world.destroyed,0);assert.equal(guest.world.shield,2);assert.equal(guest.world.ammo,5);assert.equal(guest.world.bots.length,1);
+  const guest=decodeBinarySnapshot(core.packet(1));assert.equal(guest.world.phase,'racing');assert.equal(guest.world.destroyed,0);assert.equal(guest.world.shield,2);assert.equal(guest.world.ammo,10);assert.equal(guest.world.bots.length,1);
   config.players.shift();config.host=1;core.configure(config);
   const transferred=decodeBinarySnapshot(core.packet(1));assert.equal(transferred.host,1);assert.equal(transferred.world.phase,'racing');assert.equal(transferred.world.bots.length,0);assert.equal(transferred.world.name,'Friend');
 });
