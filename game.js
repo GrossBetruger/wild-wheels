@@ -237,8 +237,9 @@ function hud(){
   const vulcanVisible=vulcan&&battleActive(race);
   document.querySelector('.viewport').classList.toggle('vulcan-active',vulcanVisible);routeHint.classList.toggle('vulcan-banner',vulcanVisible);routeHint.classList.toggle('vulcan-ending',vulcanVisible&&race.vulcan<=3);
   if(vulcanVisible)routeHint.textContent=`${race.vulcan<=3?'VULCAN ENDING':'VULCAN ACTIVE'} · ${race.vulcan.toFixed(1)}s`;
-  vulcanStatus.classList.toggle('hidden',!vulcan||race.phase!=='racing');vulcanTitle.textContent=`HEDGEHOG VULCAN · ${(race.vulcan??0).toFixed(1)}s`;vulcanTime.value=race.vulcan??0;
-  if(vulcan&&race.item==='hedgehog')$('item-name').textContent='VULCAN · HOLD SPACE TO SPRAY';
+  const vulcanAnimal=race.driver===5?'CRICKET':'HEDGEHOG';
+  vulcanStatus.classList.toggle('hidden',!vulcan||race.phase!=='racing');vulcanTitle.textContent=`${vulcanAnimal} VULCAN · ${(race.vulcan??0).toFixed(1)}s`;vulcanTime.setAttribute('aria-label',`${vulcanAnimal.toLowerCase()} Vulcan seconds remaining`);vulcanTime.value=race.vulcan??0;
+  if(vulcan&&race.item==='hedgehog'){$('item-name').textContent='VULCAN · HOLD SPACE TO SPRAY';if(race.driver===5)$('item').textContent='🦗';}
   for(const [type,card] of ammoCards){const count={hedgehog:race.ammo,missile:race.missiles,boost:race.turbos}[type],powered=vulcan&&type==='hedgehog',boost=type==='boost';card.count.textContent=powered?'∞':count;card.name.textContent=powered?'VULCAN':boost?'X · TURBO':card.label;card.button.disabled=(!powered&&count===0)||race.phase==='finished'||boost&&(race.phase!=='racing'||race.destroyed>0||mode!=='combat'&&race.finishCountdown!==null||race.boost>0);card.button.classList.toggle('selected',!boost&&race.item===type);card.button.classList.toggle('vulcan',powered);card.button.setAttribute('aria-pressed',String(!boost&&race.item===type));card.button.setAttribute('aria-label',boost?`Use turbo, ${count} charges remaining. Keyboard X.`:`${powered?'Unlimited Vulcan hedgehogs':`${count} ${card.label.toLowerCase()}`}${race.item===type?', selected':''}`);}
   if(race.phase==='countdown'){const n=Math.ceil(race.countdown);if(n!==lastCount){tone(300+n*100);lastCount=n;}$('message').querySelector('h2').textContent=n;}
   if(lastPhase===race.phase)return;lastPhase=race.phase;

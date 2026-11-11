@@ -1,4 +1,19 @@
 // Procedural models share the game's existing GPU model cache and kart physics.
+export function drawCricketProjectile(m,phase){
+  m.ball(0,0,-.25,.33,.27,.69,'#659c35',8,5);
+  m.ball(0,.12,.43,.36,.33,.34,'#8dc84b',8,5);
+  m.ball(0,.18,-.3,.27,.12,.5,'#3f6e28',7,4);
+  for(const side of [-1,1]){
+    m.ball(side*.23,.24,.67,.12,.16,.09,'#e6efc6',6,4);
+    m.ball(side*.23,.24,.74,.055,.09,.035,'#203622',5,3);
+    for(let i=0;i<5;i++)m.ball(side*(.16+i*.07),.37+i*.11,.6+i*.1,.035,.065,.035,'#344d26',5,3);
+    const kick=Math.sin(phase*Math.PI/2+side)*.2;
+    m.ball(side*.55,-.03,-.52,.19,.17,.48,'#8dc84b',7,4);
+    m.ball(side*.81,-.21,-.39+kick,.07,.09,.44,'#344d26',6,3);
+    for(const z of [-.07,.27])m.ball(side*.48,-.2,z-kick,.27,.045,.055,'#456b2a',6,3);
+  }
+}
+
 export function drawNewDriver(m,driver,turn,progress){
   if(driver<4)return false;
   const skin=['#91a9bc','#78ad41','#edc5ab'][driver-4];
