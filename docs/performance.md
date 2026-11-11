@@ -1,5 +1,7 @@
 # Performance measurements
 
+Follow-up: [JSON versus JavaScript binary versus Rust/Wasm encoding](encoding-comparison.md), including Node and Chrome measurements and compressed packet sizes.
+
 Recorded November 11, 2026 with Chrome/ANGLE on an Apple M4 Pro, hardware rendering, Balanced graphics at 668 × 418 pixels. [Raw results](../diagnostics/performance-profile.json).
 
 Run the same profiler:

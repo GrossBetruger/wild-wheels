@@ -1,0 +1,563 @@
+{
+  "frameBudgetEnforced": true,
+  "errors": [],
+  "transportErrors": [],
+  "serverGaps": [],
+  "results": [
+    {
+      "run": 1,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+      "batchSize": 10,
+      "results": [
+        {
+          "scenario": "driving",
+          "results": [
+            {
+              "name": "current-json",
+              "encode": {
+                "samples": 180,
+                "meanMs": 0.012555555548104983,
+                "p95Ms": 0.020000000298023225
+              },
+              "decode": {
+                "samples": 180,
+                "meanMs": 0.009111111118561697,
+                "p95Ms": 0.020000000298023225
+              },
+              "roundtrip": {
+                "samples": 180,
+                "meanMs": 0.02211111108875939,
+                "p95Ms": 0.05
+              }
+            },
+            {
+              "name": "javascript-binary",
+              "encode": {
+                "samples": 180,
+                "meanMs": 0.011222222240434768,
+                "p95Ms": 0.020000000298023225
+              },
+              "decode": {
+                "samples": 180,
+                "meanMs": 0.007611111108627587,
+                "p95Ms": 0.020000000298023225
+              },
+              "roundtrip": {
+                "samples": 180,
+                "meanMs": 0.01927777780426877,
+                "p95Ms": 0.030000000447034835
+              }
+            },
+            {
+              "name": "rust-wasm-binary",
+              "encode": {
+                "samples": 180,
+                "meanMs": 0.011444444465968357,
+                "p95Ms": 0.020000000298023225
+              },
+              "decode": {
+                "samples": 180,
+                "meanMs": 0.007666666673289413,
+                "p95Ms": 0.019999999552965164
+              },
+              "roundtrip": {
+                "samples": 180,
+                "meanMs": 0.02033333330932593,
+                "p95Ms": 0.039999999850988385
+              }
+            }
+          ]
+        },
+        {
+          "scenario": "drifting",
+          "results": [
+            {
+              "name": "current-json",
+              "encode": {
+                "samples": 180,
+                "meanMs": 0.06749999999172167,
+                "p95Ms": 0.09000000059604644
+              },
+              "decode": {
+                "samples": 180,
+                "meanMs": 0.05577777777281073,
+                "p95Ms": 0.08000000044703484
+              },
+              "roundtrip": {
+                "samples": 180,
+                "meanMs": 0.12333333330849806,
+                "p95Ms": 0.16999999955296516
+              }
+            },
+            {
+              "name": "javascript-binary",
+              "encode": {
+                "samples": 180,
+                "meanMs": 0.023388888951804937,
+                "p95Ms": 0.039999999850988385
+              },
+              "decode": {
+                "samples": 180,
+                "meanMs": 0.015944444433682512,
+                "p95Ms": 0.029999999701976775
+              },
+              "roundtrip": {
+                "samples": 180,
+                "meanMs": 0.03866666667577293,
+                "p95Ms": 0.05
+              }
+            },
+            {
+              "name": "rust-wasm-binary",
+              "encode": {
+                "samples": 180,
+                "meanMs": 0.026388888864053633,
+                "p95Ms": 0.039999999850988385
+              },
+              "decode": {
+                "samples": 180,
+                "meanMs": 0.017833333325882793,
+                "p95Ms": 0.029999999701976775
+              },
+              "roundtrip": {
+                "samples": 180,
+                "meanMs": 0.04466666666997804,
+                "p95Ms": 0.06000000014901161
+              }
+            }
+          ]
+        },
+        {
+          "scenario": "six-player-vulcan",
+          "results": [
+            {
+              "name": "current-json",
+              "encode": {
+                "samples": 180,
+                "meanMs": 0.1593333333440953,
+                "p95Ms": 0.20999999940395356
+              },
+              "decode": {
+                "samples": 180,
+                "meanMs": 0.12683333337306973,
+                "p95Ms": 0.16999999955296516
+              },
+              "roundtrip": {
+                "samples": 180,
+                "meanMs": 0.287444444414642,
+                "p95Ms": 0.36999999955296514
+              }
+            },
+            {
+              "name": "javascript-binary",
+              "encode": {
+                "samples": 180,
+                "meanMs": 0.06033333330518674,
+                "p95Ms": 0.07999999970197677
+              },
+              "decode": {
+                "samples": 180,
+                "meanMs": 0.03994444443947738,
+                "p95Ms": 0.06000000014901161
+              },
+              "roundtrip": {
+                "samples": 180,
+                "meanMs": 0.09788888891124062,
+                "p95Ms": 0.1299999997019768
+              }
+            },
+            {
+              "name": "rust-wasm-binary",
+              "encode": {
+                "samples": 180,
+                "meanMs": 0.06633333334492321,
+                "p95Ms": 0.09000000059604644
+              },
+              "decode": {
+                "samples": 180,
+                "meanMs": 0.04394444447424675,
+                "p95Ms": 0.06000000014901161
+              },
+              "roundtrip": {
+                "samples": 180,
+                "meanMs": 0.10861111112352866,
+                "p95Ms": 0.15
+              }
+            }
+          ]
+        }
+      ],
+      "pass": true
+    },
+    {
+      "run": 2,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+      "batchSize": 10,
+      "results": [
+        {
+          "scenario": "driving",
+          "results": [
+            {
+              "name": "current-json",
+              "encode": {
+                "samples": 180,
+                "meanMs": 0.01194444443616603,
+                "p95Ms": 0.029999999701976775
+              },
+              "decode": {
+                "samples": 180,
+                "meanMs": 0.009277777771155044,
+                "p95Ms": 0.020000000298023225
+              },
+              "roundtrip": {
+                "samples": 180,
+                "meanMs": 0.021666666666666685,
+                "p95Ms": 0.05
+              }
+            },
+            {
+              "name": "javascript-binary",
+              "encode": {
+                "samples": 180,
+                "meanMs": 0.010888888881438321,
+                "p95Ms": 0.020000000298023225
+              },
+              "decode": {
+                "samples": 180,
+                "meanMs": 0.007777777781916999,
+                "p95Ms": 0.020000000298023225
+              },
+              "roundtrip": {
+                "samples": 180,
+                "meanMs": 0.01938888888806107,
+                "p95Ms": 0.039999999850988385
+              }
+            },
+            {
+              "name": "rust-wasm-binary",
+              "encode": {
+                "samples": 180,
+                "meanMs": 0.010555555547277136,
+                "p95Ms": 0.020000000298023225
+              },
+              "decode": {
+                "samples": 180,
+                "meanMs": 0.007222222222222224,
+                "p95Ms": 0.020000000298023225
+              },
+              "roundtrip": {
+                "samples": 180,
+                "meanMs": 0.01938888892117478,
+                "p95Ms": 0.030000000447034835
+              }
+            }
+          ]
+        },
+        {
+          "scenario": "drifting",
+          "results": [
+            {
+              "name": "current-json",
+              "encode": {
+                "samples": 180,
+                "meanMs": 0.06761111110862765,
+                "p95Ms": 0.1
+              },
+              "decode": {
+                "samples": 180,
+                "meanMs": 0.05488888889551166,
+                "p95Ms": 0.07999999970197677
+              },
+              "roundtrip": {
+                "samples": 180,
+                "meanMs": 0.1224444444684519,
+                "p95Ms": 0.17000000029802323
+              }
+            },
+            {
+              "name": "javascript-binary",
+              "encode": {
+                "samples": 180,
+                "meanMs": 0.02327777776867155,
+                "p95Ms": 0.030000000447034835
+              },
+              "decode": {
+                "samples": 180,
+                "meanMs": 0.01622222223215635,
+                "p95Ms": 0.029999999701976775
+              },
+              "roundtrip": {
+                "samples": 180,
+                "meanMs": 0.037333333334989005,
+                "p95Ms": 0.05
+              }
+            },
+            {
+              "name": "rust-wasm-binary",
+              "encode": {
+                "samples": 180,
+                "meanMs": 0.026222222199042643,
+                "p95Ms": 0.039999999850988385
+              },
+              "decode": {
+                "samples": 180,
+                "meanMs": 0.018555555567145377,
+                "p95Ms": 0.030000000447034835
+              },
+              "roundtrip": {
+                "samples": 180,
+                "meanMs": 0.043388888877299074,
+                "p95Ms": 0.06000000014901161
+              }
+            }
+          ]
+        },
+        {
+          "scenario": "six-player-vulcan",
+          "results": [
+            {
+              "name": "current-json",
+              "encode": {
+                "samples": 180,
+                "meanMs": 0.15444444444858366,
+                "p95Ms": 0.2
+              },
+              "decode": {
+                "samples": 180,
+                "meanMs": 0.1267777777670158,
+                "p95Ms": 0.1600000001490116
+              },
+              "roundtrip": {
+                "samples": 180,
+                "meanMs": 0.2720000000132455,
+                "p95Ms": 0.35
+              }
+            },
+            {
+              "name": "javascript-binary",
+              "encode": {
+                "samples": 180,
+                "meanMs": 0.05844444443782178,
+                "p95Ms": 0.07999999970197677
+              },
+              "decode": {
+                "samples": 180,
+                "meanMs": 0.037277777795162476,
+                "p95Ms": 0.05
+              },
+              "roundtrip": {
+                "samples": 180,
+                "meanMs": 0.09549999999917211,
+                "p95Ms": 0.12000000029802323
+              }
+            },
+            {
+              "name": "rust-wasm-binary",
+              "encode": {
+                "samples": 180,
+                "meanMs": 0.06477777776618801,
+                "p95Ms": 0.08000000044703484
+              },
+              "decode": {
+                "samples": 180,
+                "meanMs": 0.04338888888557752,
+                "p95Ms": 0.06000000014901161
+              },
+              "roundtrip": {
+                "samples": 180,
+                "meanMs": 0.10505555555638332,
+                "p95Ms": 0.13999999985098838
+              }
+            }
+          ]
+        }
+      ],
+      "pass": true
+    },
+    {
+      "run": 3,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+      "batchSize": 10,
+      "results": [
+        {
+          "scenario": "driving",
+          "results": [
+            {
+              "name": "current-json",
+              "encode": {
+                "samples": 180,
+                "meanMs": 0.011222222215599488,
+                "p95Ms": 0.029999999701976775
+              },
+              "decode": {
+                "samples": 180,
+                "meanMs": 0.00972222221394381,
+                "p95Ms": 0.020000000298023225
+              },
+              "roundtrip": {
+                "samples": 180,
+                "meanMs": 0.02111111112352877,
+                "p95Ms": 0.05
+              }
+            },
+            {
+              "name": "javascript-binary",
+              "encode": {
+                "samples": 180,
+                "meanMs": 0.011111111094554274,
+                "p95Ms": 0.020000000298023225
+              },
+              "decode": {
+                "samples": 180,
+                "meanMs": 0.006666666670805876,
+                "p95Ms": 0.019999999552965164
+              },
+              "roundtrip": {
+                "samples": 180,
+                "meanMs": 0.02044444442623194,
+                "p95Ms": 0.030000000447034835
+              }
+            },
+            {
+              "name": "rust-wasm-binary",
+              "encode": {
+                "samples": 180,
+                "meanMs": 0.01083333334161177,
+                "p95Ms": 0.020000000298023225
+              },
+              "decode": {
+                "samples": 180,
+                "meanMs": 0.0072777777910232565,
+                "p95Ms": 0.010000000149011612
+              },
+              "roundtrip": {
+                "samples": 180,
+                "meanMs": 0.018444444446100154,
+                "p95Ms": 0.030000000447034835
+              }
+            }
+          ]
+        },
+        {
+          "scenario": "drifting",
+          "results": [
+            {
+              "name": "current-json",
+              "encode": {
+                "samples": 180,
+                "meanMs": 0.06750000000413926,
+                "p95Ms": 0.1
+              },
+              "decode": {
+                "samples": 180,
+                "meanMs": 0.05588888887729915,
+                "p95Ms": 0.07999999970197677
+              },
+              "roundtrip": {
+                "samples": 180,
+                "meanMs": 0.1220555555282367,
+                "p95Ms": 0.1600000001490116
+              }
+            },
+            {
+              "name": "javascript-binary",
+              "encode": {
+                "samples": 180,
+                "meanMs": 0.02305555555969478,
+                "p95Ms": 0.030000000447034835
+              },
+              "decode": {
+                "samples": 180,
+                "meanMs": 0.015777777776949966,
+                "p95Ms": 0.020000000298023225
+              },
+              "roundtrip": {
+                "samples": 180,
+                "meanMs": 0.039388888896339465,
+                "p95Ms": 0.06000000014901161
+              }
+            },
+            {
+              "name": "rust-wasm-binary",
+              "encode": {
+                "samples": 180,
+                "meanMs": 0.026388888905445735,
+                "p95Ms": 0.039999999850988385
+              },
+              "decode": {
+                "samples": 180,
+                "meanMs": 0.01766666666501101,
+                "p95Ms": 0.029999999701976775
+              },
+              "roundtrip": {
+                "samples": 180,
+                "meanMs": 0.04416666667494508,
+                "p95Ms": 0.06000000014901161
+              }
+            }
+          ]
+        },
+        {
+          "scenario": "six-player-vulcan",
+          "results": [
+            {
+              "name": "current-json",
+              "encode": {
+                "samples": 180,
+                "meanMs": 0.15433333331926008,
+                "p95Ms": 0.1899999998509884
+              },
+              "decode": {
+                "samples": 180,
+                "meanMs": 0.12322222222056654,
+                "p95Ms": 0.1600000001490116
+              },
+              "roundtrip": {
+                "samples": 180,
+                "meanMs": 0.2752777777446643,
+                "p95Ms": 0.35
+              }
+            },
+            {
+              "name": "javascript-binary",
+              "encode": {
+                "samples": 180,
+                "meanMs": 0.05805555554313799,
+                "p95Ms": 0.07999999970197677
+              },
+              "decode": {
+                "samples": 180,
+                "meanMs": 0.038000000007450595,
+                "p95Ms": 0.05
+              },
+              "roundtrip": {
+                "samples": 180,
+                "meanMs": 0.09538888893607585,
+                "p95Ms": 0.1299999997019768
+              }
+            },
+            {
+              "name": "rust-wasm-binary",
+              "encode": {
+                "samples": 180,
+                "meanMs": 0.06449999998841027,
+                "p95Ms": 0.08999999985098839
+              },
+              "decode": {
+                "samples": 180,
+                "meanMs": 0.04177777778771186,
+                "p95Ms": 0.06000000014901161
+              },
+              "roundtrip": {
+                "samples": 180,
+                "meanMs": 0.10683333333167759,
+                "p95Ms": 0.13999999985098838
+              }
+            }
+          ]
+        }
+      ],
+      "pass": true
+    }
+  ]
+}

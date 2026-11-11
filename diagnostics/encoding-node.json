@@ -1,0 +1,289 @@
+{
+  "node": "v22.19.0",
+  "platform": "darwin",
+  "arch": "arm64",
+  "results": [
+    {
+      "scenario": "driving",
+      "snapshots": 60,
+      "semanticEquality": true,
+      "binaryBytesIdentical": true,
+      "results": [
+        {
+          "name": "current-json",
+          "encode": {
+            "samples": 600,
+            "meanMs": 0.01688252166666667,
+            "p50Ms": 0.014375000000001137,
+            "p95Ms": 0.04004199999999969
+          },
+          "decode": {
+            "samples": 600,
+            "meanMs": 0.016412975000000454,
+            "p50Ms": 0.014625000000023647,
+            "p95Ms": 0.03233299999999417
+          },
+          "roundtrip": {
+            "samples": 600,
+            "meanMs": 0.033295496666667125,
+            "p50Ms": 0.02895899999998619,
+            "p95Ms": 0.07362500000000693
+          },
+          "rawBytes": 5129.9,
+          "compressedBytes": 1890.7666666666667,
+          "compressedMbpsAt30Hz": 0.453784
+        },
+        {
+          "name": "javascript-binary",
+          "encode": {
+            "samples": 600,
+            "meanMs": 0.01630026666666609,
+            "p50Ms": 0.013125000000002274,
+            "p95Ms": 0.028958000000002926
+          },
+          "decode": {
+            "samples": 600,
+            "meanMs": 0.015110425000000068,
+            "p50Ms": 0.013334000000014612,
+            "p95Ms": 0.025207999999992126
+          },
+          "roundtrip": {
+            "samples": 600,
+            "meanMs": 0.03141069166666616,
+            "p50Ms": 0.02679200000000037,
+            "p95Ms": 0.05362499999998249
+          },
+          "rawBytes": 5012.466666666666,
+          "compressedBytes": 1939.2166666666667,
+          "compressedMbpsAt30Hz": 0.465412
+        },
+        {
+          "name": "rust-wasm-binary",
+          "encode": {
+            "samples": 600,
+            "meanMs": 0.015005906666666392,
+            "p50Ms": 0.01304099999998698,
+            "p95Ms": 0.02679200000000037
+          },
+          "decode": {
+            "samples": 600,
+            "meanMs": 0.01502079999999978,
+            "p50Ms": 0.013374999999996362,
+            "p95Ms": 0.023374999999987267
+          },
+          "roundtrip": {
+            "samples": 600,
+            "meanMs": 0.03002670666666617,
+            "p50Ms": 0.026542000000006283,
+            "p95Ms": 0.051625000000001364
+          },
+          "rawBytes": 5012.466666666666,
+          "compressedBytes": 1939.2166666666667,
+          "compressedMbpsAt30Hz": 0.465412
+        }
+      ],
+      "wasmKernelOnly": {
+        "encode": {
+          "samples": 600,
+          "meanMs": 0.00020194833333320617,
+          "p50Ms": 0.00016600000000721593,
+          "p95Ms": 0.0007500000000106866
+        },
+        "decode": {
+          "samples": 600,
+          "meanMs": 0.00014629833333363725,
+          "p50Ms": 0.00012499999999704414,
+          "p95Ms": 0.0005409999999983484
+        }
+      }
+    },
+    {
+      "scenario": "drifting",
+      "snapshots": 60,
+      "semanticEquality": true,
+      "binaryBytesIdentical": true,
+      "results": [
+        {
+          "name": "current-json",
+          "encode": {
+            "samples": 600,
+            "meanMs": 0.1222904200000022,
+            "p50Ms": 0.12274999999999636,
+            "p95Ms": 0.1672500000000241
+          },
+          "decode": {
+            "samples": 600,
+            "meanMs": 0.09296645166666517,
+            "p50Ms": 0.09291699999999992,
+            "p95Ms": 0.12570799999997462
+          },
+          "roundtrip": {
+            "samples": 600,
+            "meanMs": 0.21525687166666738,
+            "p50Ms": 0.2173750000000041,
+            "p95Ms": 0.29220800000001645
+          },
+          "rawBytes": 19291.916666666668,
+          "compressedBytes": 6558.066666666667,
+          "compressedMbpsAt30Hz": 1.573936
+        },
+        {
+          "name": "javascript-binary",
+          "encode": {
+            "samples": 600,
+            "meanMs": 0.03593758166666712,
+            "p50Ms": 0.03620899999998528,
+            "p95Ms": 0.04929199999997991
+          },
+          "decode": {
+            "samples": 600,
+            "meanMs": 0.0228745850000008,
+            "p50Ms": 0.0217089999999871,
+            "p95Ms": 0.02870800000005147
+          },
+          "roundtrip": {
+            "samples": 600,
+            "meanMs": 0.05881216666666793,
+            "p50Ms": 0.05841600000002245,
+            "p95Ms": 0.07833299999998644
+          },
+          "rawBytes": 15569.133333333333,
+          "compressedBytes": 6079.1,
+          "compressedMbpsAt30Hz": 1.458984
+        },
+        {
+          "name": "rust-wasm-binary",
+          "encode": {
+            "samples": 600,
+            "meanMs": 0.032219774999998285,
+            "p50Ms": 0.03220800000002555,
+            "p95Ms": 0.044165999999961514
+          },
+          "decode": {
+            "samples": 600,
+            "meanMs": 0.024539318333333806,
+            "p50Ms": 0.024124999999969532,
+            "p95Ms": 0.03029100000003382
+          },
+          "roundtrip": {
+            "samples": 600,
+            "meanMs": 0.05675909333333209,
+            "p50Ms": 0.05675000000002228,
+            "p95Ms": 0.07391599999994014
+          },
+          "rawBytes": 15569.133333333333,
+          "compressedBytes": 6079.1,
+          "compressedMbpsAt30Hz": 1.458984
+        }
+      ],
+      "wasmKernelOnly": {
+        "encode": {
+          "samples": 600,
+          "meanMs": 0.004763321666666608,
+          "p50Ms": 0.004790999999954693,
+          "p95Ms": 0.006790999999907399
+        },
+        "decode": {
+          "samples": 600,
+          "meanMs": 0.0033063116666681935,
+          "p50Ms": 0.00333299999999781,
+          "p95Ms": 0.004666999999926702
+        }
+      }
+    },
+    {
+      "scenario": "six-player-vulcan",
+      "snapshots": 60,
+      "semanticEquality": true,
+      "binaryBytesIdentical": true,
+      "results": [
+        {
+          "name": "current-json",
+          "encode": {
+            "samples": 600,
+            "meanMs": 0.2937024700000014,
+            "p50Ms": 0.3010830000000624,
+            "p95Ms": 0.3975000000000364
+          },
+          "decode": {
+            "samples": 600,
+            "meanMs": 0.2268195299999953,
+            "p50Ms": 0.2318329999998241,
+            "p95Ms": 0.30508300000019517
+          },
+          "roundtrip": {
+            "samples": 600,
+            "meanMs": 0.5205219999999967,
+            "p50Ms": 0.5387909999999465,
+            "p95Ms": 0.7000410000000556
+          },
+          "rawBytes": 46460.23333333333,
+          "compressedBytes": 14214.85,
+          "compressedMbpsAt30Hz": 3.411564
+        },
+        {
+          "name": "javascript-binary",
+          "encode": {
+            "samples": 600,
+            "meanMs": 0.1057623000000054,
+            "p50Ms": 0.10658300000000054,
+            "p95Ms": 0.15591700000004494
+          },
+          "decode": {
+            "samples": 600,
+            "meanMs": 0.06948054499999595,
+            "p50Ms": 0.06704199999990124,
+            "p95Ms": 0.0959170000000995
+          },
+          "roundtrip": {
+            "samples": 600,
+            "meanMs": 0.17524284500000134,
+            "p50Ms": 0.17512499999998,
+            "p95Ms": 0.261792000000014
+          },
+          "rawBytes": 37958.666666666664,
+          "compressedBytes": 13313.983333333334,
+          "compressedMbpsAt30Hz": 3.195356
+        },
+        {
+          "name": "rust-wasm-binary",
+          "encode": {
+            "samples": 600,
+            "meanMs": 0.09200686999999183,
+            "p50Ms": 0.09224999999992178,
+            "p95Ms": 0.12783300000000963
+          },
+          "decode": {
+            "samples": 600,
+            "meanMs": 0.07118236333334114,
+            "p50Ms": 0.06966699999998127,
+            "p95Ms": 0.09341600000016115
+          },
+          "roundtrip": {
+            "samples": 600,
+            "meanMs": 0.16318923333333296,
+            "p50Ms": 0.1643749999998363,
+            "p95Ms": 0.22749999999996362
+          },
+          "rawBytes": 37958.666666666664,
+          "compressedBytes": 13313.983333333334,
+          "compressedMbpsAt30Hz": 3.195356
+        }
+      ],
+      "wasmKernelOnly": {
+        "encode": {
+          "samples": 600,
+          "meanMs": 0.010359736666667913,
+          "p50Ms": 0.010749999999916326,
+          "p95Ms": 0.014707999999927779
+        },
+        "decode": {
+          "samples": 600,
+          "meanMs": 0.007045651666670665,
+          "p50Ms": 0.007166999999981272,
+          "p95Ms": 0.009999999999990905
+        }
+      }
+    }
+  ]
+}
