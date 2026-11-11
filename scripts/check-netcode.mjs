@@ -1,3 +1,4 @@
+import {arenaFixture} from './arena-fixture.mjs';
 import { pathToFileURL } from 'node:url';
 import { writeFile } from 'node:fs/promises';
 import { Multiplayer } from '../multiplayer.js';
@@ -22,7 +23,7 @@ const percentile=(values,p)=>[...values].sort((a,b)=>a-b)[Math.min(values.length
 const degrees=(a,b)=>Math.abs(Math.atan2(Math.sin(a-b),Math.cos(a-b)))*180/Math.PI;
 
 export function simulate(profile,scenario){
-  const app=new Multiplayer();clearInterval(app.timer);
+  const app=new Multiplayer({fixtureWorld:arenaFixture});clearInterval(app.timer);
   const room={code:'07',arena:0,botCount:0,host:0,members:new Map()};
   app.makeWorld(room);app.rooms.set(room.code,room);
   if(scenario.guest)app.join(room,{name:'Host',driver:1});
