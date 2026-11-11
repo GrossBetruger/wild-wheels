@@ -39,7 +39,7 @@ impl Game{
         let data=[a.wx,a.wz,a.heading,a.motion_heading,a.camera_heading,a.speed,a.drift,a.boost,a.somersault,a.somersault_cooldown,a.dizzy,a.somersault_camera_start,a.yaw,f64::from(a.was_drifting),a.wall_cooldown,0.0];
         // This is entirely inside Wasm: no actor objects cross the JS boundary.
         unsafe{(*core::ptr::addr_of_mut!(crate::KARTS).cast::<crate::Kart>().add(id)).data=data;}
-        let flags=u32::from(advance)|u32::from(keys&1!=0)*2|u32::from(keys&2!=0)*4|u32::from(keys&16!=0)*8|u32::from(advance||id==0||a.human)*16|u32::from(g.finish_countdown.is_none())*32|u32::from(id==0)*64;
+        let flags=u32::from(advance)|u32::from(keys&1!=0)*2|u32::from(keys&2!=0)*4|u32::from(keys&16!=0)*8|u32::from(advance||id==0||a.human)*16|u32::from(g.phase=="racing")*32|u32::from(id==0)*64;
         let events=crate::step(id,g.arena,steer,dt,flags);
         let d=unsafe{(*core::ptr::addr_of!(crate::KARTS).cast::<crate::Kart>().add(id)).data};
         a.wx=d[0];a.wz=d[1];a.heading=d[2];a.motion_heading=d[3];a.camera_heading=d[4];a.speed=d[5];a.drift=d[6];a.boost=d[7];a.somersault=d[8];a.somersault_cooldown=d[9];a.dizzy=d[10];a.somersault_camera_start=d[11];a.yaw=d[12];a.was_drifting=d[13]!=0.0;

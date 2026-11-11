@@ -35,6 +35,6 @@ test('the warning is hidden outside live combat and while the player is destroye
   assert.equal(incomingMissiles(world),1);
   assert.equal(incomingMissiles({...world,destroyed:1}),0);
   for(const phase of ['ready','countdown','paused','finished'])assert.equal(incomingMissiles({...world,phase}),0);
-  assert.equal(incomingMissiles({...world,finishCountdown:2}),0);
+  assert.equal(incomingMissiles({...world,finishCountdown:2}),1);
   assert.equal(incomingMissiles({...world,mode:'race'}),0);
 });

@@ -59,7 +59,7 @@ test('only a bomber with ammunition can drop bombs during an active match',()=>{
   equipBomber(world);assert.ok(dropBomb(world,world,{wx:0,wz:0}));assert.ok(dropBomb(world,world,{wx:10,wz:10}));assert.equal(dropBomb(world,world,{wx:20,wz:20}),false);assert.equal(world.bombAmmo,0);
   assert.ok(dropBomb(world,world,{wx:0,wz:0,kind:'stink'}));assert.ok(dropBomb(world,world,{wx:10,wz:10,kind:'stink'}));assert.equal(dropBomb(world,world,{wx:20,wz:20,kind:'stink'}),false);assert.equal(world.stinkAmmo,0);
   world.bombAmmo=1;world.phase='paused';assert.equal(dropBomb(world,world,{wx:0,wz:0}),false);
-  world.phase='racing';world.finishCountdown=3;assert.equal(dropBomb(world,world,{wx:0,wz:0}),false);assert.equal(world.bombAmmo,1);
+  world.phase='racing';world.finishCountdown=3;assert.ok(dropBomb(world,world,{wx:0,wz:0}));assert.equal(world.bombAmmo,0);world.phase='finished';world.bombAmmo=1;assert.equal(dropBomb(world,world,{wx:0,wz:0}),false);
 });
 test('the server rejects invalid bomb targets and prevents duplicate drops or forged ammunition',t=>{
   const app=new Multiplayer({fixtureWorld:arenaFixture});t.after(()=>app.close());clearInterval(app.timer);

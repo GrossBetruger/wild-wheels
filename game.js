@@ -2,7 +2,7 @@ import { LENGTH, drivers, tracks, createRace, tick, useItem, useTurbo, selectIte
 import { Renderer } from './renderer.js';
 import { RaceAudio } from './audio.js';
 import { sampleTrack, branches } from './track.js';
-import { createBattle, tickBattle, fireBattle, releaseChaff, useBattleTurbo, somersaultBattle, arenas, standings, incomingMissiles, VULCAN_DURATION, MAX_HEALTH, equipBomber, dropBomb, BOMB_RECHARGE } from './combat.js';
+import { createBattle, battleActive, tickBattle, fireBattle, releaseChaff, useBattleTurbo, somersaultBattle, arenas, standings, incomingMissiles, VULCAN_DURATION, MAX_HEALTH, equipBomber, dropBomb, BOMB_RECHARGE } from './combat.js';
 import { NetworkGame } from './network.js';
 import { matchResults } from './results.js';
 import { KillCelebration, ChaffNotice } from './combat-notices.js';
@@ -64,7 +64,7 @@ function dropAt(clientX,clientY){
 }
 canvas.addEventListener('pointerdown',event=>{
   if(bomberPointer&&bomberPointer.id!==event.pointerId){bomberPointer.cancelled=true;return;}
-  if(!race.bomber||race.phase!=='racing'||race.finishCountdown!==null||!event.isPrimary||event.button!==0)return;
+  if(!race.bomber||!battleActive(race)||!event.isPrimary||event.button!==0)return;
   event.preventDefault();audio.unlock().catch(()=>{});canvas.setPointerCapture(event.pointerId);
   bomberPointer={id:event.pointerId,start:{x:event.clientX,y:event.clientY},focus:{...(renderer.bomberFocus??{wx:0,wz:0})},view:renderer.bomberView,zoom:renderer.bomberZoom??1,dragged:false};
 });
@@ -78,7 +78,7 @@ canvas.addEventListener('pointermove',event=>{
 canvas.addEventListener('pointerup',event=>{
   if(!bomberPointer||bomberPointer.id!==event.pointerId)return;
   const pointer=bomberPointer;bomberPointer=null;
-  if(!pointer.dragged&&!pointer.cancelled&&race.phase==='racing'&&race.finishCountdown===null)dropAt(event.clientX,event.clientY);
+  if(!pointer.dragged&&!pointer.cancelled&&battleActive(race))dropAt(event.clientX,event.clientY);
 });
 for(const event of ['pointercancel','lostpointercapture'])canvas.addEventListener(event,()=>{bomberPointer=null;});
 for(const event of ['blur','resize'])window.addEventListener(event,()=>{bomberPointer=null;});
@@ -213,8 +213,8 @@ function hud(){
   const speedNode=$('speed').querySelector('b'),speedText=String(Math.round(race.speed*.24));if(speedNode.textContent!==speedText)speedNode.textContent=speedText;put('toast',uiNotice&&performance.now()<uiNotice.until?uiNotice.text:race.finishRank===null&&race.noticeTime>0?race.notice:'');
   document.querySelector('.position small').textContent=mode==='combat'?'KILLS':'POSITION';document.querySelector('.lap small').textContent=mode==='combat'?'HEALTH':'LAP';document.querySelector('.timer small').textContent=mode==='combat'?'TIME LEFT':'RACE TIME';
   leaderboard.classList.toggle('hidden',mode!=='combat');
-  chaffButton.classList.toggle('hidden',mode!=='combat'||race.bomber);chaffButton.textContent=`C · CHAFF ${race.chaff??0}`;chaffButton.disabled=mode!=='combat'||race.phase!=='racing'||race.finishCountdown!==null||race.destroyed>0||race.chaff<=0||race.chaffCooldown>0;chaffButton.setAttribute('aria-label',`Release chaff, ${race.chaff??0} charges remaining. Keyboard C.`);
-  somersaultButton.classList.toggle('hidden',mode!=='combat'||race.bomber);somersaultButton.disabled=race.phase!=='racing'||race.finishCountdown!==null||race.destroyed>0||(race.somersaultCooldown??0)>1e-8;somersaultButton.textContent=(race.somersaultCooldown??0)>1e-8?`Z · ${race.somersaultCooldown.toFixed(1)}s`:'Z · SOMERSAULT';somersaultButton.setAttribute('aria-label','Somersault: jump and turn 180 degrees. Keyboard Z.');
+  chaffButton.classList.toggle('hidden',mode!=='combat'||race.bomber);chaffButton.textContent=`C · CHAFF ${race.chaff??0}`;chaffButton.disabled=!battleActive(race)||race.destroyed>0||race.chaff<=0||race.chaffCooldown>0;chaffButton.setAttribute('aria-label',`Release chaff, ${race.chaff??0} charges remaining. Keyboard C.`);
+  somersaultButton.classList.toggle('hidden',mode!=='combat'||race.bomber);somersaultButton.disabled=!battleActive(race)||race.destroyed>0||(race.somersaultCooldown??0)>1e-8;somersaultButton.textContent=(race.somersaultCooldown??0)>1e-8?`Z · ${race.somersaultCooldown.toFixed(1)}s`:'Z · SOMERSAULT';somersaultButton.setAttribute('aria-label','Somersault: jump and turn 180 degrees. Keyboard Z.');
   routeHint.textContent='';
   driftMeter.classList.toggle('hidden',mode!=='combat'||!race.wasDrifting||race.phase!=='racing');driftCharge.value=race.drift;driftLabel.textContent=race.drift>=.85?'SUPER BOOST READY':race.drift>=.45?'BOOST READY':'DRIFT CHARGING';driftMeter.classList.toggle('charged',race.drift>=.45);driftMeter.classList.toggle('super',race.drift>=.85);
   if(mode==='combat'){
@@ -234,12 +234,12 @@ function hud(){
   if(race.finishRank!==null&&race.phase==='racing'){finishDetail.textContent=finishText();$('status').textContent=`FINISHED ${race.finishRank}${ordinal(race.finishRank)}`;}
   $('item').textContent=({boost:'ϟ',hedgehog:'🦔',missile:'🚀'})[race.item]||'–';$('item-name').textContent=({boost:'AFTERBURNER READY',hedgehog:`HEDGEHOG × ${race.ammo}`,missile:`MISSILE × ${race.missiles} · HOMING`})[race.item]||'EMPTY · COLLECT AMMO';
   const vulcan=mode==='combat'&&race.vulcan>0;
-  const vulcanVisible=vulcan&&race.phase==='racing'&&race.finishCountdown===null;
+  const vulcanVisible=vulcan&&battleActive(race);
   document.querySelector('.viewport').classList.toggle('vulcan-active',vulcanVisible);routeHint.classList.toggle('vulcan-banner',vulcanVisible);routeHint.classList.toggle('vulcan-ending',vulcanVisible&&race.vulcan<=3);
   if(vulcanVisible)routeHint.textContent=`${race.vulcan<=3?'VULCAN ENDING':'VULCAN ACTIVE'} · ${race.vulcan.toFixed(1)}s`;
   vulcanStatus.classList.toggle('hidden',!vulcan||race.phase!=='racing');vulcanTitle.textContent=`HEDGEHOG VULCAN · ${(race.vulcan??0).toFixed(1)}s`;vulcanTime.value=race.vulcan??0;
   if(vulcan&&race.item==='hedgehog')$('item-name').textContent='VULCAN · HOLD SPACE TO SPRAY';
-  for(const [type,card] of ammoCards){const count={hedgehog:race.ammo,missile:race.missiles,boost:race.turbos}[type],powered=vulcan&&type==='hedgehog',boost=type==='boost';card.count.textContent=powered?'∞':count;card.name.textContent=powered?'VULCAN':boost?'X · TURBO':card.label;card.button.disabled=(!powered&&count===0)||race.phase==='finished'||boost&&(race.phase!=='racing'||race.destroyed>0||race.finishCountdown!==null||race.boost>0);card.button.classList.toggle('selected',!boost&&race.item===type);card.button.classList.toggle('vulcan',powered);card.button.setAttribute('aria-pressed',String(!boost&&race.item===type));card.button.setAttribute('aria-label',boost?`Use turbo, ${count} charges remaining. Keyboard X.`:`${powered?'Unlimited Vulcan hedgehogs':`${count} ${card.label.toLowerCase()}`}${race.item===type?', selected':''}`);}
+  for(const [type,card] of ammoCards){const count={hedgehog:race.ammo,missile:race.missiles,boost:race.turbos}[type],powered=vulcan&&type==='hedgehog',boost=type==='boost';card.count.textContent=powered?'∞':count;card.name.textContent=powered?'VULCAN':boost?'X · TURBO':card.label;card.button.disabled=(!powered&&count===0)||race.phase==='finished'||boost&&(race.phase!=='racing'||race.destroyed>0||mode!=='combat'&&race.finishCountdown!==null||race.boost>0);card.button.classList.toggle('selected',!boost&&race.item===type);card.button.classList.toggle('vulcan',powered);card.button.setAttribute('aria-pressed',String(!boost&&race.item===type));card.button.setAttribute('aria-label',boost?`Use turbo, ${count} charges remaining. Keyboard X.`:`${powered?'Unlimited Vulcan hedgehogs':`${count} ${card.label.toLowerCase()}`}${race.item===type?', selected':''}`);}
   if(race.phase==='countdown'){const n=Math.ceil(race.countdown);if(n!==lastCount){tone(300+n*100);lastCount=n;}$('message').querySelector('h2').textContent=n;}
   if(lastPhase===race.phase)return;lastPhase=race.phase;
   const battle=mode==='combat',controls=document.querySelectorAll('.control');brakeButton.classList.toggle('hidden',!battle);

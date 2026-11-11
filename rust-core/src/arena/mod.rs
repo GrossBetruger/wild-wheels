@@ -41,6 +41,8 @@ pub fn voice(g:&mut Globals,a:&mut Actor,cue:&str,root_x:f64){
 pub const DRIVER_NAMES:[&str;7]=["Pip the Panda","Rocco the Raccoon","Felix the Fox","Benny the Bear","Ellie the Elephant","Tamar the Cricket","Elon Musk"];
 pub fn driver_name(driver:usize)->&'static str { DRIVER_NAMES[driver%DRIVER_NAMES.len()] }
 impl Game {
+    pub fn combat_active(&self)->bool{self.global.phase=="racing"}
+    pub fn human_controlled(&self,id:usize)->bool{self.actors[id].human||id==0&&!self.global.multiplayer}
     pub fn from_seed(seed:Seed)->Result<Self,()> {
         if seed.global.arena>1||seed.bots.len()!=5||seed.player.id!=0{return Err(());}
         let mut actors=vec![seed.player];actors.extend(seed.bots);

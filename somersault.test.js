@@ -44,7 +44,7 @@ test('somersault camera rotates continuously through the half turn while aim rev
 
 test('somersault cannot start while dead, paused, in the countdown, or after combat ends',()=>{
   const world=createBattle();Object.assign(world,{phase:'racing'});
-  for(const state of [{destroyed:1},{phase:'paused'},{phase:'countdown'},{phase:'finished'},{finishCountdown:2},{mode:'race'}]){
+  for(const state of [{destroyed:1},{phase:'paused'},{phase:'countdown'},{phase:'finished'},{mode:'race'}]){
     const actor={...world,...state};assert.equal(somersaultBattle(actor),false);assert.equal(actor.somersault,0);
   }
 });

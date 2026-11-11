@@ -221,8 +221,8 @@ test('respawning restores four chaff charges after they have been spent',()=>{
   damageBattle(r,r,99,3);for(let frame=0;frame<61;frame++)tickBattle(r,new Set(),.05);
   assert.equal(r.destroyed,0);assert.equal(r.chaff,4);assert.equal(r.chaffCooldown,0);
 });
-test('menus, pause, death, and the ending announcement prevent chaff spending',()=>{
-  for(const [phase,destroyed,finishCountdown] of [['ready',0,null],['countdown',0,null],['paused',0,null],['finished',0,0],['racing',2,null],['racing',0,3]]){
+test('menus, pause, death, and the final leaderboard prevent chaff spending',()=>{
+  for(const [phase,destroyed,finishCountdown] of [['ready',0,null],['countdown',0,null],['paused',0,null],['finished',0,0],['racing',2,null]]){
     const r=createBattle(0,0,()=>.5);Object.assign(r,{phase,destroyed,finishCountdown});
     assert.equal(releaseChaff(r),false);assert.equal(r.chaff,4);
   }

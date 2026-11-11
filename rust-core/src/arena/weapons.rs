@@ -1,6 +1,6 @@
 use super::*;
 impl Game{
-    fn active(&self,id:usize)->bool{let a=&self.actors[id];self.global.phase=="racing"&&self.global.finish_countdown.is_none()&&a.destroyed<=0.0&&!a.bomber}
+    fn active(&self,id:usize)->bool{let a=&self.actors[id];self.combat_active()&&a.destroyed<=0.0&&!a.bomber&&!a.inactive&&(self.global.finish_countdown.is_none()||self.human_controlled(id))}
     pub(super) fn target(&self,id:usize)->Option<usize>{
         let a=&self.actors[id];self.actors.iter().filter(|b|b.id!=id&&!b.bomber&&!b.inactive&&b.destroyed<=0.0&&b.shield<=0.0&&distance(a.wx,a.wz,b.wx,b.wz)<100.0&&angle((b.wx-a.wx).atan2(b.wz-a.wz),a.heading).abs()<0.65&&clear(self.global.arena,a.wx,a.wz,b.wx,b.wz)).map(|a|a.id).min_by(|&x,&y|distance(a.wx,a.wz,self.actors[x].wx,self.actors[x].wz).total_cmp(&distance(a.wx,a.wz,self.actors[y].wx,self.actors[y].wz)).then(x.cmp(&y)))
     }
@@ -25,8 +25,9 @@ impl Game{
         let a=&mut self.actors[id];a.somersault_camera_start=a.camera_heading;a.heading+=std::f64::consts::PI;a.motion_heading=a.heading;a.drift=0.0;a.was_drifting=false;a.drift_trail=None;a.somersault=0.55;a.somersault_cooldown=1.0;
     }
     pub(super) fn bomb(&mut self,id:usize,action:&Action){
+        if self.global.finish_countdown.is_some()&&!self.human_controlled(id){return;}
         let a=&mut self.actors[id];let kind=action.bomb_kind.as_deref().unwrap_or("abomb");
-        if !a.bomber||a.inactive||self.global.phase!="racing"||self.global.finish_countdown.is_some()||!matches!(kind,"stink"|"abomb")||action.wx.abs()>96.0||action.wz.abs()>96.0{return;}
+        if !a.bomber||a.inactive||self.global.phase!="racing"||!matches!(kind,"stink"|"abomb")||action.wx.abs()>96.0||action.wz.abs()>96.0{return;}
         let ammo=match kind{"stink"=>&mut a.stink_ammo,_=>&mut a.bomb_ammo};if *ammo==0{return;}*ammo-=1;
         let g=&mut self.global;g.bomb_sequence+=1;g.bombs.push(Bomb{id:g.bomb_sequence,kind:kind.into(),owner:id,wx:action.wx,wz:action.wz,color:a.color.clone(),action_id:action.id,..Bomb::default()});
         sound(g,"bombDrop",id,action.wx,action.wz,action.id.map(|id|format!("action:{}",id)));
@@ -56,7 +57,8 @@ impl Game{
     }
     pub(super) fn damage(&mut self,victim:usize,owner:usize,amount:f64)->bool{
         let a=&self.actors[victim];
-        if a.bomber||a.inactive||self.global.phase!="racing"||self.global.finish_countdown.is_some()||a.destroyed>0.0||a.shield>0.0||victim==owner{return false;}
+        if a.bomber||a.inactive||self.global.phase!="racing"||a.destroyed>0.0||a.shield>0.0||victim==owner{return false;}
+        let unscored=self.global.finish_countdown.is_some();
         let root_x=self.actors[0].wx;let g=&mut self.global;let a=&mut self.actors[victim];a.health=(a.health-amount).max(0.0);voice(g,a,"hurt",root_x);if victim==0{g.shake=0.5;}
         if a.health>0.0{
             effect(g,"hit",victim,a.wx,a.wz,None);
@@ -65,7 +67,8 @@ impl Game{
         let mut credit=Vec::new();if owner<self.actors.len(){credit.push(owner);}
         let a=&self.actors[victim];
         if a.dizzy>0.0{for(&id,&expires)in &a.credits{if expires>g.elapsed+1e-8&&self.actors.get(id).is_some_and(|b|b.bomber&&!b.inactive)&&id!=victim&&!credit.contains(&id){credit.push(id);}}}
-        let a=&mut self.actors[victim];a.credits.clear();a.destroyed=3.0;a.speed=0.0;a.boost=0.0;a.deaths+=1;effect(g,"explosion",victim,a.wx,a.wz,None);a.drift=0.0;a.was_drifting=false;a.drift_trail=None;a.kill_streak=0;a.vulcan=0.0;a.somersault=0.0;a.dizzy=0.0;
+        let a=&mut self.actors[victim];a.credits.clear();a.destroyed=3.0;a.speed=0.0;a.boost=0.0;if !unscored{a.deaths+=1;}effect(g,"explosion",victim,a.wx,a.wz,None);a.drift=0.0;a.was_drifting=false;a.drift_trail=None;a.kill_streak=0;a.vulcan=0.0;a.somersault=0.0;a.dizzy=0.0;
+        if unscored{return true;}
         let victim_name=a.name.clone().unwrap_or_else(||driver_name(a.driver).into());let victim_color=a.color.clone();
         for scorer in credit{
             let a=&mut self.actors[scorer];a.kills+=match scorer==owner{true=>1.0,false=>0.5};a.celebrate=1.6;voice(g,a,"cheer",root_x);g.kill_sequence+=1;

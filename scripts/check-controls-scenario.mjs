@@ -167,10 +167,19 @@ export async function checkControls(evaluate,app,room,id,sleep,captureFlip,captu
   for(let i=0;i<100;i++){if(await evaluate("document.getElementById('whack-banner').textContent.includes('CO-WHACKED')"))break;await sleep(10);}
   const coWhackPass=await evaluate("(()=>{const banner=document.getElementById('whack-banner'),card=banner.firstElementChild;return !banner.classList.contains('hidden')&&banner.textContent.includes('CO-WHACKED')&&banner.textContent.includes('Rival <img>')&&!banner.querySelector('img')&&getComputedStyle(card).backgroundImage!=="+JSON.stringify(whack.background)+"})()");
   Object.assign(actor,{kills:3,deaths:4});Object.assign(other,{kills:10,deaths:2});
-  Object.assign(room.world,{phase:'finished',finishRank:1,finishTime:20,finishCountdown:0});
+  room.world.projectiles=[];room.world.bombs=[];room.world.stinkClouds=[];room.world.chaffClouds=[];room.world.supplies=[];
+  Object.assign(actor,{wx:-65,wz:0,heading:0,motionHeading:0,cameraHeading:0,speed:0,health:3,shield:0,destroyed:0,item:'missile',missiles:1,fireCooldown:0,dizzy:0});
+  Object.assign(other,{wx:-65,wz:20,speed:0,health:3,shield:0,destroyed:0});
+  Object.assign(room.world,{finishRank:1,finishTime:20,finishCountdown:3});
+  for(let i=0;i<100;i++){if(await evaluate("__game.race.finishCountdown!==null&&__game.race.item==='missile'&&__game.race.fireCooldown===0&&__game.race.destroyed===0"))break;await sleep(10);}
+  await evaluate("window.dispatchEvent(new KeyboardEvent('keydown',{key:' ',bubbles:true}));window.dispatchEvent(new KeyboardEvent('keyup',{key:' ',bubbles:true}));window.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowUp',bubbles:true}));");
+  for(let i=0;i<150;i++){if(other.destroyed>0&&actor.wz>1)break;await sleep(10);}
+  const endingPass=other.destroyed>0&&actor.wz>1&&actor.kills===3&&actor.deaths===4&&other.kills===10&&other.deaths===2&&room.world.finishTime===20;
+  await evaluate("window.dispatchEvent(new KeyboardEvent('keyup',{key:'ArrowUp',bubbles:true}));");
+  for(let i=0;i<150;i++){if(room.world.phase==='finished')break;await sleep(25);}
   for(let i=0;i<100;i++){if(await evaluate("!document.getElementById('match-results').classList.contains('hidden')&&document.querySelectorAll('#match-results tbody tr').length===2"))break;await sleep(25);}
   const leaderboard=await evaluate("[...document.querySelectorAll('#match-results tbody tr')].map(row=>[...row.cells].map(cell=>cell.textContent))");
   const resultsPass=JSON.stringify(leaderboard)===JSON.stringify([['1',other.name,'10','2'],['2',displayName+' · YOU','3','4']])&&await evaluate("document.querySelectorAll('#match-results tbody .you').length===1&&!document.querySelector('#match-results b')");
-  return {readyPass,readyCleared,readyUI,popupPass,popup,refusalPass,autoStartPass,namePass,pickupKeptVulcan,turboPass,flipPass,cameraPass,remoteSawFlip,flipTrace,desktopManual,warningPass,warning,chaffPass,chaffColor:ownCloud?.color,chaffSoundCount,greenNoticePass,orbitPass,orbitRotation,orbitTrace,desktopBombPass,stinkPass,whackPass,coWhackPass,whack,resultsPass,leaderboard,pass:readyPass&&readyCleared&&popupPass&&refusalPass&&autoStartPass&&namePass&&pickupKeptVulcan&&turboPass&&flipPass&&desktopManual&&warningPass&&chaffPass&&greenNoticePass&&orbitPass&&desktopBombPass&&stinkPass&&whackPass&&coWhackPass&&resultsPass,trace};
+  return {readyPass,readyCleared,readyUI,popupPass,popup,refusalPass,autoStartPass,namePass,pickupKeptVulcan,turboPass,flipPass,cameraPass,remoteSawFlip,flipTrace,desktopManual,warningPass,warning,chaffPass,chaffColor:ownCloud?.color,chaffSoundCount,greenNoticePass,orbitPass,orbitRotation,orbitTrace,desktopBombPass,stinkPass,whackPass,coWhackPass,whack,endingPass,resultsPass,leaderboard,pass:readyPass&&readyCleared&&popupPass&&refusalPass&&autoStartPass&&namePass&&pickupKeptVulcan&&turboPass&&flipPass&&desktopManual&&warningPass&&chaffPass&&greenNoticePass&&orbitPass&&desktopBombPass&&stinkPass&&whackPass&&coWhackPass&&endingPass&&resultsPass,trace};
   }finally{clearInterval(fixtureHeartbeat);}
 }

@@ -53,6 +53,7 @@ impl Game{
                 }
                 if held&32!=0{self.fire(id,None);}continue;
             }
+            if ending{a.speed=0.0;a.boost=0.0;continue;}
             a.dizzy=(a.dizzy-dt).max(0.0);a.somersault=(a.somersault-dt).max(0.0);a.somersault_cooldown=(a.somersault_cooldown-dt).max(0.0);a.boost=(a.boost-dt).max(0.0);
             let target=self.actors.iter().filter(|b|b.id!=id&&!b.bomber&&!b.inactive&&b.destroyed<=0.0).map(|b|b.id).min_by(|&x,&y|distance(self.actors[id].wx,self.actors[id].wz,self.actors[x].wx,self.actors[x].wz).total_cmp(&distance(self.actors[id].wx,self.actors[id].wz,self.actors[y].wx,self.actors[y].wz)).then(x.cmp(&y)));
             let Some(target)=target else{continue;};let arena=self.global.arena;let visible=clear(arena,self.actors[id].wx,self.actors[id].wz,self.actors[target].wx,self.actors[target].wz);
@@ -78,7 +79,7 @@ impl Game{
             if (i==0||j==0)&&self.actors[0].wall_cooldown<=0.0{let a=&mut self.actors[0];effect(&mut self.global,"crash",0,a.wx,a.wz,None);a.wall_cooldown=0.6;voice(&mut self.global,a,"hurt",a.wx);}
         }}
         for id in 0..self.actors.len(){self.collect(id);}
-        if !ending{self.divert_all();}
+        self.divert_all();
         let shots=std::mem::take(&mut self.global.projectiles);
         for mut shot in shots{
             let(impact,victim,decoy)=self.advance_shot(&mut shot,dt);
@@ -99,13 +100,13 @@ impl Game{
             for id in 0..self.actors.len(){if distance(self.actors[id].wx,self.actors[id].wz,bomb.wx,bomb.wz)<=22.0{self.damage(id,bomb.owner,3.0);}}
             if !self.actors[0].bomber&&distance(self.actors[0].wx,self.actors[0].wz,bomb.wx,bomb.wz)<44.0{self.global.shake=self.global.shake.max(0.7);}
         }
-        if !ending{
+        {
             let g=&mut self.global;
             for cloud in &mut g.stink_clouds{for a in &mut self.actors{
                 if a.bomber||a.inactive||a.destroyed>0.0||a.shield>0.0||cloud.hits.contains(&a.id)||distance(a.wx,a.wz,cloud.wx,cloud.wz)>14.0{continue;}
                 cloud.hits.push(a.id);
                 if a.dizzy<=0.0{g.sound_sequence+=1;g.events.push(match g.multiplayer{true=>json!({"type":"dizzy","owner":a.id,"wx":a.wx,"wz":a.wz,"id":format!("{}:{}",g.sound_epoch,g.sound_sequence)}),false=>json!("dizzy")});}
-                a.dizzy=4.0;a.credits.retain(|_,expires|*expires>g.elapsed+1e-8);a.credits.insert(cloud.owner,g.elapsed+4.0);
+                a.dizzy=4.0;a.credits.retain(|_,expires|*expires>g.elapsed+1e-8);if !ending{a.credits.insert(cloud.owner,g.elapsed+4.0);}
             }}
         }
         let order=self.order();let g=&mut self.global;g.rank=order.iter().position(|&id|id==0).map_or(0,|i|i+1);

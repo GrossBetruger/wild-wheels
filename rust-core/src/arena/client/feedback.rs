@@ -67,7 +67,7 @@ impl Client{
         let after=self.ops.iter().filter_map(|op|match op{Op::Pickup{after,..}=>Some(*after),_=>None}).fold(sequence,i64::max);action.after_move=after;
         if actor.bomber{
             let kind=action.bomb_kind.as_deref().unwrap_or("abomb");let resource=match kind{"stink"=>"stinkAmmo",_=>"bombAmmo"};
-            if action.kind!="bomb"||!matches!(kind,"stink"|"abomb")||self.pred.global.phase!="racing"||self.pred.global.finish_countdown.is_some()||now-self.received>0.5||!action.wx.is_finite()||!action.wz.is_finite()||action.wx.abs()>96.0||action.wz.abs()>96.0||match kind{"stink"=>actor.stink_ammo==0,_=>actor.bomb_ammo==0}{return false;}
+            if action.kind!="bomb"||!matches!(kind,"stink"|"abomb")||!self.pred.combat_active()||now-self.received>0.5||!action.wx.is_finite()||!action.wz.is_finite()||action.wx.abs()>96.0||action.wz.abs()>96.0||match kind{"stink"=>actor.stink_ammo==0,_=>actor.bomb_ammo==0}{return false;}
             action.after_move= -1;let kind=kind.to_string();self.next_action+=1;self.ops.push(Op::Action{action,kind,resource:resource.into(),ready:0,born:now});self.emit("bombDrop",now,Some(format!("action:{}",id)),false);return true;
         }
         if matches!(action.kind.as_str(),"select"|"cycle"){
@@ -75,7 +75,7 @@ impl Client{
             if action.kind=="cycle"{let items:Vec<_>=[("hedgehog",actor.vulcan>0.0||actor.ammo>0),("missile",actor.missiles>0)].into_iter().filter(|(_,ok)|*ok).map(|(s,_)|s).collect();if !items.is_empty(){let next=items.iter().position(|s|*s==actor.item).map_or(0,|i|(i+1)%items.len());actor.item=items[next].into();}}
             action.kind="select".into();action.item=actor.item;self.next_action+=1;self.ops.push(Op::Action{action,kind:String::new(),resource:String::new(),ready:0,born:now});return true;
         }
-        if self.pred.global.phase!="racing"||actor.destroyed>0.0||self.pred.global.finish_countdown.is_some()||now-self.received>0.5{return false;}
+        if !self.pred.combat_active()||actor.destroyed>0.0||now-self.received>0.5{return false;}
         let pending=|kind:&str|self.ops.iter().any(|op|matches!(op,Op::Action{action,..}if action.kind==kind));
         let (kind,resource,ready)=match action.kind.as_str(){
             "somersault"=>{if actor.somersault_cooldown>1e-8||pending("somersault"){return false;}action.after_move=sequence;self.pred.flip(self.viewer);self.error[2]=0.0;self.error[3]=0.0;(String::new(),String::new(),0)},
@@ -109,7 +109,7 @@ impl Client{
             self.display.global.bombs=self.frames.back().unwrap().game.global.bombs.clone();
             for op in &self.ops{if let Op::Action{action,kind,born,..}=op{if action.kind=="bomb"&&!self.display.global.bombs.iter().any(|b|b.owner==id&&b.action_id==action.id){self.display.global.bombs.push(Bomb{id:0x80000000u32.wrapping_add(action.id.unwrap_or(0)),kind:kind.clone(),owner:id,wx:action.wx,wz:action.wz,age:(now-born).max(0.0),color:actor.color.clone(),action_id:action.id});}}}return;
         }
-        if self.pred.global.phase=="racing"&&actor.destroyed<=0.0&&self.pred.global.finish_countdown.is_none()&&now-self.received<0.5{
+        if self.pred.combat_active()&&actor.destroyed<=0.0&&now-self.received<0.5{
             let supplies=self.frames.back().unwrap().game.global.supplies.clone();
             for s in supplies{
                 let key=format!("pickup:{}:{}",s.id,s.version+1);
@@ -130,7 +130,7 @@ impl Client{
         let id=self.viewer;let a=&self.display.actors[id];
         if self.drift_previous.is_some_and(|(x,z,_)|distance(a.wx,a.wz,x,z)>18.0){self.local_drift=Globals::default();self.emitter=None;self.drift_last=None;self.drift_previous=None;}
         let dt=(now-self.drift_last.unwrap_or(now)).max(0.0);self.drift_last=Some(now);self.local_drift.elapsed+=dt;super::super::movement::age(&mut self.local_drift,dt);
-        let active=enabled&&self.display.global.phase=="racing"&&self.display.global.finish_countdown.is_none()&&a.destroyed<=0.0&&a.was_drifting;
+        let active=enabled&&self.display.combat_active()&&a.destroyed<=0.0&&a.was_drifting;
         if active{
             let level=match a.drift{d if d>=0.85=>2,d if d>=0.45=>1,_=>0};
             if self.emitter.is_none(){let(x,z,h)=self.drift_previous.unwrap_or((a.wx,a.wz,a.heading));let(tx,tz)=(h.sin(),h.cos());let wheels=[-1.0,1.0].into_iter().map(|side|Point{wx:x-tx*1.5+tz*side*1.6,wz:z-tz*1.5-tx*side*1.6}).collect();self.emitter=Some(Actor{drift_trail:Some(wheels),drift_emit:0.035,..Actor::default()});self.emitter_level=level;}
