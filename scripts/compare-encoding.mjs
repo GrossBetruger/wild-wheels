@@ -6,7 +6,7 @@ import { createCodecs } from './encoding-lab/codecs.mjs';
 
 const wasm=process.argv[2],output=process.argv[3];
 if(!wasm||!output)throw new Error('Usage: node scripts/compare-encoding.mjs kernel.wasm results.json');
-const {codecs,timings}=await createCodecs(await readFile(wasm));
+const {codecs,timings,measureKernel}=await createCodecs(await readFile(wasm));
 const stats=values=>{
   const sorted=[...values].sort((a,b)=>a-b);
   return {samples:values.length,meanMs:values.reduce((a,b)=>a+b,0)/values.length,p50Ms:sorted[Math.floor(sorted.length*.5)],p95Ms:sorted[Math.floor(sorted.length*.95)]};
@@ -51,6 +51,10 @@ for(const scenario of [{name:'driving',players:2,bots:1},{name:'drifting',player
     const packet=codec.encode(snapshots[j]),middle=performance.now();codec.decode(packet);const end=performance.now();
     sample.encode.push(middle-start);sample.decode.push(end-middle);sample.roundtrip.push(end-start);
   }
+  // Separate kernel-only sampling so its timers do not penalize the Rust full path.
+  measureKernel.enabled=true;
+  for(let i=0;i<600;i++)codecs[2].decode(codecs[2].encode(snapshots[i%snapshots.length]));
+  measureKernel.enabled=false;
   const result={scenario:scenario.name,snapshots:snapshots.length,semanticEquality:true,binaryBytesIdentical:true,results:samples.map(s=>({name:s.name,encode:stats(s.encode),decode:stats(s.decode),roundtrip:stats(s.roundtrip),rawBytes:s.rawBytes/snapshots.length,compressedBytes:s.compressedBytes/snapshots.length,compressedMbpsAt30Hz:s.compressedBytes/snapshots.length*30*8/1e6})),wasmKernelOnly:{encode:stats(timings.encode),decode:stats(timings.decode)}};
   results.push(result);console.log(JSON.stringify(result));
 }

@@ -104,7 +104,7 @@ try{
     await call('Page.navigate',{url:origin+(encodingLab?'/encoding-lab/':'')},session);
     for(let attempt=0;attempt<100;attempt++){if(await evaluate(encodingLab?"location.pathname==='/encoding-lab/'&&document.readyState==='complete'":'Boolean(globalThis.__game)'))break;await sleep(50);}
     if(encodingLab){
-      const result=await compareEncodingBrowser(evaluate);results.push(result);console.log(JSON.stringify(result));
+      const result={run:profile.run,...await compareEncodingBrowser(evaluate)};results.push(result);console.log(JSON.stringify(result));
       await call('Target.closeTarget',{targetId});continue;
     }
     if(profile.guest){const room={code:'07',arena:0,botCount:0,host:0,members:new Map()};app.multiplayer.makeWorld(room);app.multiplayer.rooms.set('07',room);app.multiplayer.join(room,{name:'Host',driver:1});}

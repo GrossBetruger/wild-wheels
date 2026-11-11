@@ -13,10 +13,12 @@ export async function createCodecs(wasmBytes){
   const {instance}=await WebAssembly.instantiate(wasmBytes,{}),wasm=instance.exports;
   const values=new Float64Array(CAPACITY),scales=new Float64Array(CAPACITY),packed=new Int32Array(CAPACITY);
   let buffer=new Uint8Array(CAPACITY*4+1024*1024);
-  const rustValues=()=>new Float64Array(wasm.memory.buffer,wasm.values_ptr(),CAPACITY);
-  const rustScales=()=>new Float64Array(wasm.memory.buffer,wasm.scales_ptr(),CAPACITY);
-  const rustPacked=()=>new Int32Array(wasm.memory.buffer,wasm.packed_ptr(),CAPACITY);
+  // This kernel has fixed static memory and never allocates or grows it.
+  const rustValues=new Float64Array(wasm.memory.buffer,wasm.values_ptr(),CAPACITY);
+  const rustScales=new Float64Array(wasm.memory.buffer,wasm.scales_ptr(),CAPACITY);
+  const rustPacked=new Int32Array(wasm.memory.buffer,wasm.packed_ptr(),CAPACITY);
   const timings={encode:[],decode:[]};
+  const measureKernel={enabled:false};
   function encode(state,rust){
     const world=state.world,layout={skids:world.skids.length,particles:world.driftParticles.length,trails:world.projectiles.map(shot=>shot.trail.length)};
     const n=layout.skids*6+layout.particles*11+layout.trails.reduce((sum,n)=>sum+n*3,0);
@@ -28,8 +30,8 @@ export async function createCodecs(wasmBytes){
     summarizeScales(layout,scales);
     let bytes;
     if(rust){
-      rustValues().set(values.subarray(0,n));rustScales().set(scales.subarray(0,n));
-      const start=performance.now();if(!wasm.transform(n,false))throw new Error('Invalid Rust encoding input');timings.encode.push(performance.now()-start);
+      rustValues.set(values.subarray(0,n));rustScales.set(scales.subarray(0,n));
+      const start=measureKernel.enabled?performance.now():0;if(!wasm.transform(n,false))throw new Error('Invalid Rust encoding input');if(measureKernel.enabled)timings.encode.push(performance.now()-start);
       bytes=new Uint8Array(wasm.memory.buffer,wasm.packed_ptr(),n*4);
     }
     if(!rust){for(let i=0;i<n;i++){
@@ -53,9 +55,9 @@ export async function createCodecs(wasmBytes){
     summarizeScales(layout,scales);
     const input=new Int32Array(packet.buffer,packet.byteOffset+offset,n);
     if(rust){
-      rustPacked().set(input);rustScales().set(scales.subarray(0,n));
-      const start=performance.now();if(!wasm.transform(n,true))throw new Error('Invalid Rust decoding input');timings.decode.push(performance.now()-start);
-      values.set(rustValues().subarray(0,n));
+      rustPacked.set(input);rustScales.set(scales.subarray(0,n));
+      const start=measureKernel.enabled?performance.now():0;if(!wasm.transform(n,true))throw new Error('Invalid Rust decoding input');if(measureKernel.enabled)timings.decode.push(performance.now()-start);
+      values.set(rustValues.subarray(0,n));
     }
     if(!rust)for(let i=0;i<n;i++)values[i]=input[i]/scales[i];
     let at=0;const world=state.world;
@@ -70,7 +72,7 @@ export async function createCodecs(wasmBytes){
     for(let i=0;i<world.projectiles.length;i++)for(let j=0;j<layout.trails[i];j++)world.projectiles[i].trail.push({wx:values[at++],wz:values[at++],height:values[at++]});
     return state;
   }
-  return {timings,codecs:[
+  return {timings,measureKernel,codecs:[
     {name:'current-json',encode:state=>encoder.encode(encodeSnapshot(state)),decode:packet=>decodeSnapshot(JSON.parse(decoder.decode(packet)))},
     {name:'javascript-binary',encode:state=>encode(state,false),decode:packet=>decode(packet,false)},
     {name:'rust-wasm-binary',encode:state=>encode(state,true),decode:packet=>decode(packet,true)}
