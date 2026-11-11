@@ -2,3 +2,5 @@ node_modules/
 *.log
 .DS_Store
 regression-results/
+
+rust-core/target/

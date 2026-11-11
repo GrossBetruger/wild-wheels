@@ -1,3 +1,4 @@
+import {arenaFixture} from './scripts/arena-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createBattle, predictKartMovement, tickBattle } from './combat.js';
@@ -5,7 +6,7 @@ import { LocalPrediction } from './prediction.js';
 import { Multiplayer } from './multiplayer.js';
 
 test('analog steering stays identical in prediction and server movement and rejects values beyond full lock',t=>{
-  const app=new Multiplayer();t.after(()=>app.close());clearInterval(app.timer);
+  const app=new Multiplayer({fixtureWorld:arenaFixture});t.after(()=>app.close());clearInterval(app.timer);
   const room={code:'07',arena:0,botCount:0,host:0,members:new Map()};app.makeWorld(room);app.rooms.set('07',room);app.join(room,{name:'Host',driver:0});const member=app.join(room,{name:'Driver',driver:1});
   Object.assign(room.world,{phase:'racing',supplies:[],destroyed:999});const actor=room.world.bots[0];Object.assign(actor,{wx:-65,wz:0,heading:0,motionHeading:0,cameraHeading:0,speed:200});
   const state=app.snapshot(room,member),prediction=new LocalPrediction();prediction.accept(state.world,0);
