@@ -129,29 +129,32 @@ function collectSupplies(r,actor){
   }
 }
 // Shared visual trajectory; damage remains exclusively in tickBattle.
-function orbitChaff(shot,decoy,dt){
+function orbitChaff(shot,decoy,dt,arena){
   shot.orbitAge+=dt;
-  const circling=Math.min(1,shot.orbitAge/.6),fall=Math.max(0,shot.orbitAge-.6),angle=shot.orbitAngle+Math.PI*2*circling;
-  const radius=shot.orbitRadius*(1-.3*circling)*Math.max(.6,1-fall*.5);
-  shot.wx=decoy.wx+Math.sin(angle)*radius;shot.wz=decoy.wz+Math.cos(angle)*radius;
-  shot.heading=angle+Math.PI/2;
-  shot.height=shot.orbitHeight+(4.2-shot.orbitHeight)*Math.min(1,shot.orbitAge/.35)-7*fall*fall;
-  const impact=shot.height<=.15;
-  if(impact){shot.height=.15;shot.life=0;}
+  const direction=shot.orbitDirection<0?-1:1,circling=Math.min(1,shot.orbitAge/.6),fall=Math.max(0,shot.orbitAge-.6),angle=shot.orbitAngle+direction*Math.PI*2*circling;
+  const center=shot.orbitCenter??decoy,radius=shot.orbitRadius,speed=radius*Math.PI*2/.6;
+  shot.heading=angle+direction*Math.PI/2;
+  shot.wx=center.wx+Math.sin(angle)*radius+Math.sin(shot.heading)*speed*fall;shot.wz=center.wz+Math.cos(angle)*radius+Math.cos(shot.heading)*speed*fall;
+  const sink=Math.min(.75,Math.max(0,(shot.orbitHeight-.25)/1.2));
+  shot.height=shot.orbitHeight-sink*shot.orbitAge-7*fall*fall;shot.vy=-sink-14*fall;
+  const impact=shot.height<=.15||fall>0&&blocked(arena,shot.wx,shot.wz,.3);
+  if(impact){shot.height=Math.max(.15,shot.height);shot.life=0;}
   return {impact,decoy};
 }
 export function advanceProjectile(r,shot,dt){
   const actors=[r,...r.bots],arena=arenas[r.arena];
   shot.age=(shot.age??0)+dt;shot.life-=dt;shot.trail.push({wx:shot.wx,wz:shot.wz,height:shot.height});if(shot.trail.length>24)shot.trail.shift();
   const decoy=r.chaffClouds?.find(c=>c.id===shot.decoy)??(shot.decoyCenter?{...shot.decoyCenter,owner:shot.decoyOwner}:null),target=decoy??actors.find(k=>k.id===shot.target&&!k.destroyed);
-  if(decoy&&shot.orbitAge!==undefined)return orbitChaff(shot,decoy,dt);
-  if(shot.kind==='missile'&&target){const turnRate=decoy?4.5:1.6;shot.heading+=clamp(angleDelta(Math.atan2(target.wx-shot.wx,target.wz-shot.wz),shot.heading),-turnRate*dt,turnRate*dt);}
+  if(decoy&&shot.orbitAge!==undefined)return orbitChaff(shot,decoy,dt,arena);
+  let steering=0;
+  if(shot.kind==='missile'&&target){const turnRate=decoy?4.5:1.6;steering=clamp(angleDelta(Math.atan2(target.wx-shot.wx,target.wz-shot.wz),shot.heading),-turnRate*dt,turnRate*dt);shot.heading+=steering;}
   let impact=false,victim;const steps=Math.ceil(shot.speed*dt/1.5);
   for(let step=0;step<steps&&!impact;step++){
     shot.wx+=Math.sin(shot.heading)*shot.speed*dt/steps;shot.wz+=Math.cos(shot.heading)*shot.speed*dt/steps;
     if(decoy&&distance(shot,decoy)<6){
-      shot.orbitAge=0;shot.orbitAngle=Math.atan2(shot.wx-decoy.wx,shot.wz-decoy.wz);shot.orbitRadius=distance(shot,decoy);shot.orbitHeight=shot.height;shot.chaffed=true;shot.life=Math.max(shot.life,3);
-      return orbitChaff(shot,decoy,dt);
+      shot.orbitAge=0;shot.orbitDirection=steering<0?-1:1;shot.orbitAngle=shot.heading-shot.orbitDirection*Math.PI/2;shot.orbitRadius=shot.speed*.6/(Math.PI*2);shot.orbitHeight=shot.height;
+      shot.orbitCenter={wx:shot.wx-Math.sin(shot.orbitAngle)*shot.orbitRadius,wz:shot.wz-Math.cos(shot.orbitAngle)*shot.orbitRadius};shot.chaffed=true;shot.life=Math.max(shot.life,3);
+      return orbitChaff(shot,decoy,dt*(steps-step-1)/steps,arena);
     }
     impact=blocked(arena,shot.wx,shot.wz,.3);
     victim=decoy?undefined:actors.find(k=>k.id!==shot.owner&&!k.bomber&&!k.destroyed&&k.shield<=0&&distance(k,shot)<2.7);

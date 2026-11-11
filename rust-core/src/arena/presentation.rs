@@ -14,7 +14,7 @@ pub(super) fn present(game:&Game,viewer:usize)->usize{
     for s in &g.skids{data.extend_from_slice(&[s.owner as f64,s.ax,s.az,s.bx,s.bz,s.time]);}
     for p in &g.drift_particles{data.extend_from_slice(&[p.owner as f64,p.wx,p.wz,p.height,p.vx,p.vz,p.vy,p.age,p.life,match p.kind.as_str(){"spark"=>1.0,_=>0.0},p.level as f64,0.0]);}
     for s in &g.projectiles{
-        data.extend_from_slice(&[s.id as f64,s.owner as f64,match s.kind.as_str(){"missile"=>1.0,_=>0.0},s.wx,s.wz,s.heading,s.speed,s.height,s.vy,s.life,s.age,f64::from(s.vulcan),s.action_id.map_or(-1.0,|id|id as f64),s.target.map_or(-1.0,|id|id as f64),s.decoy.map_or(-1.0,|id|id as f64),s.orbit_age.unwrap_or(-1.0),s.orbit_angle,s.orbit_radius,s.orbit_height,f64::from(s.chaffed),s.trail.len()as f64,0.0,0.0,0.0]);
+        data.extend_from_slice(&[s.id as f64,s.owner as f64,match s.kind.as_str(){"missile"=>1.0,_=>0.0},s.wx,s.wz,s.heading,s.speed,s.height,s.vy,s.life,s.age,f64::from(s.vulcan),s.action_id.map_or(-1.0,|id|id as f64),s.target.map_or(-1.0,|id|id as f64),s.decoy.map_or(-1.0,|id|id as f64),s.orbit_age.unwrap_or(-1.0),s.orbit_angle,s.orbit_radius,s.orbit_height,f64::from(s.chaffed),s.trail.len()as f64,s.orbit_direction,s.orbit_center.as_ref().map_or(0.0,|p|p.wx),s.orbit_center.as_ref().map_or(0.0,|p|p.wz)]);
         for i in 0..24{match s.trail.get(i){Some(p)=>data.extend_from_slice(&[p.wx,p.wz,p.height]),None=>data.extend_from_slice(&[0.0;3])}}
     }
     for s in &g.supplies{data.extend_from_slice(&[s.id as f64,s.wx,s.wz,match s.kind.as_str(){"missile"=>1.0,"boost"=>2.0,"health"=>3.0,_=>0.0},s.cooldown,s.version as f64,s.collector.map_or(-1.0,|id|id as f64),0.0]);}

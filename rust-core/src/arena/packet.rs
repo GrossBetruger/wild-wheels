@@ -7,7 +7,7 @@ impl Serialize for ShotMeta<'_>{fn serialize<S:Serializer>(&self,serializer:S)->
     let s=self.0;let mut map=serializer.serialize_map(None)?;
     macro_rules! e{($key:literal,$value:expr)=>{map.serialize_entry($key,&$value)?;};}
     e!("id",s.id);e!("owner",s.owner);e!("kind",s.kind);e!("wx",s.wx);e!("wz",s.wz);e!("heading",s.heading);e!("speed",s.speed);e!("height",s.height);e!("vy",s.vy);e!("life",s.life);e!("age",s.age);e!("bounces",s.bounces);e!("target",s.target);e!("vulcan",s.vulcan);e!("trail",[0u8;0]);
-    if let Some(id)=s.action_id{e!("actionId",id);}if let Some(id)=s.decoy{e!("decoy",id);}if let Some(id)=s.decoy_owner{e!("decoyOwner",id);}if let Some(p)=&s.decoy_center{e!("decoyCenter",p);}if let Some(age)=s.orbit_age{e!("orbitAge",age);e!("orbitAngle",s.orbit_angle);e!("orbitRadius",s.orbit_radius);e!("orbitHeight",s.orbit_height);}if s.chaffed{e!("chaffed",true);}map.end()
+    if let Some(id)=s.action_id{e!("actionId",id);}if let Some(id)=s.decoy{e!("decoy",id);}if let Some(id)=s.decoy_owner{e!("decoyOwner",id);}if let Some(p)=&s.decoy_center{e!("decoyCenter",p);}if let Some(age)=s.orbit_age{e!("orbitAge",age);e!("orbitAngle",s.orbit_angle);e!("orbitRadius",s.orbit_radius);e!("orbitHeight",s.orbit_height);e!("orbitDirection",s.orbit_direction);if let Some(center)=&s.orbit_center{e!("orbitCenter",center);}}if s.chaffed{e!("chaffed",true);}map.end()
 }}
 struct GlobalMeta<'a>{game:&'a Game,viewer:usize}
 impl Serialize for GlobalMeta<'_>{fn serialize<S:Serializer>(&self,serializer:S)->Result<S::Ok,S::Error>{

@@ -7,15 +7,36 @@ import { ChaffNotice } from './combat-notices.js';
 
 test('a diverted missile circles once, falls without another turn, and explodes safely after the cloud expires',()=>{
   const world=createBattle();Object.assign(world,{phase:'racing',wx:-65,wz:0,shield:0,bots:[],supplies:[],chaffClouds:[{id:0,owner:0,wx:-65,wz:20,age:0,life:.1}],projectiles:[{kind:'missile',owner:99,target:null,decoy:0,decoyOwner:0,decoyCenter:{wx:-65,wz:20},wx:-60,wz:20,heading:Math.PI,speed:70,height:1.3,life:4,trail:[],orbitAge:0,orbitAngle:Math.PI/2,orbitRadius:5,orbitHeight:1.3,chaffed:true}]});
-  const missile=world.projectiles[0];let rotation=0,previous=Math.PI/2,maxHeight=0,sawFall=false;
+  const missile=world.projectiles[0];let rotation=0,previous=Math.PI,maxHeight=0,sawFall=false,sankWhileCircling=false,movedWhileFalling=false;
   for(let i=0;i<120;i++){
+    const before={wx:missile.wx,wz:missile.wz};
     tickBattle(world,new Set(),1/60);maxHeight=Math.max(maxHeight,missile.height);
-    const angle=Math.atan2(missile.wx+65,missile.wz-20);rotation+=Math.atan2(Math.sin(angle-previous),Math.cos(angle-previous));previous=angle;
-    if(missile.orbitAge>.6&&missile.height<2)sawFall=true;
+    rotation+=Math.atan2(Math.sin(missile.heading-previous),Math.cos(missile.heading-previous));previous=missile.heading;
+    if(missile.orbitAge>0&&missile.orbitAge<.6&&missile.height<1.3)sankWhileCircling=true;
+    if(missile.orbitAge>.6&&missile.height<.8)sawFall=true;
+    if(missile.orbitAge>.6&&world.projectiles.includes(missile)&&Math.hypot(missile.wx-before.wx,missile.wz-before.wz)>.5)movedWhileFalling=true;
   }
-  assert.ok(Math.abs(rotation-Math.PI*2)<1e-6);assert.ok(maxHeight>=4);assert.equal(sawFall,true);
+  assert.ok(Math.abs(rotation-Math.PI*2)<1e-6);assert.ok(maxHeight<=1.3);assert.equal(sawFall,true);assert.equal(sankWhileCircling,true);assert.equal(movedWhileFalling,true);assert.ok(missile.wz<10);
   assert.equal(missile.height,.15);assert.equal(world.projectiles.length,0);assert.equal(world.chaffClouds.length,0);assert.equal(world.health,3);
   assert.ok(world.effects.some(effect=>effect.type==='explosion'));
+});
+
+test('chaff preserves either incoming turn and forward flight through one descending circle',()=>{
+  for(const [heading,direction]of[[.35,-1],[-.35,1]]){
+    const world=createBattle();Object.assign(world,{phase:'racing',wx:-65,wz:0,shield:0,bots:[],supplies:[],chaffClouds:[{id:0,owner:0,wx:-65,wz:20,age:0,life:8}],projectiles:[{kind:'missile',owner:99,target:null,decoy:0,decoyOwner:0,decoyCenter:{wx:-65,wz:20},wx:-65,wz:10,heading,speed:70,height:1.3,life:4,trail:[]}]});
+    const missile=world.projectiles[0];let entered=false,previous=heading,rotation=0,movedAfterCircle=false;
+    for(let frame=0;frame<120;frame++){
+      const position={wx:missile.wx,wz:missile.wz};tickBattle(world,new Set(),1/60);const turn=Math.atan2(Math.sin(missile.heading-previous),Math.cos(missile.heading-previous));
+      if(missile.orbitAge!==undefined){
+        if(!entered){assert.ok(Math.abs(turn)<=.08,'entering the circle preserves the incoming heading');entered=true;}
+        if(missile.orbitAge>0)rotation+=turn;
+        assert.equal(missile.orbitDirection,direction);
+        if(missile.orbitAge>.6&&world.projectiles.includes(missile)){assert.ok(Math.hypot(missile.wx-position.wx,missile.wz-position.wz)>1,'the missile keeps flying while it drops');movedAfterCircle=true;}
+      }
+      previous=missile.heading;
+    }
+    assert.equal(entered,true);assert.ok(Math.abs(rotation-direction*Math.PI*2)<1e-6);assert.equal(movedAfterCircle,true);assert.equal(world.projectiles.length,0);assert.equal(world.health,3);
+  }
 });
 
 test('the green notice confirms only this player’s successful chaff diversion and expires once',()=>{

@@ -123,14 +123,16 @@ export async function checkControls(evaluate,app,room,id,sleep,captureFlip,captu
   const greenNoticePass=await evaluate("!document.getElementById('averted-notice').classList.contains('hidden')&&document.getElementById('averted-notice').textContent.includes('MISSILE AVERTED')&&document.getElementById('incoming-warning').classList.contains('hidden')");
   const orbitTrace=[];let sawOrbit=false,orbitCaptured=false;
   for(let i=0;i<220;i++){
-    const shot=await evaluate("(()=>{const p=__game.race.projectiles.find(p=>p.decoy!=null);return p?{wx:p.wx,wz:p.wz,height:p.height,age:p.orbitAge??null}:null;})()");
+    const shot=await evaluate("(()=>{const p=__game.race.projectiles.find(p=>p.decoy!=null);return p?{wx:p.wx,wz:p.wz,height:p.height,heading:p.heading,direction:p.orbitDirection,entryHeight:p.orbitHeight,age:p.orbitAge??null}:null;})()");
     if(shot){orbitTrace.push(shot);if(shot.age!==null)sawOrbit=true;}
     if(captureChaff&&!orbitCaptured&&shot?.age>.4){await captureChaff();orbitCaptured=true;}
     if(sawOrbit&&!shot)break;await sleep(20);
   }
   let orbitRotation=0,previousAngle=null;
-  for(const shot of orbitTrace.filter(shot=>shot.age!==null)){const angle=Math.atan2(shot.wx-ownCloud.wx,shot.wz-ownCloud.wz);if(previousAngle!==null)orbitRotation+=Math.atan2(Math.sin(angle-previousAngle),Math.cos(angle-previousAngle));previousAngle=angle;}
-  const orbitPass=sawOrbit&&orbitRotation>Math.PI*1.6&&orbitRotation<=Math.PI*2.2&&orbitTrace.some(shot=>shot.height>3.5)&&orbitTrace.some(shot=>shot.age>.6&&shot.height<2)&&room.world.projectiles.every(shot=>shot.decoy==null);
+  for(const shot of orbitTrace.filter(shot=>shot.age!==null)){if(previousAngle!==null)orbitRotation+=Math.atan2(Math.sin(shot.heading-previousAngle),Math.cos(shot.heading-previousAngle));previousAngle=shot.heading;}
+  const descendsWhileCircling=orbitTrace.some(shot=>shot.age>0&&shot.age<.6&&shot.height<shot.entryHeight-.02);
+  const movesWhileFalling=orbitTrace.some((shot,index)=>index>0&&shot.age>.65&&shot.height<orbitTrace[index-1].height&&Math.hypot(shot.wx-orbitTrace[index-1].wx,shot.wz-orbitTrace[index-1].wz)>.2);
+  const orbitPass=sawOrbit&&Math.abs(orbitRotation)>Math.PI*1.6&&Math.abs(orbitRotation)<=Math.PI*2.2&&descendsWhileCircling&&movesWhileFalling&&room.world.projectiles.every(shot=>shot.decoy==null);
   const bomber=app.join(room,{name:'Phone Bomber',driver:2,role:'bomber'});
   app.controls(bomber,{sequence:0,keys:[],actions:[{type:'bomb',id:0,afterMove:-1,wx:-65,wz:30}],epoch:room.world.soundEpoch});
   for(let i=0;i<100;i++){if(await evaluate('__game.race.bombs.some(bomb=>bomb.wx===-65&&bomb.wz===30)'))break;await sleep(10);}

@@ -77,17 +77,21 @@ impl Game{
     pub(super) fn advance_shot(&self,shot:&mut Shot,dt:f64)->(bool,Option<usize>,Option<usize>){
         shot.age+=dt;shot.life-=dt;shot.trail.push(Sample{wx:shot.wx,wz:shot.wz,height:shot.height});if shot.trail.len()>24{shot.trail.remove(0);}
         let decoy=shot.decoy.and_then(|id|self.global.chaff_clouds.iter().find(|c|c.id==id).map(|c|(c.wx,c.wz,c.owner))).or_else(||shot.decoy_center.as_ref().map(|p|(p.wx,p.wz,shot.decoy_owner.unwrap_or(0))));
-        let orbit=|shot:&mut Shot,point:(f64,f64,usize)|{
-            let age=shot.orbit_age.unwrap_or(0.0)+dt;shot.orbit_age=Some(age);let circling=(age/0.6).min(1.0);let fall=(age-0.6).max(0.0);let angle=shot.orbit_angle+std::f64::consts::PI*2.0*circling;let radius=shot.orbit_radius*(1.0-0.3*circling)*(1.0-fall*0.5).max(0.6);
-            shot.wx=point.0+angle.sin()*radius;shot.wz=point.1+angle.cos()*radius;shot.heading=angle+std::f64::consts::PI/2.0;shot.height=shot.orbit_height+(4.2-shot.orbit_height)*(age/0.35).min(1.0)-7.0*fall*fall;let impact=shot.height<=0.15;if impact{shot.height=0.15;shot.life=0.0;}(impact,None,Some(point.2))
+        let orbit=|shot:&mut Shot,point:(f64,f64,usize),delta:f64|{
+            let age=shot.orbit_age.unwrap_or(0.0)+delta;shot.orbit_age=Some(age);let direction=match shot.orbit_direction<0.0{true=>-1.0,false=>1.0};let circling=(age/0.6).min(1.0);let fall=(age-0.6).max(0.0);let angle=shot.orbit_angle+direction*std::f64::consts::TAU*circling;let radius=shot.orbit_radius;let speed=radius*std::f64::consts::TAU/0.6;
+            let center=shot.orbit_center.as_ref().map_or((point.0,point.1),|p|(p.wx,p.wz));shot.heading=angle+direction*std::f64::consts::FRAC_PI_2;
+            shot.wx=center.0+angle.sin()*radius+shot.heading.sin()*speed*fall;shot.wz=center.1+angle.cos()*radius+shot.heading.cos()*speed*fall;
+            let sink=((shot.orbit_height-0.25)/1.2).clamp(0.0,0.75);shot.height=shot.orbit_height-sink*age-7.0*fall*fall;shot.vy=-sink-14.0*fall;
+            let impact=shot.height<=0.15||fall>0.0&&blocked(self.global.arena,shot.wx,shot.wz,0.3);if impact{shot.height=shot.height.max(0.15);shot.life=0.0;}(impact,None,Some(point.2))
         };
-        if let Some(point)=decoy{if shot.orbit_age.is_some(){return orbit(shot,point);}}
+        if let Some(point)=decoy{if shot.orbit_age.is_some(){return orbit(shot,point,dt);}}
         let target=decoy.map(|p|(p.0,p.1)).or_else(||shot.target.and_then(|id|self.actors.get(id)).filter(|a|a.destroyed<=0.0).map(|a|(a.wx,a.wz)));
-        if shot.kind=="missile"{if let Some((x,z))=target{let rate=match decoy.is_some(){true=>4.5,false=>1.6};shot.heading+=angle((x-shot.wx).atan2(z-shot.wz),shot.heading).clamp(-rate*dt,rate*dt);}}
+        let mut steering=0.0;
+        if shot.kind=="missile"{if let Some((x,z))=target{let rate=match decoy.is_some(){true=>4.5,false=>1.6};steering=angle((x-shot.wx).atan2(z-shot.wz),shot.heading).clamp(-rate*dt,rate*dt);shot.heading+=steering;}}
         let steps=(shot.speed*dt/1.5).ceil() as usize;
-        for _ in 0..steps{
+        for step in 0..steps{
             shot.wx+=shot.heading.sin()*shot.speed*dt/steps as f64;shot.wz+=shot.heading.cos()*shot.speed*dt/steps as f64;
-            if let Some(point)=decoy{if distance(shot.wx,shot.wz,point.0,point.1)<6.0{shot.orbit_age=Some(0.0);shot.orbit_angle=(shot.wx-point.0).atan2(shot.wz-point.1);shot.orbit_radius=distance(shot.wx,shot.wz,point.0,point.1);shot.orbit_height=shot.height;shot.chaffed=true;shot.life=shot.life.max(3.0);return orbit(shot,point);}}
+            if let Some(point)=decoy{if distance(shot.wx,shot.wz,point.0,point.1)<6.0{shot.orbit_age=Some(0.0);shot.orbit_direction=match steering<0.0{true=>-1.0,false=>1.0};shot.orbit_angle=shot.heading-shot.orbit_direction*std::f64::consts::FRAC_PI_2;shot.orbit_radius=shot.speed*0.6/std::f64::consts::TAU;shot.orbit_height=shot.height;shot.orbit_center=Some(Point{wx:shot.wx-shot.orbit_angle.sin()*shot.orbit_radius,wz:shot.wz-shot.orbit_angle.cos()*shot.orbit_radius});shot.chaffed=true;shot.life=shot.life.max(3.0);return orbit(shot,point,dt*(steps-step-1)as f64/steps as f64);}}
             let victim=match decoy.is_some(){true=>None,false=>self.actors.iter().find(|a|a.id!=shot.owner&&!a.bomber&&a.destroyed<=0.0&&a.shield<=0.0&&distance(a.wx,a.wz,shot.wx,shot.wz)<2.7).map(|a|a.id)};
             if blocked(self.global.arena,shot.wx,shot.wz,0.3)||victim.is_some(){shot.life=0.0;return(true,victim,decoy.map(|p|p.2));}
         }(false,None,decoy.map(|p|p.2))

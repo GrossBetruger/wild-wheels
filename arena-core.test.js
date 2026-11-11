@@ -113,11 +113,34 @@ test('kills against each new character show its actual name in the kill announce
 test('a Rust-owned chaffed missile completes one circle then crashes without more turns or damage',()=>{
   const seed=createBattle();Object.assign(seed,{phase:'racing',human:true,wx:-65,wz:0,shield:0,supplies:[],chaffClouds:[{id:0,owner:0,wx:-65,wz:20,age:0,life:.1}],projectiles:[{id:1,kind:'missile',owner:1,target:null,decoy:0,decoyOwner:0,decoyCenter:{wx:-65,wz:20},wx:-60,wz:20,heading:Math.PI,speed:70,height:1.3,life:4,trail:[],orbitAge:0,orbitAngle:Math.PI/2,orbitRadius:5,orbitHeight:1.3,chaffed:true}]});
   for(const bot of seed.bots)Object.assign(bot,{inactive:true,destroyed:1e9});
-  const core=new ArenaCore(seed);let rotation=0,previous=Math.PI/2,sawFall=false;
+  const core=new ArenaCore(seed);let rotation=0,previous=Math.PI,sawFall=false,sankWhileCircling=false,movedWhileFalling=false,last=null;
   for(let frame=0;frame<120;frame++){
     core.step(1/60);const shot=core.snapshot().projectiles[0];if(!shot)continue;
-    const angle=Math.atan2(shot.wx+65,shot.wz-20);rotation+=Math.atan2(Math.sin(angle-previous),Math.cos(angle-previous));previous=angle;
-    if(shot.orbitAge>.6&&shot.height<2)sawFall=true;
+    rotation+=Math.atan2(Math.sin(shot.heading-previous),Math.cos(shot.heading-previous));previous=shot.heading;
+    if(shot.orbitAge>0&&shot.orbitAge<.6&&shot.height<1.3)sankWhileCircling=true;
+    if(shot.orbitAge>.6&&shot.height<.8)sawFall=true;
+    if(last&&shot.orbitAge>.6&&Math.hypot(shot.wx-last.wx,shot.wz-last.wz)>.5)movedWhileFalling=true;
+    last=shot;
   }
-  const world=core.snapshot();assert.ok(Math.abs(rotation-Math.PI*2)<1e-6);assert.equal(sawFall,true);assert.equal(world.projectiles.length,0);assert.equal(world.health,3);assert.ok(world.effects.some(effect=>effect.type==='explosion'));
+  const world=core.snapshot();assert.ok(Math.abs(rotation-Math.PI*2)<1e-6);assert.equal(sawFall,true);assert.equal(sankWhileCircling,true);assert.equal(movedWhileFalling,true);assert.ok(last.wz<10);assert.equal(world.projectiles.length,0);assert.equal(world.health,3);assert.ok(world.effects.some(effect=>effect.type==='explosion'));
+});
+
+test('Rust chaff keeps clockwise and counterclockwise approaches continuous through the falling exit',()=>{
+  for(const [heading,direction]of[[.35,-1],[-.35,1]]){
+    const seed=createBattle();Object.assign(seed,{phase:'racing',human:true,wx:-65,wz:0,shield:0,supplies:[],chaffClouds:[{id:0,owner:0,wx:-65,wz:20,age:0,life:8}],projectiles:[{id:1,kind:'missile',owner:1,target:null,decoy:0,decoyOwner:0,decoyCenter:{wx:-65,wz:20},wx:-65,wz:10,heading,speed:70,height:1.3,life:4,trail:[]}]});
+    for(const bot of seed.bots)Object.assign(bot,{inactive:true,destroyed:1e9});
+    const core=new ArenaCore(seed);let entered=false,previous={heading,wx:-65,wz:10},rotation=0,movedAfterCircle=false;
+    for(let frame=0;frame<120;frame++){
+      core.step(1/60);const shot=core.snapshot().projectiles[0];if(!shot)continue;
+      const turn=Math.atan2(Math.sin(shot.heading-previous.heading),Math.cos(shot.heading-previous.heading));
+      if(shot.orbitAge!==undefined){
+        if(!entered){assert.ok(Math.abs(turn)<=.08,'the missile enters without a heading jump');entered=true;assert.equal(decodeBinarySnapshot(core.packet()).world.projectiles[0].orbitDirection,direction);assert.equal(core.present().projectiles[0].orbitDirection,direction);}
+        if(shot.orbitAge>0)rotation+=turn;
+        assert.equal(shot.orbitDirection,direction);
+        if(shot.orbitAge>.6){assert.ok(Math.hypot(shot.wx-previous.wx,shot.wz-previous.wz)>1,'falling preserves forward motion');movedAfterCircle=true;}
+      }
+      previous=shot;
+    }
+    assert.equal(entered,true);assert.ok(Math.abs(rotation-direction*Math.PI*2)<1e-6);assert.equal(movedAfterCircle,true);assert.equal(core.snapshot().projectiles.length,0);assert.equal(core.snapshot().health,3);
+  }
 });
