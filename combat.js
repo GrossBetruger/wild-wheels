@@ -1,6 +1,6 @@
 import { createRace, drivers, START_HEDGEHOGS, itemCapacity } from './engine.js';
 export const VULCAN_DURATION=15;
-export const HEDGEGUARD_DURATION=12;
+export const HEDGEGUARD_DURATION=25;
 export const MAX_HEALTH=6;
 export const RECOVERY_HEALTH=3;
 export function recoveryInterval(driver){return 14-2*drivers[driver].cuteness;}

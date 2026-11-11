@@ -48,7 +48,7 @@ export async function checkCharacters(evaluate,app,room,id,sleep,capture){
     const ammoRecovery=await wait(()=>evaluate("__game.race.ammo>=1&&Number(document.getElementById('hedgehog-count').textContent)>=1"))&&app.snapshot(room,observer).world.bots.find(actor=>actor.id===id)?.ammo>=1;
     const own=[room.world,...room.world.bots].find(actor=>actor.id===id),peer=[room.world,...room.world.bots].find(actor=>actor.id===observer.id);
     room.world.supplies=[{id:8,kind:'hedgeproof',wx:own.wx,wz:own.wz,cooldown:0,version:0}];
-    Object.assign(peer,{driver,human:true,inactive:false,destroyed:0,shield:0,wx:own.wx+7,wz:own.wz+5,hedgeShield:12});app.broadcast(room);
+    Object.assign(peer,{driver,human:true,inactive:false,destroyed:0,shield:0,wx:own.wx+7,wz:own.wz+5,hedgeShield:25});app.broadcast(room);
     await evaluate('__game.auraDraws=[]');
     const aura=await wait(()=>evaluate(`__game.race.hedgeShield>0&&document.querySelector('.hedgeguard-status').textContent.includes('MISSILES STILL HURT')&&__game.auraDraws.some(draw=>draw.id===${id}&&draw.driver===${driver}&&draw.icons===6)&&__game.auraDraws.some(draw=>draw.id===${observer.id}&&draw.driver===${driver}&&draw.icons===6)`))&&app.snapshot(room,observer).world.bots.find(actor=>actor.id===id)?.hedgeShield>0;
     await capture(`${driver===5?'cricket':driver===6?'money':'shield'}-hedgeguard`);

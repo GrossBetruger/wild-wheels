@@ -8,7 +8,7 @@ pub(super) struct PendingSound{pub kind:String,pub time:f64,pub key:Option<Strin
 fn grant(a:&mut Actor,kind:&str){match kind{
     "health"=>{a.health=(a.health+1.0).min(6.0);a.notice=format!("+1 HEART · {} / 6",a.health);a.notice_time=2.0;},
     "missile"=>{a.missiles=(a.missiles+1).min(item_capacity(a.driver,"missile"));if !(a.vulcan>0.0&&a.item=="hedgehog"){a.item="missile".into();}},
-    "hedgeproof"=>a.hedge_shield=12.0,"hedgehog"=>a.ammo=item_capacity(a.driver,"hedgehog"),"boost"=>a.turbos=(a.turbos+1).min(item_capacity(a.driver,"boost")),_=>{}
+    "hedgeproof"=>a.hedge_shield=25.0,"hedgehog"=>a.ammo=item_capacity(a.driver,"hedgehog"),"boost"=>a.turbos=(a.turbos+1).min(item_capacity(a.driver,"boost")),_=>{}
 }}
 fn select(a:&mut Actor,item:&str){if match item{"hedgehog"=>a.vulcan>0.0||a.ammo>0,"missile"=>a.missiles>0,_=>false}{a.item=item.into();}}
 fn spend(a:&mut Actor,resource:&str){let value=match resource{"ammo"=>&mut a.ammo,"missiles"=>&mut a.missiles,"turbos"=>&mut a.turbos,"chaff"=>&mut a.chaff,"bombAmmo"=>&mut a.bomb_ammo,"stinkAmmo"=>&mut a.stink_ammo,_=>return};*value=value.saturating_sub(1);}

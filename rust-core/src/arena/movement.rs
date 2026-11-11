@@ -62,7 +62,7 @@ impl Game{
             match supply.kind.as_str(){
                 "health"=>{a.health=(a.health+1.0).min(6.0);a.notice=format!("+1 HEART · {} / 6",a.health);a.notice_time=2.0;},
                 "missile"=>{a.missiles=(a.missiles+1).min(item_capacity(a.driver,"missile"));if !(a.vulcan>0.0&&a.item=="hedgehog"){a.item="missile".into();}},
-                "hedgeproof"=>a.hedge_shield=12.0,"hedgehog"=>a.ammo=item_capacity(a.driver,"hedgehog"),"boost"=>a.turbos=(a.turbos+1).min(item_capacity(a.driver,"boost")),_=>{}
+                "hedgeproof"=>a.hedge_shield=25.0,"hedgehog"=>a.ammo=item_capacity(a.driver,"hedgehog"),"boost"=>a.turbos=(a.turbos+1).min(item_capacity(a.driver,"boost")),_=>{}
             }
             supply.cooldown=match supply.kind.as_str(){"hedgeproof"=>45.0,_=>8.0};supply.version+=1;supply.collector=Some(id);
             if g.multiplayer||id==0{
