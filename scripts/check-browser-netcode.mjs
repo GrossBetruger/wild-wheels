@@ -9,6 +9,7 @@ import { checkFeedback } from './check-feedback-scenario.mjs';
 import { checkDrift } from './check-drift-scenario.mjs';
 import { checkControls } from './check-controls-scenario.mjs';
 import { checkMobile } from './check-mobile-scenario.mjs';
+import { profilePerformance } from './profile-performance.mjs';
 
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const quantile=(values,p)=>[...values].sort((a,b)=>a-b)[Math.min(values.length-1,Math.floor(values.length*p))]??0;
@@ -53,11 +54,25 @@ let session;
 async function evaluate(expression){const result=await call('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true},session);if(result.exceptionDetails)throw new Error(result.exceptionDetails.exception?.description??result.exceptionDetails.text);return result.result.value;}
 const results=[];
 try{
-  const profiles=[{name:'local-host',delay:0,jitter:0},{name:'local-guest',delay:0,jitter:0,guest:true},{name:'160ms-guest',delay:80,jitter:0,guest:true},{name:'160ms-jitter-guest',delay:80,jitter:30,guest:true}];
+  const profiles=process.argv.includes('--profile')?[{name:'cpu-profile',delay:0,jitter:0}]:[{name:'local-host',delay:0,jitter:0},{name:'local-guest',delay:0,jitter:0,guest:true},{name:'160ms-guest',delay:80,jitter:0,guest:true},{name:'160ms-jitter-guest',delay:80,jitter:30,guest:true}];
   for(const profile of Array.from({length:repeat},(_,run)=>profiles.map(profile=>({...profile,run:run+1}))).flat()){
     activeProfile=`${profile.run}:${profile.name}`;
     const {targetId}=await call('Target.createTarget',{url:'about:blank'});({sessionId:session}=await call('Target.attachToTarget',{targetId,flatten:true}));
     await call('Page.enable',{},session);await call('Runtime.enable',{},session);
+    if(process.argv.includes('--profile'))await call('Page.addScriptToEvaluateOnNewDocument',{source:`{
+      globalThis.__perf={enabled:false,render:[],network:[],frame:[],intervals:[],last:null};
+      const request=window.requestAnimationFrame.bind(window);
+      window.requestAnimationFrame=callback=>request(time=>{
+        const metrics=__perf,start=performance.now(),count=metrics.render.length;
+        try{callback(time);}finally{
+          if(metrics.enabled&&metrics.render.length>count){
+            metrics.frame.push(performance.now()-start);
+            if(metrics.last!==null)metrics.intervals.push(time-metrics.last);
+            metrics.last=time;
+          }
+        }
+      });
+    }`},session);
     if(process.argv.includes('--mobile')){
       await call('Emulation.setDeviceMetricsOverride',{width:430,height:900,deviceScaleFactor:1,mobile:true,screenOrientation:{type:'portraitPrimary',angle:0}},session);
       await call('Emulation.setTouchEmulationEnabled',{enabled:true},session);
@@ -80,6 +95,14 @@ try{
     if(profile.guest){const room={code:'07',arena:0,botCount:0,host:0,members:new Map()};app.multiplayer.makeWorld(room);app.multiplayer.rooms.set('07',room);app.multiplayer.join(room,{name:'Host',driver:1});}
     const identity=await evaluate(`(async()=>{__game.network.botCount.value='0';__game.network.invitation='07';await __game.network.connect('${profile.guest?'/api/join':'/api/rooms'}');return {code:__game.network.state.code,you:__game.network.state.you};})()`);
     const room=app.multiplayer.rooms.get(identity.code);
+    if(process.argv.includes('--profile')){
+      for(const measurement of await profilePerformance(evaluate,app.multiplayer,room,sleep)){
+        const result={profile:profile.name,run:profile.run,...measurement};results.push(result);console.log(JSON.stringify(result));
+      }
+      await evaluate('__game.network.leave()');await call('Target.closeTarget',{targetId});
+      for(const member of [...room.members.values()])app.multiplayer.remove(member);
+      continue;
+    }
     if(process.argv.includes('--mobile')){
       const capture=async label=>{const screenshot=await call('Page.captureScreenshot',{format:'png'},session);await writeFile(`${output}.${profile.run}.${profile.name}.${label}.mobile.png`,Buffer.from(screenshot.data,'base64'));};
       const rotate=angle=>call('Emulation.setDeviceMetricsOverride',{width:angle?900:430,height:angle?430:900,deviceScaleFactor:1,mobile:true,screenOrientation:{type:angle===90?'landscapePrimary':angle===270?'landscapeSecondary':'portraitPrimary',angle}},session);
