@@ -39,6 +39,7 @@ export class Renderer {
     this.canvas=canvas;const gl=this.gl=canvas.getContext('webgl',{antialias:true,alpha:false});if(!gl)throw new Error('This game requires WebGL. Enable hardware acceleration in your browser.');
     this.models=new Map();this.instances=[];this.quality='auto';this.resolution=1.25;this.fps=0;this.fpsStart=0;this.frameCount=0;this.slowWindows=0;this.fastWindows=0;
     this.tailFolds=new Map();
+    this.lastBodies=new Map();this.ashBodies=new Map();
     const debug=gl.getExtension('WEBGL_debug_renderer_info');this.gpuName=debug?gl.getParameter(debug.UNMASKED_RENDERER_WEBGL):'WebGL';this.softwareGPU=/swiftshader|llvmpipe|software/i.test(this.gpuName);if(this.softwareGPU)this.resolution=.75;
     this.program=gl.createProgram();
     gl.attachShader(this.program,shader(gl,gl.VERTEX_SHADER,`
@@ -115,7 +116,7 @@ export class Renderer {
   pixelRatio(){return Math.min(devicePixelRatio,this.resolution);}
   model(key,x,y,z,angle,build,pitch=0,plumage=null){
     let model=this.models.get(key);
-    if(!model){const mesh=new Mesh();this.buildingModel=true;try{build(mesh);}finally{this.buildingModel=false;}const buffer=this.gl.createBuffer();this.gl.bindBuffer(this.gl.ARRAY_BUFFER,buffer);this.gl.bufferData(this.gl.ARRAY_BUFFER,new Float32Array(mesh.data),this.gl.STATIC_DRAW);model={buffer,count:mesh.data.length/9};this.models.set(key,model);}
+    if(!model){const mesh=new Mesh();this.buildingModel=true;try{build(mesh);}finally{this.buildingModel=false;}const buffer=this.gl.createBuffer();this.gl.bindBuffer(this.gl.ARRAY_BUFFER,buffer);this.gl.bufferData(this.gl.ARRAY_BUFFER,new Float32Array(mesh.data),this.gl.STATIC_DRAW);model={buffer,count:mesh.data.length/9,rubble:this.rubbleSamples(mesh.data)};this.models.set(key,model);}
     this.instances.push({...model,x,y,z,angle,pitch,plumage});
   }
   scenery(track){
@@ -400,7 +401,7 @@ export class Renderer {
   }
   drawBattle(r,time){
     const helmetScene=`${r.arena}:${r.soundEpoch}:${r.id}`;
-    if(this.helmetScene!==helmetScene||time<(this.helmetTime??0)){this.helmetScene=helmetScene;this.helmetFlights=new Map();this.tailFolds.clear();}this.helmetTime=time;
+    if(this.helmetScene!==helmetScene||time<(this.helmetTime??0)){this.helmetScene=helmetScene;this.helmetFlights=new Map();this.tailFolds.clear();this.lastBodies.clear();this.ashBodies.clear();}this.helmetTime=time;
     if(this.track!==`arena-${r.arena}`)this.arenaScenery(r.arena);
     const gl=this.gl,canvas=this.canvas,width=Math.round(canvas.clientWidth*this.pixelRatio()),height=Math.round(canvas.clientHeight*this.pixelRatio());if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;}gl.viewport(0,0,width,height);
     const sky=rgb(arenas[r.arena].sky);gl.clearColor(...sky,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(this.program);
@@ -422,12 +423,26 @@ export class Renderer {
       const nx=-dz/length*.24,nz=dx/length*.24,fade=Math.min(1,(r.elapsed-skid.time)/6),ground=rgb(arenas[r.arena].ground),color=ground.map(c=>c*(.28+fade*.65));
       m.quad([skid.ax+nx,.025,skid.az+nz],[skid.bx+nx,.025,skid.bz+nz],[skid.bx-nx,.025,skid.bz-nz],[skid.ax-nx,.025,skid.az-nz],color);
     }
+    const ashKeys=new Set(r.effects.filter(f=>f.type==='ash').map(f=>`${f.wx}:${f.wz}`));for(const key of this.ashBodies.keys())if(!ashKeys.has(key))this.ashBodies.delete(key);
     for(const actor of [r,...r.bots]){
       if(actor.bomber||actor.inactive||actor.afk)continue;
-      const pose={...combatPose(actor),id:actor.id};if(actor.destroyed){m.at(pose.x,.1,pose.z);m.disc(0,0,0,2,3,'#343344');continue;}
+      const pose={...combatPose(actor),id:actor.id};if(actor.destroyed){
+        const ash=r.effects.find(f=>f.type==='ash'&&Math.hypot(f.wx-pose.x,f.wz-pose.z)<.1),key=`${pose.x}:${pose.z}`;
+        if(ash&&(!this.ashBodies.has(key)||ash.age<this.ashBodies.get(key).age)){
+          if(!this.lastBodies.has(actor.id)){
+            const start=this.instances.length,glow=this.glow.sprites.length,smoke=this.smoke.sprites.length,ghost=new Mesh();
+            this.kart(ghost,pose,actor.color??drivers[actor.driver].color,actor.driver,0,0,false,time);
+            this.rememberBody(actor,this.instances.slice(start),ghost.data);this.instances.length=start;this.glow.sprites.length=glow;this.smoke.sprites.length=smoke;
+          }
+          this.ashBodies.set(key,{age:ash.age,points:this.bodyRubble(this.lastBodies.get(actor.id))});
+        }
+        m.at(pose.x,.1,pose.z);m.disc(0,0,0,2,3,'#343344');continue;
+      }
       if(overview){m.at(pose.x,.08,pose.z);m.disc(0,0,0,3.6,3.6,actor.color??drivers[actor.driver].color);}
       const jump=somersaultPose(actor);
+      const bodyStart=this.instances.length,dataStart=m.data.length;
       this.kart(m,pose,actor.color??drivers[actor.driver].color,actor.driver,0,0,actor.boost>0,time,actor.celebrate,jump,actor.driver!==7||actor.vulcan<=0);
+      const parts=this.instances.slice(bodyStart);this.rememberBody(actor,parts,parts.length?[]:m.data.slice(dataStart));
       if(actor.driver===7)this.houstonHelmet(pose,actor,time,jump);
       if(actor.hedgeShield>0)this.hedgeguard(m,pose,actor,time,jump);
       if(actor.dizzy>0)for(let i=0;i<6;i++){const angle=time*(actor.boost>0?9:5)+i*Math.PI/3;m.at(pose.x+Math.sin(angle)*3.2,6.8+Math.sin(angle*2)*.5,pose.z+Math.cos(angle)*3.2,angle);m.box(0,0,0,1.2,.22,.3,'#fff08b');m.box(0,0,0,.3,.22,1.2,'#fff08b');this.glow.at(m.origin[0],m.origin[1],m.origin[2]);this.glow.particle(0,0,0,.8,[.7,.6,.05]);}
@@ -504,18 +519,56 @@ export class Renderer {
     this.glow.at(effect.wx,2,effect.wz);this.glow.particle(0,0,0,Math.max(0,24-t*24),[fade,.55*fade,.12*fade]);
   }
   ashRemains(m,effect){
-    const t=effect.age,settled=Math.min(1,t/1.1),fade=Math.min(1,(effect.life-t)/.6);
-    m.at(effect.wx,.04,effect.wz);
-    m.ball(0,.08,0,1.8,.12+settled*.3,2,'#656970',12,5);
-    for(let i=0;i<9;i++){const a=i*2.399;m.ball(Math.sin(a)*(1+i%3*.28),.1,Math.cos(a)*(1+i%3*.28),.33,.08+settled*.12,.38,i%2?'#909398':'#4c5158',7,4);}
-    // Gray flakes start where the kart and driver stood, then crumble and drift down.
-    for(let i=0;i<64;i++){
-      const a=i*2.399,height=.5+(i%9)*.53,y=Math.max(.12,height+t*(.6+i%4*.2)-t*t*3.8),spread=.3+(i%5)*.2+t*.8;
-      m.at(effect.wx+Math.sin(a)*spread,y,effect.wz+Math.cos(a)*spread,a+t*(i%3-1));
-      const size=(.08+i%3*.04)*fade;m.box(0,0,0,size,size*.4,size*1.7,i%3?'#8e9298':'#d2d2cc');
+    const t=effect.age,key=`${effect.wx}:${effect.wz}`,fade=Math.max(0,Math.min(1,(effect.life-t)/.6));
+    let body=this.ashBodies.get(key);
+    if(!body||t<body.age){
+      const source=[...this.lastBodies.values()].find(b=>Math.hypot(b.x-effect.wx,b.z-effect.wz)<3);
+      body={age:t,points:source?this.bodyRubble(source):[]};this.ashBodies.set(key,body);
     }
-    this.smoke.at(effect.wx,1.1+t*.5,effect.wz);
-    for(let i=0;i<7;i++){const a=i*2.399;this.smoke.particle(Math.sin(a)*t*.7,Math.sin(i)*.4,Math.cos(a)*t*.7,(1.1+t*.9)*Math.sqrt(fade),[.43,.45,.48]);}
+    body.age=t;
+    for(const [i,point]of body.points.entries()){
+      const age=Math.max(0,t-.18-(i%7)*.045),p=Math.min(1,age/(.65+i%5*.04)),fall=p*p*(3-2*p),a=i*2.399,radius=.25+(i%17)/17*1.9;
+      const x=point[0]*(1-fall)+Math.sin(a)*radius*fall,z=point[2]*(1-fall)+Math.cos(a)*radius*fall;
+      const ground=.08+Math.max(0,1-radius/2.3)*.65,bounce=Math.sin(p*Math.PI)*.12;
+      const y=point[1]*(1-fall)+ground*fall+bounce;
+      m.at(effect.wx+x,y,effect.wz+z,a*fall);m.pitch=Math.sin(a)*fall*2;
+      const size=(.2+i%3*.035)*Math.cbrt(fade);m.box(0,0,0,size,size*.8,size,i%5===0?'#b4b1a8':i%2?'#777b80':'#50565d');
+    }
+    this.smoke.at(effect.wx,.4,effect.wz);
+    const simmer=Math.max(0,t-1.3);
+    for(let i=0;i<16;i++){
+      const age=(simmer*.55+i/16)%1,a=i*2.399+simmer*.35;
+      this.smoke.particle(Math.sin(a)*(.4+age),age*2.6,Math.cos(a)*(.4+age),(.5+age*1.4)*Math.sqrt(fade),[.39,.41,.44]);
+      if(t>1.3&&i%4===0){this.glow.at(effect.wx+Math.sin(a)*1.1,.2,effect.wz+Math.cos(a)*1.1);this.glow.particle(0,0,0,.18*fade,[.22*fade,.055*fade,.008]);}
+    }
+  }
+  rubbleSamples(data){
+    const points=new Map(),step=Math.max(1,Math.floor(data.length/9/480));
+    for(let i=0;i<data.length;i+=9*step){const point=data.slice(i,i+3),key=point.map(v=>Math.round(v/.18)).join(':');if(!points.has(key))points.set(key,point);}
+    return [...points.values()];
+  }
+  rememberBody(actor,parts,dynamic){
+    this.lastBodies.set(actor.id,{x:actor.wx,z:actor.wz,parts,dynamic:parts.length?[]:this.rubbleSamples(dynamic)});
+  }
+  bodyRubble({x,z,parts,dynamic}){
+    const actor={wx:x,wz:z};
+    const count=parts.reduce((n,p)=>n+p.count,0),points=[];
+    for(const part of parts){
+      const share=Math.max(8,Math.floor(420*part.count/Math.max(1,count))),step=Math.max(1,Math.ceil(part.rubble.length/share));
+      for(let i=0;i<part.rubble.length;i+=step){
+        let [x,y,z]=part.rubble[i];
+        if(part.plumage){
+          const {clock,fold,angle}=part.plumage,reach=Math.max(0,Math.min(1,(y-1.75)/3.8)),wave=clock*1.15+x*.85+y*.45;
+          x+=Math.sin(wave*.7)*.16*reach;y+=Math.cos(wave)*.14*reach;z+=Math.sin(wave)*.55*reach;
+          const c=Math.cos(angle*fold*.86),s=Math.sin(angle*fold*.86),xx=x*c-(y-1.75)*s,yy=x*s+(y-1.75)*c;
+          z+=1.05-Math.abs(angle)*fold*.12;x=xx;y=1.75+yy*Math.cos(-fold*.95)-z*Math.sin(-fold*.95);z=yy*Math.sin(-fold*.95)+z*Math.cos(-fold*.95)-1.05;
+        }
+        const yy=(y-2)*Math.cos(part.pitch)-z*Math.sin(part.pitch)+2,zz=(y-2)*Math.sin(part.pitch)+z*Math.cos(part.pitch);
+        points.push([part.x+x*Math.cos(part.angle)+zz*Math.sin(part.angle)-actor.wx,part.y+yy,part.z-x*Math.sin(part.angle)+zz*Math.cos(part.angle)-actor.wz]);
+      }
+    }
+    if(!points.length)for(const point of dynamic)points.push([point[0]-actor.wx,point[1],point[2]-actor.wz]);
+    return points;
   }
   flush(m,view,height){
     const gl=this.gl;

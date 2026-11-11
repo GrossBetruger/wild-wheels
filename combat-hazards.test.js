@@ -11,7 +11,8 @@ for(const engine of ['solo','Rust']){
     step();assert.equal(read().health,0);assert.equal(read().deaths,1);assert.equal(read().bots[0].kills,1);assert.ok(read().effects.some(f=>f.type==='ash'));assert.equal(read().effects.some(f=>f.type==='explosion'),false);
     if(core){const peer=new ArenaClient();peer.accept(core.packet(1),0);peer.frame(0,[],0);assert.ok(peer.present().effects.some(f=>f.type==='ash'));}
     for(let i=0;i<120;i++)step();assert.ok(read().effects.some(f=>f.type==='ash'));assert.ok(read().destroyed>0);
-    for(let i=0;i<61;i++)step();assert.equal(read().effects.some(f=>f.type==='ash'),false);assert.equal(read().destroyed,0);assert.equal(read().health,3);
+    for(let i=0;i<61;i++)step();assert.ok(read().effects.some(f=>f.type==='ash'));assert.equal(read().destroyed,0);assert.equal(read().health,3);
+    for(let i=0;i<80;i++)step();assert.equal(read().effects.some(f=>f.type==='ash'),false);
   });
 
   test(`${engine}: A-bombs deal five damage through radius 22 and three through radius 28`,()=>{

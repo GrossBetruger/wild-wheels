@@ -2,7 +2,7 @@
 
 Combat hazards: A-bombs deal 5 damage within 22 units and 3 damage in the outer ring through 28 units. Dizziness lasts 8 seconds, with stronger steering disturbance and camera sway during boost. Boosted wall collisions explode; each bomber with active gas credit earns a full point for those crashes. Ordinary stink-assisted kills remain half a point. `combat-hazards.test.js` covers radius boundaries, normal versus boosted impacts, multiple bomber credit and stronger boosted swerving in both simulation engines. Movement prediction stops at fatal impacts while the server confirms death and scoring.
 
-A-bomb deaths produce drifting ash and a pile until respawn. Combat tests check ash lifetime, kill credit, and remote typed presentation; the mobile bombing group checks ash replication alongside the blast. Other fatal damage keeps its normal explosion.
+A-bomb deaths turn the character and vehicle's last rendered shape into rubble. Chunks collapse smoothly over 1.3 seconds, then smolder for 3 seconds. Combat tests check rubble lifetime through respawn, kill credit, and remote typed presentation; mobile captures cover the initial shape, collapse, heap and smolder. Other fatal damage keeps its normal explosion.
 
 Fuel controls each turbo's duration: `2 + 0.8 × (Fuel − 1)` seconds. Houston alone has 5 Fuel (5.2 seconds); every other character has at most 3. `fuel.test.js` checks all character durations in Grand Prix, solo Arena and Rust multiplayer, plus immediate/queued client prediction and server agreement. The character browser group checks Fuel bars and duration tooltips.
 

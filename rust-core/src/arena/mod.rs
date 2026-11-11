@@ -31,7 +31,7 @@ pub fn sound(g:&mut Globals,kind:&str,owner:usize,x:f64,z:f64,key:Option<String>
     if let Some(key)=key {event["key"]=json!(key);}g.events.push(event);
 }
 pub fn effect(g:&mut Globals,kind:&str,owner:usize,x:f64,z:f64,key:Option<String>){
-    sound(g,kind,owner,x,z,key);g.effects.push(Effect{kind:kind.into(),wx:x,wz:z,life:match kind {"ash"=>3.0,"explosion"=>2.5,_=>0.65},..Effect::default()});
+    sound(g,kind,owner,x,z,key);g.effects.push(Effect{kind:kind.into(),wx:x,wz:z,life:match kind {"ash"=>4.3,"explosion"=>2.5,_=>0.65},..Effect::default()});
 }
 pub fn voice(g:&mut Globals,a:&mut Actor,cue:&str,root_x:f64){
     if a.voice_cooldown>0.0&&cue!="win" {return;}

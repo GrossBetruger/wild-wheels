@@ -64,7 +64,7 @@ export function incomingMissiles(world){
 }
 function voice(r,actor,cue){if((actor.voiceCooldown??0)>0&&cue!=='win')return;actor.voiceCooldown=1.5;r.voices.push({driver:actor.driver,cue,pan:actor===r?0:clamp((actor.wx-r.wx)/70,-.8,.8),volume:actor===r?1:.6});}
 function sound(r,type,actor,key){r.events.push(r.multiplayer?{type,owner:actor.owner??actor.id,wx:actor.wx,wz:actor.wz,id:`${r.soundEpoch}:${r.soundSequence=(r.soundSequence??0)+1}`,...(key?{key}:{})} :type);}
-function fx(r,type,actor,key){sound(r,type,actor,key);r.effects.push({type,wx:actor.wx,wz:actor.wz,age:0,life:type==='ash'?3:type==='explosion'?2.5:.65});}
+function fx(r,type,actor,key){sound(r,type,actor,key);r.effects.push({type,wx:actor.wx,wz:actor.wz,age:0,life:type==='ash'?4.3:type==='explosion'?2.5:.65});}
 function divertMissiles(r,cloud){
   let diverted=0;
   for(const shot of r.projectiles){
