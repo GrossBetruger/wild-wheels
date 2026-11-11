@@ -1,4 +1,3 @@
-import {arenaFixture} from './scripts/arena-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Multiplayer } from './multiplayer.js';
@@ -6,7 +5,7 @@ import { createBattle } from './combat.js';
 import { LocalPrediction } from './prediction.js';
 
 test('a burst of movement requests cannot buy extra simulation time, even with a forged duration',t=>{
-  const app=new Multiplayer({fixtureWorld:arenaFixture});clearInterval(app.timer);t.after(()=>app.close());
+  const app=new Multiplayer();clearInterval(app.timer);t.after(()=>app.close());
   const room={code:'07',arena:0,botCount:0,host:0,members:new Map()};app.makeWorld(room);app.rooms.set('07',room);
   const member=app.join(room,{name:'Driver',driver:0});
   Object.assign(room.world,{phase:'racing',wx:0,wz:70,heading:0,motionHeading:0,cameraHeading:0,supplies:[]});
@@ -21,7 +20,7 @@ test('a burst of movement requests cannot buy extra simulation time, even with a
 });
 
 test('old match commands cannot move a player after the host resets the arena',t=>{
-  const app=new Multiplayer({fixtureWorld:arenaFixture});clearInterval(app.timer);t.after(()=>app.close());
+  const app=new Multiplayer();clearInterval(app.timer);t.after(()=>app.close());
   const room={code:'07',arena:0,botCount:0,host:0,members:new Map()};app.makeWorld(room);app.rooms.set('07',room);
   const member=app.join(room,{name:'Driver',driver:0}),epoch=room.world.soundEpoch;
   app.controls(member,{sequence:0,keys:[],actions:[],epoch,moves:[{sequence:0,keys:['arrowup']}]});

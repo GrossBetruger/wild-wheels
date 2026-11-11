@@ -1,4 +1,3 @@
-import {arenaFixture} from './scripts/arena-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createBattle, makeProjectile, advanceProjectile } from './combat.js';
@@ -7,7 +6,7 @@ import { Multiplayer } from './multiplayer.js';
 import { encodeSnapshot, decodeSnapshot } from './wire.js';
 
 test('collecting a missile leaves an equipped Vulcan selected locally and on the server',t=>{
-  const app=new Multiplayer({fixtureWorld:arenaFixture});t.after(()=>app.close());clearInterval(app.timer);
+  const app=new Multiplayer();t.after(()=>app.close());clearInterval(app.timer);
   const room={code:'07',arena:0,botCount:0,host:0,members:new Map()};app.makeWorld(room);app.rooms.set('07',room);
   const member=app.join(room,{name:'Host',driver:0});
   Object.assign(room.world,{phase:'racing',wx:-65,wz:70,vulcan:10,item:'hedgehog',fireCooldown:0,missiles:0,supplies:[{id:0,version:0,wx:-65,wz:70,kind:'missile',cooldown:0}]});
@@ -21,7 +20,7 @@ test('collecting a missile leaves an equipped Vulcan selected locally and on the
 });
 
 test('turbo spends its own charge and can be activated while a Vulcan shot is on cooldown',t=>{
-  const app=new Multiplayer({fixtureWorld:arenaFixture});t.after(()=>app.close());clearInterval(app.timer);
+  const app=new Multiplayer();t.after(()=>app.close());clearInterval(app.timer);
   const room={code:'07',arena:0,botCount:0,host:0,members:new Map()};app.makeWorld(room);app.rooms.set('07',room);
   const member=app.join(room,{name:'Host',driver:0});
   Object.assign(room.world,{phase:'racing',wx:-65,wz:70,vulcan:10,item:'hedgehog',ammo:5,missiles:2,turbos:1,boost:0,fireCooldown:.075,supplies:[]});
@@ -96,7 +95,7 @@ test('an empty weapon, full health pickup, and destroyed driver give no false ac
 });
 
 test('held Vulcan fire produces twelve authoritative shots per second and keeps reserve ammo',t=>{
-  const app=new Multiplayer({fixtureWorld:arenaFixture});clearInterval(app.timer);t.after(()=>app.close());
+  const app=new Multiplayer();clearInterval(app.timer);t.after(()=>app.close());
   const room={code:'07',arena:0,botCount:0,host:0,members:new Map()};app.makeWorld(room);app.rooms.set('07',room);
   const member=app.join(room,{name:'Driver',driver:0});Object.assign(room.world,{phase:'racing',wx:-65,wz:70,heading:Math.PI/2,motionHeading:Math.PI/2,cameraHeading:Math.PI/2,fireCooldown:0,vulcan:15,supplies:[]});
   const feedback=new LocalFeedback(()=>{});feedback.accept(decodeSnapshot(JSON.parse(encodeSnapshot(app.snapshot(room,member)))),0);
@@ -109,7 +108,7 @@ test('held Vulcan fire produces twelve authoritative shots per second and keeps 
 });
 
 test('a delayed movement batch collects a passed pickup and can fire its missile at the contact position',t=>{
-  const app=new Multiplayer({fixtureWorld:arenaFixture});clearInterval(app.timer);t.after(()=>app.close());
+  const app=new Multiplayer();clearInterval(app.timer);t.after(()=>app.close());
   const room={code:'07',arena:0,botCount:0,host:0,members:new Map()};app.makeWorld(room);app.rooms.set('07',room);
   const member=app.join(room,{name:'Driver',driver:0});for(let tick=0;tick<8;tick++)app.step(1/60);
   Object.assign(room.world,{phase:'racing',wx:-65,wz:70,heading:Math.PI/2,motionHeading:Math.PI/2,cameraHeading:Math.PI/2,speed:850,boost:10,fireCooldown:0,missiles:0,supplies:[{id:0,version:0,kind:'missile',wx:-60,wz:70,cooldown:0}]});
@@ -120,7 +119,7 @@ test('a delayed movement batch collects a passed pickup and can fire its missile
 });
 
 test('duplicate and excessive fire requests cannot duplicate a projectile or bypass cooldown',t=>{
-  const app=new Multiplayer({fixtureWorld:arenaFixture});clearInterval(app.timer);t.after(()=>app.close());
+  const app=new Multiplayer();clearInterval(app.timer);t.after(()=>app.close());
   const room={code:'07',arena:0,botCount:0,host:0,members:new Map()};app.makeWorld(room);app.rooms.set('07',room);
   const member=app.join(room,{name:'Driver',driver:0});Object.assign(room.world,{phase:'racing',wx:0,wz:60,heading:0,fireCooldown:0,supplies:[]});
   const request={sequence:0,epoch:room.world.soundEpoch,keys:[],moves:[{sequence:0,keys:[]}],actions:Array.from({length:8},(_,id)=>({type:'fire',id,afterMove:0}))};
@@ -164,7 +163,7 @@ test('a localhost confirmation already advanced by the server does not speed up 
 });
 
 test('a missile picked up between movement ticks can be fired immediately without becoming a hedgehog',t=>{
-  const app=new Multiplayer({fixtureWorld:arenaFixture});clearInterval(app.timer);t.after(()=>app.close());
+  const app=new Multiplayer();clearInterval(app.timer);t.after(()=>app.close());
   const room={code:'07',arena:0,botCount:0,host:0,members:new Map()};app.makeWorld(room);app.rooms.set('07',room);
   const member=app.join(room,{name:'Driver',driver:0});
   Object.assign(room.world,{phase:'racing',wx:-65,wz:70,heading:Math.PI/2,motionHeading:Math.PI/2,cameraHeading:Math.PI/2,speed:850,boost:10,fireCooldown:0,missiles:0,supplies:[{id:0,version:0,kind:'missile',wx:-60,wz:70,cooldown:0}]});

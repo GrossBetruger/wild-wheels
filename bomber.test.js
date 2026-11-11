@@ -1,4 +1,3 @@
-import {arenaFixture} from './scripts/arena-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createBattle, equipBomber, dropBomb, tickBattle, damageBattle, targetAhead, fireBattle } from './combat.js';
@@ -62,7 +61,7 @@ test('only a bomber with ammunition can drop bombs during an active match',()=>{
   world.phase='racing';world.finishCountdown=3;assert.equal(dropBomb(world,world,{wx:0,wz:0}),false);assert.equal(world.bombAmmo,1);
 });
 test('the server rejects invalid bomb targets and prevents duplicate drops or forged ammunition',t=>{
-  const app=new Multiplayer({fixtureWorld:arenaFixture});t.after(()=>app.close());clearInterval(app.timer);
+  const app=new Multiplayer();t.after(()=>app.close());clearInterval(app.timer);
   const room={code:'07',arena:0,botCount:0,host:0,members:new Map()};app.makeWorld(room);app.rooms.set('07',room);
   const bomber=app.join(room,{name:'Phone',driver:0,role:'bomber'});app.join(room,{name:'Driver',driver:1});room.world.phase='racing';
   for(const target of [{wx:97,wz:0},{wx:0,wz:Infinity},{wx:'0',wz:0},{wx:0,wz:0,kind:'infinite'}])assert.throws(()=>app.controls(bomber,{sequence:0,keys:[],actions:[{type:'bomb',...target}]}),/Invalid action/);

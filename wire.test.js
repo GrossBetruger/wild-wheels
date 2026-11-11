@@ -1,4 +1,3 @@
-import {arenaFixture} from './scripts/arena-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createBattle, predictKartMovement } from './combat.js';
@@ -36,7 +35,7 @@ test('a boost expiring on the next tick has the same speed on the server and gue
 });
 
 test('a busy connection sends the latest position and retains intervening action sounds',t=>{
-  const app=new Multiplayer({fixtureWorld:arenaFixture});t.after(()=>app.close());clearInterval(app.timer);
+  const app=new Multiplayer();t.after(()=>app.close());clearInterval(app.timer);
   const room={code:'07',arena:0,botCount:0,host:0,members:new Map()};app.makeWorld(room);
   const member=app.join(room,{name:'Host',driver:0}),sent=[];
   member.socket={readyState:1,send:(text,done)=>sent.push({state:decodeBinarySnapshot(text),done})};
@@ -52,7 +51,7 @@ test('a busy connection sends the latest position and retains intervening action
 });
 
 test('a new match discards queued sounds from the previous match',t=>{
-  const app=new Multiplayer({fixtureWorld:arenaFixture});t.after(()=>app.close());clearInterval(app.timer);
+  const app=new Multiplayer();t.after(()=>app.close());clearInterval(app.timer);
   const room={code:'07',arena:0,botCount:0,host:0,members:new Map()};app.makeWorld(room);
   const member=app.join(room,{name:'Host',driver:0}),sent=[];
   member.socket={readyState:1,send:(text,done)=>sent.push({state:decodeBinarySnapshot(text),done})};

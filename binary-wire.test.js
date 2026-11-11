@@ -1,4 +1,3 @@
-import {arenaFixture} from './scripts/arena-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createBattle, predictKartMovement } from './combat.js';
@@ -27,7 +26,7 @@ test('binary movement preserves a boost expiring on the next server tick',()=>{
 });
 
 test('queued binary snapshots keep their original state and merge sounds into the latest update',t=>{
-  const app=new Multiplayer({fixtureWorld:arenaFixture});t.after(()=>app.close());clearInterval(app.timer);
+  const app=new Multiplayer();t.after(()=>app.close());clearInterval(app.timer);
   const room={code:'07',arena:0,botCount:0,host:0,members:new Map()};app.makeWorld(room);
   const member=app.join(room,{name:'Host',driver:0}),sent=[];
   member.socket={readyState:1,send:(bytes,done)=>sent.push({bytes,done})};

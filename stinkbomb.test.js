@@ -1,4 +1,3 @@
-import {arenaFixture} from './scripts/arena-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createBattle, equipBomber, dropBomb, tickBattle, predictKartMovement, damageBattle } from './combat.js';
@@ -42,7 +41,7 @@ test('dizzy steering weaves, remains responsive, and returns to normal after the
   for(let i=0;i<6;i++)predictKartMovement(world,world,new Set(['arrowup']),1/60);assert.equal(world.heading,0);
 });
 test('dizzy guest prediction follows the same movement and expiration as the server',t=>{
-  const app=new Multiplayer({fixtureWorld:arenaFixture});t.after(()=>app.close());clearInterval(app.timer);
+  const app=new Multiplayer();t.after(()=>app.close());clearInterval(app.timer);
   const room={code:'07',arena:0,botCount:0,host:0,members:new Map()};app.makeWorld(room);app.rooms.set('07',room);app.join(room,{name:'Host',driver:0});const guest=app.join(room,{name:'Dizzy guest',driver:1});
   Object.assign(room.world,{phase:'racing',supplies:[],destroyed:999});const actor=room.world.bots[0];Object.assign(actor,{wx:-65,wz:0,speed:200,heading:0,motionHeading:0,cameraHeading:0,dizzy:4});
   const prediction=new LocalPrediction();prediction.accept(app.snapshot(room,guest).world,0);

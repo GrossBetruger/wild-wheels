@@ -10,7 +10,6 @@ import { usesMobileControls, bombTarget, panBomber } from './mobile.js';
 const $ = id => document.getElementById(id);
 const canvas = $('game'), map = $('map').getContext('2d');
 const keys = new Set(), audio = new RaceAudio(), renderer = new Renderer(canvas);
-let uiNotice=null;
 const mobile=usesMobileControls(navigator.maxTouchPoints,matchMedia('(pointer:coarse)').matches);document.body.classList.toggle('mobile-bomber',mobile);
 const racePanel=document.querySelector('.race-panel');let mobileImmersive=false,mobileNativeFullscreen=false;
 function exitMobileFullscreen(){mobileImmersive=false;mobileNativeFullscreen=false;racePanel.classList.remove('mobile-fullscreen');document.body.classList.remove('mobile-playing');mobileScreenButton.textContent='FULL SCREEN';if(document.fullscreenElement===racePanel)document.exitFullscreen().catch(()=>{});}
@@ -210,7 +209,7 @@ function hud(){
     $('lap').replaceChildren(document.createTextNode(String(Math.min(3,Math.floor(race.s/LENGTH)+1)).padStart(2,'0')+' '),Object.assign(document.createElement('span'),{textContent:'/ 03'}));
     put('timer',timeLabel(race.finishTime??race.elapsed));
   }
-  const speedNode=$('speed').querySelector('b'),speedText=String(Math.round(race.speed*.24));if(speedNode.textContent!==speedText)speedNode.textContent=speedText;put('toast',uiNotice&&performance.now()<uiNotice.until?uiNotice.text:race.finishRank===null&&race.noticeTime>0?race.notice:'');
+  const speedNode=$('speed').querySelector('b'),speedText=String(Math.round(race.speed*.24));if(speedNode.textContent!==speedText)speedNode.textContent=speedText;put('toast',race.finishRank===null&&race.noticeTime>0?race.notice:'');
   document.querySelector('.position small').textContent=mode==='combat'?'KILLS':'POSITION';document.querySelector('.lap small').textContent=mode==='combat'?'HEALTH':'LAP';document.querySelector('.timer small').textContent=mode==='combat'?'TIME LEFT':'RACE TIME';
   leaderboard.classList.toggle('hidden',mode!=='combat');
   chaffButton.classList.toggle('hidden',mode!=='combat'||race.bomber);chaffButton.textContent=`C · CHAFF ${race.chaff??0}`;chaffButton.disabled=mode!=='combat'||race.phase!=='racing'||race.finishCountdown!==null||race.destroyed>0||race.chaff<=0||race.chaffCooldown>0;chaffButton.setAttribute('aria-label',`Release chaff, ${race.chaff??0} charges remaining. Keyboard C.`);
@@ -271,7 +270,7 @@ $('start').onclick=start;$('pause').onclick=pause;$('restart').onclick=()=>{if(n
 $('change-track').onclick=()=>chooseMap((track+1)%mapButtons.length);
 $('sound').textContent='SOUND ON';$('sound').setAttribute('aria-label','Mute sound');
 $('sound').onclick=()=>{audio.toggle();$('sound').textContent=audio.enabled?'SOUND ON':'SOUND OFF';$('sound').setAttribute('aria-label',audio.enabled?'Mute sound':'Enable sound');tone(660);};
-$('fullscreen').onclick=async()=>{try{if(document.fullscreenElement){await document.exitFullscreen();return;}await document.querySelector('.viewport').requestFullscreen();}catch{uiNotice={text:'Fullscreen unavailable in this browser',until:performance.now()+3000};}};
+$('fullscreen').onclick=async()=>{try{if(document.fullscreenElement){await document.exitFullscreen();return;}await document.querySelector('.viewport').requestFullscreen();}catch{race.notice='Fullscreen unavailable in this browser';race.noticeTime=3;}};
 window.addEventListener('keydown',e=>{
   if(e.target instanceof HTMLInputElement||e.target instanceof HTMLTextAreaElement||e.target instanceof HTMLSelectElement||e.target.isContentEditable)return;
   const playing=['racing','countdown'].includes(race.phase),key=e.key.toLowerCase();

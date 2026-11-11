@@ -1,4 +1,3 @@
-import {arenaFixture} from './arena-fixture.mjs';
 import { createServer } from 'node:http';
 import { readFile, writeFile, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -25,7 +24,7 @@ const source=sourceIndex>=0?pathToFileURL(process.argv[sourceIndex+1]+'/'):new U
 const repeatIndex=process.argv.indexOf('--repeat'),repeat=repeatIndex>=0?Number(process.argv[repeatIndex+1]):1;
 if(!Number.isInteger(repeat)||repeat<1||repeat>10)throw new Error('Repeat must be 1–10');
 const {createGameServer}=await import(new URL('server.js',source));
-const app=createGameServer({fixtureWorld:arenaFixture});
+const app=createGameServer();
 const serverGaps=[];let activeProfile;
 const originalAdvance=app.multiplayer.advance.bind(app.multiplayer);
 app.multiplayer.advance=now=>{const gap=now-app.multiplayer.lastAdvance;if(gap>100)serverGaps.push({profile:activeProfile,gapMs:+gap.toFixed(2)});originalAdvance(now);};
@@ -169,7 +168,7 @@ try{
       const game=__game,render=game.network.render.bind(game.network),start=performance.now();
       const reference=createBattle();Object.assign(reference,{phase:'racing',wx:-65,wz:70,heading:Math.PI/2,motionHeading:Math.PI/2,cameraHeading:Math.PI/2,speed:0,supplies:[]});
       for(const bot of reference.bots)bot.destroyed=999;
-      game.trace=[];game.done=false;let previous='',accumulator=game.network.client.stats.accumulator;
+      game.trace=[];game.done=false;let previous='',accumulator=game.network.prediction.accumulator??0;
       game.network.render=dt=>{
         const now=performance.now(),t=(now-start)/1000;
         const keys=t<.5?[]:t<1.5?['arrowup']:t<2.5?['arrowup','arrowright']:t<3.3?['arrowup','arrowright','shift']:t<4.8?['arrowup','arrowleft']:t<6?['arrowup','arrowright']:['arrowup','arrowleft','shift'];
@@ -180,7 +179,7 @@ try{
         const fraction=accumulator*60,expectedX=reference.wx+(future.wx-reference.wx)*fraction,expectedZ=reference.wz+(future.wz-reference.wz)*fraction;
         const expectedCamera=reference.cameraHeading+Math.atan2(Math.sin(future.cameraHeading-reference.cameraHeading),Math.cos(future.cameraHeading-reference.cameraHeading))*fraction;
         const view=render(dt);
-        const stats=game.network.client.stats;game.trace.push({time:t,dt,wx:view.wx,wz:view.wz,cameraHeading:view.cameraHeading,speed:view.speed,keys:key,ping:game.network.rtt,sinceUpdate:now/1000-stats.received,pendingCommands:stats.pendingCommands,socketState:game.network.socket.readyState,expectedX,expectedZ,expectedCamera,positionError:Math.hypot(view.wx-expectedX,view.wz-expectedZ),cameraError:Math.abs(Math.atan2(Math.sin(view.cameraHeading-expectedCamera),Math.cos(view.cameraHeading-expectedCamera)))*180/Math.PI});
+        game.trace.push({time:t,dt,wx:view.wx,wz:view.wz,cameraHeading:view.cameraHeading,speed:view.speed,keys:key,ping:game.network.rtt,sinceUpdate:now/1000-game.network.prediction.received,pendingCommands:game.network.prediction.history.length,socketState:game.network.socket.readyState,expectedX,expectedZ,expectedCamera,positionError:Math.hypot(view.wx-expectedX,view.wz-expectedZ),cameraError:Math.abs(Math.atan2(Math.sin(view.cameraHeading-expectedCamera),Math.cos(view.cameraHeading-expectedCamera)))*180/Math.PI});
         if(t>=8){game.done=true;game.network.render=render;game.keys.clear();game.network.input();}
         return view;
       };

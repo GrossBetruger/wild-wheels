@@ -1,4 +1,3 @@
-import {arenaFixture} from './scripts/arena-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createBattle, somersaultBattle, somersaultPose, tickBattle, fireBattle, damageBattle, blocked, arenas } from './combat.js';
@@ -57,7 +56,7 @@ test('a somersault still obeys arena cover and destruction cancels the jump',()=
 });
 
 test('a guest flips locally and delayed command acknowledgment neither turns twice nor changes the path',t=>{
-  const app=new Multiplayer({fixtureWorld:arenaFixture});t.after(()=>app.close());clearInterval(app.timer);
+  const app=new Multiplayer();t.after(()=>app.close());clearInterval(app.timer);
   const room={code:'07',arena:0,botCount:0,host:0,members:new Map()};app.makeWorld(room);app.rooms.set('07',room);
   app.join(room,{name:'Host',driver:0});const member=app.join(room,{name:'Guest',driver:1});
   Object.assign(room.world,{phase:'racing',destroyed:999,supplies:[]});

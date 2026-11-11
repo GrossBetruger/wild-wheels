@@ -1,7 +1,10 @@
 import { drivers } from './engine.js';
-import {ArenaClient} from './arena-core.js';
-import {createBinaryEncoder} from './binary-wire.js';
-const bootstrapPacket=createBinaryEncoder();
+import { NetworkPlayback } from './playback.js';
+import { LocalPrediction } from './prediction.js';
+import { ActionAudio } from './action-audio.js';
+import { decodeBinarySnapshot } from './binary-wire.js';
+import { LocalFeedback } from './feedback.js';
+import { LocalDrift } from './drift-feedback.js';
 
 export function invitationUrl(pageUrl,code,{publicOrigin,lan}={}){
   const page=new URL(pageUrl);
@@ -18,9 +21,9 @@ export class PlayRequestPrompt {
 
 export class NetworkGame {
   playRequestPrompt=new PlayRequestPrompt();
-  token=null;state=null;paused=false;sequence=0;actions=[];client=null;rtt=0;lastPing=-Infinity;
+  token=null;state=null;paused=false;sequence=0;actions=[];playback=new NetworkPlayback();prediction=new LocalPrediction();driftFeedback=new LocalDrift();rtt=0;lastPing=-Infinity;
   constructor({anchor,keys,driver,arena,onState,onLeave,unlock,sound=()=>{},role='driver'}){
-    Object.assign(this,{keys,driver,arena,onState,onLeave,unlock,sound,role});
+    Object.assign(this,{keys,driver,arena,onState,onLeave,unlock,sound,role});this.actionAudio=new ActionAudio(sound);this.feedback=new LocalFeedback((type,key)=>this.actionAudio.emit(type,performance.now()/1000,null,key));
     this.panel=document.createElement('section');this.panel.className='network-panel';this.panel.setAttribute('aria-label','Multiplayer arena lobby');
     const title=document.createElement('strong');title.textContent='PLAY TOGETHER · UP TO 6 PLAYERS';
     this.name=document.createElement('input');this.name.placeholder='Your name';this.name.value='Player';this.name.maxLength=24;this.name.setAttribute('aria-label','Player name');
@@ -155,14 +158,20 @@ export class NetworkGame {
     this.hostButton.disabled=true;this.status.textContent='Connecting…';
     try{
       this.unlock().catch(()=>{});if(path==='/api/rooms')await this.refreshInfo();const reply=await this.request(path,{name:this.name.value.trim(),driver:path==='/api/join'?null:this.driver(),role:this.role,arena:this.arena(),bots:Number(this.botCount.value),code:this.invitation.toUpperCase()});
-      this.token=reply.token;this.nameDirty=false;this.namePending=false;this.sequence=0;this.pending=null;this.failures=0;this.shareEdited=false;this.actions=[];this.keys.clear();this.paused=false;this.client=new ArenaClient();this.accept(bootstrapPacket(reply));this.stream();
+      this.token=reply.token;this.nameDirty=false;this.namePending=false;this.sequence=0;this.pending=null;this.failures=0;this.shareEdited=false;this.actions=[];this.keys.clear();this.paused=false;this.accept(reply);this.stream();
     }catch(error){this.status.textContent=error.message;}
     this.hostButton.disabled=this.active;this.name.disabled=false;
   }
-  accept(packet){
+  accept(state){
     if(!this.active)return;
-    const now=performance.now()/1000;this.client.accept(packet,now);this.client.frame(0,this.paused?0:this.keys,now);this.client.peek();
-    const state=this.client.state();
+    const now=performance.now()/1000;
+    if(this.state?.world.soundEpoch!==state.world.soundEpoch||this.state?.world.phase!==state.world.phase)this.lastLocal=null;
+    this.actionAudio.accept(state.world,now,state.inputSequence);
+    this.feedback.accept(state,now);
+    state.world.events=this.actionAudio.confirmations(state.world.events,now);
+    if(this.state&&state.world.elapsed<this.state.world.elapsed)this.playback.clear();
+    this.playback.push(state.time,state.world);
+    this.prediction.accept(state.world,now,{sequence:state.movementSequence??-1,actionSequence:state.actionSequence??-1});
     const rosterKey=JSON.stringify([state.host,state.you,state.players]);
     this.state=state;this.leaveButton.classList.remove('hidden');this.share.classList.remove('hidden');this.copyButton.classList.remove('hidden');this.animalChoice.classList.remove('hidden');
     this.saveNameButton.classList.remove('hidden');
@@ -184,27 +193,53 @@ export class NetworkGame {
     this.updatePlayRequest();
     this.onState(this.view());
   }
-  view(){if(!this.state)return null;this.client.view.paused=this.paused;return this.client.view.world;}
+  view(){
+    if(!this.state)return null;
+    const world=this.state.world;
+    if(this.paused&&['countdown','racing'].includes(world.phase))return {...world,phase:'paused',resumePhase:world.phase};
+    return world;
+  }
   render(dt,keys=this.keys){
-    if(!this.client||!this.state)return null;
-    this.client.view.paused=this.paused;this.client.frame(dt,this.paused?0:keys,performance.now()/1000);
-    return this.client.present();
+    const world=this.playback.sample()??this.view();if(!world)return null;
+    if(world.bomber){
+      const view=this.feedback.render(world,world,performance.now()/1000,-1);
+      if(this.paused&&['countdown','racing'].includes(world.phase))return {...view,phase:'paused',resumePhase:world.phase};
+      return view;
+    }
+    const local=this.prediction.sample(this.paused?new Set():keys,dt,performance.now()/1000);
+    const now=performance.now()/1000;
+    for(const type of this.prediction.sounds.splice(0))this.actionAudio.emit(type,now);
+    this.lastLocal=local;
+    const movement=this.prediction.nextSequence-1;
+    let view=this.feedback.render(world,local??world,now,movement);
+    if(!this.paused&&keys.has(' ')&&this.feedback.action('fire',undefined,local??world,now,movement)){this.input();view=this.feedback.render(world,local??world,now,movement);}
+    view=this.driftFeedback.render(view,now,!this.paused&&now-this.prediction.received<.5);
+    if(this.paused&&['countdown','racing'].includes(world.phase))return {...view,phase:'paused',resumePhase:world.phase};
+    return view;
   }
   action(type,item){
-    if(!this.active||this.paused||!this.client.action(type,item,performance.now()/1000))return;
-    this.input();return true;
+    if(!this.active||this.paused)return;
+    if(!this.feedback.action(type,item,this.lastLocal??this.state.world,performance.now()/1000,this.prediction.nextSequence-1))return;
+    if(['turbo','somersault'].includes(type)){
+      this.prediction.maneuver(this.feedback.operations.at(-1));
+      this.lastLocal=this.prediction.sample(this.paused?new Set():this.keys,0,performance.now()/1000);
+    }
+    this.input();
+    return true;
   }
   input(){
     const now=performance.now()/1000;
-    if(!this.active||!this.client||this.socket?.readyState!==WebSocket.OPEN||this.socket.bufferedAmount>16384)return;
-    if(now-this.lastPing>=1){this.lastPing=now;this.socket.send(JSON.stringify({type:'ping',sent:now}));}
-    this.socket.send(this.client.outboundText(this.paused?0:this.keys));
+    if(this.active&&this.socket?.readyState===WebSocket.OPEN){
+      if(this.socket.bufferedAmount>16384)return;
+      if(now-this.lastPing>=1){this.lastPing=now;this.socket.send(JSON.stringify({type:'ping',sent:now}));}
+      this.socket.send(JSON.stringify({type:'input',sequence:this.sequence++,keys:this.paused?[]:[...this.keys].filter(key=>['arrowup','arrowdown','arrowleft','arrowright','w','a','s','d','shift'].includes(key)),actions:this.feedback.commands(),epoch:this.state.world.soundEpoch,moves:this.prediction.commands()}));return;
+    }
   }
   stream(){
     const token=this.token,url=new URL('/api/socket',location.href);url.protocol=location.protocol==='https:'?'wss:':'ws:';const socket=this.socket=new WebSocket(url);
     socket.binaryType='arraybuffer';
-    socket.onopen=()=>{if(this.token===token){this.client.resend();socket.send(JSON.stringify({type:'authenticate',token}));}};
-    socket.onmessage=event=>{try{if(this.token!==token)return;if(event.data instanceof ArrayBuffer){this.accept(event.data);return;}if(typeof event.data!=='string'||event.data.length>2048)throw new Error();const state=JSON.parse(event.data);if(state.type!=='pong')throw new Error();if(state.sent===this.lastPing)this.rtt=Math.max(0,Math.min(.3,performance.now()/1000-state.sent));}catch{socket.close();}};
+    socket.onopen=()=>{if(this.token===token){this.prediction.resend();this.feedback.resend();socket.send(JSON.stringify({type:'authenticate',token}));}};
+    socket.onmessage=event=>{try{if(this.token!==token)return;const binary=event.data instanceof ArrayBuffer;if(!binary&&(typeof event.data!=='string'||event.data.length>512*1024))throw new Error();const state=binary?decodeBinarySnapshot(event.data):JSON.parse(event.data);if(state.type==='state'){if(!binary)throw new Error();this.accept(state);}if(state.type==='pong'&&state.sent===this.lastPing)this.rtt=Math.max(0,Math.min(.3,performance.now()/1000-state.sent));}catch{socket.close();}};
     socket.onerror=()=>{};
     socket.onclose=()=>{if(this.token===token){this.keys.clear();this.status.textContent='Reconnecting to the room…';setTimeout(()=>{if(this.token===token)this.stream();},500);}};
   }
@@ -218,7 +253,8 @@ export class NetworkGame {
     if(!this.active)return;
     this.readyDialog.close();this.playRequestPrompt=new PlayRequestPrompt();
     this.saveNameButton.classList.add('hidden');this.nameFeedback.textContent='';this.nameDirty=false;this.namePending=false;
-    this.request('/api/leave',{}).catch(()=>{});this.token=null;this.socket?.close();this.state=null;this.pending=null;this.actions=[];this.keys.clear();this.client=null;this.rtt=0;this.lastPing=-Infinity;
+    this.driftFeedback=new LocalDrift();
+    this.request('/api/leave',{}).catch(()=>{});this.token=null;this.socket?.close();this.state=null;this.pending=null;this.actions=[];this.keys.clear();this.playback.clear();this.prediction.clear();this.actionAudio=new ActionAudio(this.sound);this.feedback=new LocalFeedback((type,key)=>this.actionAudio.emit(type,performance.now()/1000,null,key));this.lastLocal=null;this.rtt=0;this.lastPing=-Infinity;
     this.internetError=false;this.hostButton.disabled=false;this.name.disabled=false;this.botCount.disabled=false;for(const option of this.botCount.options)option.disabled=false;this.leaveButton.classList.add('hidden');this.copyButton.classList.add('hidden');this.internetButton.classList.add('hidden');this.animalChoice.classList.add('hidden');this.share.classList.add('hidden');this.help.classList.add('hidden');this.players.replaceChildren();this.status.textContent=message;this.onLeave();
   }
 }
