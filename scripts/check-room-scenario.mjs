@@ -2,6 +2,7 @@ export async function checkRoom(evaluate,app,room,id,sleep,reload){
   const wait=async predicate=>{for(let attempt=0;attempt<120;attempt++){if(await predicate())return true;await sleep(25);}return false;};
   if(room.members.size===1)app.join(room,{name:'Friend',driver:1});
   const count=room.members.size,code=room.code,host=room.host,name=id===host?'Oren 🦗':'Sam 🦗';
+  const roomUrl=await evaluate(`new URL(location.href).searchParams.get('room')===${JSON.stringify(code)}`);
   await evaluate(`{const input=__game.network.name;input.value=${JSON.stringify(name)};input.dispatchEvent(new Event('input'));}`);
   await evaluate('__game.network.saveName()');
   const nameSaved=await wait(()=>evaluate(`__game.race.name===${JSON.stringify(name)}&&document.cookie.includes('wild-wheels-name=')&&!document.cookie.includes('wild-wheels-session=')`));
@@ -22,7 +23,7 @@ export async function checkRoom(evaluate,app,room,id,sleep,reload){
   await reload();
   const restored=await wait(()=>evaluate(`__game.network.active&&__game.network.state.code===${JSON.stringify(code)}&&__game.network.state.you===${id}&&__game.race.name===${JSON.stringify(name)}&&!__game.network.afk`));
   const restoredUI=await evaluate("({name:__game.network.name.value,kills:__game.race.kills,deaths:__game.race.deaths,hostDisabled:__game.network.hostButton.disabled})");
-  const refreshPass=restored&&room.members.size===count&&room.host===host&&restoredUI.name===name&&restoredUI.kills===3&&restoredUI.deaths===2&&restoredUI.hostDisabled===(id!==host);
+  const refreshPass=restored&&room.members.size===count&&room.host===host&&restoredUI.name===name&&restoredUI.kills===3&&restoredUI.deaths===2&&restoredUI.hostDisabled===(id!==host)&&await evaluate(`new URL(location.href).searchParams.get('room')===${JSON.stringify(code)}`);
   const afterRefresh=actor.wz;
   await evaluate("__game.keys.add('arrowup')");await sleep(300);await evaluate('__game.keys.clear()');await sleep(250);
   const controlsPass=droveBefore&&actor.wz>afterRefresh;
@@ -32,7 +33,7 @@ export async function checkRoom(evaluate,app,room,id,sleep,reload){
     await evaluate('__game.network.hostButton.click()');
     replacementPass &&= await wait(()=>evaluate(`__game.network.active&&__game.network.state.code!==${JSON.stringify(code)}`));
     replacementPass &&= app.rooms.size===1&&!app.rooms.has(code)&&!app.members.has(oldToken)&&app.members.size===1;
-    replacementPass &&= await evaluate(`__game.network.isHost&&__game.network.name.value===${JSON.stringify(name)}`);
+    replacementPass &&= await evaluate(`__game.network.isHost&&__game.network.name.value===${JSON.stringify(name)}&&new URL(location.href).searchParams.get('room')===__game.network.state.code`);
   }
-  return {nameSaved,afkPass,back,offlineRetained,refreshPass,controlsPass,replacementPass,pass:nameSaved&&afkPass&&back&&offlineRetained&&refreshPass&&controlsPass&&replacementPass};
+  return {roomUrl,nameSaved,afkPass,back,offlineRetained,refreshPass,controlsPass,replacementPass,pass:roomUrl&&nameSaved&&afkPass&&back&&offlineRetained&&refreshPass&&controlsPass&&replacementPass};
 }

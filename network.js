@@ -117,6 +117,7 @@ export class NetworkGame {
   button(label,action){const button=document.createElement('button');button.type='button';button.textContent=label;button.onclick=action;return button;}
   rememberName(){const name=this.name.value.trim();if(!name||name.length>24)return;document.cookie=`wild-wheels-name=${encodeURIComponent(name)}; Path=/; SameSite=Lax; Max-Age=31536000${location.protocol==='https:'?'; Secure':''}`;}
   adopt(reply){
+    const url=new URL(location.href);url.searchParams.set('room',reply.code);history.replaceState(null,'',url);this.invitation=reply.code;
     this.token=reply.token;this.socket?.close();this.nameDirty=false;this.namePending=false;this.sequence=0;this.pending=null;this.failures=0;this.shareEdited=false;this.actions=[];this.keys.clear();this.paused=Boolean(reply.players.find(player=>player.id===reply.you)?.afk);this.client=new ArenaClient();this.accept(bootstrapPacket(reply));this.rememberName();this.stream();
   }
   async restore(){
