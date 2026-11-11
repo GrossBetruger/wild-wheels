@@ -65,7 +65,9 @@ impl Game {
     }
     pub fn order(&self)->Vec<usize> {
         let mut ids:Vec<_>=self.actors.iter().filter(|a|!a.inactive).map(|a|a.id).collect();
-        ids.sort_by(|&a,&b|self.actors[b].kills.total_cmp(&self.actors[a].kills).then(self.actors[a].deaths.cmp(&self.actors[b].deaths)).then(a.cmp(&b)));ids
+        let top=ids.iter().map(|&id|self.actors[id].kills).fold(f64::NEG_INFINITY,f64::max);
+        let host=match self.global.multiplayer{true=>self.global.host.filter(|&id|self.actors.get(id).is_some_and(|a|!a.inactive&&a.kills==top)),false=>None};
+        ids.sort_by(|&a,&b|self.actors[b].kills.total_cmp(&self.actors[a].kills).then((Some(b)==host).cmp(&(Some(a)==host))).then(self.actors[a].deaths.cmp(&self.actors[b].deaths)).then(a.cmp(&b)));ids
     }
     pub fn action(&mut self,id:usize,action:&Action){
         if id>=self.actors.len(){return;}

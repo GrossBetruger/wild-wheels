@@ -3,7 +3,7 @@ import { LENGTH, drivers, pickupType } from './engine.js';
 import { arenas, combatPose, somersaultPose, BOMB_FALL_TIME, BOMB_RADIUS, STINK_RADIUS, DIZZY_DURATION, VULCAN_DURATION } from './combat.js';
 import { kartNameplates } from './nameplates.js';
 import { bomberCamera } from './mobile.js';
-import {drawNewDriver,drawRoadster,drawRoadsterJets,drawCricketHaze,drawCricketProjectile,drawHoustonHelmet} from './characters.js';
+import {drawNewDriver,drawRoadster,drawRoadsterJets,drawCricketHaze,drawCricketProjectile,drawHoustonHelmet,drawDollarBundle} from './characters.js';
 const rgb=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255);
 const sub=(a,b)=>a.map((v,i)=>v-b[i]);
 const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
@@ -192,6 +192,7 @@ export class Renderer {
   }
   hedgehog(m,x,y,z,size,angle=0){if(!this.buildingModel){this.model(`hedgehog:${size}`,x,y,z,angle,mesh=>this.hedgehog(mesh,0,0,0,size));return;}m.at(x,y,z,angle);m.ball(0,0,0,size,size*.8,size,'#79513b',8,5);for(let i=0;i<9;i++){const a=i/9*Math.PI*2;m.cone(Math.cos(a)*size*.6,size*.2,Math.sin(a)*size*.6,size*.25,size*.85,'#dab67f',4);}m.ball(0,-size*.1,size*.85,size*.5,size*.4,size*.4,'#eed1a1',7,4);m.ball(0,0,size*1.2,size*.15,size*.15,size*.15,'#242a34',6,3);}
   cricket(m,x,y,z,angle,clock){const phase=Math.floor(clock*20)%4;this.model(`cricket:${phase}`,x,y,z,angle,mesh=>drawCricketProjectile(mesh,phase));}
+  dollarBundle(m,x,y,z,angle,clock){this.model('dollar-bundle',x,y,z,angle+clock*9,drawDollarBundle);}
   draw(r,time){
     this.instances=[];
     this.nameplates=[];
@@ -285,13 +286,14 @@ export class Renderer {
     }
     for(const supply of r.supplies){if(supply.cooldown>0)continue;const pose={x:supply.wx,z:supply.wz,tx:0,tz:1},bob=Math.sin(time*2)*.3;m.at(pose.x,.1,pose.z);m.disc(0,0,0,3,3,{missile:'#c65d51',hedgehog:'#bb9c68',boost:'#d4bc55',health:'#78b88c'}[supply.kind]);switch(supply.kind){case 'missile':this.missile(m,pose,2+bob,time,1.5);break;case 'hedgehog':this.hedgehog(m,pose.x,1.5+bob,pose.z,1.1,time);break;case 'boost':m.at(pose.x,1+bob,pose.z,time);m.box(0,0,0,1.2,2,.8,'#f1cc62');break;case 'health':m.at(pose.x,1+bob,pose.z,time);m.box(0,.7,0,2.4,.7,.5,'#d6f4c6');m.box(0,0,0,.7,2.4,.5,'#d6f4c6');break;}}
     for(const shot of r.projectiles){
-      const pose={x:shot.wx,z:shot.wz,tx:Math.sin(shot.heading),tz:Math.cos(shot.heading)},cricket=shot.kind==='hedgehog'&&shot.vulcan&&(shot.owner===r.id?r:r.bots.find(actor=>actor.id===shot.owner))?.driver===5;
+      const pose={x:shot.wx,z:shot.wz,tx:Math.sin(shot.heading),tz:Math.cos(shot.heading)},owner=shot.vulcan?(shot.owner===r.id?r:r.bots.find(actor=>actor.id===shot.owner)):null,cricket=shot.kind==='hedgehog'&&owner?.driver===5,dollars=shot.kind==='hedgehog'&&owner?.driver===6;
       if(shot.kind==='missile'){this.missile(m,pose,shot.height);this.glow.at(shot.wx,shot.height,shot.wz,shot.heading);this.glow.flame(0,0,-1,.25,2,[.5,.17,.03],time);}
       if(shot.kind==='hedgehog'){
         if(cricket)this.cricket(m,shot.wx,shot.height,shot.wz,shot.heading,time);
-        if(!cricket)this.hedgehog(m,shot.wx,shot.height,shot.wz,shot.vulcan?.45:.6,time*15);
+        if(dollars)this.dollarBundle(m,shot.wx,shot.height,shot.wz,shot.heading,time);
+        if(!cricket&&!dollars)this.hedgehog(m,shot.wx,shot.height,shot.wz,shot.vulcan?.45:.6,time*15);
       }
-      for(let i=0;i<shot.trail.length;i+=3){const t=shot.trail[i],size=.12+(1-i/shot.trail.length)*.5;if(shot.vulcan){this.glow.at(t.wx,t.height,t.wz);this.glow.particle(0,0,0,.32,cricket?[.12,.6,.035]:[.7,.35,.03]);continue;}m.at(t.wx,t.height,t.wz);m.ball(0,0,0,size,size,size,shot.kind==='missile'?'#c5c6c8':'#d7bf85',5,3);}
+      for(let i=0;i<shot.trail.length;i+=3){const t=shot.trail[i],size=.12+(1-i/shot.trail.length)*.5;if(shot.vulcan){this.glow.at(t.wx,t.height,t.wz);this.glow.particle(0,0,0,.32,cricket?[.12,.6,.035]:dollars?[.2,.55,.06]:[.7,.35,.03]);continue;}m.at(t.wx,t.height,t.wz);m.ball(0,0,0,size,size,size,shot.kind==='missile'?'#c5c6c8':'#d7bf85',5,3);}
     }
     for(const bomb of r.bombs??[]){
       const progress=Math.min(1,bomb.age/BOMB_FALL_TIME),height=65*(1-progress*progress),stink=bomb.kind==='stink',radius=stink?STINK_RADIUS:BOMB_RADIUS;

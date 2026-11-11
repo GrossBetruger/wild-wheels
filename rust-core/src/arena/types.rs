@@ -69,7 +69,7 @@ pub struct Kill { pub id:u32,pub attacker:usize,pub victim:usize,pub victim_name
 pub struct Globals {
     pub mode:String,pub phase:String,pub arena:usize,pub elapsed:f64,pub countdown:f64,pub duration:f64,pub target_score:f64,
     pub rank:usize,pub finish_rank:Option<usize>,pub finish_time:Option<f64>,pub finish_countdown:Option<f64>,pub winner:Value,
-    pub multiplayer:bool,pub sound_epoch:u64,pub sound_sequence:u64,pub shake:f64,
+    pub multiplayer:bool,pub host:Option<usize>,pub sound_epoch:u64,pub sound_sequence:u64,pub shake:f64,
     pub projectile_sequence:u32,pub bomb_sequence:u32,pub chaff_sequence:u32,pub kill_sequence:u32,
     pub projectiles:Vec<Shot>,pub bombs:Vec<Bomb>,pub chaff_clouds:Vec<Chaff>,pub stink_clouds:Vec<Stink>,pub supplies:Vec<Supply>,
     pub effects:Vec<Effect>,pub skids:Vec<Skid>,pub drift_particles:Vec<Particle>,pub kill_feed:Vec<Kill>,pub events:Vec<Value>,pub voices:Vec<Value>,

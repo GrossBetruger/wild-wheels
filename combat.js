@@ -43,7 +43,10 @@ export function createBattle(driver=0,arena=0,random=Math.random){
 export function battleActive(world){return world.mode==='combat'&&world.phase==='racing';}
 function humanControlled(world,actor){return actor.human||actor===world&&!world.multiplayer;}
 function canAct(world,actor){return battleActive(world)&&!actor.inactive&&!actor.bomber&&actor.destroyed<=0&&(world.finishCountdown===null||humanControlled(world,actor));}
-export function standings(r){return [r,...r.bots].filter(actor=>!actor.inactive).sort((a,b)=>b.kills-a.kills||a.deaths-b.deaths||a.id-b.id);}
+export function standings(r){
+  const actors=[r,...r.bots].filter(actor=>!actor.inactive),top=Math.max(...actors.map(actor=>actor.kills)),host=r.multiplayer?actors.find(actor=>actor.id===r.host&&actor.kills===top):null;
+  return actors.sort((a,b)=>b.kills-a.kills||Number(b===host)-Number(a===host)||a.deaths-b.deaths||a.id-b.id);
+}
 export function equipBomber(actor){Object.assign(actor,{bomber:true,bombAmmo:BOMB_START_AMMO,stinkAmmo:2,bombReload:0,speed:0,shield:0,destroyed:0,dizzy:0});return actor;}
 export function validBombTarget(world,point){return Boolean(point)&&Number.isFinite(point.wx)&&Number.isFinite(point.wz)&&Math.abs(point.wx)<=arenas[world.arena].size&&Math.abs(point.wz)<=arenas[world.arena].size;}
 export function dropBomb(world,actor,point,actionId){

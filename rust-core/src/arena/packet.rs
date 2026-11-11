@@ -14,7 +14,7 @@ impl Serialize for GlobalMeta<'_>{fn serialize<S:Serializer>(&self,serializer:S)
     let g=&self.game.global;let mut map=serializer.serialize_map(None)?;
     macro_rules! e{($key:literal,$value:expr)=>{map.serialize_entry($key,&$value)?;};}
     e!("mode",g.mode);e!("phase",g.phase);e!("arena",g.arena);e!("elapsed",g.elapsed);e!("countdown",g.countdown);e!("duration",g.duration);e!("targetScore",g.target_score);e!("finishTime",g.finish_time);e!("finishCountdown",g.finish_countdown);e!("winner",g.winner);e!("multiplayer",g.multiplayer);e!("soundEpoch",g.sound_epoch);e!("soundSequence",g.sound_sequence);e!("shake",g.shake);e!("projectileSequence",g.projectile_sequence);e!("bombSequence",g.bomb_sequence);e!("chaffSequence",g.chaff_sequence);e!("killSequence",g.kill_sequence);
-    e!("bombs",g.bombs);e!("chaffClouds",g.chaff_clouds);e!("stinkClouds",g.stink_clouds);e!("supplies",g.supplies);e!("effects",g.effects);e!("voices",g.voices);e!("killFeed",self.game.viewer_feed(self.viewer));
+    e!("host",g.host);e!("bombs",g.bombs);e!("chaffClouds",g.chaff_clouds);e!("stinkClouds",g.stink_clouds);e!("supplies",g.supplies);e!("effects",g.effects);e!("voices",g.voices);e!("killFeed",self.game.viewer_feed(self.viewer));
     let events=self.game.viewer_events(self.viewer);
     e!("events",events);e!("skids",[0u8;0]);e!("driftParticles",[0u8;0]);e!("projectiles",g.projectiles.iter().map(ShotMeta).collect::<Vec<_>>());map.end()
 }}

@@ -44,6 +44,10 @@ Arena recovery restores one heart every `14 - 2 × cuteness` seconds after the l
 
 Intelligence limits hedgehogs to `10 + 2 × (intelligence - 1)` and missiles, turbos, A-bombs and stinkbombs to `intelligence + 1` of each. Pickups, regeneration and client speculation obey those limits; choosing a less intelligent character clamps stored inventory. Everyone starts and respawns with ten hedgehogs. Regular hedgehog cooldown is 0.225 seconds; Vulcan stays at 0.075 seconds and missiles at 0.9 seconds. `intelligence.test.js` covers all eight characters, capped bomber refills, native client pickup prediction and four held-fire shots in 0.9 seconds.
 
+Elon's Vulcan renders spinning dollar bundles for local predicted and remote shots. The character group verifies both paths and the Dollar Vulcan label. Projectile damage, trajectories and fire rate use the shared Vulcan rules.
+
+The actual room host wins a tie for the highest points, including when they have more deaths; ties that do not involve the host still use deaths and player ID. The ending announcement and final leaderboard explicitly say `TIE ON POINTS · HOST WINS`, preserving the actual point and death totals. `host-tie.test.js` checks both host slots, per-player victory/finish events, packets and client rendering; the controls group checks the final on-screen notice and tied rows.
+
 ## Targeted checks
 
 ```sh

@@ -1,4 +1,13 @@
 // Procedural models share the game's existing GPU model cache and kart physics.
+export function drawDollarBundle(m){
+  for(let layer=0;layer<4;layer++)m.box(0,-.18+layer*.12,0,1.3,.09,1.7,layer%2?'#e0e7bd':'#4c8751');
+  m.box(0,.28,0,1.16,.015,1.52,'#6ca65d');
+  m.box(0,-.19,0,.2,.58,1.75,'#f0e6bc');
+  m.disc(.39,.3,0,.16,.28,'#2e623d',10);
+  for(const z of [-.33,0,.33])m.box(-.37,.3,z,.33,.025,.055,'#ecf0cf');
+  m.box(-.51,.3,.17,.055,.025,.33,'#ecf0cf');m.box(-.23,.3,-.17,.055,.025,.33,'#ecf0cf');m.box(-.37,.31,0,.04,.025,.85,'#ecf0cf');
+}
+
 export function drawCricketProjectile(m,phase){
   m.ball(0,0,-.25,.33,.27,.69,'#659c35',8,5);
   m.ball(0,.12,.43,.36,.33,.34,'#8dc84b',8,5);

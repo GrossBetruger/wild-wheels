@@ -50,7 +50,7 @@ class World extends Actor{
   get mode(){return 'combat';}get phase(){const value=phase[this.frame.n(10)];return this.frame.paused&&['countdown','racing'].includes(value)?'paused':value;}get resumePhase(){return phase[this.frame.n(10)];}
   get arena(){return this.frame.n(11);}get elapsed(){return this.frame.n(12);}get countdown(){return this.frame.n(13);}get duration(){return this.frame.n(14);}get targetScore(){return this.frame.n(15);}
   get finishRank(){return this.frame.n(16)<0?null:this.frame.n(16);}get finishTime(){return this.frame.n(17)<0?null:this.frame.n(17);}get finishCountdown(){return this.frame.n(18)<0?null:this.frame.n(18);}
-  get rank(){return this.frame.n(19);}get shake(){return this.frame.n(20);}get soundEpoch(){return this.frame.n(22);}get winner(){return this.frame.text.winner;}
+  get rank(){return this.frame.n(19);}get shake(){return this.frame.n(20);}get soundEpoch(){return this.frame.n(22);}get winner(){return this.frame.text.winner;}get host(){return this.frame.text.host;}get multiplayer(){return this.frame.text.multiplayer;}
   get killFeed(){return this.frame.text.killFeed;}get events(){return this.frame.events;}get voices(){return this.frame.voices;}
   get bots(){return this.frame.bots;}get skids(){return this.frame.pools.skids;}get driftParticles(){return this.frame.pools.driftParticles;}get projectiles(){return this.frame.pools.projectiles;}get supplies(){return this.frame.pools.supplies;}get bombs(){return this.frame.pools.bombs;}get chaffClouds(){return this.frame.pools.chaffClouds;}get stinkClouds(){return this.frame.pools.stinkClouds;}get effects(){return this.frame.pools.effects;}
 }

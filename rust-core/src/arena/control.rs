@@ -44,6 +44,7 @@ impl Game {
         game.configure_room(room);Ok(game)
     }
     fn configure_room(&mut self,room:&Room){
+        self.global.host=Some(room.host);
         let mut bots=room.bots;
         for id in 0..6 {
             let person=room.players.iter().find(|p|p.id==id);

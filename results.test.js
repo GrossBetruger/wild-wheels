@@ -2,7 +2,25 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createBattle } from './combat.js';
 import { createRace } from './engine.js';
-import { matchResults } from './results.js';
+import { matchResults, battleTieNotice } from './results.js';
+
+test('a host tied for the highest points wins even with more deaths, and the result explicitly reports the tie',()=>{
+  const world=createBattle();Object.assign(world,{multiplayer:true,host:3,phase:'finished',finishRank:2,id:0,name:'Guest',kills:7,deaths:1});
+  world.bots=[{id:3,driver:7,name:'Host',kills:7,deaths:9},{id:2,driver:2,name:'Other',kills:6,deaths:0}];
+  assert.deepEqual(matchResults(world),[
+    {place:1,name:'Host',you:false,kills:7,deaths:9},
+    {place:2,name:'Guest · YOU',you:true,kills:7,deaths:1},
+    {place:3,name:'Other',you:false,kills:6,deaths:0}
+  ]);
+  assert.equal(battleTieNotice(world),'TIE ON POINTS · HOST WINS');
+});
+
+test('a host with fewer points does not win another pair of players’ tie',()=>{
+  const world=createBattle();Object.assign(world,{multiplayer:true,host:0,phase:'finished',finishRank:3,id:0,name:'Host',kills:6,deaths:0});
+  world.bots=[{id:1,driver:1,name:'Sam',kills:7,deaths:3},{id:2,driver:2,name:'Jo',kills:7,deaths:1}];
+  assert.deepEqual(matchResults(world).map(row=>[row.name,row.kills,row.deaths]),[['Jo',7,1],['Sam',7,3],['Host · YOU',6,0]]);
+  assert.equal(battleTieNotice(world),'');
+});
 
 test('final battle leaderboard ranks by kills then fewer deaths and keeps player names',()=>{
   const world=createBattle();Object.assign(world,{id:0,name:'Alex',kills:5,deaths:3});

@@ -1,6 +1,13 @@
 import { drivers } from './engine.js';
 import { standings } from './combat.js';
 
+export function battleTieNotice(world){
+  if(world.mode!=='combat'||!world.multiplayer||world.finishRank==null)return '';
+  const order=standings(world);
+  if(order[0]?.id!==world.host||order.length<2||order[0].kills!==order[1].kills)return '';
+  return 'TIE ON POINTS · HOST WINS';
+}
+
 export function matchResults(world){
   const name=(actor,you)=>`${actor.name??drivers[actor.driver].name}${you?' · YOU':''}`;
   if(world.mode==='combat')return standings(world).map((actor,index)=>({place:index+1,name:name(actor,actor.id===world.id),you:actor.id===world.id,kills:actor.kills,deaths:actor.deaths}));

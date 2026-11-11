@@ -67,6 +67,7 @@ export async function checkControls(evaluate,app,room,id,sleep,captureFlip,captu
   }`);
   for(let i=0;i<100;i++){if(await evaluate('__game.controlsDone'))break;await sleep(25);}
   const trace=await evaluate('__game.controlsTrace'),request=trace.find(frame=>frame.request);
+  for(let i=0;i<100&&actor.turbos!==0;i++)await sleep(10);
   const turboPass=Boolean(request&&request.boost>2.4&&request.turbos===0)&&trace.every(frame=>frame.item==='hedgehog'&&!frame.turboSelected)&&trace.some(frame=>frame.vulcanShot)&&actor.turbos===0;
   Object.assign(actor,{wx:-65,wz:70,heading:0,motionHeading:0,cameraHeading:0,speed:180,boost:0,vulcan:0,somersault:0,somersaultCooldown:0,fireCooldown:0,item:'hedgehog',ammo:5});room.world.supplies=[];
   for(let i=0;i<100;i++){if(await evaluate('__game.network.state.world.vulcan===0&&__game.network.state.world.heading===0&&__game.network.state.world.wz>69'))break;await sleep(25);}
@@ -186,6 +187,11 @@ export async function checkControls(evaluate,app,room,id,sleep,captureFlip,captu
   for(let i=0;i<100;i++){if(await evaluate("!document.getElementById('match-results').classList.contains('hidden')&&document.querySelectorAll('#match-results tbody tr').length===2"))break;await sleep(25);}
   const leaderboard=await evaluate("[...document.querySelectorAll('#match-results tbody tr')].map(row=>[...row.cells].map(cell=>cell.textContent))");
   const resultsPass=JSON.stringify(leaderboard)===JSON.stringify([['1',other.name,'10','2'],['2',displayName+' · YOU','3','4']])&&await evaluate("document.querySelectorAll('#match-results tbody .you').length===1&&!document.querySelector('#match-results b')");
-  return {readyPass,readyCleared,readyUI,popupPass,popup,refusalPass,autoStartPass,namePass,pickupKeptVulcan,commandPass,turboPass,flipPass,cameraPass,remoteSawFlip,flipTrace,desktopManual,warningPass,warning,chaffPass,chaffColor:ownCloud?.color,chaffSoundCount,greenNoticePass,orbitPass,orbitRotation,orbitTrace,desktopBombPass,stinkPass,whackPass,coWhackPass,whack,endingPass,resultsPass,leaderboard,pass:readyPass&&readyCleared&&popupPass&&refusalPass&&autoStartPass&&namePass&&pickupKeptVulcan&&commandPass&&turboPass&&flipPass&&desktopManual&&warningPass&&chaffPass&&greenNoticePass&&orbitPass&&desktopBombPass&&stinkPass&&whackPass&&coWhackPass&&endingPass&&resultsPass,trace};
+  const hostActor=[room.world,...room.world.bots].find(actor=>actor.id===room.host),guestActor=[room.world,...room.world.bots].find(actor=>actor.id!==room.host);
+  Object.assign(hostActor,{kills:7,deaths:9});Object.assign(guestActor,{kills:7,deaths:1});
+  for(let i=0;i<100;i++){if(await evaluate("document.querySelector('#match-results caption').textContent==='TIE ON POINTS · HOST WINS'"))break;await sleep(25);}
+  const tiedRows=await evaluate("[...document.querySelectorAll('#match-results tbody tr')].map(row=>[...row.cells].map(cell=>cell.textContent))");
+  const tiePass=tiedRows[0]?.[1]===hostActor.name+(id===room.host?' · YOU':'')&&tiedRows[0]?.[2]==='7'&&tiedRows[0]?.[3]==='9'&&tiedRows[1]?.[2]==='7'&&tiedRows[1]?.[3]==='1'&&await evaluate("document.querySelector('#match-results caption').textContent==='TIE ON POINTS · HOST WINS'");
+  return {readyPass,readyCleared,readyUI,popupPass,popup,refusalPass,autoStartPass,namePass,pickupKeptVulcan,commandPass,turboPass,flipPass,cameraPass,remoteSawFlip,flipTrace,desktopManual,warningPass,warning,chaffPass,chaffColor:ownCloud?.color,chaffSoundCount,greenNoticePass,orbitPass,orbitRotation,orbitTrace,desktopBombPass,stinkPass,whackPass,coWhackPass,whack,endingPass,resultsPass,leaderboard,tiePass,tiedRows,pass:readyPass&&readyCleared&&popupPass&&refusalPass&&autoStartPass&&namePass&&pickupKeptVulcan&&commandPass&&turboPass&&flipPass&&desktopManual&&warningPass&&chaffPass&&greenNoticePass&&orbitPass&&desktopBombPass&&stinkPass&&whackPass&&coWhackPass&&endingPass&&resultsPass&&tiePass,trace};
   }finally{clearInterval(fixtureHeartbeat);}
 }

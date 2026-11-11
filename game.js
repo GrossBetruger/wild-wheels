@@ -4,7 +4,7 @@ import { RaceAudio } from './audio.js';
 import { sampleTrack, branches } from './track.js';
 import { createBattle, battleActive, tickBattle, fireBattle, releaseChaff, useBattleTurbo, somersaultBattle, arenas, standings, incomingMissiles, VULCAN_DURATION, MAX_HEALTH, equipBomber, dropBomb, BOMB_RECHARGE, recoveryInterval, hedgehogRecoveryInterval } from './combat.js';
 import { NetworkGame } from './network.js';
-import { matchResults } from './results.js';
+import { matchResults, battleTieNotice } from './results.js';
 import { KillCelebration, ChaffNotice } from './combat-notices.js';
 import { usesMobileControls, bombTarget, panBomber } from './mobile.js';
 const $ = id => document.getElementById(id);
@@ -106,8 +106,8 @@ const finalResults=document.createElement('section');finalResults.id='match-resu
 function showResults(){
   const visible=race.phase==='finished';finalResults.classList.toggle('hidden',!visible);$('message').classList.toggle('results-visible',visible);
   if(!visible){resultsKey='';return;}
-  const rows=matchResults(race),version=JSON.stringify([mode,rows]);if(version===resultsKey)return;resultsKey=version;
-  const table=document.createElement('table'),caption=document.createElement('caption');caption.textContent='FINAL LEADERBOARD';table.append(caption);
+  const rows=matchResults(race),version=JSON.stringify([mode,rows,battleTieNotice(race)]);if(version===resultsKey)return;resultsKey=version;
+  const table=document.createElement('table'),caption=document.createElement('caption');caption.textContent=battleTieNotice(race)||'FINAL LEADERBOARD';table.append(caption);
   const header=table.createTHead().insertRow();for(const label of mode==='combat'?['Place','Player','Kills','Deaths']:['Place','Player','Time']){const cell=document.createElement('th');cell.scope='col';cell.textContent=label;header.append(cell);}
   const body=table.createTBody();
   for(const result of rows){const row=body.insertRow();row.classList.toggle('you',result.you);for(const value of mode==='combat'?[result.place,result.name,result.kills,result.deaths]:[result.place,result.name,result.time===null?'DNF':timeLabel(result.time)])row.insertCell().textContent=String(value);}
@@ -140,7 +140,7 @@ function announceFinish(){
   finishTitle.textContent=`${race.finishRank}${ordinal(race.finishRank)} PLACE`;
   finishDetail.textContent=finishText();finishFlash.classList.remove('hidden');
 }
-function finishText(){return `${mode==='combat'?`${race.kills} KILLS`:timeLabel(race.finishTime)} · ${mode==='combat'?'BATTLE':'RACE'} ENDING IN ${Math.ceil(race.finishCountdown)}…`;}
+function finishText(){return (battleTieNotice(race)?battleTieNotice(race)+' · ':'')+`${mode==='combat'?`${race.kills} KILLS`:timeLabel(race.finishTime)} · ${mode==='combat'?'BATTLE':'RACE'} ENDING IN ${Math.ceil(race.finishCountdown)}…`;}
 function draw(){
   renderer.draw(race,race.elapsed);drawMap();
   const visible=new Set();
@@ -242,9 +242,9 @@ function hud(){
   const vulcanVisible=vulcan&&battleActive(race);
   document.querySelector('.viewport').classList.toggle('vulcan-active',vulcanVisible);routeHint.classList.toggle('vulcan-banner',vulcanVisible);routeHint.classList.toggle('vulcan-ending',vulcanVisible&&race.vulcan<=3);
   if(vulcanVisible)routeHint.textContent=`${race.vulcan<=3?'VULCAN ENDING':'VULCAN ACTIVE'} · ${race.vulcan.toFixed(1)}s`;
-  const vulcanAnimal=race.driver===5?'CRICKET':'HEDGEHOG';
+  const vulcanAnimal=race.driver===5?'CRICKET':race.driver===6?'DOLLAR':'HEDGEHOG';
   vulcanStatus.classList.toggle('hidden',!vulcan||race.phase!=='racing');vulcanTitle.textContent=`${vulcanAnimal} VULCAN · ${(race.vulcan??0).toFixed(1)}s`;vulcanTime.setAttribute('aria-label',`${vulcanAnimal.toLowerCase()} Vulcan seconds remaining`);vulcanTime.value=race.vulcan??0;
-  if(vulcan&&race.item==='hedgehog'){$('item-name').textContent='VULCAN · HOLD SPACE TO SPRAY';if(race.driver===5)$('item').textContent='🦗';}
+  if(vulcan&&race.item==='hedgehog'){$('item-name').textContent='VULCAN · HOLD SPACE TO SPRAY';if(race.driver===5)$('item').textContent='🦗';if(race.driver===6)$('item').textContent='💵';}
   for(const [type,card] of ammoCards){const count={hedgehog:race.ammo,missile:race.missiles,boost:race.turbos}[type],powered=vulcan&&type==='hedgehog',boost=type==='boost';card.count.textContent=powered?'∞':count;card.button.title=count+' / '+itemCapacity(race.driver,type)+' held';card.name.textContent=powered?'VULCAN':boost?'X · TURBO':card.label;card.button.disabled=(!powered&&count===0)||race.phase==='finished'||boost&&(race.phase!=='racing'||race.destroyed>0||mode!=='combat'&&race.finishCountdown!==null||race.boost>0);card.button.classList.toggle('selected',!boost&&race.item===type);card.button.classList.toggle('vulcan',powered);card.button.setAttribute('aria-pressed',String(!boost&&race.item===type));card.button.setAttribute('aria-label',boost?`Use turbo, ${count} charges remaining. Keyboard X.`:`${powered?'Unlimited Vulcan hedgehogs':`${count} ${card.label.toLowerCase()}`}${race.item===type?', selected':''}`);}
   if(race.phase==='countdown'){const n=Math.ceil(race.countdown);if(n!==lastCount){tone(300+n*100);lastCount=n;}$('message').querySelector('h2').textContent=n;}
   if(lastPhase===race.phase)return;lastPhase=race.phase;
@@ -265,7 +265,7 @@ function hud(){
     case 'countdown':message.querySelector('.pill').textContent='ON YOUR MARKS';message.querySelector('p').textContent=race.bomber?'Pick your target. Tap when the battle starts.':'Hold ↑ or W to accelerate';message.querySelector('small').textContent='';$('status').textContent='LIGHTS OUT IN 3…';break;
     case 'racing':tone(850,.3);$('status').textContent='MAKE SOME PIXEL DUST';break;
     case 'paused':message.querySelector('.pill').textContent='PIT STOP';message.querySelector('h2').textContent='Catch your breath.';message.querySelector('p').textContent=network.active?'The match continues while you are away.':'Your rivals can wait.';button.textContent='BACK TO THE RACE ↗';$('status').textContent='RACE PAUSED';break;
-    case 'finished':keys.clear();message.querySelector('.pill').textContent=mode==='combat'?'BATTLE COMPLETE':'RACE COMPLETE';message.querySelector('h2').textContent=`${race.finishRank}${ordinal(race.finishRank)} PLACE`;message.querySelector('p').textContent=mode==='combat'?`${race.kills} kills · ${race.deaths} deaths · ${timeLabel(race.finishTime)}`:`Finished ${race.finishRank}${ordinal(race.finishRank).toLowerCase()} of 6 · ${timeLabel(race.finishTime)}`;message.querySelector('small').textContent='';button.textContent='PLAY AGAIN ↗';$('status').textContent='MATCH COMPLETE';break;
+    case 'finished':keys.clear();message.querySelector('.pill').textContent=mode==='combat'?(battleTieNotice(race)||'BATTLE COMPLETE'):'RACE COMPLETE';message.querySelector('h2').textContent=`${race.finishRank}${ordinal(race.finishRank)} PLACE`;message.querySelector('p').textContent=mode==='combat'?`${race.kills} kills · ${race.deaths} deaths · ${timeLabel(race.finishTime)}`:`Finished ${race.finishRank}${ordinal(race.finishRank).toLowerCase()} of 6 · ${timeLabel(race.finishTime)}`;message.querySelector('small').textContent='';button.textContent='PLAY AGAIN ↗';$('status').textContent='MATCH COMPLETE';break;
   }
 }
 function showDriver(index){selected=index;[...$('drivers').children].forEach((b,i)=>{b.classList.toggle('selected',i===index);b.setAttribute('aria-pressed',String(i===index));});const d=drivers[index];$('driver-name').textContent=d.name;$('driver-desc').textContent=d.desc;$('intelligence-stat').parentElement.title='Carrying limits: '+itemCapacity(index,'hedgehog')+' hedgehogs, '+itemCapacity(index,'missile')+' missiles, '+itemCapacity(index,'boost')+' turbos, '+itemCapacity(index,'abomb')+' of each bomb.';$('cuteness-stat').parentElement.title='Arena: recovers one heart every '+recoveryInterval(index)+' seconds without taking damage, up to 3 hearts. Replenishes one hedgehog every '+hedgehogRecoveryInterval(index)+' seconds.';$('driver-number').textContent=String(index+1).padStart(2,'0');for(const [id,value] of [['speed-stat',d.speed],['handling-stat',d.handling],['accel-stat',d.accel],['cuteness-stat',d.cuteness],['intelligence-stat',d.intelligence]]){$(id).replaceChildren(...Array.from({length:5},(_,i)=>Object.assign(document.createElement('i'),{className:i<value?'on':''})));}}
