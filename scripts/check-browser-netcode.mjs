@@ -35,13 +35,14 @@ const gameSource=await readFile(new URL('game.js',source),'utf8');
 const encodingLab=process.argv.includes('--encoding');
 const labFiles=new Map();
 if(encodingLab){
+  labFiles.set('/encoding-lab/',{type:'text/html',body:'<!doctype html><title>Local encoding benchmark</title>'});
   const argument=flag=>{const i=process.argv.indexOf(flag);if(i<0||!process.argv[i+1])throw new Error('Missing '+flag);return process.argv[i+1];};
   labFiles.set('/encoding-lab/codecs.mjs',{type:'text/javascript',body:await readFile(new URL('./encoding-lab/codecs.mjs',import.meta.url))});
   labFiles.set('/encoding-lab/kernel.wasm',{type:'application/wasm',body:await readFile(argument('--wasm'))});
   labFiles.set('/encoding-lab/corpus.json',{type:'application/json',body:await readFile(argument('--corpus'))});
 }
 const server=createServer((req,res)=>{
-  const lab=labFiles.get(req.url);if(lab){res.writeHead(200,{'Content-Type':lab.type,'Cache-Control':'no-store'});res.end(lab.body);return;}
+  const lab=labFiles.get(req.url);if(lab){res.writeHead(200,{'Content-Type':lab.type,'Cache-Control':'no-store','Content-Security-Policy':"default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'"});res.end(lab.body);return;}
   if(req.url==='/game.js'){res.writeHead(200,{'Content-Type':'text/javascript','Cache-Control':'no-store'});res.end(gameSource+'\nglobalThis.__game={network,renderer,keys,audio,get race(){return race}};');return;}
   app.server.emit('request',req,res);
 });
@@ -100,8 +101,8 @@ try{
         send(data){this.delay('up',()=>{if(this.readyState===Original.OPEN)super.send(data);});}
       };
     }`},session);
-    await call('Page.navigate',{url:origin},session);
-    for(let attempt=0;attempt<100;attempt++){if(await evaluate('Boolean(globalThis.__game)'))break;await sleep(50);}
+    await call('Page.navigate',{url:origin+(encodingLab?'/encoding-lab/':'')},session);
+    for(let attempt=0;attempt<100;attempt++){if(await evaluate(encodingLab?"location.pathname==='/encoding-lab/'&&document.readyState==='complete'":'Boolean(globalThis.__game)'))break;await sleep(50);}
     if(encodingLab){
       const result=await compareEncodingBrowser(evaluate);results.push(result);console.log(JSON.stringify(result));
       await call('Target.closeTarget',{targetId});continue;
