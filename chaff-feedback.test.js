@@ -4,6 +4,15 @@ import { createBattle, releaseChaff, tickBattle } from './combat.js';
 import { encodeSnapshot, decodeSnapshot } from './wire.js';
 import { ActionAudio } from './action-audio.js';
 import { ChaffNotice } from './combat-notices.js';
+import {ArenaCore} from './arena-core.js';
+
+for(const engine of ['solo','Rust'])test(`${engine}: chaff diverts missiles at 40 units but not beyond`,()=>{
+  for(const [radius,diverted]of [[40,true],[40.01,false]]){
+    const world=createBattle();Object.assign(world,{phase:'racing',human:true,wx:-65,wz:70,shield:0,speed:0,supplies:[],chaffClouds:[{id:7,owner:0,wx:-65,wz:20,age:0,life:8}],projectiles:[{id:1,kind:'missile',owner:1,target:0,wx:-65,wz:20+radius,heading:0,speed:70,height:1.3,life:3,trail:[]}]});for(const bot of world.bots)Object.assign(bot,{inactive:true,destroyed:1e9});
+    const core=engine==='Rust'?new ArenaCore(world):null;if(core)core.step(0);if(!core)tickBattle(world,new Set(),0);
+    const shot=(core?core.snapshot():world).projectiles[0];assert.equal(shot.target,diverted?null:0);assert.equal(shot.decoy??null,diverted?7:null);
+  }
+});
 
 test('a diverted missile circles once, falls without another turn, and explodes safely after the cloud expires',()=>{
   const world=createBattle();Object.assign(world,{phase:'racing',wx:-65,wz:0,shield:0,bots:[],supplies:[],chaffClouds:[{id:0,owner:0,wx:-65,wz:20,age:0,life:.1}],projectiles:[{kind:'missile',owner:99,target:null,decoy:0,decoyOwner:0,decoyCenter:{wx:-65,wz:20},wx:-60,wz:20,heading:Math.PI,speed:70,height:1.3,life:4,trail:[],orbitAge:0,orbitAngle:Math.PI/2,orbitRadius:5,orbitHeight:1.3,chaffed:true}]});
@@ -53,7 +62,7 @@ test('the green notice confirms only this player’s successful chaff diversion 
 test('guest chaff keeps its kart color and emits one success cue when it diverts a missile',()=>{
   const world=createBattle();Object.assign(world,{phase:'racing',multiplayer:true,soundEpoch:1,destroyed:999,supplies:[]});
   const guest=world.bots[0];Object.assign(guest,{human:true,wx:-65,wz:0,heading:0,speed:0,color:'#df7053',chaff:2,chaffCooldown:0});world.bots=[guest];
-  world.projectiles=[{kind:'missile',owner:0,target:1,wx:-65,wz:-30,heading:0,speed:70,height:1.3,life:2,trail:[]}];
+  world.projectiles=[{kind:'missile',owner:0,target:1,wx:-65,wz:-15,heading:0,speed:70,height:1.3,life:2,trail:[]}];
   releaseChaff(world,guest);
   assert.equal(world.chaffClouds[0].color,'#df7053');assert.equal(world.chaffClouds[0].owner,1);
   const cue=world.events.filter(event=>event.type==='chaffDivert');assert.equal(cue.length,1);assert.equal(cue[0].owner,1);

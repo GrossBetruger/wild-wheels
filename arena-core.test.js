@@ -67,7 +67,7 @@ test('a Rust-owned A-bomb retains its original damage and radius and consumes on
 test('Rust chaff breaks missile lock and its orbit ends in a harmless explosion',()=>{
   const seed=createBattle();Object.assign(seed,{phase:'racing',supplies:[],wx:-65,wz:0,shield:0});
   for(const bot of seed.bots)Object.assign(bot,{inactive:true,destroyed:1e9});
-  seed.projectiles=[{id:1,owner:1,target:0,kind:'missile',wx:-65,wz:-30,heading:0,speed:70,height:1.3,vy:3,life:3,trail:[]}];
+  seed.projectiles=[{id:1,owner:1,target:0,kind:'missile',wx:-65,wz:-15,heading:0,speed:70,height:1.3,vy:3,life:3,trail:[]}];
   const core=new ArenaCore(seed);core.step(1/60,[{actor:0,keys:[],actions:[{type:'chaff',id:0,afterMove:-1}]}]);
   let world=core.snapshot();assert.equal(world.chaff,3);assert.equal(world.projectiles[0].target,null);assert.equal(world.chaffClouds[0].color,seed.color);assert.equal(world.chaffClouds[0].diversions,1);
   for(let i=0;i<300;i++)core.step(1/60);

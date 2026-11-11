@@ -234,7 +234,7 @@ test('chaff affects only nearby missiles locked onto the deploying kart',()=>{
 });
 test('a chaff cloud keeps distracting incoming missiles and pauses with the match',()=>{
   const r=createBattle(0,0,()=>.5);Object.assign(r,{phase:'racing',wx:-65,wz:0,heading:0,bots:[],supplies:[]});releaseChaff(r);
-  r.projectiles=[{kind:'missile',owner:99,target:0,wx:-65,wz:-30,heading:0,speed:70,height:1.3,life:3,trail:[]}];
+  r.projectiles=[{kind:'missile',owner:99,target:0,wx:-65,wz:-15,heading:0,speed:70,height:1.3,life:3,trail:[]}];
   tickBattle(r,new Set(),.05);assert.equal(r.projectiles[0].target,null);
   r.phase='paused';tickBattle(r,new Set(),.05);assert.equal(r.chaffClouds[0].age,.05);
   r.phase='racing';for(let frame=0;frame<160;frame++)tickBattle(r,new Set(),.05);

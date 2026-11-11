@@ -67,9 +67,9 @@ export async function checkMobile(evaluate,app,room,id,sleep,capture,rotate,tap,
   for(let i=0;i<600;i++){if(actor.stinkAmmo===3)break;await sleep(10);}
   const stinkRefill=actor.stinkAmmo===3&&actor.bombAmmo===0&&room.world.elapsed>=4.999;
   Object.assign(other,{wx:-65,wz:30,health:1,shield:0,hedgeShield:0,destroyed:0,speed:0});
-  for(let i=0;i<150;i++){if(actor.kills===2&&await evaluate("document.getElementById('whack-banner').textContent.includes('YOU RADIOWHACKED')"))break;await sleep(10);}
-  const radiowhackPass=actor.kills===2&&await evaluate("document.getElementById('whack-banner').textContent.includes('YOU RADIOWHACKED')&&document.getElementById('whack-banner').textContent.includes('Target <img>')&&!document.querySelector('#whack-banner img')");
-  if(capture)await capture('radiowhack');
+  for(let i=0;i<150;i++){if(actor.kills===2&&await evaluate("document.getElementById('whack-banner').textContent.includes('YOU CHERNOWHACKED')"))break;await sleep(10);}
+  const chernowhackPass=actor.kills===2&&await evaluate("document.getElementById('whack-banner').textContent.includes('YOU CHERNOWHACKED')&&document.getElementById('whack-banner').textContent.includes('Target <img>')&&!document.querySelector('#whack-banner img')&&document.querySelector('#whack-banner .cherno-emblem text')?.textContent==='☭'&&document.querySelector('#whack-banner .cherno-emblem')?.getBoundingClientRect().width>20");
+  if(capture)await capture('chernowhack');
   // Isolate the following stink-bomb test from the preceding A-bomb's fallout.
   room.world.effects=room.world.effects.filter(effect=>effect.type!=='radiation');
   Object.assign(other,{wx:-65,wz:30,health:3,shield:0,destroyed:0,speed:0});
@@ -123,6 +123,6 @@ export async function checkMobile(evaluate,app,room,id,sleep,capture,rotate,tap,
   await chooseCamera('3d');
   await evaluate("document.getElementById('mobile-fullscreen').click()");
   const exited=await evaluate("!document.querySelector('.race-panel').classList.contains('mobile-fullscreen')");
-  return {radiowhackPass,radiationPass,bomberNamePass,readyRequestPass,initialAmmo,fullscreen,overhead,default3D,closeView,portraitKartWidth,mapOption,switchPreservesGame,namedTarget,accurate,spent,immediate,feedbackDelayMs:feedback?.delay,boundedDrops,desktopSawDrop,blast,noKillBonus,stinkRefill,stinkShot,stinkWorks,stinkImmediate,dizzyExpired,refill,refillAt,marginsIgnored,landscape,landscapePass,exited,pass:radiowhackPass&&radiationPass&&bomberNamePass&&readyRequestPass&&initialAmmo&&fullscreen&&overhead&&default3D&&closeView&&mapOption&&switchPreservesGame&&namedTarget&&accurate&&spent&&immediate&&boundedDrops&&desktopSawDrop&&blast&&noKillBonus&&stinkRefill&&stinkShot&&stinkWorks&&stinkImmediate&&dizzyExpired&&refill&&marginsIgnored&&landscapePass&&exited};
+  return {chernowhackPass,radiationPass,bomberNamePass,readyRequestPass,initialAmmo,fullscreen,overhead,default3D,closeView,portraitKartWidth,mapOption,switchPreservesGame,namedTarget,accurate,spent,immediate,feedbackDelayMs:feedback?.delay,boundedDrops,desktopSawDrop,blast,noKillBonus,stinkRefill,stinkShot,stinkWorks,stinkImmediate,dizzyExpired,refill,refillAt,marginsIgnored,landscape,landscapePass,exited,pass:chernowhackPass&&radiationPass&&bomberNamePass&&readyRequestPass&&initialAmmo&&fullscreen&&overhead&&default3D&&closeView&&mapOption&&switchPreservesGame&&namedTarget&&accurate&&spent&&immediate&&boundedDrops&&desktopSawDrop&&blast&&noKillBonus&&stinkRefill&&stinkShot&&stinkWorks&&stinkImmediate&&dizzyExpired&&refill&&marginsIgnored&&landscapePass&&exited};
   }finally{clearInterval(fixtureHeartbeat);}
 }

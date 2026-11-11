@@ -12,6 +12,7 @@ export const BOMB_RADIUS=22;
 export const BOMB_OUTER_RADIUS=28;
 export const RADIATION_DURATION=8;
 export const RADIATION_INTERVAL=1;
+export const CHAFF_RADIUS=40;
 export const BOMB_START_AMMO=2;
 export const BOMB_RECHARGE=10;
 export const STINK_RADIUS=14;
@@ -70,7 +71,7 @@ function fx(r,type,actor,key){sound(r,type,actor,key);r.effects.push({type,wx:ac
 function divertMissiles(r,cloud){
   let diverted=0;
   for(const shot of r.projectiles){
-    if(shot.kind!=='missile'||shot.target!==cloud.owner||shot.decoy!=null||distance(shot,cloud)>70||!clearShot(arenas[r.arena],shot,cloud))continue;
+    if(shot.kind!=='missile'||shot.target!==cloud.owner||shot.decoy!=null||distance(shot,cloud)>CHAFF_RADIUS||!clearShot(arenas[r.arena],shot,cloud))continue;
     shot.target=null;shot.decoy=cloud.id;shot.decoyOwner=cloud.owner;shot.decoyCenter={wx:cloud.wx,wz:cloud.wz};shot.life=Math.max(shot.life??0,4.5);diverted++;
   }
   if(diverted){cloud.diversions=(cloud.diversions??0)+diverted;cloud.divertedAt=r.elapsed;sound(r,'chaffDivert',cloud);}

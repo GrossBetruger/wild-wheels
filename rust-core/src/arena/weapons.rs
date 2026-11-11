@@ -35,7 +35,7 @@ impl Game{
     fn divert(g:&mut Globals,cloud:&mut Chaff)->usize{
         let mut diverted=0;
         for shot in &mut g.projectiles{
-            if shot.kind!="missile"||shot.target!=Some(cloud.owner)||shot.decoy.is_some()||distance(shot.wx,shot.wz,cloud.wx,cloud.wz)>70.0||!clear(g.arena,shot.wx,shot.wz,cloud.wx,cloud.wz){continue;}
+            if shot.kind!="missile"||shot.target!=Some(cloud.owner)||shot.decoy.is_some()||distance(shot.wx,shot.wz,cloud.wx,cloud.wz)>40.0||!clear(g.arena,shot.wx,shot.wz,cloud.wx,cloud.wz){continue;}
             shot.target=None;shot.decoy=Some(cloud.id);shot.decoy_owner=Some(cloud.owner);shot.decoy_center=Some(Point{wx:cloud.wx,wz:cloud.wz});shot.life=shot.life.max(4.5);diverted+=1;
         }
         if diverted>0{cloud.diversions+=diverted as u32;cloud.diverted_at=Some(g.elapsed);sound(g,"chaffDivert",cloud.owner,cloud.wx,cloud.wz,None);}diverted

@@ -1,5 +1,7 @@
 # Development checks
 
+Chaff diverts owner-targeted missiles within 40 units of its cloud, with a clear path. Boundary tests cover both simulation engines. Radiation kills use the Chernowhacked celebration with a combined radiation/hammer-and-sickle emblem and warning colors.
+
 A-bombs leave a radioactive zone covering the full 28-unit blast footprint for 8 seconds. Contact deals 1 damage immediately and every second afterward; leaving and re-entering starts a new immediate dose. Respawn shields and Hedgeguard protect against radiation. Radiation kills credit the bomb's owner and produce ash. `radiation.test.js` covers dose timing, boundaries, shields, expiry, re-entry, credit and remote presentation in both engines; the mobile group checks fallout replication and visuals.
 
 Combat hazards: A-bombs deal 5 damage within 22 units and 3 damage in the outer ring through 28 units. Dizziness lasts 8 seconds, with stronger steering disturbance and camera sway during boost. Boosted wall collisions explode; each bomber with active gas credit earns a full point for those crashes. Ordinary stink-assisted kills remain half a point. `combat-hazards.test.js` covers radius boundaries, normal versus boosted impacts, multiple bomber credit and stronger boosted swerving in both simulation engines. Movement prediction stops at fatal impacts while the server confirms death and scoring.

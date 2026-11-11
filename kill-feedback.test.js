@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import { createBattle, damageBattle, equipBomber, tickBattle } from './combat.js';
 import { KillCelebration, ChaffNotice } from './combat-notices.js';
 
-test('a radiation kill celebrates you radiowhacked and names its victim',()=>{
+test('a radiation kill celebrates you chernowhacked and names its victim',()=>{
   const world=equipBomber(createBattle());Object.assign(world,{phase:'racing',supplies:[]});
   const victim=world.bots[0];Object.assign(victim,{name:'Sam',wx:-65,wz:0,health:1,shield:0,human:true,speed:0});for(const bot of world.bots.slice(1))Object.assign(bot,{inactive:true,destroyed:1e9});
   const feedback=new KillCelebration();feedback.sample(world,0);
   world.effects=[{type:'radiation',owner:0,wx:-65,wz:0,age:0,life:8,doses:{}}];tickBattle(world,new Set(),1/60);
-  const message=feedback.sample(world,.1);assert.equal(message.title,'✦ YOU RADIOWHACKED ✦');assert.equal(message.name,'Sam');assert.equal(message.assist,false);assert.equal(world.kills,1);
+  const message=feedback.sample(world,.1);assert.equal(message.title,'YOU CHERNOWHACKED');assert.equal(message.name,'Sam');assert.equal(message.assist,false);assert.equal(world.kills,1);
 });
 
 test('stinkbomb assists say co-whacked while the bomber’s own killing blow still says you whacked',()=>{

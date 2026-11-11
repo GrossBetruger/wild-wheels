@@ -189,7 +189,17 @@ function hud(){
   if(!whack)whackKey=null;
   if(whack&&whackKey!==whack.key){
     whackKey=whack.key;const card=document.createElement('div');card.className=whack.assist?'whack-card co-whack':'whack-card';card.style.setProperty('--victim-color',whack.color);
-    const title=document.createElement('span'),name=document.createElement('strong');title.textContent=whack.title;name.textContent=`“${whack.name}”`;card.append(title,name);whackBanner.replaceChildren(card);
+    const title=document.createElement('span'),name=document.createElement('strong');title.textContent=whack.title;name.textContent=`“${whack.name}”`;
+    if(whack.radiation){
+      card.classList.add('cherno-whack');const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');svg.setAttribute('viewBox','0 0 48 48');svg.setAttribute('class','cherno-emblem');svg.setAttribute('aria-hidden','true');
+      const shape=(tag,attrs)=>{const node=document.createElementNS(ns,tag);for(const [key,value]of Object.entries(attrs))node.setAttribute(key,value);svg.append(node);return node;};
+      shape('circle',{cx:24,cy:24,r:22,fill:'#e4ee70',stroke:'#be9b31','stroke-width':2});
+      for(let arm=0;arm<3;arm++)shape('path',{d:'M15 8.4 A18 18 0 0 1 33 8.4 L27.5 17.94 A7 7 0 0 0 20.5 17.94 Z',fill:'#721b28',transform:`rotate(${arm*120} 24 24)`});
+      shape('circle',{cx:24,cy:24,r:9,fill:'#a52632'});shape('text',{x:24,y:30,'text-anchor':'middle','font-size':19,'font-family':'Georgia,serif',fill:'#fff2a0'}).textContent='☭';
+      const copy=document.createElement('div');copy.className='cherno-copy';copy.append(title,name);card.append(svg,copy);
+    }
+    if(!whack.radiation)card.append(title,name);
+    whackBanner.replaceChildren(card);
   }
   const threats=incomingMissiles(race);
   avertedBanner.classList.toggle('hidden',!chaffNotice.sample(race,performance.now()/1000)||threats>0);
