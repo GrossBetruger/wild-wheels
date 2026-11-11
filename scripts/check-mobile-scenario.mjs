@@ -66,6 +66,10 @@ export async function checkMobile(evaluate,app,room,id,sleep,capture,rotate,tap,
   const immediate=Boolean(feedback&&feedback.ammo===1&&feedback.bombs.some(bomb=>bomb.owner===id));
   for(let i=0;i<600;i++){if(actor.stinkAmmo===3)break;await sleep(10);}
   const stinkRefill=actor.stinkAmmo===3&&actor.bombAmmo===0&&room.world.elapsed>=4.999;
+  Object.assign(other,{wx:-65,wz:30,health:1,shield:0,hedgeShield:0,destroyed:0,speed:0});
+  for(let i=0;i<150;i++){if(actor.kills===2&&await evaluate("document.getElementById('whack-banner').textContent.includes('YOU RADIOWHACKED')"))break;await sleep(10);}
+  const radiowhackPass=actor.kills===2&&await evaluate("document.getElementById('whack-banner').textContent.includes('YOU RADIOWHACKED')&&document.getElementById('whack-banner').textContent.includes('Target <img>')&&!document.querySelector('#whack-banner img')");
+  if(capture)await capture('radiowhack');
   // Isolate the following stink-bomb test from the preceding A-bomb's fallout.
   room.world.effects=room.world.effects.filter(effect=>effect.type!=='radiation');
   Object.assign(other,{wx:-65,wz:30,health:3,shield:0,destroyed:0,speed:0});
@@ -75,7 +79,7 @@ export async function checkMobile(evaluate,app,room,id,sleep,capture,rotate,tap,
   for(let i=0;i<100;i++){if(room.world.bombs.some(bomb=>bomb.kind==='stink'))break;await sleep(10);}
   const stinkShot=room.world.bombs.some(bomb=>bomb.kind==='stink'&&bomb.owner===id)&&actor.bombAmmo===0&&actor.stinkAmmo===2;
   for(let i=0;i<150;i++){if(other.dizzy>0)break;await sleep(10);}
-  const stinkWorks=other.dizzy>0&&other.health===3&&actor.kills===1&&room.world.stinkClouds.length>0;
+  const stinkWorks=other.dizzy>0&&other.health===3&&actor.kills===2&&room.world.stinkClouds.length>0;
   const stinkFeedback=await evaluate('__game.lastTapFrames[0]??null'),stinkImmediate=Boolean(stinkFeedback&&stinkFeedback.ammo===0&&stinkFeedback.stinkAmmo===2&&stinkFeedback.bombs.some(bomb=>bomb.kind==='stink'));
   if(capture)await capture('stink-cloud');
   for(let i=0;i<1000;i++){if(actor.bombAmmo===1&&other.dizzy===0)break;await sleep(10);}
@@ -86,7 +90,7 @@ export async function checkMobile(evaluate,app,room,id,sleep,capture,rotate,tap,
   const marginsIgnored=room.world.bombSequence===before&&actor.bombAmmo===1;
   await chooseCamera('map');
   const mapOption=await evaluate("__game.renderer.bomberView==='map'&&document.getElementById('bomber-view-map').getAttribute('aria-pressed')==='true'");
-  const switchPreservesGame=actor.bombAmmo===1&&actor.kills===1&&room.world.phase==='racing';
+  const switchPreservesGame=actor.bombAmmo===1&&actor.kills===2&&room.world.phase==='racing';
   if(capture)await capture('portrait-2d-map');
   const landscape=[];
   for(const angle of [0,90,270])for(const view of ['3d','map']){
@@ -119,6 +123,6 @@ export async function checkMobile(evaluate,app,room,id,sleep,capture,rotate,tap,
   await chooseCamera('3d');
   await evaluate("document.getElementById('mobile-fullscreen').click()");
   const exited=await evaluate("!document.querySelector('.race-panel').classList.contains('mobile-fullscreen')");
-  return {radiationPass,bomberNamePass,readyRequestPass,initialAmmo,fullscreen,overhead,default3D,closeView,portraitKartWidth,mapOption,switchPreservesGame,namedTarget,accurate,spent,immediate,feedbackDelayMs:feedback?.delay,boundedDrops,desktopSawDrop,blast,noKillBonus,stinkRefill,stinkShot,stinkWorks,stinkImmediate,dizzyExpired,refill,refillAt,marginsIgnored,landscape,landscapePass,exited,pass:radiationPass&&bomberNamePass&&readyRequestPass&&initialAmmo&&fullscreen&&overhead&&default3D&&closeView&&mapOption&&switchPreservesGame&&namedTarget&&accurate&&spent&&immediate&&boundedDrops&&desktopSawDrop&&blast&&noKillBonus&&stinkRefill&&stinkShot&&stinkWorks&&stinkImmediate&&dizzyExpired&&refill&&marginsIgnored&&landscapePass&&exited};
+  return {radiowhackPass,radiationPass,bomberNamePass,readyRequestPass,initialAmmo,fullscreen,overhead,default3D,closeView,portraitKartWidth,mapOption,switchPreservesGame,namedTarget,accurate,spent,immediate,feedbackDelayMs:feedback?.delay,boundedDrops,desktopSawDrop,blast,noKillBonus,stinkRefill,stinkShot,stinkWorks,stinkImmediate,dizzyExpired,refill,refillAt,marginsIgnored,landscape,landscapePass,exited,pass:radiowhackPass&&radiationPass&&bomberNamePass&&readyRequestPass&&initialAmmo&&fullscreen&&overhead&&default3D&&closeView&&mapOption&&switchPreservesGame&&namedTarget&&accurate&&spent&&immediate&&boundedDrops&&desktopSawDrop&&blast&&noKillBonus&&stinkRefill&&stinkShot&&stinkWorks&&stinkImmediate&&dizzyExpired&&refill&&marginsIgnored&&landscapePass&&exited};
   }finally{clearInterval(fixtureHeartbeat);}
 }

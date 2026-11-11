@@ -36,7 +36,7 @@ for(const engine of ['solo','Rust']){
   test(`${engine}: a radiation kill credits its bomber and leaves ash`,()=>{
     const seed=createBattle();Object.assign(seed,{phase:'racing',human:true,wx:-65,wz:0,health:1,shield:0,speed:0,supplies:[],effects:[{type:'radiation',owner:2,wx:-65,wz:0,age:0,life:8,doses:{}}]});for(const bot of seed.bots)Object.assign(bot,{inactive:true,destroyed:1e9});equipBomber(seed.bots[1]);seed.bots[1].inactive=false;
     const core=engine==='Rust'?new ArenaCore(seed):null;if(core)core.step(1/60);if(!core)tickBattle(seed,new Set(),1/60);
-    const after=core?core.snapshot():seed;assert.equal(after.health,0);assert.equal(after.deaths,1);assert.equal(after.bots.find(b=>b.id===2).kills,1);assert.ok(after.effects.some(f=>f.type==='ash'));
+    const after=core?core.snapshot():seed;assert.equal(after.health,0);assert.equal(after.deaths,1);assert.equal(after.bots.find(b=>b.id===2).kills,1);assert.ok(after.effects.some(f=>f.type==='ash'));assert.equal(after.killFeed.find(f=>f.attacker===2).radiation,true);
     if(core){const peer=new ArenaClient();peer.accept(core.packet(2),0);peer.frame(0,[],0);const zone=peer.present().effects.find(f=>f.type==='radiation');assert.equal(zone.owner,2);assert.equal(zone.radius,28);assert.equal(zone.life,8);}
   });
 }
