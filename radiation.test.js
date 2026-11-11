@@ -4,14 +4,14 @@ import {createBattle,tickBattle,equipBomber} from './combat.js';
 import {ArenaCore,ArenaClient} from './arena-core.js';
 
 for(const engine of ['solo','Rust']){
-  test(`${engine}: radiation hits on entry, then every half second rather than every frame`,()=>{
+  test(`${engine}: radiation hits on entry, then every second rather than every frame`,()=>{
     const seed=createBattle();Object.assign(seed,{phase:'racing',human:true,wx:-65,wz:0,health:6,shield:0,speed:0,supplies:[],effects:[{type:'radiation',owner:1,wx:-65,wz:0,age:0,life:8,doses:{}}]});
     for(const bot of seed.bots)Object.assign(bot,{inactive:true,destroyed:1e9});equipBomber(seed.bots[0]);seed.bots[0].inactive=false;
     const core=engine==='Rust'?new ArenaCore(seed):null,step=()=>core?core.step(1/60):tickBattle(seed,new Set(),1/60),read=()=>core?core.snapshot():seed;
     step();assert.equal(read().health,5);
-    for(let i=0;i<29;i++)step();assert.equal(read().health,5);
+    for(let i=0;i<59;i++)step();assert.equal(read().health,5);
     step();assert.equal(read().health,4);
-    for(let i=0;i<29;i++)step();assert.equal(read().health,4);
+    for(let i=0;i<59;i++)step();assert.equal(read().health,4);
     step();assert.equal(read().health,3);assert.equal(read().bots[0].kills,0);
   });
 

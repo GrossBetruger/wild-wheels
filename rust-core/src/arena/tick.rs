@@ -121,7 +121,7 @@ impl Game{
                 let key=a.id.to_string();
                 if a.bomber||a.inactive||a.afk||a.destroyed>0.0||a.shield>0.0||a.hedge_shield>0.0||distance(a.wx,a.wz,zone.wx,zone.wz)>28.0{zone.doses.remove(&key);continue;}
                 if zone.age+1e-8<*zone.doses.get(&key).unwrap_or(&0.0){continue;}
-                zone.doses.insert(key,zone.age+0.5);if let Some(owner)=zone.owner{doses.push((a.id,owner));}
+                zone.doses.insert(key,zone.age+1.0);if let Some(owner)=zone.owner{doses.push((a.id,owner));}
             }
         }
         for (victim,owner) in doses{self.damage(victim,owner,1.0,"radiation");}
