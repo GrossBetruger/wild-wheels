@@ -1,4 +1,66 @@
 // Procedural models share the game's existing GPU model cache and kart physics.
+// Starship reference: https://www.spacex.com/vehicles/starship/
+const STARSHIP_ENGINES=[[0,.64,.28],[-.55,-.32,.28],[.55,-.32,.28],[0,-.27,.16],[-.23,.14,.16],[.23,.14,.16]];
+export function drawStarship(m,color){
+  const rings=[[-3.05,1.02],[-2.5,1.02],[-1.9,1.02],[-1.3,1.02],[-.7,1.02],[-.1,1.02],[.5,1.02],[1.1,1.02],[1.6,.98],[2.1,.85],[2.6,.66],[3.1,.4],[3.6,.04]];
+  const point=(z,r,a)=>[Math.cos(a)*r,1.45+Math.sin(a)*r,z];
+  // Stainless-steel panels above a tiled heat shield; the ship skims the ground.
+  for(let ring=0;ring<rings.length-1;ring++)for(let side=0;side<20;side++){
+    const [z,r]=rings[ring],[zz,rr]=rings[ring+1],a=side*Math.PI/10,b=(side+1)*Math.PI/10;
+    const tile=Math.sin((a+b)/2)<-.15,steel=['#d6dfe1','#b7c5cb','#e1e7e7'][side%3];
+    m.quad(point(z,r,a),point(zz,rr,a),point(zz,rr,b),point(z,r,b),tile?(ring+side)%2?'#28313b':'#343e49':steel);
+    m.quad(point(z,r+.008,a),point(z+.025,r+.008,a),point(z+.025,r+.008,b),point(z,r+.008,b),tile?'#424d55':'#8b9ca5');
+  }
+  for(const side of [-1,1]){
+    // Two forward and two aft flaps, with dark windward faces and silver edges.
+    for(const points of [
+      [[side*.89,1.38,1.8],[side*1.85,1.45,1.15],[side*1.65,1.5,2.3],[side*.77,1.5,2.65]],
+      [[side*.91,1.38,-2.9],[side*2.5,1.1,-3.15],[side*2.35,1.25,-1.72],[side*.98,1.5,-1.05]],
+    ]){
+      m.quad(...points,'#c6d0d5');m.quad(...points.map(([x,y,z])=>[x,y-.1,z]).reverse(),'#29353f');
+      for(let i=0;i<4;i++){const a=points[i],b=points[(i+1)%4];m.quad(a,b,[b[0],b[1]-.1,b[2]],[a[0],a[1]-.1,a[2]],color);}
+    }
+    for(const z of [-2.35,2.05])m.ball(side*.96,1.62,z,.08,.11,.15,'#202b37',7,4);
+  }
+  // Open cartoon cockpit keeps Houston and her helmet animation visible.
+  m.ball(0,2.38,-.12,.79,.09,.83,'#5d7482',12,4);
+  m.ball(0,2.46,-.12,.67,.07,.71,'#202e3e',12,4);
+  m.box(0,2.49,.63,.86,.08,.08,color);
+  m.quad([-.21,2.49,1.04],[-.12,2.49,1.04],[.23,2.43,1.67],[.14,2.43,1.67],'#243444');
+  m.quad([.21,2.49,1.04],[.12,2.49,1.04],[-.23,2.43,1.67],[-.14,2.43,1.67],'#243444');
+  for(let i=0;i<20;i++)m.tri([0,1.45,-3.06],point(-3.06,1.02,i*Math.PI/10),point(-3.06,1.02,(i+1)*Math.PI/10),'#33414c');
+  for(const [x,y,r]of STARSHIP_ENGINES)for(let i=0;i<10;i++){
+    const a=i*Math.PI/5,b=(i+1)*Math.PI/5,p=(angle,radius,z)=>[x+Math.cos(angle)*radius,1.45+y+Math.sin(angle)*radius,z];
+    m.quad(p(a,r*.6,-3.08),p(a,r,-3.53),p(b,r,-3.53),p(b,r*.6,-3.08),'#7b8d99');
+    m.tri([x,1.45+y,-3.49],p(b,r*.85,-3.54),p(a,r*.85,-3.54),'#202733');
+  }
+}
+
+export function drawStarshipThrust(glow,smoke,p,angle,clock,jump=null,boost=false){
+  for(const mesh of [glow,smoke]){mesh.at(p.x,.13+(jump?.height??0),p.z,angle);mesh.pitch=jump?.pitch??0;mesh.pivot=1.87;}
+  const firing=boost||Boolean(jump),power=firing?1:.16;
+  for(const [index,[x,y,r]]of STARSHIP_ENGINES.entries()){
+    const height=1.45+y,flicker=1+Math.sin(clock*47+index)*.1;
+    glow.particle(x,height,-3.56,r*3,[.13*power,.3*power,.65*power]);
+    if(!firing)continue;
+    glow.flame(x,height,-3.55,r*1.2,5.8*flicker,[.11,.035,.24],clock+index);
+    glow.flame(x,height,-3.56,r*.7,3.8*flicker,[.06,.22,.48],clock+index);
+    for(let i=0;i<14;i++){
+      const t=i/14,fade=1-t;
+      glow.particle(x,height,-3.6-t*5.8,r*(2.2-t),[.25*fade,.42*fade,.75*fade]);
+      if(i%2===0){const age=(clock*2+i/14+index*.11)%1;smoke.particle(x+Math.sin(i*7)*age*.35,height+Math.cos(i*9)*age*.25,-4-age*8,(.4+age*1.7)*Math.sqrt(1-age),[.73,.8,.94]);}
+    }
+  }
+  if(!jump)return;
+  // Small maneuvering jets visibly assist the nose-over rotation.
+  const z=-jump.pitch/(Math.PI*2)<.5?2.05:-2.35;
+  for(const side of [-1,1])for(let i=0;i<12;i++){
+    const t=(clock*4+i/12)%1;
+    smoke.particle(side*(.96+t*.45),1.62-t*2.5,z,.22+t*.55,[.9,.96,1]);
+    if(i<4)glow.particle(side*.97,1.5-i*.17,z,.23,[.13,.23,.34]);
+  }
+}
+
 export function drawCessna(m,color){
   const white='#edf0e5',dark='#354451';
   m.ball(0,1.3,-.35,.8,.68,2.85,white,12,7);

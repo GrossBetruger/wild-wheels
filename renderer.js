@@ -3,7 +3,7 @@ import { LENGTH, drivers, pickupType } from './engine.js';
 import { arenas, combatPose, somersaultPose, BOMB_FALL_TIME, BOMB_RADIUS, STINK_RADIUS, DIZZY_DURATION, VULCAN_DURATION } from './combat.js';
 import { kartNameplates } from './nameplates.js';
 import { bomberCamera } from './mobile.js';
-import {drawNewDriver,drawRoadster,drawRoadsterJets,drawCricketHaze,drawCricketProjectile,drawHoustonHelmet,drawDollarBundle,drawCessna,drawCessnaPropeller,drawCessnaBoost,drawElectron,drawPilotWorm} from './characters.js';
+import {drawNewDriver,drawRoadster,drawRoadsterJets,drawCricketHaze,drawCricketProjectile,drawHoustonHelmet,drawDollarBundle,drawCessna,drawCessnaPropeller,drawCessnaBoost,drawElectron,drawPilotWorm,drawStarship,drawStarshipThrust} from './characters.js';
 import {previewPose} from './preview-pose.js';
 import {drawRococoChariot,drawPearococo,drawPeacockFeather,drawRoyalWing,drawBalletPump,drawFairyStar,drawFairyBoost} from './pearococo.js';
 const rgb=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255);
@@ -163,10 +163,11 @@ export class Renderer {
     if(driver===9){this.royalChariot(m,p,color,yaw,spin,boost,clock,celebrate,jump,gesture);return;}
     if(driver===8&&!this.buildingModel){this.pilotPlane(m,p,color,yaw,spin,boost,clock,celebrate,jump,gesture);return;}
     if(driver===6)color='#e8edf2';
-    if(!gesture&&!this.buildingModel&&(celebrate<=0||jump)){const angle=Math.atan2(p.tx,p.tz)-yaw+spin;m.at(p.x,.13,p.z,angle);m.disc(.2,0,.25,2.3,3,'#3a4147');this.model(`kart:${driver}:${color}${driver===7&&!helmet?':bare':''}`,p.x,jump?.height??0,p.z,angle,mesh=>this.kart(mesh,{x:0,z:0,tx:0,tz:1},color,driver,0,0,false,0,0,null,helmet),jump?.pitch??0);if(boost||jump)this.afterburner(p,angle,clock,jump,driver);return;}
+    if(!gesture&&!this.buildingModel&&(celebrate<=0||jump)){const angle=Math.atan2(p.tx,p.tz)-yaw+spin;m.at(p.x,.13,p.z,angle);m.disc(.2,0,.25,2.3,3,'#3a4147');this.model(`kart:${driver}:${color}${driver===7&&!helmet?':bare':''}`,p.x,jump?.height??0,p.z,angle,mesh=>this.kart(mesh,{x:0,z:0,tx:0,tz:1},color,driver,0,0,false,0,0,null,helmet),jump?.pitch??0);if(driver===7){this.starshipEngines(p,angle,clock,jump,boost);return;}if(boost||jump)this.afterburner(p,angle,clock,jump,driver);return;}
     const angle=Math.atan2(p.tx,p.tz)-yaw+spin;m.at(p.x,.13,p.z,angle);if(!this.buildingModel)m.disc(.2,0,.25,2.3,3,'#3a4147');
     if(driver===6)drawRoadster(m);
-    if(driver!==6){
+    if(driver===7)drawStarship(m,color);
+    if(driver!==6&&driver!==7){
     for(const x of [-1.6,1.6])for(const z of [-1.5,1.4]){m.ball(x,.65,z,.58,.68,.7,'#202534',8,5);m.box(x+Math.sign(x)*.5,.38,z,.08,.52,.6,'#b9b9b7');for(let t=0;t<3;t++)m.box(x,.7,z-.4+t*.3,1.05,.06,.08,'#343a45');}
     m.box(0,.5,0,3.2,.65,4.4,color);m.box(0,1.1,.9,2.7,.35,1.8,color);m.box(0,.55,2.2,3.5,.3,.35,'#c5c9c4');m.box(0,.5,-2.3,3.7,.3,.35,'#30384b');
     m.box(0,1,-.4,1.8,1.2,1.5,'#333445');m.box(0,1.2,-1.4,2.4,.6,.6,color);
@@ -198,10 +199,14 @@ export class Renderer {
     m.at(p.x,.13,p.z,angle);
     if(turn>.7){this.glow.at(p.x,.13,p.z,angle);for(let i=0;i<3;i++){const a=progress*3+i*2.1;this.glow.particle(Math.cos(a)*1.9,5+Math.sin(a)*.25,Math.sin(a)*.5,.45,[.55,.35,.07]);}}
     if(driver===6){if(boost)this.afterburner(p,angle,clock,null,driver);return;}
+    if(driver===7){if(!this.buildingModel)this.starshipEngines(p,angle,clock,null,boost);return;}
     m.box(-1,1.15,-2.1,.55,.3,.12,'#ff765a');m.box(1,1.15,-2.1,.55,.3,.12,'#ff765a');
     m.box(0,1.2,-2.25,.8,.35,.12,'#f7edce');m.box(0,1.26,-2.33,.12,.25,.03,'#33364b');
     for(const side of [-1,1]){m.ball(side*1.2,.75,-2.45,.31,.31,.5,'#69788b',10,5);m.ball(side*1.2,.75,-2.85,.24,.24,.08,'#161d2a',10,4);}
     if(boost)this.afterburner(p,angle,clock,null,driver);
+  }
+  starshipEngines(p,angle,clock,jump=null,boost=false){
+    drawStarshipThrust(this.glow,this.smoke,p,angle,clock,jump,boost);
   }
   houstonHelmet(p,actor,time,jump){
     if(actor.vulcan<=0){this.helmetFlights.delete(actor.id);return;}
@@ -254,6 +259,7 @@ export class Renderer {
     this.model(`cessna:propeller:${phase}`,p.x,jump?.height??0,p.z,angle,mesh=>{mesh.at(0,.13,0);drawCessnaPropeller(mesh,phase);},jump?.pitch??0);
   }
   afterburner(p,angle,clock,jump=null,driver=0){
+    if(driver===7){this.starshipEngines(p,angle,clock,jump,true);return;}
     if(driver===9){drawFairyBoost(this.glow,this.smoke,p,angle,clock,jump);return;}
     if(driver===5){drawCricketHaze(this.glow,this.smoke,p,angle,clock,jump);return;}
     if(driver===6){drawRoadsterJets(this.glow,this.smoke,p,angle,clock,jump);return;}

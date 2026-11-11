@@ -6,6 +6,8 @@ Pearococo coverage includes local and remote royal waves, fairy-dust boost/flip/
 
 Avita-Jas is included in the character browser group: character selection, local/remote Cessna rendering, animated propeller, boost/loop vapor trails, and local/remote electron Vulcan shots. `avita.test.js` verifies ordinary Vulcan damage and ammunition rules in solo and Rust combat; room, recovery, inventory, and Hedgeguard tests include the worm pilot.
 
+Houston's Starship is covered in the selection preview and arena screenshots, with local turbo exhaust, somersault maneuvering jets, and remote engine effects. Her existing local/remote Vulcan helmet launch, bare head, and helmet restoration checks also run with the spacecraft.
+
 Hedgeguard coverage in `hedgeguard.test.js` exercises both solo and Rust combat: rare spawn timing, 25-second protection, ordinary/Vulcan/cricket/dollar shot immunity, A-bomb damage immunity, stink-bomb dizziness immunity, missile damage, expiration, death/respawn, and immediate pickup feedback with remote replication. The character browser group checks local and remote orbiting shield/cricket/money auras, the countdown, and expiry under all four network profiles.
 
 For CPU/GPU profiling and recorded results, see [Performance measurements](performance.md).

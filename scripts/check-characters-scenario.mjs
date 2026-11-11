@@ -20,6 +20,12 @@ export async function checkCharacters(evaluate,app,room,id,sleep,capture){
     renderer.planePropeller=(...args)=>{const result=propeller(...args);__game.propellerFrames.add(renderer.instances.at(-1).buffer);return result;};
     const worm=renderer.wormPilot.bind(renderer);__game.wormPoses=new Set();
     renderer.wormPilot=(...args)=>{const result=worm(...args);__game.wormPoses.add(renderer.instances.at(-1).buffer);return result;};
+    const engines=renderer.starshipEngines.bind(renderer);__game.starshipJets=[];
+    renderer.starshipEngines=(p,angle,clock,jump,boost)=>{
+      const start=renderer.glow.sprites.length,smoke=renderer.smoke.sprites.length,result=engines(p,angle,clock,jump,boost),points=renderer.glow.sprites;let blue=false;
+      for(let i=start;i<points.length;i+=7)if(points[i+6]>.4&&points[i+6]>points[i+4]*2)blue=true;
+      __game.starshipJets.push({id:p.id,boost,flip:Boolean(jump),blue,vapor:renderer.smoke.sprites.length>smoke});__game.starshipJets=__game.starshipJets.slice(-120);return result;
+    };
     const aura=renderer.hedgeguard.bind(renderer);__game.auraDraws=[];
     renderer.hedgeguard=(mesh,pose,actor,...args)=>{const start=renderer.instances.length,result=aura(mesh,pose,actor,...args);__game.auraDraws.push({id:actor.id,driver:actor.driver,icons:renderer.instances.length-start});__game.auraDraws=__game.auraDraws.slice(-80);return result;};
     const helmet=renderer.houstonHelmet.bind(renderer);__game.helmetTrace=[];
@@ -66,7 +72,7 @@ export async function checkCharacters(evaluate,app,room,id,sleep,capture){
     own.hedgeShield=.05;peer.hedgeShield=.05;room.world.supplies=[];app.broadcast(room);
     const auraExpired=await wait(()=>evaluate("__game.race.hedgeShield===0&&document.querySelector('.hedgeguard-status').classList.contains('hidden')"));
     peer.destroyed=999;app.broadcast(room);
-    let boostHaze=true,flipHaze=true,cricketVulcan=true,remoteCrickets=true,helmetAnimation=true,remoteHelmet=true,helmetRestored=true,dollarVulcan=true,remoteDollars=true,propellerAnimation=true,wormFlex=true,electronVulcan=true,remoteElectrons=true;
+    let boostHaze=true,flipHaze=true,cricketVulcan=true,remoteCrickets=true,helmetAnimation=true,remoteHelmet=true,helmetRestored=true,dollarVulcan=true,remoteDollars=true,propellerAnimation=true,wormFlex=true,electronVulcan=true,remoteElectrons=true,starshipBoost=true,starshipFlip=true,remoteStarship=true;
     if(driver===8){
       wormFlex=await wait(()=>evaluate('__game.wormPoses.size>=3'));
       await evaluate('__game.characterAngle=Math.PI');await capture('avita-pilot-front');
@@ -111,6 +117,11 @@ export async function checkCharacters(evaluate,app,room,id,sleep,capture){
       await wait(()=>evaluate('__game.helmetTrace.some(frame=>frame.height!==null)'));await sleep(250);await capture('houston-remote-helmet');
       remoteHelmet=await wait(flew);
       other.vulcan=0;app.broadcast(room);helmetRestored=await wait(()=>evaluate('__game.helmetTrace.some(frame=>frame.vulcan===0&&frame.worn&&!frame.bare)'));
+      await evaluate('__game.characterAngle=Math.PI/2');await capture('houston-starship-side');await evaluate('__game.characterAngle=0');
+      starshipBoost=await evaluate("__game.network.action('turbo')===true")&&await wait(()=>evaluate(`__game.starshipJets.some(jet=>jet.id===${id}&&jet.boost&&jet.blue&&jet.vapor)`));await capture('houston-starship-boost');
+      starshipFlip=await evaluate("__game.network.action('somersault')===true")&&await wait(()=>evaluate(`__game.starshipJets.some(jet=>jet.id===${id}&&jet.flip&&jet.blue&&jet.vapor)`));await capture('houston-starship-flip');
+      actor.boost=0;actor.somersault=0;other.boost=2.5;app.broadcast(room);
+      remoteStarship=await wait(()=>evaluate(`__game.starshipJets.some(jet=>jet.id===${observer.id}&&jet.boost&&jet.blue&&jet.vapor)`));await capture('houston-remote-starship');
     }
     if(driver===5){
       await evaluate('__game.characterAngle=0');
@@ -134,7 +145,7 @@ export async function checkCharacters(evaluate,app,room,id,sleep,capture){
       await capture('tamar-remote-crickets');
     }
     const pearococo=driver===9?await checkPearococo(evaluate,app,room,id,observer,wait,sleep,capture):{pass:true};
-    characters.push({pearococo,driver,name,selected,previewStopped,rendered:pixels.colors>20&&pixels.glError===0,remote:remote?.driver===driver,paint,pixels,cutenessStat,intelligenceStat,recovery,ammoRecovery,aura,auraModel,auraExpired,boostHaze,flipHaze,cricketVulcan,remoteCrickets,helmetAnimation,remoteHelmet,helmetRestored,dollarVulcan,remoteDollars,propellerAnimation,wormFlex,electronVulcan,remoteElectrons});
+    characters.push({starshipBoost,starshipFlip,remoteStarship,pearococo,driver,name,selected,previewStopped,rendered:pixels.colors>20&&pixels.glError===0,remote:remote?.driver===driver,paint,pixels,cutenessStat,intelligenceStat,recovery,ammoRecovery,aura,auraModel,auraExpired,boostHaze,flipHaze,cricketVulcan,remoteCrickets,helmetAnimation,remoteHelmet,helmetRestored,dollarVulcan,remoteDollars,propellerAnimation,wormFlex,electronVulcan,remoteElectrons});
   }
   await evaluate('__game.characterAngle=0');
   const boostAccepted=await evaluate("__game.network.action('turbo')===true");
@@ -148,5 +159,5 @@ export async function checkCharacters(evaluate,app,room,id,sleep,capture){
   // Restore the simulated observer's actual selection before room teardown.
   // Mid-match roster updates correctly reject the test's temporary character swap.
   Object.assign([room.world,...room.world.bots].find(actor=>actor.id===observer.id),{driver:observer.driver,bomber:observer.role==='bomber'});
-  return {menuPass,preview,characters,boostAccepted,boostVapor,flipAccepted,flipVapor,remoteFlip,voicePass,pass:menuPass&&preview.pass&&characters.every(character=>character.pearococo.pass&&character.selected&&character.previewStopped&&character.rendered&&character.remote&&character.paint&&character.cutenessStat&&character.intelligenceStat&&character.recovery&&character.ammoRecovery&&character.aura&&character.auraModel&&character.auraExpired&&character.boostHaze&&character.flipHaze&&character.cricketVulcan&&character.remoteCrickets&&character.helmetAnimation&&character.remoteHelmet&&character.helmetRestored&&character.dollarVulcan&&character.remoteDollars&&character.propellerAnimation&&character.wormFlex&&character.electronVulcan&&character.remoteElectrons)&&boostAccepted&&boostVapor&&flipAccepted&&flipVapor&&remoteFlip&&voicePass};
+  return {menuPass,preview,characters,boostAccepted,boostVapor,flipAccepted,flipVapor,remoteFlip,voicePass,pass:menuPass&&preview.pass&&characters.every(character=>character.starshipBoost&&character.starshipFlip&&character.remoteStarship&&character.pearococo.pass&&character.selected&&character.previewStopped&&character.rendered&&character.remote&&character.paint&&character.cutenessStat&&character.intelligenceStat&&character.recovery&&character.ammoRecovery&&character.aura&&character.auraModel&&character.auraExpired&&character.boostHaze&&character.flipHaze&&character.cricketVulcan&&character.remoteCrickets&&character.helmetAnimation&&character.remoteHelmet&&character.helmetRestored&&character.dollarVulcan&&character.remoteDollars&&character.propellerAnimation&&character.wormFlex&&character.electronVulcan&&character.remoteElectrons)&&boostAccepted&&boostVapor&&flipAccepted&&flipVapor&&remoteFlip&&voicePass};
 }
