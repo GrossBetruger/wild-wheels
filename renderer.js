@@ -5,7 +5,7 @@ import { kartNameplates } from './nameplates.js';
 import { bomberCamera } from './mobile.js';
 import {drawNewDriver,drawRoadster,drawRoadsterJets,drawCricketHaze,drawCricketProjectile,drawHoustonHelmet,drawDollarBundle,drawCessna,drawCessnaPropeller,drawCessnaBoost,drawElectron,drawPilotWorm} from './characters.js';
 import {previewPose} from './preview-pose.js';
-import {drawRococoChariot,drawPearococo,drawPeacockTail,drawRoyalWing,drawBalletPump,drawFairyStar,drawFairyBoost} from './pearococo.js';
+import {drawRococoChariot,drawPearococo,drawPeacockFeather,drawRoyalWing,drawBalletPump,drawFairyStar,drawFairyBoost} from './pearococo.js';
 const rgb=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255);
 const sub=(a,b)=>a.map((v,i)=>v-b[i]);
 const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
@@ -38,12 +38,13 @@ export class Renderer {
   constructor(canvas){
     this.canvas=canvas;const gl=this.gl=canvas.getContext('webgl',{antialias:true,alpha:false});if(!gl)throw new Error('This game requires WebGL. Enable hardware acceleration in your browser.');
     this.models=new Map();this.instances=[];this.quality='auto';this.resolution=1.25;this.fps=0;this.fpsStart=0;this.frameCount=0;this.slowWindows=0;this.fastWindows=0;
+    this.tailFolds=new Map();
     const debug=gl.getExtension('WEBGL_debug_renderer_info');this.gpuName=debug?gl.getParameter(debug.UNMASKED_RENDERER_WEBGL):'WebGL';this.softwareGPU=/swiftshader|llvmpipe|software/i.test(this.gpuName);if(this.softwareGPU)this.resolution=.75;
     this.program=gl.createProgram();
     gl.attachShader(this.program,shader(gl,gl.VERTEX_SHADER,`
       attribute vec3 position;attribute vec3 normal;attribute vec3 color;
       uniform mat4 matrix;uniform vec3 eye;uniform vec3 origin;
-      uniform vec2 rotation;uniform vec2 pitch;uniform vec2 plumage;
+      uniform vec2 rotation;uniform vec2 pitch;uniform vec4 plumage;
       uniform float emission;uniform float fogScale;
       varying vec3 shade;varying float distanceToEye;
       vec3 tilt(vec3 v){return vec3(v.x,v.y*pitch.x-v.z*pitch.y,v.y*pitch.y+v.z*pitch.x);}
@@ -59,6 +60,16 @@ export class Renderer {
           vec3 dy=vec3(.16*(slope*sin(wave*.7)+reach*cos(wave*.7)*.7*.45),1.+.14*(slope*cos(wave)-reach*sin(wave)*.45),.55*(slope*sin(wave)+reach*cos(wave)*.45));
           vec3 dz=vec3(0.,0.,1.);
           localNormal=cross(dy,dz)*normal.x+cross(dz,dx)*normal.y+cross(dx,dy)*normal.z;
+          // Each complete feather pivots inward without shrinking its blade or eyes.
+          float fold=plumage.z,turn=plumage.w*fold*.86,c=cos(turn),s=sin(turn);
+          vec3 root=vec3(0.,1.75,-1.05),offset=local-root;
+          offset.xy=vec2(offset.x*c-offset.y*s,offset.x*s+offset.y*c);
+          localNormal.xy=vec2(localNormal.x*c-localNormal.y*s,localNormal.x*s+localNormal.y*c);
+          offset.z-=abs(plumage.w)*fold*.12;
+          c=cos(-fold*.95);s=sin(-fold*.95);
+          offset.yz=vec2(offset.y*c-offset.z*s,offset.y*s+offset.z*c);
+          localNormal.yz=vec2(localNormal.y*c-localNormal.z*s,localNormal.y*s+localNormal.z*c);
+          local=root+offset;
         }
         vec3 a=tilt(local-vec3(0.,2.,0.))+vec3(0.,2.,0.),b=tilt(localNormal);
         vec3 p=vec3(a.x*rotation.x+a.z*rotation.y,a.y,-a.x*rotation.y+a.z*rotation.x)+origin;
@@ -85,7 +96,7 @@ export class Renderer {
     this.originUniform=gl.getUniformLocation(this.program,'origin');this.rotationUniform=gl.getUniformLocation(this.program,'rotation');gl.uniform3f(this.originUniform,0,0,0);gl.uniform2f(this.rotationUniform,1,0);
     this.pitchUniform=gl.getUniformLocation(this.program,'pitch');gl.uniform2f(this.pitchUniform,1,0);
     this.fogScale=gl.getUniformLocation(this.program,'fogScale');
-    this.plumageUniform=gl.getUniformLocation(this.program,'plumage');gl.uniform2f(this.plumageUniform,0,0);
+    this.plumageUniform=gl.getUniformLocation(this.program,'plumage');gl.uniform4f(this.plumageUniform,0,0,0,0);
     this.particleProgram=gl.createProgram();
     gl.attachShader(this.particleProgram,shader(gl,gl.VERTEX_SHADER,`attribute vec3 position;attribute float size;attribute vec3 color;uniform mat4 matrix;uniform float height;varying vec3 tint;void main(){gl_Position=matrix*vec4(position,1.);gl_PointSize=clamp(size*height/max(.1,gl_Position.w),1.,180.);tint=color;}`));
     gl.attachShader(this.particleProgram,shader(gl,gl.FRAGMENT_SHADER,`precision mediump float;varying vec3 tint;uniform float smoke;void main(){vec2 p=gl_PointCoord*2.-1.;float r=length(p);float glow=exp(-r*r*3.5)*(1.-smoothstep(.65,1.,r));gl_FragColor=smoke>.5?vec4(tint,glow*.5):vec4(tint*glow,1.);}`));
@@ -207,12 +218,20 @@ export class Renderer {
     this.model(`kart:9:${color}`,p.x,height,p.z,angle,mesh=>{mesh.at(0,.13,0);drawRococoChariot(mesh,color);},pitch);
     const facing=angle+(gesture?.yaw??0),lean=pitch+(gesture?.lean??0);
     this.model('pearococo:queen',p.x,height,p.z,facing,drawPearococo,lean);
-    this.royalTail(p,height,facing,lean,clock);
+    const fold=gesture?.tailFold??this.boostTailFold(p.id??color,boost,clock);
+    this.royalTail(p,height,facing,lean,clock,fold);
     this.royalWave(p,height,facing,lean,clock,celebrate>0||(gesture?.right??0)>0);
     if(boost||jump)this.afterburner(p,angle,clock,jump,9);
   }
-  royalTail(p,height,angle,pitch,clock){
-    this.model('pearococo:tail',p.x,height,p.z,angle,drawPeacockTail,pitch,clock);
+  boostTailFold(id,boost,clock){
+    let state=this.tailFolds.get(id);
+    if(!state||clock<state.time||clock-state.time>1){state={amount:boost?1:0,time:clock};this.tailFolds.set(id,state);}
+    const dt=clock-state.time;state.time=clock;
+    state.amount=boost?Math.min(1,state.amount+dt/.35):Math.max(0,state.amount-dt/.55);
+    return state.amount*state.amount*(3-2*state.amount);
+  }
+  royalTail(p,height,angle,pitch,clock,fold=0){
+    for(let i=0;i<11;i++)this.model(`pearococo:feather:${i}`,p.x,height,p.z,angle,mesh=>drawPeacockFeather(mesh,i),pitch,{clock,fold,angle:(i-5)*.23});
   }
   royalWave(p,height,angle,pitch,clock,waving){
     const phase=waving?Math.floor(clock*6)%8:-1;
@@ -375,7 +394,7 @@ export class Renderer {
   }
   drawBattle(r,time){
     const helmetScene=`${r.arena}:${r.soundEpoch}:${r.id}`;
-    if(this.helmetScene!==helmetScene||time<(this.helmetTime??0)){this.helmetScene=helmetScene;this.helmetFlights=new Map();}this.helmetTime=time;
+    if(this.helmetScene!==helmetScene||time<(this.helmetTime??0)){this.helmetScene=helmetScene;this.helmetFlights=new Map();this.tailFolds.clear();}this.helmetTime=time;
     if(this.track!==`arena-${r.arena}`)this.arenaScenery(r.arena);
     const gl=this.gl,canvas=this.canvas,width=Math.round(canvas.clientWidth*this.pixelRatio()),height=Math.round(canvas.clientHeight*this.pixelRatio());if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;}gl.viewport(0,0,width,height);
     const sky=rgb(arenas[r.arena].sky);gl.clearColor(...sky,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(this.program);
@@ -399,7 +418,7 @@ export class Renderer {
     }
     for(const actor of [r,...r.bots]){
       if(actor.bomber||actor.inactive||actor.afk)continue;
-      const pose=combatPose(actor);if(actor.destroyed){m.at(pose.x,.1,pose.z);m.disc(0,0,0,2,3,'#343344');continue;}
+      const pose={...combatPose(actor),id:actor.id};if(actor.destroyed){m.at(pose.x,.1,pose.z);m.disc(0,0,0,2,3,'#343344');continue;}
       if(overview){m.at(pose.x,.08,pose.z);m.disc(0,0,0,3.6,3.6,actor.color??drivers[actor.driver].color);}
       const jump=somersaultPose(actor);
       this.kart(m,pose,actor.color??drivers[actor.driver].color,actor.driver,0,0,actor.boost>0,time,actor.celebrate,jump,actor.driver!==7||actor.vulcan<=0);
@@ -479,8 +498,8 @@ export class Renderer {
   }
   flush(m,view,height){
     const gl=this.gl;
-    for(const instance of this.instances){gl.uniform3f(this.originUniform,instance.x,instance.y,instance.z);gl.uniform2f(this.rotationUniform,Math.cos(instance.angle),Math.sin(instance.angle));gl.uniform2f(this.pitchUniform,Math.cos(instance.pitch),Math.sin(instance.pitch));gl.uniform2f(this.plumageUniform,instance.plumage===null?0:1,instance.plumage??0);this.drawBuffer(instance.buffer,instance.count);}
-    gl.uniform3f(this.originUniform,0,0,0);gl.uniform2f(this.rotationUniform,1,0);gl.uniform2f(this.pitchUniform,1,0);gl.uniform2f(this.plumageUniform,0,0);
+    for(const instance of this.instances){gl.uniform3f(this.originUniform,instance.x,instance.y,instance.z);gl.uniform2f(this.rotationUniform,Math.cos(instance.angle),Math.sin(instance.angle));gl.uniform2f(this.pitchUniform,Math.cos(instance.pitch),Math.sin(instance.pitch));gl.uniform4f(this.plumageUniform,instance.plumage===null?0:1,instance.plumage?.clock??0,instance.plumage?.fold??0,instance.plumage?.angle??0);this.drawBuffer(instance.buffer,instance.count);}
+    gl.uniform3f(this.originUniform,0,0,0);gl.uniform2f(this.rotationUniform,1,0);gl.uniform2f(this.pitchUniform,1,0);gl.uniform4f(this.plumageUniform,0,0,0,0);
     gl.bindBuffer(gl.ARRAY_BUFFER,this.dynamicBuffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(m.data),gl.DYNAMIC_DRAW);this.drawBuffer(this.dynamicBuffer,m.data.length/9);
     gl.enable(gl.BLEND);gl.depthMask(false);
     if(this.smoke.sprites.length){gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);this.drawParticles(this.smoke.sprites,view,height,true);}

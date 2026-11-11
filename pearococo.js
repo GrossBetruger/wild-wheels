@@ -30,25 +30,23 @@ export function drawRococoChariot(m,color){
   m.ball(0,1.42,2.52,.19,.2,.1,'#c773b7',8,5);
 }
 
-export function drawPeacockTail(m){
+export function drawPeacockFeather(m,i){
   // A real peacock fan: tapered feather blades, gold shafts and jeweled eyes.
-  for(let i=0;i<11;i++){
-    const a=(i-5)*.23,dx=Math.sin(a),dy=Math.cos(a),length=3.8+(i%2)*.15;
-    const point=(t,w,z)=>[dx*t+dy*w,1.75+dy*t-dx*w,z];
-    // Subdivisions let the GPU bend the blade, shaft and eyes together.
-    for(let j=0;j<12;j++){
-      const t=j/12,u=(j+1)/12,w=Math.sin(t*Math.PI)*.43,v=Math.sin(u*Math.PI)*.43;
-      const a=point(t*length,-w,-1.05-t*.4),b=point(u*length,-v,-1.05-u*.4),c=point(u*length,v,-1.05-u*.4),d=point(t*length,w,-1.05-t*.4);
-      m.quad(a,b,c,d,i%2?'#74bfae':'#60a5b5');m.quad(d,c,b,a,i%2?'#74bfae':'#60a5b5');
-    }
-    for(let j=1;j<=9;j++){const p=point(j*length/10,0,-1.34);m.ball(...p,.035,.08,.035,gold,5,3);}
-    const [x,y]=point(length*.82,0,0);
-    for(const side of [-1,1]){
-      m.ball(x,y,-1.45+side*.1,.28,.4,.08,gold,9,5);
-      m.ball(x,y,-1.45+side*.17,.2,.28,.04,teal,8,5);
-      m.ball(x,y,-1.45+side*.2,.105,.16,.025,'#d176ae',7,4);
-      pearl(m,x-.04,y+.08,-1.45+side*.23);
-    }
+  const a=(i-5)*.23,dx=Math.sin(a),dy=Math.cos(a),length=3.8+(i%2)*.15;
+  const point=(t,w,z)=>[dx*t+dy*w,1.75+dy*t-dx*w,z];
+  // Subdivisions let the GPU bend the blade, shaft and eyes together.
+  for(let j=0;j<12;j++){
+    const t=j/12,u=(j+1)/12,w=Math.sin(t*Math.PI)*.43,v=Math.sin(u*Math.PI)*.43;
+    const a=point(t*length,-w,-1.05-t*.4),b=point(u*length,-v,-1.05-u*.4),c=point(u*length,v,-1.05-u*.4),d=point(t*length,w,-1.05-t*.4);
+    m.quad(a,b,c,d,i%2?'#74bfae':'#60a5b5');m.quad(d,c,b,a,i%2?'#74bfae':'#60a5b5');
+  }
+  for(let j=1;j<=9;j++){const p=point(j*length/10,0,-1.34);m.ball(...p,.035,.08,.035,gold,5,3);}
+  const [x,y]=point(length*.82,0,0);
+  for(const side of [-1,1]){
+    m.ball(x,y,-1.45+side*.1,.28,.4,.08,gold,9,5);
+    m.ball(x,y,-1.45+side*.17,.2,.28,.04,teal,8,5);
+    m.ball(x,y,-1.45+side*.2,.105,.16,.025,'#d176ae',7,4);
+    pearl(m,x-.04,y+.08,-1.45+side*.23);
   }
 }
 
