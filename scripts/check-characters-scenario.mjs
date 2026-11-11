@@ -15,6 +15,8 @@ export async function checkCharacters(evaluate,app,room,id,sleep,capture){
     renderer.electron=(...args)=>{__game.electronDraws++;return electron(...args);};
     const propeller=renderer.planePropeller.bind(renderer);__game.propellerFrames=new Set();
     renderer.planePropeller=(...args)=>{const result=propeller(...args);__game.propellerFrames.add(renderer.instances.at(-1).buffer);return result;};
+    const worm=renderer.wormPilot.bind(renderer);__game.wormPoses=new Set();
+    renderer.wormPilot=(...args)=>{const result=worm(...args);__game.wormPoses.add(renderer.instances.at(-1).buffer);return result;};
     const aura=renderer.hedgeguard.bind(renderer);__game.auraDraws=[];
     renderer.hedgeguard=(mesh,pose,actor,...args)=>{const start=renderer.instances.length,result=aura(mesh,pose,actor,...args);__game.auraDraws.push({id:actor.id,driver:actor.driver,icons:renderer.instances.length-start});__game.auraDraws=__game.auraDraws.slice(-80);return result;};
     const helmet=renderer.houstonHelmet.bind(renderer);__game.helmetTrace=[];
@@ -60,8 +62,11 @@ export async function checkCharacters(evaluate,app,room,id,sleep,capture){
     own.hedgeShield=.05;peer.hedgeShield=.05;room.world.supplies=[];app.broadcast(room);
     const auraExpired=await wait(()=>evaluate("__game.race.hedgeShield===0&&document.querySelector('.hedgeguard-status').classList.contains('hidden')"));
     peer.destroyed=999;app.broadcast(room);
-    let boostHaze=true,flipHaze=true,cricketVulcan=true,remoteCrickets=true,helmetAnimation=true,remoteHelmet=true,helmetRestored=true,dollarVulcan=true,remoteDollars=true,propellerAnimation=true,electronVulcan=true,remoteElectrons=true;
+    let boostHaze=true,flipHaze=true,cricketVulcan=true,remoteCrickets=true,helmetAnimation=true,remoteHelmet=true,helmetRestored=true,dollarVulcan=true,remoteDollars=true,propellerAnimation=true,wormFlex=true,electronVulcan=true,remoteElectrons=true;
     if(driver===8){
+      wormFlex=await wait(()=>evaluate('__game.wormPoses.size>=3'));
+      await evaluate('__game.characterAngle=Math.PI');await capture('avita-pilot-front');
+      await evaluate('__game.characterAngle=Math.PI/2');await capture('avita-pilot-side');
       await evaluate('__game.characterAngle=0');
       propellerAnimation=await wait(()=>evaluate('__game.propellerFrames.size>=3'));await capture('avita-cessna');
       const vapor=()=>evaluate("(()=>{const points=__game.renderer.smoke.sprites;for(let i=0;i<points.length;i+=7)if(points[i+4]>.8&&points[i+5]>.8&&points[i+6]>.8)return true;return false;})()");
@@ -124,7 +129,7 @@ export async function checkCharacters(evaluate,app,room,id,sleep,capture){
       remoteCrickets=await wait(()=>evaluate(`__game.cricketDraws>0&&__game.race.projectiles.some(shot=>shot.owner===${observer.id}&&shot.vulcan)`));
       await capture('tamar-remote-crickets');
     }
-    characters.push({driver,name,selected,rendered:pixels.colors>20&&pixels.glError===0,remote:remote?.driver===driver,paint,pixels,cutenessStat,intelligenceStat,recovery,ammoRecovery,aura,auraModel,auraExpired,boostHaze,flipHaze,cricketVulcan,remoteCrickets,helmetAnimation,remoteHelmet,helmetRestored,dollarVulcan,remoteDollars,propellerAnimation,electronVulcan,remoteElectrons});
+    characters.push({driver,name,selected,rendered:pixels.colors>20&&pixels.glError===0,remote:remote?.driver===driver,paint,pixels,cutenessStat,intelligenceStat,recovery,ammoRecovery,aura,auraModel,auraExpired,boostHaze,flipHaze,cricketVulcan,remoteCrickets,helmetAnimation,remoteHelmet,helmetRestored,dollarVulcan,remoteDollars,propellerAnimation,wormFlex,electronVulcan,remoteElectrons});
   }
   await evaluate('__game.characterAngle=0');
   const boostAccepted=await evaluate("__game.network.action('turbo')===true");
@@ -138,5 +143,5 @@ export async function checkCharacters(evaluate,app,room,id,sleep,capture){
   // Restore the simulated observer's actual selection before room teardown.
   // Mid-match roster updates correctly reject the test's temporary character swap.
   Object.assign([room.world,...room.world.bots].find(actor=>actor.id===observer.id),{driver:observer.driver,bomber:observer.role==='bomber'});
-  return {menuPass,characters,boostAccepted,boostVapor,flipAccepted,flipVapor,remoteFlip,voicePass,pass:menuPass&&characters.every(character=>character.selected&&character.rendered&&character.remote&&character.paint&&character.cutenessStat&&character.intelligenceStat&&character.recovery&&character.ammoRecovery&&character.aura&&character.auraModel&&character.auraExpired&&character.boostHaze&&character.flipHaze&&character.cricketVulcan&&character.remoteCrickets&&character.helmetAnimation&&character.remoteHelmet&&character.helmetRestored&&character.dollarVulcan&&character.remoteDollars&&character.propellerAnimation&&character.electronVulcan&&character.remoteElectrons)&&boostAccepted&&boostVapor&&flipAccepted&&flipVapor&&remoteFlip&&voicePass};
+  return {menuPass,characters,boostAccepted,boostVapor,flipAccepted,flipVapor,remoteFlip,voicePass,pass:menuPass&&characters.every(character=>character.selected&&character.rendered&&character.remote&&character.paint&&character.cutenessStat&&character.intelligenceStat&&character.recovery&&character.ammoRecovery&&character.aura&&character.auraModel&&character.auraExpired&&character.boostHaze&&character.flipHaze&&character.cricketVulcan&&character.remoteCrickets&&character.helmetAnimation&&character.remoteHelmet&&character.helmetRestored&&character.dollarVulcan&&character.remoteDollars&&character.propellerAnimation&&character.wormFlex&&character.electronVulcan&&character.remoteElectrons)&&boostAccepted&&boostVapor&&flipAccepted&&flipVapor&&remoteFlip&&voicePass};
 }

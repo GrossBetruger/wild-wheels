@@ -24,25 +24,41 @@ export function drawCessna(m,color){
   for(const side of [-1,1])m.ball(side*.52,1.38,2.71,.16,.12,.06,dark,7,4);
 }
 
-export function drawPilotWorm(m,turn,progress){
-  for(let i=0;i<7;i++){
-    const y=1.7+i*.23,sway=Math.sin(i*.6+progress*3)*turn*.17;
-    m.ball(sway,y,-.05+i*.07,.48-i*.012,.23,.43,'#e6a2a2',10,5);
-    m.ball(sway,y-.09,.31+i*.07,.34,.035,.05,'#c77e91',8,3);
+export function drawPilotWorm(m,turn,progress,wiggle=0){
+  // The worm curls out beside the cockpit, then bends back above the wing.
+  const body=[[0,1.75,-.15],[-.35,1.95,-.08],[-.7,2.15,0],[-1.02,2.4,.05],[-1.28,2.65,.1],[-1.43,2.95,.13],[-1.4,3.25,.16],[-1.22,3.53,.18],[-.95,3.72,.2],[-.62,3.8,.23],[-.28,3.84,.26],[.05,3.97,.28],[.23,4.2,.31],[.23,4.45,.33]];
+  for(const [i,[x,y,z]]of body.entries()){
+    const bend=wiggle*.22*i/(body.length-1),radius=.34+i*.004;
+    m.ball(x+bend,y,z,radius,.28,radius,i%2?'#efa5a8':'#e695a0',9,5);
+    m.ball(x+bend,y-.1,z,radius+.012,.035,radius+.012,'#bd6c85',9,3);
+    m.ball(x+bend,y,z+radius*.86,.22,.18,.06,'#ffc7b5',7,4);
   }
-  m.ball(0,3.35,.39,.65,.62,.57,'#f1b8b1',12,7);
-  m.ball(0,3.72,.26,.69,.35,.58,'#80513c',12,6);
+  const x=.15+wiggle*.22,y=4.7;
+  m.ball(x,y,.4,.64,.6,.58,'#f4b3ad',12,7);
+  m.box(x,y-.34,.97,.31,.055,.045,'#a65371');
+  for(const side of [-1,1])m.ball(x+side*.43,y-.18,.88,.15,.09,.045,'#e57e98',7,4);
+  // A leather flying cap with shearling trim, long ear flaps and visible seams.
+  m.ball(x,y+.36,.27,.76,.43,.69,'#a66c35',12,7);
+  m.box(x,y+.75,-.23,.09,.055,1,'#f4deb2');
+  for(let i=0;i<13;i++){
+    const a=i*Math.PI/12;
+    m.ball(x+Math.cos(a)*.69,y+.2,.3+Math.sin(a)*.6,.13,.1,.1,'#f4deb2',7,4);
+  }
+  m.box(x,y+.01,-.37,1.36,.17,.12,'#4a352e');
   for(const side of [-1,1]){
-    m.ball(side*.6,3.38,.31,.15,.29,.23,'#80513c',8,5);
-    m.ball(side*.25,3.49,.87,.25,.21,.1,'#e6d3a5',10,5);
-    m.ball(side*.25,3.49,.95,.18,.15,.045,'#a0d9de',9,5);
-    m.ball(side*.25,3.48,.99,.065,.09,.025,'#263747',6,4);
-    m.ball(side*.2,3.55,1,.045,.035,.02,'#ffffff',5,3);
-    m.ball(side*.44,3.15,.85,.13,.07,.04,'#e78c9c',7,4);
+    m.box(x+side*.68,y-.55,.25,.24,.79,.38,'#a66c35');
+    m.box(x+side*.78,y-.54,.28,.07,.7,.36,'#f4deb2');
+    m.box(x+side*.69,y-.51,.63,.22,.16,.06,'#e8bd63');
+    // Oversized brass-rimmed goggles sit on the face, rather than on the cap.
+    m.ball(x+side*.34,y+.05,.94,.37,.32,.18,'#e8bd63',12,7);
+    m.ball(x+side*.34,y+.05,1.08,.28,.24,.09,'#55b9dd',10,6);
+    m.ball(x+side*.34,y+.04,1.16,.08,.11,.025,'#23475d',7,4);
+    m.ball(x+side*.26,y+.14,1.17,.09,.055,.025,'#ecffff',7,4);
+    m.box(x+side*.65,y-.03,.59,.16,.18,.45,'#4a352e');
   }
-  m.box(0,3.51,.96,.16,.07,.06,'#80513c');
-  m.box(0,3.08,.93,.28,.045,.04,'#9e5969');
-  for(let i=0;i<6;i++)m.ball(-.68-i*.06,2.93-i*.055,-.1-i*.17,.17-i*.015,.08,.14,'#f4d473',7,4);
+  m.box(x,y+.06,1.1,.19,.1,.1,'#e8bd63');
+  m.box(x,y-.48,.8,.62,.1,.12,'#4a352e');
+  for(let i=0;i<7;i++)m.ball(x-.55-i*.09,4.03-i*.09,.05-i*.17,.18-i*.014,.08,.16,'#f4d473',7,4);
 }
 
 export function drawCessnaPropeller(m,phase){
