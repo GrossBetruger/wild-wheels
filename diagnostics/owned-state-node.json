@@ -1,0 +1,212 @@
+{
+  "node": "v22.19.0",
+  "platform": "darwin",
+  "arch": "arm64",
+  "results": [
+    {
+      "scenario": "driving",
+      "seedIndex": 52,
+      "seedBytes": 21463,
+      "jsInitializationMs": 0.1766669999999948,
+      "initializationMs": 1.2367910000000109,
+      "verifiedUpdates": 720,
+      "commandsPerUpdate": 4,
+      "commandBytesIfPacked": 32,
+      "results": [
+        {
+          "name": "javascript-owned",
+          "update": {
+            "samples": 600,
+            "meanMs": 0.002596131666665779,
+            "p95Ms": 0.006875000000007958
+          },
+          "encode": {
+            "samples": 600,
+            "meanMs": 0.02883081666666712,
+            "p95Ms": 0.03695899999999597
+          },
+          "decode": {
+            "samples": 600,
+            "meanMs": 0.025345078333333316,
+            "p95Ms": 0.0327920000000006
+          },
+          "pipeline": {
+            "samples": 600,
+            "meanMs": 0.05677202666666621,
+            "p95Ms": 0.0741249999999809
+          }
+        },
+        {
+          "name": "rust-wasm-owned",
+          "update": {
+            "samples": 600,
+            "meanMs": 0.0031980666666662216,
+            "p95Ms": 0.0036249999999995453
+          },
+          "encode": {
+            "samples": 600,
+            "meanMs": 0.014873056666667423,
+            "p95Ms": 0.017583999999999378
+          },
+          "decode": {
+            "samples": 600,
+            "meanMs": 0.025353941666666532,
+            "p95Ms": 0.032958000000007814
+          },
+          "pipeline": {
+            "samples": 600,
+            "meanMs": 0.04342506500000018,
+            "p95Ms": 0.052874999999971806
+          }
+        }
+      ],
+      "packetSizes": {
+        "javascript-owned": {
+          "bytes": 10300,
+          "compressedBytes": 4030
+        },
+        "rust-wasm-owned": {
+          "bytes": 10300,
+          "compressedBytes": 4052
+        }
+      }
+    },
+    {
+      "scenario": "drifting",
+      "seedIndex": 33,
+      "seedBytes": 87538,
+      "jsInitializationMs": 0.6564580000000433,
+      "initializationMs": 1.213542000000018,
+      "verifiedUpdates": 720,
+      "commandsPerUpdate": 4,
+      "commandBytesIfPacked": 32,
+      "results": [
+        {
+          "name": "javascript-owned",
+          "update": {
+            "samples": 600,
+            "meanMs": 0.002137500000000235,
+            "p95Ms": 0.0027919999999994616
+          },
+          "encode": {
+            "samples": 600,
+            "meanMs": 0.03281853500000144,
+            "p95Ms": 0.041291999999884865
+          },
+          "decode": {
+            "samples": 600,
+            "meanMs": 0.02113062833333269,
+            "p95Ms": 0.02525000000014188
+          },
+          "pipeline": {
+            "samples": 600,
+            "meanMs": 0.05608666333333436,
+            "p95Ms": 0.06837500000006003
+          }
+        },
+        {
+          "name": "rust-wasm-owned",
+          "update": {
+            "samples": 600,
+            "meanMs": 0.001730815000003266,
+            "p95Ms": 0.002292000000124972
+          },
+          "encode": {
+            "samples": 600,
+            "meanMs": 0.012618080000000495,
+            "p95Ms": 0.014625000000023647
+          },
+          "decode": {
+            "samples": 600,
+            "meanMs": 0.021062146666667256,
+            "p95Ms": 0.02529200000003584
+          },
+          "pipeline": {
+            "samples": 600,
+            "meanMs": 0.035411041666671014,
+            "p95Ms": 0.04170899999985522
+          }
+        }
+      ],
+      "packetSizes": {
+        "javascript-owned": {
+          "bytes": 20280,
+          "compressedBytes": 8051
+        },
+        "rust-wasm-owned": {
+          "bytes": 20280,
+          "compressedBytes": 8081
+        }
+      }
+    },
+    {
+      "scenario": "six-player-vulcan",
+      "seedIndex": 41,
+      "seedBytes": 177706,
+      "jsInitializationMs": 1.2540420000000267,
+      "initializationMs": 2.093166999999994,
+      "verifiedUpdates": 720,
+      "commandsPerUpdate": 4,
+      "commandBytesIfPacked": 32,
+      "results": [
+        {
+          "name": "javascript-owned",
+          "update": {
+            "samples": 600,
+            "meanMs": 0.008569373333320982,
+            "p95Ms": 0.009125000000040018
+          },
+          "encode": {
+            "samples": 600,
+            "meanMs": 0.09880082833333556,
+            "p95Ms": 0.11379099999999198
+          },
+          "decode": {
+            "samples": 600,
+            "meanMs": 0.0746536666666725,
+            "p95Ms": 0.086875000000191
+          },
+          "pipeline": {
+            "samples": 600,
+            "meanMs": 0.18202386833332904,
+            "p95Ms": 0.22850000000016735
+          }
+        },
+        {
+          "name": "rust-wasm-owned",
+          "update": {
+            "samples": 600,
+            "meanMs": 0.009831331666663345,
+            "p95Ms": 0.013416999999662949
+          },
+          "encode": {
+            "samples": 600,
+            "meanMs": 0.04453770166666042,
+            "p95Ms": 0.05070900000009715
+          },
+          "decode": {
+            "samples": 600,
+            "meanMs": 0.07550619166667313,
+            "p95Ms": 0.08679200000005949
+          },
+          "pipeline": {
+            "samples": 600,
+            "meanMs": 0.1298752249999969,
+            "p95Ms": 0.14962500000001455
+          }
+        }
+      ],
+      "packetSizes": {
+        "javascript-owned": {
+          "bytes": 48976,
+          "compressedBytes": 17988
+        },
+        "rust-wasm-owned": {
+          "bytes": 48976,
+          "compressedBytes": 18099
+        }
+      }
+    }
+  ],
+  "pass": true
+}
