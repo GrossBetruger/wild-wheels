@@ -1,0 +1,16 @@
+[package]
+name = "wild-wheels-owned-state-lab"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+serde_json = { version = "=1.0.145", features = ["float_roundtrip"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+panic = "abort"

@@ -11,6 +11,7 @@ import { checkControls } from './check-controls-scenario.mjs';
 import { checkMobile } from './check-mobile-scenario.mjs';
 import { profilePerformance } from './profile-performance.mjs';
 import { compareEncodingBrowser } from './encoding-lab/browser.mjs';
+import { compareOwnedStateBrowser } from './owned-state-lab/browser.mjs';
 
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const quantile=(values,p)=>[...values].sort((a,b)=>a-b)[Math.min(values.length-1,Math.floor(values.length*p))]??0;
@@ -32,17 +33,19 @@ const originalControls=app.multiplayer.controls.bind(app.multiplayer);
 app.multiplayer.controls=(member,body)=>{try{return originalControls(member,body);}catch(error){transportErrors.push({error:error.message,accepted:member.acceptedMove,received:body.moves?.map(move=>move.sequence),messageSequence:body.sequence});throw error;}};
 // Test-only access to the actual game objects. Production files remain untouched.
 const gameSource=await readFile(new URL('game.js',source),'utf8');
-const encodingLab=process.argv.includes('--encoding');
+const ownedStateLab=process.argv.includes('--owned-state');
+const encodingLab=process.argv.includes('--encoding')||ownedStateLab;
 const labFiles=new Map();
 if(encodingLab){
   labFiles.set('/encoding-lab/',{type:'text/html',body:'<!doctype html><title>Local encoding benchmark</title>'});
+  if(ownedStateLab)labFiles.set('/owned-state-lab/experiment.mjs',{type:'text/javascript',body:await readFile(new URL('./owned-state-lab/experiment.mjs',import.meta.url))});
   const argument=flag=>{const i=process.argv.indexOf(flag);if(i<0||!process.argv[i+1])throw new Error('Missing '+flag);return process.argv[i+1];};
   labFiles.set('/encoding-lab/codecs.mjs',{type:'text/javascript',body:await readFile(new URL('./encoding-lab/codecs.mjs',import.meta.url))});
   labFiles.set('/encoding-lab/kernel.wasm',{type:'application/wasm',body:await readFile(argument('--wasm'))});
   labFiles.set('/encoding-lab/corpus.json',{type:'application/json',body:await readFile(argument('--corpus'))});
 }
 const server=createServer((req,res)=>{
-  const lab=labFiles.get(req.url);if(lab){res.writeHead(200,{'Content-Type':lab.type,'Cache-Control':'no-store','Content-Security-Policy':"default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'"});res.end(lab.body);return;}
+  const lab=labFiles.get(req.url);if(lab){res.writeHead(200,{'Content-Type':lab.type,'Cache-Control':'no-store','Content-Security-Policy':"default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'",...(ownedStateLab?{'Cross-Origin-Opener-Policy':'same-origin','Cross-Origin-Embedder-Policy':'require-corp'}:{})});res.end(lab.body);return;}
   if(req.url==='/game.js'){res.writeHead(200,{'Content-Type':'text/javascript','Cache-Control':'no-store'});res.end(gameSource+'\nglobalThis.__game={network,renderer,keys,audio,get race(){return race}};');return;}
   app.server.emit('request',req,res);
 });
@@ -104,7 +107,7 @@ try{
     await call('Page.navigate',{url:origin+(encodingLab?'/encoding-lab/':'')},session);
     for(let attempt=0;attempt<100;attempt++){if(await evaluate(encodingLab?"location.pathname==='/encoding-lab/'&&document.readyState==='complete'":'Boolean(globalThis.__game)'))break;await sleep(50);}
     if(encodingLab){
-      const result={run:profile.run,...await compareEncodingBrowser(evaluate)};results.push(result);console.log(JSON.stringify(result));
+      const result={run:profile.run,...await (ownedStateLab?compareOwnedStateBrowser(evaluate):compareEncodingBrowser(evaluate))};results.push(result);console.log(JSON.stringify(result));
       await call('Target.closeTarget',{targetId});continue;
     }
     if(profile.guest){const room={code:'07',arena:0,botCount:0,host:0,members:new Map()};app.multiplayer.makeWorld(room);app.multiplayer.rooms.set('07',room);app.multiplayer.join(room,{name:'Host',driver:1});}
