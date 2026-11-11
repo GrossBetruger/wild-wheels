@@ -1,4 +1,5 @@
 const SLOTS: usize = 128;
+mod arena;
 const FIELDS: usize = 16;
 const CLEAR: u32 = 1;
 const CHARGE: u32 = 2;

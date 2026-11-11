@@ -1,5 +1,11 @@
 # Rust/Wasm core migration
 
+Current status: this branch is the multiplayer Arena Battle migration workspace. Main's thin movement activation was reverted after the JS/Wasm bridge used more CPU than the original function; the measurements are in diagnostics/movement-core-comparison.json. Grand Prix is explicitly out of scope and stays JavaScript.
+
+The new coarse API in arena-core.js owns arena simulation, AI, weapons, bombs, chaff, scoring, entity lifecycles, packet generation, prediction/reconciliation, immediate action/pickup feedback, and render-facing numeric state in Rust. Inputs and packets cross the boundary; actor objects do not. core-view.js exposes read-only views over Wasm memory for the existing browser renderer/UI. Full snapshots are diagnostic only. The focused core suite currently passes; the room-server and browser shell still need wiring and the complete browser/performance checks before production activation.
+
+The sections below describe the earlier thin movement prototype, which remains available on this branch for comparison. Its per-actor bridge is not the target architecture.
+
 The first production Rust slice owns arena kart movement. Server authority, local prediction/replay, solo arena driving, and AI locomotion all call the same checked-in rust-core.wasm module. The module has no external Rust dependencies. Hosts and players do not need Rust installed to run the game.
 
 ## Implemented
