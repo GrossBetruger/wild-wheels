@@ -512,11 +512,12 @@ export class Renderer {
     this.glow.at(effect.wx,.3,effect.wz);
     for(let i=0;i<48;i++){const a=i/48*Math.PI*2,b=(i+1)/48*Math.PI*2;this.glow.quad([Math.sin(a)*radius,0,Math.cos(a)*radius],[Math.sin(b)*radius,0,Math.cos(b)*radius],[Math.sin(b)*(radius+1.2),0,Math.cos(b)*(radius+1.2)],[Math.sin(a)*(radius+1.2),0,Math.cos(a)*(radius+1.2)],[fade,.4*fade,.04*fade]);}
     for(let i=0;i<12;i++){
-      const a=i*2.399,r=5+t*3,y=4+t*9;
+      const a=i*2.399,r=5+t*3,y=6+t*14;
       m.at(effect.wx+Math.sin(a)*r,y+(i%3)*2,effect.wz+Math.cos(a)*r);m.ball(0,0,0,(5+t*2)*fade,(3+t)*fade,(5+t*2)*fade,t<.45?'#fff0a0':t<1.2?'#ff9b48':'#817783',8,5);
     }
-    for(let i=0;i<5;i++){m.at(effect.wx,1+i*(2+t*1.7),effect.wz);m.ball(0,0,0,(3+t)*fade,(3+t)*fade,(3+t)*fade,t<.5?'#ffcd6d':'#9c8990',8,5);}
-    this.glow.at(effect.wx,2,effect.wz);this.glow.particle(0,0,0,Math.max(0,24-t*24),[fade,.55*fade,.12*fade]);
+    // The translucent lower plume leaves the incinerated character visible.
+    for(let i=0;i<5;i++){this.smoke.at(effect.wx,1+i*(2+t*1.7),effect.wz);this.smoke.particle(0,0,0,(4+t*2)*Math.sqrt(fade),t<.5?[.92,.77,.5]:[.61,.57,.56]);}
+    this.glow.at(effect.wx,2,effect.wz);this.glow.particle(0,0,0,Math.max(0,24-t*68),[fade,.55*fade,.12*fade]);
   }
   ashRemains(m,effect){
     const t=effect.age,key=`${effect.wx}:${effect.wz}`,fade=Math.max(0,Math.min(1,(effect.life-t)/.6));
