@@ -1,0 +1,1048 @@
+{
+  "created": "2026-11-11T11:40:12.660Z",
+  "javascriptRevision": "7b8ef3d",
+  "rustRevision": "b7f617bc19094f2b93ca11d18813968a27c6f3ed",
+  "wasmSha256": "a7670cc4e422ec7e34aa009bd59fccf88d24547d37a27bb0bc9bd2cbd8fdb49c",
+  "order": [
+    "/private/tmp/wild-wheels-profile-js-1.json",
+    "/private/tmp/wild-wheels-profile-rust-1.json",
+    "/private/tmp/wild-wheels-profile-rust-2.json",
+    "/private/tmp/wild-wheels-profile-js-2.json"
+  ],
+  "method": "Two samples per scene and pipeline, JS/Rust/Rust/JS order. CPU totals normalize to 60 simulation/render ticks and 30 snapshot/receive updates per second. Browser total includes packet handling outside requestAnimationFrame. GPU uses disjoint timer queries when available. Full-frame CPU includes rendering/UI/audio; this is a local benchmark, not a claim about internet RTT.",
+  "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+  "regressions": {
+    "frameBudgetEnforced": true,
+    "repeat": 1,
+    "results": [
+      {
+        "name": "automated",
+        "status": 0
+      },
+      {
+        "name": "movement",
+        "status": 0
+      },
+      {
+        "name": "actions",
+        "status": 0
+      },
+      {
+        "name": "drift",
+        "status": 0
+      },
+      {
+        "name": "controls",
+        "status": 0
+      },
+      {
+        "name": "mobile",
+        "status": 0
+      }
+    ],
+    "groups": [
+      {
+        "name": "movement",
+        "passed": 4,
+        "total": 4,
+        "errors": [],
+        "transportErrors": []
+      },
+      {
+        "name": "actions",
+        "passed": 4,
+        "total": 4,
+        "errors": [],
+        "transportErrors": []
+      },
+      {
+        "name": "drift",
+        "passed": 4,
+        "total": 4,
+        "errors": [],
+        "transportErrors": []
+      },
+      {
+        "name": "controls",
+        "passed": 4,
+        "total": 4,
+        "errors": [],
+        "transportErrors": []
+      },
+      {
+        "name": "mobile",
+        "passed": 4,
+        "total": 4,
+        "errors": [],
+        "transportErrors": []
+      }
+    ]
+  },
+  "cases": [
+    {
+      "scenario": "driving",
+      "serverCpuMsPerSecond": {
+        "javascript": 2.65703,
+        "rust": 0.80397,
+        "speedup": 3.30488
+      },
+      "clientCoreCpuMsPerSecond": {
+        "javascript": 8.23352,
+        "rust": 8.37363,
+        "speedup": 0.98327
+      },
+      "browserTotalCpuMsPerSecond": {
+        "javascript": 41.88462,
+        "rust": 45.20604,
+        "speedup": 0.92653
+      },
+      "renderCpuMsPerFrame": {
+        "javascript": 0.40824,
+        "rust": 0.4342,
+        "speedup": 0.94021
+      },
+      "frameIntervalP95Ms": {
+        "javascript": 16.75,
+        "rust": 16.8,
+        "speedup": 0.99702
+      },
+      "gpuMsPerFrame": {
+        "javascript": 0.17318,
+        "rust": 0.17572,
+        "speedup": 0.98555
+      }
+    },
+    {
+      "scenario": "drifting",
+      "serverCpuMsPerSecond": {
+        "javascript": 3.71553,
+        "rust": 1.31882,
+        "speedup": 2.81732
+      },
+      "clientCoreCpuMsPerSecond": {
+        "javascript": 11.12779,
+        "rust": 9.76182,
+        "speedup": 1.13993
+      },
+      "browserTotalCpuMsPerSecond": {
+        "javascript": 68.71724,
+        "rust": 84.59744,
+        "speedup": 0.81229
+      },
+      "renderCpuMsPerFrame": {
+        "javascript": 0.77009,
+        "rust": 1.03356,
+        "speedup": 0.74508
+      },
+      "frameIntervalP95Ms": {
+        "javascript": 16.7,
+        "rust": 16.7,
+        "speedup": 1
+      },
+      "gpuMsPerFrame": {
+        "javascript": 0.20456,
+        "rust": 0.19572,
+        "speedup": 1.04517
+      }
+    },
+    {
+      "scenario": "six-player-vulcan",
+      "serverCpuMsPerSecond": {
+        "javascript": 23.91356,
+        "rust": 9.28386,
+        "speedup": 2.57582
+      },
+      "clientCoreCpuMsPerSecond": {
+        "javascript": 17.03346,
+        "rust": 14.64076,
+        "speedup": 1.16343
+      },
+      "browserTotalCpuMsPerSecond": {
+        "javascript": 116.7917,
+        "rust": 150.19279,
+        "speedup": 0.77761
+      },
+      "renderCpuMsPerFrame": {
+        "javascript": 1.38434,
+        "rust": 1.94101,
+        "speedup": 0.71321
+      },
+      "frameIntervalP95Ms": {
+        "javascript": 16.75,
+        "rust": 16.7,
+        "speedup": 1.00299
+      },
+      "gpuMsPerFrame": {
+        "javascript": 0.26576,
+        "rust": 0.27557,
+        "speedup": 0.96439
+      }
+    }
+  ],
+  "samples": [
+    {
+      "path": "/private/tmp/wild-wheels-profile-js-1.json",
+      "frameBudgetEnforced": true,
+      "errors": [],
+      "transportErrors": [],
+      "serverGaps": [
+        {
+          "profile": "1:cpu-profile",
+          "gapMs": 101.43
+        },
+        {
+          "profile": "1:cpu-profile",
+          "gapMs": 130.98
+        },
+        {
+          "profile": "1:cpu-profile",
+          "gapMs": 741.46
+        }
+      ],
+      "results": [
+        {
+          "profile": "cpu-profile",
+          "run": 1,
+          "scenario": "driving",
+          "server": {
+            "pipeline": "javascript",
+            "simulation": {
+              "samples": 1800,
+              "meanMs": 0.011432936111112516,
+              "p95Ms": 0.01995800000008785
+            },
+            "snapshot": {
+              "samples": 900,
+              "meanMs": 0.03456750222222366,
+              "p95Ms": 0.04920799999990777
+            },
+            "encoding": {
+              "samples": 900,
+              "meanMs": 0.03287986000000009,
+              "p95Ms": 0.05066599999997834
+            },
+            "uncompressedMbpsPerRecipient": 0.9338624
+          },
+          "browser": {
+            "render": {
+              "samples": 364,
+              "meanMs": 0.4038461539689656,
+              "p95Ms": 1
+            },
+            "network": {
+              "samples": 364,
+              "meanMs": 0.06675824195474059,
+              "p95Ms": 0.20000000298023224
+            },
+            "receive": {
+              "samples": 182,
+              "meanMs": 0.13846153810947806,
+              "p95Ms": 0.20000000298023224
+            },
+            "frame": {
+              "samples": 364,
+              "meanMs": 0.6112637365093598,
+              "p95Ms": 1.2000000029802322
+            },
+            "intervals": {
+              "samples": 363,
+              "meanMs": 16.66611570247934,
+              "p95Ms": 16.799999999999272
+            },
+            "gpuElapsed": {
+              "samples": 364,
+              "meanMs": 0.1728276785714287,
+              "p95Ms": 0.218791
+            },
+            "gpuTimerSupported": true,
+            "gpuDisjoint": 0,
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+            "softwareGPU": false,
+            "width": 668,
+            "height": 418,
+            "pixelRatio": 1,
+            "projectiles": 0
+          },
+          "pass": true
+        },
+        {
+          "profile": "cpu-profile",
+          "run": 1,
+          "scenario": "drifting",
+          "server": {
+            "pipeline": "javascript",
+            "simulation": {
+              "samples": 1800,
+              "meanMs": 0.013176094444438098,
+              "p95Ms": 0.023416999998516985
+            },
+            "snapshot": {
+              "samples": 900,
+              "meanMs": 0.03368632000001324,
+              "p95Ms": 0.04254199999741104
+            },
+            "encoding": {
+              "samples": 900,
+              "meanMs": 0.06071537444446019,
+              "p95Ms": 0.12683199999992212
+            },
+            "uncompressedMbpsPerRecipient": 3.187410133333333
+          },
+          "browser": {
+            "render": {
+              "samples": 366,
+              "meanMs": 0.7366120218009246,
+              "p95Ms": 1.1999999955296516
+            },
+            "network": {
+              "samples": 366,
+              "meanMs": 0.10519125687131464,
+              "p95Ms": 0.20000000298023224
+            },
+            "receive": {
+              "samples": 183,
+              "meanMs": 0.17704918060472102,
+              "p95Ms": 0.29999999701976776
+            },
+            "frame": {
+              "samples": 366,
+              "meanMs": 1.0336065575521174,
+              "p95Ms": 1.4000000059604645
+            },
+            "intervals": {
+              "samples": 365,
+              "meanMs": 16.666027397260276,
+              "p95Ms": 16.700000000000728
+            },
+            "gpuElapsed": {
+              "samples": 366,
+              "meanMs": 0.21036187431693992,
+              "p95Ms": 0.322749
+            },
+            "gpuTimerSupported": true,
+            "gpuDisjoint": 0,
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+            "softwareGPU": false,
+            "width": 668,
+            "height": 418,
+            "pixelRatio": 1,
+            "projectiles": 2
+          },
+          "pass": true
+        },
+        {
+          "profile": "cpu-profile",
+          "run": 1,
+          "scenario": "six-player-vulcan",
+          "server": {
+            "pipeline": "javascript",
+            "simulation": {
+              "samples": 1800,
+              "meanMs": 0.02749502500003372,
+              "p95Ms": 0.04824999999982538
+            },
+            "snapshot": {
+              "samples": 900,
+              "meanMs": 0.16566241333322168,
+              "p95Ms": 0.20433500000217464
+            },
+            "encoding": {
+              "samples": 900,
+              "meanMs": 0.570614400000199,
+              "p95Ms": 0.8205820000002859
+            },
+            "uncompressedMbpsPerRecipient": 9.28415768888889
+          },
+          "browser": {
+            "render": {
+              "samples": 364,
+              "meanMs": 1.3013736262180648,
+              "p95Ms": 1.5999999940395355
+            },
+            "network": {
+              "samples": 364,
+              "meanMs": 0.16538461539280283,
+              "p95Ms": 0.30000000447034836
+            },
+            "receive": {
+              "samples": 182,
+              "meanMs": 0.22582417558673973,
+              "p95Ms": 0.30000000447034836
+            },
+            "frame": {
+              "samples": 364,
+              "meanMs": 1.7307692307282936,
+              "p95Ms": 2
+            },
+            "intervals": {
+              "samples": 363,
+              "meanMs": 16.665564738292016,
+              "p95Ms": 16.700000000000728
+            },
+            "gpuElapsed": {
+              "samples": 364,
+              "meanMs": 0.26223163186813214,
+              "p95Ms": 0.359916
+            },
+            "gpuTimerSupported": true,
+            "gpuDisjoint": 0,
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+            "softwareGPU": false,
+            "width": 668,
+            "height": 418,
+            "pixelRatio": 1,
+            "projectiles": 42
+          },
+          "pass": true
+        }
+      ]
+    },
+    {
+      "path": "/private/tmp/wild-wheels-profile-rust-1.json",
+      "frameBudgetEnforced": true,
+      "errors": [],
+      "transportErrors": [],
+      "serverGaps": [
+        {
+          "profile": "1:cpu-profile",
+          "gapMs": 116.39
+        },
+        {
+          "profile": "1:cpu-profile",
+          "gapMs": 686.43
+        },
+        {
+          "profile": "1:cpu-profile",
+          "gapMs": 1898.25
+        }
+      ],
+      "results": [
+        {
+          "profile": "cpu-profile",
+          "run": 1,
+          "scenario": "driving",
+          "server": {
+            "pipeline": "rust-owned",
+            "simulation": {
+              "samples": 1800,
+              "meanMs": 0.004102732222223658,
+              "p95Ms": 0.005750000000034561
+            },
+            "snapshot": {
+              "samples": 0,
+              "meanMs": null,
+              "p95Ms": null
+            },
+            "encoding": {
+              "samples": 900,
+              "meanMs": 0.018532721111110328,
+              "p95Ms": 0.02425000000005184
+            },
+            "uncompressedMbpsPerRecipient": 1.0048005333333334
+          },
+          "browser": {
+            "render": {
+              "samples": 364,
+              "meanMs": 0.4398351648187899,
+              "p95Ms": 1
+            },
+            "network": {
+              "samples": 364,
+              "meanMs": 0.03571428583709748,
+              "p95Ms": 0.10000000149011612
+            },
+            "receive": {
+              "samples": 182,
+              "meanMs": 0.20219780177205474,
+              "p95Ms": 0.30000000447034836
+            },
+            "frame": {
+              "samples": 364,
+              "meanMs": 0.6576923078314943,
+              "p95Ms": 1.3999999985098839
+            },
+            "intervals": {
+              "samples": 363,
+              "meanMs": 16.665840220385675,
+              "p95Ms": 16.799999999999727
+            },
+            "gpuElapsed": {
+              "samples": 364,
+              "meanMs": 0.1730240329670329,
+              "p95Ms": 0.209083
+            },
+            "gpuTimerSupported": true,
+            "gpuDisjoint": 0,
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+            "softwareGPU": false,
+            "width": 668,
+            "height": 418,
+            "pixelRatio": 1,
+            "projectiles": 0
+          },
+          "pass": true
+        },
+        {
+          "profile": "cpu-profile",
+          "run": 1,
+          "scenario": "drifting",
+          "server": {
+            "pipeline": "rust-owned",
+            "simulation": {
+              "samples": 1800,
+              "meanMs": 0.00688043388886399,
+              "p95Ms": 0.015666999999666587
+            },
+            "snapshot": {
+              "samples": 0,
+              "meanMs": null,
+              "p95Ms": null
+            },
+            "encoding": {
+              "samples": 900,
+              "meanMs": 0.03127022111111324,
+              "p95Ms": 0.04733300000043528
+            },
+            "uncompressedMbpsPerRecipient": 3.4212352000000004
+          },
+          "browser": {
+            "render": {
+              "samples": 365,
+              "meanMs": 0.9931506847069688,
+              "p95Ms": 1.4000000059604645
+            },
+            "network": {
+              "samples": 365,
+              "meanMs": 0.05041095908374003,
+              "p95Ms": 0.10000000149011612
+            },
+            "receive": {
+              "samples": 183,
+              "meanMs": 0.23497267759562843,
+              "p95Ms": 0.30000000447034836
+            },
+            "frame": {
+              "samples": 365,
+              "meanMs": 1.2594520545985601,
+              "p95Ms": 1.7000000029802322
+            },
+            "intervals": {
+              "samples": 364,
+              "meanMs": 16.66593406593407,
+              "p95Ms": 16.700000000000728
+            },
+            "gpuElapsed": {
+              "samples": 365,
+              "meanMs": 0.19396569041095887,
+              "p95Ms": 0.263249
+            },
+            "gpuTimerSupported": true,
+            "gpuDisjoint": 0,
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+            "softwareGPU": false,
+            "width": 668,
+            "height": 418,
+            "pixelRatio": 1,
+            "projectiles": 1
+          },
+          "pass": true
+        },
+        {
+          "profile": "cpu-profile",
+          "run": 1,
+          "scenario": "six-player-vulcan",
+          "server": {
+            "pipeline": "rust-owned",
+            "simulation": {
+              "samples": 1800,
+              "meanMs": 0.015871526111158246,
+              "p95Ms": 0.03695800000059535
+            },
+            "snapshot": {
+              "samples": 0,
+              "meanMs": null,
+              "p95Ms": null
+            },
+            "encoding": {
+              "samples": 900,
+              "meanMs": 0.278626681111196,
+              "p95Ms": 0.37099899999884656
+            },
+            "uncompressedMbpsPerRecipient": 9.580651911111111
+          },
+          "browser": {
+            "render": {
+              "samples": 367,
+              "meanMs": 1.9313351497338318,
+              "p95Ms": 2.1999999955296516
+            },
+            "network": {
+              "samples": 367,
+              "meanMs": 0.07275204352364553,
+              "p95Ms": 0.19999999552965164
+            },
+            "receive": {
+              "samples": 184,
+              "meanMs": 0.3380434779126359,
+              "p95Ms": 0.4000000059604645
+            },
+            "frame": {
+              "samples": 367,
+              "meanMs": 2.317711171767692,
+              "p95Ms": 2.6999999955296516
+            },
+            "intervals": {
+              "samples": 366,
+              "meanMs": 16.66584699453552,
+              "p95Ms": 16.700000000000728
+            },
+            "gpuElapsed": {
+              "samples": 367,
+              "meanMs": 0.26962134059945514,
+              "p95Ms": 0.378583
+            },
+            "gpuTimerSupported": true,
+            "gpuDisjoint": 0,
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+            "softwareGPU": false,
+            "width": 668,
+            "height": 418,
+            "pixelRatio": 1,
+            "projectiles": 35
+          },
+          "pass": true
+        }
+      ]
+    },
+    {
+      "path": "/private/tmp/wild-wheels-profile-rust-2.json",
+      "frameBudgetEnforced": true,
+      "errors": [],
+      "transportErrors": [],
+      "serverGaps": [
+        {
+          "profile": "1:cpu-profile",
+          "gapMs": 116.78
+        },
+        {
+          "profile": "1:cpu-profile",
+          "gapMs": 680.83
+        },
+        {
+          "profile": "1:cpu-profile",
+          "gapMs": 1908.08
+        }
+      ],
+      "results": [
+        {
+          "profile": "cpu-profile",
+          "run": 1,
+          "scenario": "driving",
+          "server": {
+            "pipeline": "rust-owned",
+            "simulation": {
+              "samples": 1800,
+              "meanMs": 0.004059723888888256,
+              "p95Ms": 0.005667000000016742
+            },
+            "snapshot": {
+              "samples": 0,
+              "meanMs": null,
+              "p95Ms": null
+            },
+            "encoding": {
+              "samples": 900,
+              "meanMs": 0.018740431111112153,
+              "p95Ms": 0.02420900000004167
+            },
+            "uncompressedMbpsPerRecipient": 0.9999802666666667
+          },
+          "browser": {
+            "render": {
+              "samples": 364,
+              "meanMs": 0.4285714285918972,
+              "p95Ms": 1
+            },
+            "network": {
+              "samples": 364,
+              "meanMs": 0.03406593404137171,
+              "p95Ms": 0.10000000149011612
+            },
+            "receive": {
+              "samples": 182,
+              "meanMs": 0.21648351627064275,
+              "p95Ms": 0.30000000447034836
+            },
+            "frame": {
+              "samples": 364,
+              "meanMs": 0.6398351648106024,
+              "p95Ms": 1.2000000029802322
+            },
+            "intervals": {
+              "samples": 363,
+              "meanMs": 16.665840220385675,
+              "p95Ms": 16.799999999999272
+            },
+            "gpuElapsed": {
+              "samples": 364,
+              "meanMs": 0.1784157032967032,
+              "p95Ms": 0.227416
+            },
+            "gpuTimerSupported": true,
+            "gpuDisjoint": 0,
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+            "softwareGPU": false,
+            "width": 668,
+            "height": 418,
+            "pixelRatio": 1,
+            "projectiles": 1
+          },
+          "pass": true
+        },
+        {
+          "profile": "cpu-profile",
+          "run": 1,
+          "scenario": "drifting",
+          "server": {
+            "pipeline": "rust-owned",
+            "simulation": {
+              "samples": 1800,
+              "meanMs": 0.006365430000029543,
+              "p95Ms": 0.013249999999970896
+            },
+            "snapshot": {
+              "samples": 0,
+              "meanMs": null,
+              "p95Ms": null
+            },
+            "encoding": {
+              "samples": 900,
+              "meanMs": 0.03015925111105187,
+              "p95Ms": 0.042290999999750056
+            },
+            "uncompressedMbpsPerRecipient": 3.454985066666667
+          },
+          "browser": {
+            "render": {
+              "samples": 365,
+              "meanMs": 1.0739726028213763,
+              "p95Ms": 1.4000000059604645
+            },
+            "network": {
+              "samples": 365,
+              "meanMs": 0.043835616438356165,
+              "p95Ms": 0.10000000149011612
+            },
+            "receive": {
+              "samples": 183,
+              "meanMs": 0.22732240507185786,
+              "p95Ms": 0.30000000447034836
+            },
+            "frame": {
+              "samples": 365,
+              "meanMs": 1.3293150685421409,
+              "p95Ms": 1.7000000029802322
+            },
+            "intervals": {
+              "samples": 364,
+              "meanMs": 16.666208791208785,
+              "p95Ms": 16.700000000000728
+            },
+            "gpuElapsed": {
+              "samples": 365,
+              "meanMs": 0.19747659178082194,
+              "p95Ms": 0.264708
+            },
+            "gpuTimerSupported": true,
+            "gpuDisjoint": 0,
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+            "softwareGPU": false,
+            "width": 668,
+            "height": 418,
+            "pixelRatio": 1,
+            "projectiles": 0
+          },
+          "pass": true
+        },
+        {
+          "profile": "cpu-profile",
+          "run": 1,
+          "scenario": "six-player-vulcan",
+          "server": {
+            "pipeline": "rust-owned",
+            "simulation": {
+              "samples": 1800,
+              "meanMs": 0.015038418888901409,
+              "p95Ms": 0.03525000000081491
+            },
+            "snapshot": {
+              "samples": 0,
+              "meanMs": null,
+              "p95Ms": null
+            },
+            "encoding": {
+              "samples": 900,
+              "meanMs": 0.27847751111109875,
+              "p95Ms": 0.36899999999877764
+            },
+            "uncompressedMbpsPerRecipient": 9.580422933333333
+          },
+          "browser": {
+            "render": {
+              "samples": 369,
+              "meanMs": 1.9506775068073738,
+              "p95Ms": 2.1999999955296516
+            },
+            "network": {
+              "samples": 369,
+              "meanMs": 0.07940379423177663,
+              "p95Ms": 0.20000000298023224
+            },
+            "receive": {
+              "samples": 184,
+              "meanMs": 0.3336956524492606,
+              "p95Ms": 0.4000000059604645
+            },
+            "frame": {
+              "samples": 369,
+              "meanMs": 2.3528455283825958,
+              "p95Ms": 2.6999999955296516
+            },
+            "intervals": {
+              "samples": 368,
+              "meanMs": 16.666032608695648,
+              "p95Ms": 16.700000000000728
+            },
+            "gpuElapsed": {
+              "samples": 369,
+              "meanMs": 0.2815161165311656,
+              "p95Ms": 0.441166
+            },
+            "gpuTimerSupported": true,
+            "gpuDisjoint": 0,
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+            "softwareGPU": false,
+            "width": 668,
+            "height": 418,
+            "pixelRatio": 1,
+            "projectiles": 34
+          },
+          "pass": true
+        }
+      ]
+    },
+    {
+      "path": "/private/tmp/wild-wheels-profile-js-2.json",
+      "frameBudgetEnforced": true,
+      "errors": [],
+      "transportErrors": [],
+      "serverGaps": [
+        {
+          "profile": "1:cpu-profile",
+          "gapMs": 135.7
+        },
+        {
+          "profile": "1:cpu-profile",
+          "gapMs": 744.66
+        }
+      ],
+      "results": [
+        {
+          "profile": "cpu-profile",
+          "run": 1,
+          "scenario": "driving",
+          "server": {
+            "pipeline": "javascript",
+            "simulation": {
+              "samples": 1800,
+              "meanMs": 0.010119988333334315,
+              "p95Ms": 0.018708000000060565
+            },
+            "snapshot": {
+              "samples": 900,
+              "meanMs": 0.03519028333333305,
+              "p95Ms": 0.05016599999999016
+            },
+            "encoding": {
+              "samples": 900,
+              "meanMs": 0.03139187888888892,
+              "p95Ms": 0.04349999999999454
+            },
+            "uncompressedMbpsPerRecipient": 0.9143034666666666
+          },
+          "browser": {
+            "render": {
+              "samples": 364,
+              "meanMs": 0.4126373625841442,
+              "p95Ms": 1.1000000014901161
+            },
+            "network": {
+              "samples": 364,
+              "meanMs": 0.06840659358671733,
+              "p95Ms": 0.20000000298023224
+            },
+            "receive": {
+              "samples": 182,
+              "meanMs": 0.14010989015082737,
+              "p95Ms": 0.20000000298023224
+            },
+            "frame": {
+              "samples": 364,
+              "meanMs": 0.645604395747676,
+              "p95Ms": 1.3000000044703484
+            },
+            "intervals": {
+              "samples": 363,
+              "meanMs": 16.66611570247934,
+              "p95Ms": 16.700000000000728
+            },
+            "gpuElapsed": {
+              "samples": 364,
+              "meanMs": 0.17353281318681338,
+              "p95Ms": 0.218125
+            },
+            "gpuTimerSupported": true,
+            "gpuDisjoint": 0,
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+            "softwareGPU": false,
+            "width": 668,
+            "height": 418,
+            "pixelRatio": 1,
+            "projectiles": 0
+          },
+          "pass": true
+        },
+        {
+          "profile": "cpu-profile",
+          "run": 1,
+          "scenario": "drifting",
+          "server": {
+            "pipeline": "javascript",
+            "simulation": {
+              "samples": 1800,
+              "meanMs": 0.013118580555576248,
+              "p95Ms": 0.022041000000172062
+            },
+            "snapshot": {
+              "samples": 900,
+              "meanMs": 0.03800484333329223,
+              "p95Ms": 0.05216699999800767
+            },
+            "encoding": {
+              "samples": 900,
+              "meanMs": 0.06270601777773563,
+              "p95Ms": 0.12979100000120525
+            },
+            "uncompressedMbpsPerRecipient": 3.3075487999999997
+          },
+          "browser": {
+            "render": {
+              "samples": 365,
+              "meanMs": 0.8035616437662138,
+              "p95Ms": 1.2000000029802322
+            },
+            "network": {
+              "samples": 365,
+              "meanMs": 0.09534246617392318,
+              "p95Ms": 0.20000000298023224
+            },
+            "receive": {
+              "samples": 182,
+              "meanMs": 0.16373626339239078,
+              "p95Ms": 0.29999999701976776
+            },
+            "frame": {
+              "samples": 365,
+              "meanMs": 1.0865753428372618,
+              "p95Ms": 1.4000000059604645
+            },
+            "intervals": {
+              "samples": 364,
+              "meanMs": 16.665934065934064,
+              "p95Ms": 16.700000000000728
+            },
+            "gpuElapsed": {
+              "samples": 365,
+              "meanMs": 0.19876282739726034,
+              "p95Ms": 0.284791
+            },
+            "gpuTimerSupported": true,
+            "gpuDisjoint": 0,
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+            "softwareGPU": false,
+            "width": 668,
+            "height": 418,
+            "pixelRatio": 1,
+            "projectiles": 0
+          },
+          "pass": true
+        },
+        {
+          "profile": "cpu-profile",
+          "run": 1,
+          "scenario": "six-player-vulcan",
+          "server": {
+            "pipeline": "javascript",
+            "simulation": {
+              "samples": 1800,
+              "meanMs": 0.027334235555533975,
+              "p95Ms": 0.04766699999890989
+            },
+            "snapshot": {
+              "samples": 900,
+              "meanMs": 0.17207183222204347,
+              "p95Ms": 0.2131660000050033
+            },
+            "encoding": {
+              "samples": 900,
+              "meanMs": 0.5762299766664001,
+              "p95Ms": 0.8304169999973965
+            },
+            "uncompressedMbpsPerRecipient": 9.28415768888889
+          },
+          "browser": {
+            "render": {
+              "samples": 364,
+              "meanMs": 1.467307692148037,
+              "p95Ms": 2
+            },
+            "network": {
+              "samples": 364,
+              "meanMs": 0.17582417561948954,
+              "p95Ms": 0.3999999985098839
+            },
+            "receive": {
+              "samples": 183,
+              "meanMs": 0.22732240437972742,
+              "p95Ms": 0.30000000447034836
+            },
+            "frame": {
+              "samples": 364,
+              "meanMs": 1.9357142856979108,
+              "p95Ms": 2.8000000044703484
+            },
+            "intervals": {
+              "samples": 363,
+              "meanMs": 16.665840220385668,
+              "p95Ms": 16.799999999999272
+            },
+            "gpuElapsed": {
+              "samples": 364,
+              "meanMs": 0.26927878571428565,
+              "p95Ms": 0.375833
+            },
+            "gpuTimerSupported": true,
+            "gpuDisjoint": 0,
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+            "softwareGPU": false,
+            "width": 668,
+            "height": 418,
+            "pixelRatio": 1,
+            "projectiles": 40
+          },
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

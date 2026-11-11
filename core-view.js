@@ -60,7 +60,10 @@ export class CoreView{
     this.groups=groups;
     for(const[name,count,stride,Type]of groups)this.pools[name]=indexed(new Pool(()=>this.n(count),i=>new Type(this,()=>this.bases[name]+i*stride)));
   }
-  n(index){if(this.data.buffer!==this.core.memory.buffer)this.data=new Float64Array(this.core.memory.buffer,this.pointer,this.length);return this.data[index];}
+  rebind(){if(this.data&&this.data.buffer!==this.core.memory.buffer)this.data=new Float64Array(this.core.memory.buffer,this.pointer,this.length);}
+  // SDK commands rebind once after Wasm calls; rendering runs synchronously and
+  // cannot grow the heap between these reads. Avoid a Wasm getter per property.
+  n(index){return this.data[index];}
   refresh(length){
     if(length<32)throw new Error('Rust presentation unavailable');this.pointer=this.core.presentation_ptr();this.length=length;this.data=new Float64Array(this.core.memory.buffer,this.pointer,length);
     if(this.n(0)!==1)throw new Error('Rust presentation version mismatch');

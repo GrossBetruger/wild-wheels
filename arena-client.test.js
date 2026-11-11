@@ -91,3 +91,12 @@ test('fresh drift sparks stay attached to the rendered wheels when network UI up
   }
   assert.ok(fresh>0);
 });
+
+test('growing the Wasm heap between frames preserves the visible kart and immediate firing feedback',()=>{
+  const seed=createBattle();Object.assign(seed,{phase:'racing',multiplayer:true,human:true,wx:-65,wz:0,heading:0,motionHeading:0,cameraHeading:0,fireCooldown:0,supplies:[]});
+  for(const bot of seed.bots)Object.assign(bot,{inactive:true,destroyed:1e9});
+  const server=new ArenaCore(seed),client=new ArenaClient();client.accept(server.packet(),0);client.frame(1/60,[],1/60);const view=client.present();
+  client.core.memory.grow(1);client.outbound([]);assert.equal(view.wx,-65);assert.equal(view.health,3);
+  client.core.memory.grow(1);assert.equal(client.action('fire',undefined,1/60),true);assert.equal(view.wx,-65);
+  client.present();assert.equal(view.ammo,4);assert.equal(view.projectiles.length,1);assert.deepEqual(view.events,['fire']);
+});
