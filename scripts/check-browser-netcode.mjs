@@ -10,6 +10,7 @@ import { checkDrift } from './check-drift-scenario.mjs';
 import { checkControls } from './check-controls-scenario.mjs';
 import { checkMobile } from './check-mobile-scenario.mjs';
 import { profilePerformance } from './profile-performance.mjs';
+import { compareEncodingBrowser } from './encoding-lab/browser.mjs';
 
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const quantile=(values,p)=>[...values].sort((a,b)=>a-b)[Math.min(values.length-1,Math.floor(values.length*p))]??0;
@@ -31,7 +32,16 @@ const originalControls=app.multiplayer.controls.bind(app.multiplayer);
 app.multiplayer.controls=(member,body)=>{try{return originalControls(member,body);}catch(error){transportErrors.push({error:error.message,accepted:member.acceptedMove,received:body.moves?.map(move=>move.sequence),messageSequence:body.sequence});throw error;}};
 // Test-only access to the actual game objects. Production files remain untouched.
 const gameSource=await readFile(new URL('game.js',source),'utf8');
+const encodingLab=process.argv.includes('--encoding');
+const labFiles=new Map();
+if(encodingLab){
+  const argument=flag=>{const i=process.argv.indexOf(flag);if(i<0||!process.argv[i+1])throw new Error('Missing '+flag);return process.argv[i+1];};
+  labFiles.set('/encoding-lab/codecs.mjs',{type:'text/javascript',body:await readFile(new URL('./encoding-lab/codecs.mjs',import.meta.url))});
+  labFiles.set('/encoding-lab/kernel.wasm',{type:'application/wasm',body:await readFile(argument('--wasm'))});
+  labFiles.set('/encoding-lab/corpus.json',{type:'application/json',body:await readFile(argument('--corpus'))});
+}
 const server=createServer((req,res)=>{
+  const lab=labFiles.get(req.url);if(lab){res.writeHead(200,{'Content-Type':lab.type,'Cache-Control':'no-store'});res.end(lab.body);return;}
   if(req.url==='/game.js'){res.writeHead(200,{'Content-Type':'text/javascript','Cache-Control':'no-store'});res.end(gameSource+'\nglobalThis.__game={network,renderer,keys,audio,get race(){return race}};');return;}
   app.server.emit('request',req,res);
 });
@@ -54,7 +64,7 @@ let session;
 async function evaluate(expression){const result=await call('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true},session);if(result.exceptionDetails)throw new Error(result.exceptionDetails.exception?.description??result.exceptionDetails.text);return result.result.value;}
 const results=[];
 try{
-  const profiles=process.argv.includes('--profile')?[{name:'cpu-profile',delay:0,jitter:0}]:[{name:'local-host',delay:0,jitter:0},{name:'local-guest',delay:0,jitter:0,guest:true},{name:'160ms-guest',delay:80,jitter:0,guest:true},{name:'160ms-jitter-guest',delay:80,jitter:30,guest:true}];
+  const profiles=process.argv.includes('--profile')||encodingLab?[{name:'cpu-profile',delay:0,jitter:0}]:[{name:'local-host',delay:0,jitter:0},{name:'local-guest',delay:0,jitter:0,guest:true},{name:'160ms-guest',delay:80,jitter:0,guest:true},{name:'160ms-jitter-guest',delay:80,jitter:30,guest:true}];
   for(const profile of Array.from({length:repeat},(_,run)=>profiles.map(profile=>({...profile,run:run+1}))).flat()){
     activeProfile=`${profile.run}:${profile.name}`;
     const {targetId}=await call('Target.createTarget',{url:'about:blank'});({sessionId:session}=await call('Target.attachToTarget',{targetId,flatten:true}));
@@ -92,6 +102,10 @@ try{
     }`},session);
     await call('Page.navigate',{url:origin},session);
     for(let attempt=0;attempt<100;attempt++){if(await evaluate('Boolean(globalThis.__game)'))break;await sleep(50);}
+    if(encodingLab){
+      const result=await compareEncodingBrowser(evaluate);results.push(result);console.log(JSON.stringify(result));
+      await call('Target.closeTarget',{targetId});continue;
+    }
     if(profile.guest){const room={code:'07',arena:0,botCount:0,host:0,members:new Map()};app.multiplayer.makeWorld(room);app.multiplayer.rooms.set('07',room);app.multiplayer.join(room,{name:'Host',driver:1});}
     const identity=await evaluate(`(async()=>{__game.network.botCount.value='0';__game.network.invitation='07';await __game.network.connect('${profile.guest?'/api/join':'/api/rooms'}');return {code:__game.network.state.code,you:__game.network.state.you};})()`);
     const room=app.multiplayer.rooms.get(identity.code);
