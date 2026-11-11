@@ -4,6 +4,16 @@ import {createBattle,tickBattle,equipBomber,useBattleTurbo,predictKartMovement} 
 import {ArenaCore,ArenaClient} from './arena-core.js';
 
 for(const engine of ['solo','Rust']){
+  test(`${engine}: an A-bomb victim becomes ash through respawn and peers receive the ash effect`,()=>{
+    const seed=createBattle();Object.assign(seed,{phase:'racing',human:true,wx:-65,wz:0,health:3,shield:0,speed:0,supplies:[],bombs:[{id:1,owner:1,kind:'abomb',wx:-65,wz:0,age:.899,color:'#ffffff'}]});
+    for(const bot of seed.bots)Object.assign(bot,{inactive:true,destroyed:1e9});equipBomber(seed.bots[0]);seed.bots[0].inactive=false;
+    const core=engine==='Rust'?new ArenaCore(seed):null,step=()=>core?core.step(1/60):tickBattle(seed,new Set(),1/60),read=()=>core?core.snapshot():seed;
+    step();assert.equal(read().health,0);assert.equal(read().deaths,1);assert.equal(read().bots[0].kills,1);assert.ok(read().effects.some(f=>f.type==='ash'));assert.equal(read().effects.some(f=>f.type==='explosion'),false);
+    if(core){const peer=new ArenaClient();peer.accept(core.packet(1),0);peer.frame(0,[],0);assert.ok(peer.present().effects.some(f=>f.type==='ash'));}
+    for(let i=0;i<120;i++)step();assert.ok(read().effects.some(f=>f.type==='ash'));assert.ok(read().destroyed>0);
+    for(let i=0;i<61;i++)step();assert.equal(read().effects.some(f=>f.type==='ash'),false);assert.equal(read().destroyed,0);assert.equal(read().health,3);
+  });
+
   test(`${engine}: A-bombs deal five damage through radius 22 and three through radius 28`,()=>{
     for(const [radius,health]of [[0,1],[22,1],[22.01,3],[28,3],[28.01,6]]){
       const seed=createBattle();Object.assign(seed,{phase:'racing',human:true,wx:-65,wz:radius,health:6,shield:0,speed:0,supplies:[],bombs:[{id:1,owner:1,kind:'abomb',wx:-65,wz:0,age:.899,color:'#ffffff'}]});

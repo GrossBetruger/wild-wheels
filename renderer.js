@@ -467,7 +467,7 @@ export class Renderer {
       m.at(bomb.wx,height,bomb.wz,bomb.age*3);m.ball(0,0,0,2.2*scale,3.4*scale,2.2*scale,'#39334e',10,6);m.box(0,2.3*scale,0,5*scale,.5,.7*scale,'#ffdb69');m.box(0,2.3*scale,0,.7*scale,.5,5*scale,'#ffdb69');
       this.glow.at(bomb.wx,height+3,bomb.wz);this.glow.particle(0,0,0,3,[.8,.35,.03]);
     }
-    for(const effect of r.effects){if(effect.type==='abomb'){this.atomicExplosion(m,effect);continue;}if(effect.type==='explosion'){this.explosion(m,effect);continue;}for(let i=0;i<10;i++){const a=i*2.4,t=effect.age;m.at(effect.wx+Math.cos(a)*t*8,1+t*4,effect.wz+Math.sin(a)*t*8);m.ball(0,0,0,.12,.12,.12,'#f4dc8b',5,3);}}
+    for(const effect of r.effects){if(effect.type==='ash'){this.ashRemains(m,effect);continue;}if(effect.type==='abomb'){this.atomicExplosion(m,effect);continue;}if(effect.type==='explosion'){this.explosion(m,effect);continue;}for(let i=0;i<10;i++){const a=i*2.4,t=effect.age;m.at(effect.wx+Math.cos(a)*t*8,1+t*4,effect.wz+Math.sin(a)*t*8);m.ball(0,0,0,.12,.12,.12,'#f4dc8b',5,3);}}
     for(const cloud of r.stinkClouds??[]){const fade=Math.min(1,(cloud.life-cloud.age)/.7);for(let i=0;i<15;i++){const angle=i*2.399+cloud.age*.2,radius=2+(i%5)*2.6,x=cloud.wx+Math.sin(angle)*radius,z=cloud.wz+Math.cos(angle)*radius,y=1+(i%3)+Math.sin(cloud.age*2+i)*.7;this.smoke.at(x,y,z);this.smoke.particle(0,0,0,(7+cloud.age*2)*Math.sqrt(fade),[.5,.7,.23]);this.glow.at(x,y+.4,z);this.glow.particle(0,0,0,.25*fade,[.15,.3,.04]);}}
     for(const cloud of r.chaffClouds){
       const t=cloud.age,fade=Math.min(1,(cloud.life-t)/1.4),expansion=1-Math.exp(-t*2.5);
@@ -502,6 +502,20 @@ export class Renderer {
     }
     for(let i=0;i<5;i++){m.at(effect.wx,1+i*(2+t*1.7),effect.wz);m.ball(0,0,0,(3+t)*fade,(3+t)*fade,(3+t)*fade,t<.5?'#ffcd6d':'#9c8990',8,5);}
     this.glow.at(effect.wx,2,effect.wz);this.glow.particle(0,0,0,Math.max(0,24-t*24),[fade,.55*fade,.12*fade]);
+  }
+  ashRemains(m,effect){
+    const t=effect.age,settled=Math.min(1,t/1.1),fade=Math.min(1,(effect.life-t)/.6);
+    m.at(effect.wx,.04,effect.wz);
+    m.ball(0,.08,0,1.8,.12+settled*.3,2,'#656970',12,5);
+    for(let i=0;i<9;i++){const a=i*2.399;m.ball(Math.sin(a)*(1+i%3*.28),.1,Math.cos(a)*(1+i%3*.28),.33,.08+settled*.12,.38,i%2?'#909398':'#4c5158',7,4);}
+    // Gray flakes start where the kart and driver stood, then crumble and drift down.
+    for(let i=0;i<64;i++){
+      const a=i*2.399,height=.5+(i%9)*.53,y=Math.max(.12,height+t*(.6+i%4*.2)-t*t*3.8),spread=.3+(i%5)*.2+t*.8;
+      m.at(effect.wx+Math.sin(a)*spread,y,effect.wz+Math.cos(a)*spread,a+t*(i%3-1));
+      const size=(.08+i%3*.04)*fade;m.box(0,0,0,size,size*.4,size*1.7,i%3?'#8e9298':'#d2d2cc');
+    }
+    this.smoke.at(effect.wx,1.1+t*.5,effect.wz);
+    for(let i=0;i<7;i++){const a=i*2.399;this.smoke.particle(Math.sin(a)*t*.7,Math.sin(i)*.4,Math.cos(a)*t*.7,(1.1+t*.9)*Math.sqrt(fade),[.43,.45,.48]);}
   }
   flush(m,view,height){
     const gl=this.gl;

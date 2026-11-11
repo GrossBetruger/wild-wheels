@@ -44,7 +44,7 @@ fields(Bomb,['id','owner',null,'wx','wz','age','actionId'],{nullable:['actionId'
 class Chaff extends Row{get color(){return color(this.n(10));}}
 fields(Chaff,['id','owner','wx','wz','originX','originZ','age','life','diversions','divertedAt'],{nullable:['divertedAt']});
 class Stink extends Row{}fields(Stink,['id','owner','wx','wz','age','life']);
-class Effect extends Row{get type(){return ['effect','explosion','abomb','boost','pickup','hit','crash','fire','vulcanReady'][this.n(0)];}get color(){return color(this.n(5));}}
+class Effect extends Row{get type(){return ['effect','explosion','abomb','boost','pickup','hit','crash','fire','vulcanReady','ash'][this.n(0)];}get color(){return color(this.n(5));}}
 fields(Effect,[null,'wx','wz','age','life']);
 class World extends Actor{
   get base(){return 32+this.frame.n(21)*48;}

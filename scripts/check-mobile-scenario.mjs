@@ -54,7 +54,7 @@ export async function checkMobile(evaluate,app,room,id,sleep,capture,rotate,tap,
   const boundedDrops=room.world.bombSequence===2&&actor.bombAmmo===0;
   if(capture)await capture('portrait-3d-drop');
   for(let i=0;i<150;i++){if(other.deaths===1)break;await sleep(10);}
-  const blast=other.deaths===1&&actor.kills===1&&app.snapshot(room,enemy).world.effects.some(effect=>effect.type==='abomb');
+  const blast=other.deaths===1&&actor.kills===1&&app.snapshot(room,enemy).world.effects.some(effect=>effect.type==='abomb')&&app.snapshot(room,enemy).world.effects.some(effect=>effect.type==='ash')&&await evaluate("__game.race.effects.some(effect=>effect.type==='ash')");
   const noKillBonus=actor.bombAmmo===0&&actor.stinkAmmo===2&&room.world.elapsed<5;
   if(capture){await sleep(350);await capture('portrait-3d-blast');}
   const feedback=await evaluate("__game.bombTrace[0]??null");
