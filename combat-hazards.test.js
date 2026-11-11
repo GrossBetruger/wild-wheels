@@ -15,8 +15,8 @@ for(const engine of ['solo','Rust']){
     for(let i=0;i<80;i++)step();assert.equal(read().effects.some(f=>f.type==='ash'),false);
   });
 
-  test(`${engine}: A-bombs deal five damage through radius 22 and three through radius 28`,()=>{
-    for(const [radius,health]of [[0,1],[22,1],[22.01,3],[28,3],[28.01,6]]){
+  test(`${engine}: A-bomb impact plus immediate radiation deals six damage through radius 22 and four through radius 28`,()=>{
+    for(const [radius,health]of [[0,0],[22,0],[22.01,2],[28,2],[28.01,6]]){
       const seed=createBattle();Object.assign(seed,{phase:'racing',human:true,wx:-65,wz:radius,health:6,shield:0,speed:0,supplies:[],bombs:[{id:1,owner:1,kind:'abomb',wx:-65,wz:0,age:.899,color:'#ffffff'}]});
       for(const bot of seed.bots)Object.assign(bot,{inactive:true,destroyed:1e9});equipBomber(seed.bots[0]);Object.assign(seed.bots[0],{inactive:false});
       const core=engine==='Rust'?new ArenaCore(seed):null;if(core)core.step(1/60);if(!core)tickBattle(seed,new Set(),1/60);

@@ -55,7 +55,7 @@ pub struct Stink { pub id:u32,pub owner:usize,pub wx:f64,pub wz:f64,pub age:f64,
 pub struct Supply { pub id:u32,pub wx:f64,pub wz:f64,pub kind:String,pub cooldown:f64,pub version:u32,pub collector:Option<usize> }
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(default,rename_all="camelCase")]
-pub struct Effect { #[serde(rename="type")] pub kind:String,pub wx:f64,pub wz:f64,pub age:f64,pub life:f64,pub color:Option<String> }
+pub struct Effect { #[serde(rename="type")] pub kind:String,pub wx:f64,pub wz:f64,pub age:f64,pub life:f64,pub color:Option<String>,#[serde(skip_serializing_if="Option::is_none")]pub owner:Option<usize>,#[serde(skip_serializing_if="BTreeMap::is_empty")]pub doses:BTreeMap<String,f64> }
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(default,rename_all="camelCase")]
 pub struct Skid { pub owner:usize,pub ax:f64,pub az:f64,pub bx:f64,pub bz:f64,pub time:f64 }

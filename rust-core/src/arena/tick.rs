@@ -102,6 +102,7 @@ impl Game{
             bomb.age+=dt;if bomb.age<0.9-1e-8{self.global.bombs.push(bomb);continue;}
             if bomb.kind=="stink"{self.global.stink_clouds.push(Stink{id:bomb.id,owner:bomb.owner,wx:bomb.wx,wz:bomb.wz,life:5.0,..Stink::default()});sound(&mut self.global,"stinkBurst",bomb.owner,bomb.wx,bomb.wz,None);continue;}
             sound(&mut self.global,"bombExplosion",bomb.owner,bomb.wx,bomb.wz,None);self.global.effects.push(Effect{kind:"abomb".into(),wx:bomb.wx,wz:bomb.wz,life:3.0,color:Some(bomb.color),..Effect::default()});
+            self.global.effects.push(Effect{kind:"radiation".into(),owner:Some(bomb.owner),wx:bomb.wx,wz:bomb.wz,life:8.0,..Effect::default()});
             for id in 0..self.actors.len(){let radius=distance(self.actors[id].wx,self.actors[id].wz,bomb.wx,bomb.wz);if radius<=28.0{self.damage(id,bomb.owner,match radius<=22.0{true=>5.0,false=>3.0},"abomb");}}
             if !self.actors[0].bomber&&distance(self.actors[0].wx,self.actors[0].wz,bomb.wx,bomb.wz)<44.0{self.global.shake=self.global.shake.max(0.7);}
         }
@@ -114,6 +115,16 @@ impl Game{
                 a.dizzy=DIZZY_DURATION;a.credits.retain(|_,expires|*expires>g.elapsed+1e-8);if !ending{a.credits.insert(cloud.owner,g.elapsed+DIZZY_DURATION);}
             }}
         }
+        let mut doses=Vec::new();
+        for zone in self.global.effects.iter_mut().filter(|f|f.kind=="radiation"&&f.age<f.life-1e-8){
+            for a in &self.actors{
+                let key=a.id.to_string();
+                if a.bomber||a.inactive||a.afk||a.destroyed>0.0||a.shield>0.0||a.hedge_shield>0.0||distance(a.wx,a.wz,zone.wx,zone.wz)>28.0{zone.doses.remove(&key);continue;}
+                if zone.age+1e-8<*zone.doses.get(&key).unwrap_or(&0.0){continue;}
+                zone.doses.insert(key,zone.age+0.5);if let Some(owner)=zone.owner{doses.push((a.id,owner));}
+            }
+        }
+        for (victim,owner) in doses{self.damage(victim,owner,1.0,"radiation");}
         let order=self.order();let g=&mut self.global;g.rank=order.iter().position(|&id|id==0).map_or(0,|i|i+1);
         if !ending&&order.first().is_some_and(|&id|self.actors[id].kills>=g.target_score||g.elapsed>=g.duration){
             let id=order[0];g.winner=match id{0=>json!("player"),_=>json!(id-1)};g.finish_rank=Some(g.rank);g.finish_time=Some(g.elapsed.min(g.duration));g.finish_countdown=Some(3.0);g.events.push(json!(match g.rank==1{true=>"victory",false=>"finish"}));let root_x=self.actors[0].wx;voice(g,&mut self.actors[id],"win",root_x);

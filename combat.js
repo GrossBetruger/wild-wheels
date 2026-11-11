@@ -10,6 +10,8 @@ export const SOMERSAULT_DURATION=.55;
 export const BOMB_FALL_TIME=.9;
 export const BOMB_RADIUS=22;
 export const BOMB_OUTER_RADIUS=28;
+export const RADIATION_DURATION=8;
+export const RADIATION_INTERVAL=.5;
 export const BOMB_START_AMMO=2;
 export const BOMB_RECHARGE=10;
 export const STINK_RADIUS=14;
@@ -188,7 +190,7 @@ export function damageBattle(r,victim,owner,amount,kind='hedgehog'){
     if(bomber&&bomber!==victim)credited.add(bomber);
   }
   victim.stinkContributors=new Map();
-  victim.destroyed=3;victim.speed=0;victim.boost=0;if(r.finishCountdown===null)victim.deaths++;fx(r,kind==='abomb'?'ash':'explosion',victim);
+  victim.destroyed=3;victim.speed=0;victim.boost=0;if(r.finishCountdown===null)victim.deaths++;fx(r,kind==='abomb'||kind==='radiation'?'ash':'explosion',victim);
   victim.drift=0;victim.wasDrifting=false;victim.driftTrail=null;victim.killStreak=0;victim.vulcan=0;victim.hedgeShield=0;victim.somersault=0;victim.dizzy=0;
   if(r.finishCountdown!==null)return true;
   for(const scorer of credited){const full=kind==='wall'||scorer===attacker;scorer.kills+=full?1:.5;scorer.celebrate=1.6;voice(r,scorer,'cheer');r.killFeed.unshift({id:r.killSequence=(r.killSequence??0)+1,attacker:scorer.id,assist:!full,victim:victim.id,victimName:victim.name??drivers[victim.driver].name,victimColor:victim.color??drivers[victim.driver].color,text:`${scorer===r?'YOU':scorer.name??drivers[scorer.driver].name.split(' ')[0]} → ${victim===r?'YOU':victim.name??drivers[victim.driver].name.split(' ')[0]}`,time:r.elapsed});r.killFeed=r.killFeed.slice(0,16);}
@@ -357,6 +359,7 @@ export function tickBattle(r,keys,dt,inputs=null){
       r.stinkClouds.push({id:bomb.id,owner:bomb.owner,wx:bomb.wx,wz:bomb.wz,age:0,life:5,hits:[]});sound(r,'stinkBurst',bomb);continue;
     }
     sound(r,'bombExplosion',bomb);r.effects.push({type:'abomb',wx:bomb.wx,wz:bomb.wz,age:0,life:3,color:bomb.color});
+    r.effects.push({type:'radiation',owner:bomb.owner,wx:bomb.wx,wz:bomb.wz,age:0,life:RADIATION_DURATION,doses:{}});
     for(const victim of actors){const radius=distance(victim,bomb);if(radius<=BOMB_OUTER_RADIUS)damageBattle(r,victim,bomb.owner,radius<=BOMB_RADIUS?5:3,'abomb');}
     if(!r.bomber&&distance(r,bomb)<BOMB_RADIUS*2)r.shake=Math.max(r.shake,.7);
   }
@@ -367,6 +370,12 @@ export function tickBattle(r,keys,dt,inputs=null){
     actor.stinkContributors??=new Map();
     for(const [id,expires] of actor.stinkContributors)if(expires<=r.elapsed+1e-8)actor.stinkContributors.delete(id);
     if(!ending)actor.stinkContributors.set(cloud.owner,r.elapsed+DIZZY_DURATION);
+  }
+  for(const zone of r.effects.filter(f=>f.type==='radiation'&&f.age<f.life-1e-8))for(const actor of actors){
+    zone.doses??={};
+    if(actor.bomber||actor.inactive||actor.afk||actor.destroyed||actor.shield>0||actor.hedgeShield>0||distance(actor,zone)>BOMB_OUTER_RADIUS){delete zone.doses[actor.id];continue;}
+    if(zone.age+1e-8<(zone.doses[actor.id]??0))continue;
+    zone.doses[actor.id]=zone.age+RADIATION_INTERVAL;damageBattle(r,actor,zone.owner,1,'radiation');
   }
   const order=standings(r);r.rank=order.findIndex(k=>k.id===0)+1;
   if(!ending&&(order[0].kills>=r.targetScore||r.elapsed>=r.duration)){

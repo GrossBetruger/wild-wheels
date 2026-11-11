@@ -44,8 +44,8 @@ fields(Bomb,['id','owner',null,'wx','wz','age','actionId'],{nullable:['actionId'
 class Chaff extends Row{get color(){return color(this.n(10));}}
 fields(Chaff,['id','owner','wx','wz','originX','originZ','age','life','diversions','divertedAt'],{nullable:['divertedAt']});
 class Stink extends Row{}fields(Stink,['id','owner','wx','wz','age','life']);
-class Effect extends Row{get type(){return ['effect','explosion','abomb','boost','pickup','hit','crash','fire','vulcanReady','ash'][this.n(0)];}get color(){return color(this.n(5));}}
-fields(Effect,[null,'wx','wz','age','life']);
+class Effect extends Row{get type(){return ['effect','explosion','abomb','boost','pickup','hit','crash','fire','vulcanReady','ash','radiation'][this.n(0)];}get color(){return color(this.n(5));}}
+fields(Effect,[null,'wx','wz','age','life',null,'owner','radius'],{nullable:['owner']});
 class World extends Actor{
   get base(){return 32+this.frame.n(21)*48;}
   get mode(){return 'combat';}get phase(){const value=phase[this.frame.n(10)];return this.frame.paused&&['countdown','racing'].includes(value)?'paused':value;}get resumePhase(){return phase[this.frame.n(10)];}

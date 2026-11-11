@@ -1,5 +1,7 @@
 # Development checks
 
+A-bombs leave a radioactive zone covering the full 28-unit blast footprint for 8 seconds. Contact deals 1 damage immediately and every 0.5 seconds afterward; leaving and re-entering starts a new immediate dose. Respawn shields and Hedgeguard protect against radiation. Radiation kills credit the bomb's owner and produce ash. `radiation.test.js` covers dose timing, boundaries, shields, expiry, re-entry, credit and remote presentation in both engines; the mobile group checks fallout replication and visuals.
+
 Combat hazards: A-bombs deal 5 damage within 22 units and 3 damage in the outer ring through 28 units. Dizziness lasts 8 seconds, with stronger steering disturbance and camera sway during boost. Boosted wall collisions explode; each bomber with active gas credit earns a full point for those crashes. Ordinary stink-assisted kills remain half a point. `combat-hazards.test.js` covers radius boundaries, normal versus boosted impacts, multiple bomber credit and stronger boosted swerving in both simulation engines. Movement prediction stops at fatal impacts while the server confirms death and scoring.
 
 A-bomb deaths turn the character and vehicle's last rendered shape into rubble. Chunks collapse smoothly over 1.3 seconds, then smolder for 3 seconds. Combat tests check rubble lifetime through respawn, kill credit, and remote typed presentation; mobile captures cover the initial shape, collapse, heap and smolder. Other fatal damage keeps its normal explosion.
