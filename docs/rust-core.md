@@ -18,6 +18,6 @@ Cargo dependencies are pinned in Cargo.lock. The build uses offline release comp
 
 The lightweight suite covers multiplayer behavior against the Rust server, with explicit local fixture adapters for arranging scenarios. Production never installs that mutable fixture world. Focused core tests cover simulation parity, scoring, bomber cadence/damage, chaff, prediction, immediate feedback, contested pickups, render memory views, room identity, countdown/reset, host transfer, and invalid commands.
 
-Run npm test before pushing. Push main before the heavy browser/netcode/regression suites, following AGENTS.md. Existing responsiveness and frame criteria remain unchanged. Revert and push the responsible commit if post-push checks expose a new regression.
+Run npm test before pushing. Push main before the heavy browser/netcode/regression suites, following AGENTS.md. Existing responsiveness and frame criteria remain unchanged. Fix regressions forward, per the user's preference for this recreational game.
 
 The earlier thin movement bridge increased CPU cost and was reverted. Its measurements remain in diagnostics/movement-core-comparison.json; its source is preserved in branch history. Those results do not predict the performance of this full ownership path. Whole-path benchmarks are still required before claiming an improvement.

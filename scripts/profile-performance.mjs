@@ -1,5 +1,6 @@
 import { Multiplayer } from '../multiplayer.js';
-import { createBinaryEncoder } from '../binary-wire.js';
+import {arenaFixture} from './arena-fixture.mjs';
+import {createBinaryEncoder} from '../binary-wire.js';
 const encodeSnapshot=createBinaryEncoder();
 
 const scenarios=[
@@ -17,19 +18,18 @@ function prepare(app,room,scenario){
   while(room.members.size<scenario.players)app.join(room,{name:`Profiler ${room.members.size+1}`,driver:null});
   app.makeWorld(room);
   Object.assign(room.world,{phase:'racing',duration:3600,targetScore:100000,supplies:[]});
-  for(const actor of [room.world,...room.world.bots])actor.shield=3600;
+  for(const actor of [room.world,...room.world.bots]){actor.shield=3600;if(scenario.vulcan)actor.vulcan=3600;}
 }
 function controls(app,room,scenario){
   const keys=['arrowup',' ',...(room.world.elapsed%4<3?['arrowleft']:[]),...(scenario.drift?['shift']:[])];
   for(const member of room.members.values()){
     member.lastSeen=member.inputAt=Date.now();
     if(!member.socket)member.keys=new Set(keys);
-    if(scenario.vulcan)[room.world,...room.world.bots][member.id].vulcan=15;
   }
   return keys;
 }
-function serverProfile(scenario){
-  const app=new Multiplayer();clearInterval(app.timer);
+function serverProfile(scenario,MultiplayerType=Multiplayer){
+  const app=new MultiplayerType({fixtureWorld:arenaFixture});clearInterval(app.timer);
   // Exclude transport and encoding from simulation measurements; measure them separately.
   app.broadcast=()=>{};
   const room={code:'07',arena:0,botCount:scenario.bots,host:0,members:new Map()};
@@ -46,13 +46,13 @@ function serverProfile(scenario){
       // Include every recipient: this is total room work per 30 Hz broadcast.
       let build=0,encode=0;
       for(const member of room.members.values()){
+        if(room.core){start=performance.now();const packet=room.core.packetRecord(member.id);encode+=performance.now()-start;bytes+=packet.data.length;continue;}
         start=performance.now();const state=app.snapshot(room,member);build+=performance.now()-start;
-        start=performance.now();const packet=encodeSnapshot(state);encode+=performance.now()-start;
-        bytes+=Buffer.byteLength(packet);
+        start=performance.now();const packet=encodeSnapshot(state);encode+=performance.now()-start;bytes+=packet.length;
       }
-      snapshot.push(build);encoding.push(encode);
+      if(!room.core)snapshot.push(build);encoding.push(encode);
     }
-    return {simulation:summarize(simulation),snapshot:summarize(snapshot),encoding:summarize(encoding),uncompressedMbpsPerRecipient:bytes/30/scenario.players*8/1e6};
+    return {pipeline:room.core?'rust-owned':'javascript',simulation:summarize(simulation),snapshot:summarize(snapshot),encoding:summarize(encoding),uncompressedMbpsPerRecipient:bytes/30/scenario.players*8/1e6};
   }finally{app.close();}
 }
 
@@ -93,7 +93,7 @@ export async function profilePerformance(evaluate,app,room,sleep){
   const originalMembers=new Set(room.members.keys());
   try{
     for(const scenario of scenarios){
-      const server=serverProfile(scenario);
+      const server=serverProfile(scenario,app.constructor);
       prepare(app,room,scenario);
       const drive=async()=>{
         const keys=controls(app,room,scenario);
