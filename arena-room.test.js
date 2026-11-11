@@ -67,3 +67,11 @@ test('elephant, cricket and Roadster drivers survive room configuration, packets
   }
   assert.throws(()=>core.configure({code:'11',host:0,arena:0,bots:0,epoch:1,players:[{id:0,name:'Invalid',driver:7,role:'driver'}]}),/Invalid Rust room/);
 });
+
+test('every Roadster and its chaff remain white across room slots and character changes',()=>{
+  const config={code:'11',host:0,arena:0,bots:0,epoch:1,players:[{id:0,name:'First Roadster',driver:6,role:'driver'},{id:1,name:'Second Roadster',driver:6,role:'driver'}]};
+  const core=ArenaCore.room(config);const first=decodeBinarySnapshot(core.packet(0)),second=decodeBinarySnapshot(core.packet(1));
+  assert.equal(first.world.color,'#e8edf2');assert.equal(second.world.color,'#e8edf2');assert.deepEqual(first.players.map(player=>player.color),['#e8edf2','#e8edf2']);
+  core.configure({...config,players:[{...config.players[0],driver:0},config.players[1]]});assert.equal(core.snapshot(0).color,'#8456cf');assert.equal(core.snapshot(1).color,'#e8edf2');
+  core.start();for(let i=0;i<181;i++)core.step(1/60);core.step(1/60,[{actor:1,keys:[],actions:[{type:'chaff'}]}]);assert.equal(core.snapshot(1).chaffClouds[0].color,'#e8edf2');
+});

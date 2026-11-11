@@ -103,7 +103,7 @@ export class Multiplayer {
     const id=[0,1,2,3,4,5].find(slot=>!room.members.has(slot)),token=randomBytes(32).toString('hex');
     const used=new Set([...room.members.values()].map(player=>player.driver));
     const driver=identity.driver??drivers.findIndex((_,index)=>!used.has(index));
-    const member={...identity,driver:driver<0?id%drivers.length:driver,color:PLAYER_COLORS[id],name:identity.name==='Player'?`Player ${id+1}`:identity.name,id,token,room,keys:new Set(),actions:[],lastSeen:Date.now(),sequence:-1};room.members.set(id,member);this.members.set(token,member);this.assign(room,member);this.roster(room);this.broadcast(room);return member;
+    const member={...identity,driver:driver<0?id%drivers.length:driver,color:driver===6?drivers[6].color:PLAYER_COLORS[id],name:identity.name==='Player'?`Player ${id+1}`:identity.name,id,token,room,keys:new Set(),actions:[],lastSeen:Date.now(),sequence:-1};room.members.set(id,member);this.members.set(token,member);this.assign(room,member);this.roster(room);this.broadcast(room);return member;
   }
   remove(member){
     const room=member.room;this.members.delete(member.token);room.members.delete(member.id);member.stream?.end();member.socket?.close(1000,'Left room');
@@ -221,7 +221,7 @@ export class Multiplayer {
         case '/api/driver':{
           if(!['ready','finished'].includes(room.core.status.phase))throw problem(409,'Choose a character before the next match.');
           if(!Number.isInteger(body.driver)||body.driver<0||body.driver>=drivers.length)throw problem(400,'Choose a character.');
-          member.driver=body.driver;this.syncRoom(room);
+          member.driver=body.driver;member.color=body.driver===6?drivers[6].color:PLAYER_COLORS[member.id];this.syncRoom(room);
           this.broadcast(room);json(200,{ok:true});break;
         }
         case '/api/input':{

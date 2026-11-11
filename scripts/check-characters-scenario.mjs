@@ -22,7 +22,8 @@ export async function checkCharacters(evaluate,app,room,id,sleep,capture){
     const rendered=await evaluate(`({cached:[...__game.renderer.models].some(([key,model])=>key.startsWith('kart:${driver}:')&&model.count>0),glError:__game.renderer.gl.getError()})`);
     const remote=app.snapshot(room,observer).world.bots.find(actor=>actor.id===id);
     await capture(name.split(' ')[0].toLowerCase());
-    characters.push({driver,name,selected,rendered:rendered.cached&&rendered.glError===0,remote:remote?.driver===driver});
+    const paint=driver!==6||remote?.color==='#e8edf2'&&await evaluate("__game.race.color==='#e8edf2'&&__game.renderer.models.has('kart:6:#e8edf2')");
+    characters.push({driver,name,selected,rendered:rendered.cached&&rendered.glError===0,remote:remote?.driver===driver,paint});
   }
   await evaluate('__game.characterAngle=0');
   const boostAccepted=await evaluate("__game.network.action('turbo')===true");
@@ -33,5 +34,5 @@ export async function checkCharacters(evaluate,app,room,id,sleep,capture){
   const remoteFlip=await wait(()=>{const actor=app.snapshot(room,observer).world.bots.find(actor=>actor.id===id);return actor?.driver===6&&actor.somersault>0;});
   await capture('roadster-flip');
   const voicePass=await evaluate("[4,5,6].every(driver=>__game.audio.voice({driver,cue:'win'}))");
-  return {menuPass,characters,boostAccepted,boostVapor,flipAccepted,flipVapor,remoteFlip,voicePass,pass:menuPass&&characters.every(character=>character.selected&&character.rendered&&character.remote)&&boostAccepted&&boostVapor&&flipAccepted&&flipVapor&&remoteFlip&&voicePass};
+  return {menuPass,characters,boostAccepted,boostVapor,flipAccepted,flipVapor,remoteFlip,voicePass,pass:menuPass&&characters.every(character=>character.selected&&character.rendered&&character.remote&&character.paint)&&boostAccepted&&boostVapor&&flipAccepted&&flipVapor&&remoteFlip&&voicePass};
 }

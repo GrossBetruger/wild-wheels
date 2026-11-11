@@ -54,7 +54,7 @@ impl Game {
             let active=person.is_some()||bots>0;
             if person.is_none()&&active{bots-=1;}
             if active&&actor.inactive{actor.destroyed=0.0;actor.health=3.0;actor.shield=2.0;actor.speed=0.0;}
-            actor.human=person.is_some();actor.inactive=!active;actor.color=COLORS[id].into();
+            actor.human=person.is_some();actor.inactive=!active;actor.color=match person.map_or(actor.driver,|p|p.driver){6=>"#e8edf2",_=>COLORS[id]}.into();
             if !active{actor.destroyed=1e9;actor.speed=0.0;}
             match person {
                 Some(p)=>{
@@ -66,7 +66,7 @@ impl Game {
             }
         }
         self.room.clear();
-        for (key,value) in [("code",json!(room.code)),("host",json!(room.host)),("arena",json!(room.arena)),("bots",json!(room.bots)),("startRequest",json!(room.start_request)),("players",json!(room.players.iter().map(|p|json!({"id":p.id,"name":p.name.trim(),"driver":p.driver,"color":COLORS[p.id],"role":p.role,"wantsToPlay":p.wants_to_play,"playRequestRefused":p.play_request_refused})).collect::<Vec<_>>()))]{self.room.insert(key.into(),value);}
+        for (key,value) in [("code",json!(room.code)),("host",json!(room.host)),("arena",json!(room.arena)),("bots",json!(room.bots)),("startRequest",json!(room.start_request)),("players",json!(room.players.iter().map(|p|json!({"id":p.id,"name":p.name.trim(),"driver":p.driver,"color":self.actors[p.id].color,"role":p.role,"wantsToPlay":p.wants_to_play,"playRequestRefused":p.play_request_refused})).collect::<Vec<_>>()))]{self.room.insert(key.into(),value);}
     }
 }
 #[no_mangle]pub extern "C" fn game_create(len:usize)->u32 {

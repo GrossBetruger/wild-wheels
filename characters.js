@@ -45,7 +45,8 @@ export function drawNewDriver(m,driver,turn,progress){
 }
 
 export const ROADSTER_NOZZLES=[-1.14,-.38,.38,1.14];
-export function drawRoadster(m,color){
+export function drawRoadster(m){
+  const color='#e8edf2';
   for(const x of [-1.6,1.6])for(const z of [-1.65,1.6]){m.ball(x,.62,z,.56,.63,.65,'#202531',10,5);m.ball(x+Math.sign(x)*.49,.62,z,.08,.43,.44,'#b5c3cb',10,5);m.ball(x+Math.sign(x)*.56,.62,z,.03,.18,.18,'#303a44',8,4);}
   m.box(0,.32,0,3.45,.35,5.2,'#202b36');m.box(0,.62,-.05,3.25,.43,5.05,color);
   m.quad([-1.5,.94,2.64],[1.5,.94,2.64],[1.34,1.39,.65],[-1.34,1.39,.65],color);

@@ -108,9 +108,10 @@ export class Renderer {
     m.at(0,0,0);this.gl.bindBuffer(this.gl.ARRAY_BUFFER,this.staticBuffer);this.gl.bufferData(this.gl.ARRAY_BUFFER,new Float32Array(m.data),this.gl.STATIC_DRAW);this.staticCount=m.data.length/9;this.track=track;
   }
   kart(m,p,color,driver,yaw=0,spin=0,boost=false,clock=0,celebrate=0,jump=null){
+    if(driver===6)color='#e8edf2';
     if(!this.buildingModel&&(celebrate<=0||jump)){const angle=Math.atan2(p.tx,p.tz)-yaw+spin;m.at(p.x,.13,p.z,angle);m.disc(.2,0,.25,2.3,3,'#3a4147');this.model(`kart:${driver}:${color}`,p.x,jump?.height??0,p.z,angle,mesh=>this.kart(mesh,{x:0,z:0,tx:0,tz:1},color,driver),jump?.pitch??0);if(boost||jump)this.afterburner(p,angle,clock,jump,driver);return;}
     const angle=Math.atan2(p.tx,p.tz)-yaw+spin;m.at(p.x,.13,p.z,angle);if(!this.buildingModel)m.disc(.2,0,.25,2.3,3,'#3a4147');
-    if(driver===6)drawRoadster(m,color);
+    if(driver===6)drawRoadster(m);
     if(driver!==6){
     for(const x of [-1.6,1.6])for(const z of [-1.5,1.4]){m.ball(x,.65,z,.58,.68,.7,'#202534',8,5);m.box(x+Math.sign(x)*.5,.38,z,.08,.52,.6,'#b9b9b7');for(let t=0;t<3;t++)m.box(x,.7,z-.4+t*.3,1.05,.06,.08,'#343a45');}
     m.box(0,.5,0,3.2,.65,4.4,color);m.box(0,1.1,.9,2.7,.35,1.8,color);m.box(0,.55,2.2,3.5,.3,.35,'#c5c9c4');m.box(0,.5,-2.3,3.7,.3,.35,'#30384b');
