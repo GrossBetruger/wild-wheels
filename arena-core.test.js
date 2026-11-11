@@ -102,7 +102,7 @@ test('Rust render buffers retain bomb targets, types and timer values without a 
 });
 
 test('kills against each new character show its actual name in the kill announcement',()=>{
-  for(const [driver,name]of[[4,'Ellie the Elephant'],[5,'Chirp the Cricket'],[6,'Elon Musk']]){
+  for(const [driver,name]of[[4,'Ellie the Elephant'],[5,'Tamar the Cricket'],[6,'Elon Musk']]){
     const seed=createBattle();Object.assign(seed,{phase:'racing',human:true,wx:-65,wz:0,heading:0,motionHeading:0,cameraHeading:0,shield:0,fireCooldown:0,supplies:[]});
     Object.assign(seed.bots[0],{human:true,driver,name:undefined,wx:-65,wz:12,health:1,shield:0,speed:0});for(const bot of seed.bots.slice(1))Object.assign(bot,{inactive:true,destroyed:1e9});
     const core=new ArenaCore(seed);core.step(1/60,[{actor:0,keys:[],actions:[{type:'fire'}]}]);for(let i=0;i<20;i++)core.step(1/60);

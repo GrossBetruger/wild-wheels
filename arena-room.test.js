@@ -60,8 +60,8 @@ test('late movement after a finished match is acknowledged without moving or cra
 });
 
 test('elephant, cricket and Roadster drivers survive room configuration, packets and client presentation',()=>{
-  const core=ArenaCore.room({code:'11',host:0,arena:0,bots:0,epoch:1,players:[{id:0,name:'Elon',driver:6,role:'driver'},{id:1,name:'Ellie',driver:4,role:'driver'},{id:2,name:'Chirp',driver:5,role:'driver'}]});
-  for(const [viewer,driver,name]of[[0,6,'Elon'],[1,4,'Ellie'],[2,5,'Chirp']]){
+  const core=ArenaCore.room({code:'11',host:0,arena:0,bots:0,epoch:1,players:[{id:0,name:'Elon',driver:6,role:'driver'},{id:1,name:'Ellie',driver:4,role:'driver'},{id:2,name:'Tamar',driver:5,role:'driver'}]});
+  for(const [viewer,driver,name]of[[0,6,'Elon'],[1,4,'Ellie'],[2,5,'Tamar']]){
     const client=new ArenaClient();client.accept(core.packet(viewer),0);client.frame(0,[],0);const view=client.present();
     assert.equal(view.driver,driver);assert.equal(view.name,name);assert.equal(view.health,3);assert.equal(view.bots.length,2);
   }
