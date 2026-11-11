@@ -1,6 +1,8 @@
 import { createRace, drivers } from './engine.js';
 export const VULCAN_DURATION=15;
 export const MAX_HEALTH=6;
+export const RECOVERY_HEALTH=3;
+export function recoveryInterval(driver){return 14-2*drivers[driver].cuteness;}
 export const MOVEMENT_DT=1/60;
 export const SOMERSAULT_DURATION=.55;
 export const BOMB_FALL_TIME=.9;
@@ -25,7 +27,7 @@ function spawn(r,actor,initial=false){
   const choice=initial?candidates[Math.floor(actor.id*8/6)]:candidates.sort((a,b)=>Math.min(...actors.filter(k=>k!==actor&&!k.destroyed).map(k=>distance(b,k)),999)-Math.min(...actors.filter(k=>k!==actor&&!k.destroyed).map(k=>distance(a,k)),999))[0];
   actor.wx=choice.wx;actor.wz=choice.wz;actor.heading=Math.atan2(-choice.wx,-choice.wz);actor.speed=0;actor.health=3;actor.destroyed=0;actor.shield=2;actor.ammo=5;actor.missiles=1;actor.turbos=1;actor.item='hedgehog';actor.fireCooldown=.5;actor.vx=0;actor.boost=0;actor.path=[];
   actor.motionHeading=actor.heading;actor.cameraHeading=actor.heading;actor.drift=0;actor.wasDrifting=false;actor.driftTrail=null;actor.driftEmit=0;
-  actor.killStreak=0;actor.vulcan=0;
+  actor.killStreak=0;actor.vulcan=0;actor.healTimer=0;
   actor.chaff=4;actor.chaffCooldown=0;
   actor.somersault=0;actor.somersaultCooldown=0;actor.somersaultCameraStart=actor.cameraHeading;
   actor.dizzy=0;actor.stinkContributors=new Map();
@@ -168,7 +170,7 @@ export function advanceProjectile(r,shot,dt){
 }
 export function damageBattle(r,victim,owner,amount){
   if(victim.bomber||victim.inactive||!battleActive(r)||victim.destroyed>0||victim.shield>0||victim.id===owner)return false;
-  victim.health=Math.max(0,victim.health-amount);voice(r,victim,'hurt');
+  victim.health=Math.max(0,victim.health-amount);victim.healTimer=0;voice(r,victim,'hurt');
   if(victim===r)r.shake=.5;
   const attacker=[r,...r.bots].find(k=>k.id===owner);
   if(victim.health>0){fx(r,'hit',victim);if(attacker){attacker.celebrate=1.6;voice(r,attacker,'cheer');}return true;}
@@ -286,6 +288,11 @@ export function tickBattle(r,keys,dt,inputs=null){
       continue;
     }
     if(actor.destroyed>0){actor.destroyed=Math.max(0,actor.destroyed-dt);if(actor.destroyed===0&&!ending)spawn(r,actor);continue;}
+    if(!ending&&!actor.inactive&&!actor.afk&&actor.health>0&&actor.health<RECOVERY_HEALTH){
+      actor.healTimer=(actor.healTimer??0)+dt;const interval=recoveryInterval(actor.driver);
+      if(actor.healTimer>=interval-1e-8){actor.health=Math.min(RECOVERY_HEALTH,actor.health+1);actor.healTimer=actor.health>=RECOVERY_HEALTH?0:Math.max(0,actor.healTimer-interval);}
+    }
+    if(actor.health>=RECOVERY_HEALTH)actor.healTimer=0;
     actor.reload+=dt;if(actor.reload>=2){actor.ammo=Math.min(6,actor.ammo+1);actor.reload=0;}
     if((actor===r&&!r.multiplayer)||actor.human){
       const control=inputs?.get(actor.id)??(actor===r?keys:new Set());

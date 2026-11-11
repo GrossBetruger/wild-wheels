@@ -1,13 +1,13 @@
 import { trackBend, branches, chooseRoute, routeSpeedScale } from './track.js';
 export const LENGTH = 18000;
 export const drivers = [
-  { name: 'Pip the Panda', emoji: '🐼', color: '#8456cf', desc: 'Small paws. Big podium energy.', speed: 4, handling: 5, accel: 4 },
-  { name: 'Rocco the Raccoon', emoji: '🦝', color: '#df7053', desc: 'Your racing line? Consider it stolen.', speed: 5, handling: 3, accel: 4 },
-  { name: 'Felix the Fox', emoji: '🦊', color: '#edb84f', desc: 'Quick on the corners. Quicker with trouble.', speed: 4, handling: 4, accel: 5 },
-  { name: 'Benny the Bear', emoji: '🐻', color: '#67a99c', desc: 'Big bear. Tiny kart. Absolutely no brakes.', speed: 5, handling: 4, accel: 3 },
-  { name: 'Ellie the Elephant', emoji: '🐘', color: '#81a5bc', desc: 'Big ears. Bigger corner exits.', speed: 4, handling: 4, accel: 5 },
-  { name: 'Tamar the Cricket', emoji: '🦗', color: '#83b64d', desc: 'Six legs. One accelerator. Maximum chirp.', speed: 3, handling: 5, accel: 5 },
-  { name: 'Elon Musk', emoji: '🚘', color: '#e8edf2', desc: 'New Roadster. Cold-gas thrusters. Zero chill.', speed: 5, handling: 3, accel: 5 },
+  { name: 'Pip the Panda', emoji: '🐼', color: '#8456cf', desc: 'Small paws. Big podium energy.', speed: 4, handling: 5, accel: 4, cuteness: 5 },
+  { name: 'Rocco the Raccoon', emoji: '🦝', color: '#df7053', desc: 'Your racing line? Consider it stolen.', speed: 5, handling: 3, accel: 4, cuteness: 3 },
+  { name: 'Felix the Fox', emoji: '🦊', color: '#edb84f', desc: 'Quick on the corners. Quicker with trouble.', speed: 4, handling: 4, accel: 5, cuteness: 4 },
+  { name: 'Benny the Bear', emoji: '🐻', color: '#67a99c', desc: 'Big bear. Tiny kart. Absolutely no brakes.', speed: 5, handling: 4, accel: 3, cuteness: 4 },
+  { name: 'Ellie the Elephant', emoji: '🐘', color: '#81a5bc', desc: 'Big ears. Bigger corner exits.', speed: 4, handling: 4, accel: 5, cuteness: 5 },
+  { name: 'Tamar the Cricket', emoji: '🦗', color: '#83b64d', desc: 'Six legs. One accelerator. Maximum chirp.', speed: 3, handling: 5, accel: 5, cuteness: 5 },
+  { name: 'Elon Musk', emoji: '🚘', color: '#e8edf2', desc: 'New Roadster. Cold-gas thrusters. Zero chill.', speed: 5, handling: 3, accel: 5, cuteness: 1 },
 ];
 export const tracks = [
   { name: 'Sunny Side Circuit', difficulty: 'ROOKIE', desc: 'Rolling hills. Questionable shortcuts.', sky: '#afdadd', grass: '#91b96d', darkGrass: '#88ad65', mountain: '#8ea69b', curve: 1 },

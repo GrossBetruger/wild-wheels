@@ -18,6 +18,7 @@ function fields(Type,names,{booleans=[],nullable=[]}={}){
   }
 }
 class Actor extends Row{
+  get healTimer(){return this.n(43);}
   get afk(){return Boolean(this.n(42));}
   get name(){return this.frame.text.actors[this.id]?.name??undefined;}
   get notice(){return this.frame.text.actors[this.id]?.notice??'';}

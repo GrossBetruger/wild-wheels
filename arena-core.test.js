@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {ArenaCore} from './arena-core.js';
-import {createBattle,tickBattle} from './scripts/reference-combat.mjs';
+import {createBattle,tickBattle} from './combat.js';
 import {decodeBinarySnapshot} from './binary-wire.js';
 
 test('a Rust-owned arena advances driving, AI, collisions and pickups through frame commands',()=>{

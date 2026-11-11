@@ -38,6 +38,8 @@ pub fn voice(g:&mut Globals,a:&mut Actor,cue:&str,root_x:f64){
     a.voice_cooldown=1.5;
     g.voices.push(json!({"driver":a.driver,"cue":cue,"pan":match a.id==0 {true=>0.0,false=>((a.wx-root_x)/70.0).clamp(-0.8,0.8)},"volume":match a.id==0 {true=>1.0,false=>0.6}}));
 }
+pub const DRIVER_CUTENESS:[u8;7]=[5,3,4,4,5,5,1];
+pub fn recovery_interval(driver:usize)->f64{14.0-2.0*f64::from(DRIVER_CUTENESS[driver%DRIVER_CUTENESS.len()])}
 pub const DRIVER_NAMES:[&str;7]=["Pip the Panda","Rocco the Raccoon","Felix the Fox","Benny the Bear","Ellie the Elephant","Tamar the Cricket","Elon Musk"];
 pub fn driver_name(driver:usize)->&'static str { DRIVER_NAMES[driver%DRIVER_NAMES.len()] }
 impl Game {

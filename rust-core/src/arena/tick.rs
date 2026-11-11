@@ -39,6 +39,11 @@ impl Game{
                 if !a.inactive&&!ending{let before=a.bomb_reload;a.bomb_reload+=dt;if before<5.0-1e-8&&a.bomb_reload>=5.0-1e-8{a.stink_ammo+=1;a.bomb_reload=a.bomb_reload.max(5.0);}if a.bomb_reload>=10.0-1e-8{a.bomb_ammo+=1;a.stink_ammo+=1;a.bomb_reload=(a.bomb_reload-10.0).max(0.0);}}continue;
             }
             if a.destroyed>0.0{a.destroyed=(a.destroyed-dt).max(0.0);if a.destroyed==0.0&&!ending{self.spawn(id);}continue;}
+            if !ending&&!a.inactive&&a.health>0.0&&a.health<3.0{
+                a.heal_timer+=dt;let interval=recovery_interval(a.driver);
+                if a.heal_timer>=interval-1e-8{a.health=(a.health+1.0).min(3.0);a.heal_timer=match a.health>=3.0{true=>0.0,false=>(a.heal_timer-interval).max(0.0)};}
+            }
+            if a.health>=3.0{a.heal_timer=0.0;}
             a.reload+=dt;if a.reload>=2.0{a.ammo=(a.ammo+1).min(6);a.reload=0.0;}
             if id==0&&!self.global.multiplayer||a.human{
                 let held=input.map_or(0,|i|i.keys);
