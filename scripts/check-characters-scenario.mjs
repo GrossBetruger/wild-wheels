@@ -115,5 +115,8 @@ export async function checkCharacters(evaluate,app,room,id,sleep,capture){
   const remoteFlip=await wait(()=>{const actor=app.snapshot(room,observer).world.bots.find(actor=>actor.id===id);return actor?.driver===6&&actor.somersault>0;});
   await capture('roadster-flip');
   const voicePass=await evaluate("[4,5,6,7].every(driver=>__game.audio.voice({driver,cue:'win'}))");
+  // Restore the simulated observer's actual selection before room teardown.
+  // Mid-match roster updates correctly reject the test's temporary character swap.
+  Object.assign([room.world,...room.world.bots].find(actor=>actor.id===observer.id),{driver:observer.driver,bomber:observer.role==='bomber'});
   return {menuPass,characters,boostAccepted,boostVapor,flipAccepted,flipVapor,remoteFlip,voicePass,pass:menuPass&&characters.every(character=>character.selected&&character.rendered&&character.remote&&character.paint&&character.cutenessStat&&character.intelligenceStat&&character.recovery&&character.ammoRecovery&&character.aura&&character.auraModel&&character.auraExpired&&character.boostHaze&&character.flipHaze&&character.cricketVulcan&&character.remoteCrickets&&character.helmetAnimation&&character.remoteHelmet&&character.helmetRestored&&character.dollarVulcan&&character.remoteDollars)&&boostAccepted&&boostVapor&&flipAccepted&&flipVapor&&remoteFlip&&voicePass};
 }
