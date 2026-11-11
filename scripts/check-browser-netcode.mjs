@@ -118,7 +118,8 @@ try{
     const room=app.multiplayer.rooms.get(identity.code);
     if(process.argv.includes('--room')){
       const reload=async()=>{await evaluate('__game.reloadMarker=true');await call('Page.reload',{},session);for(let attempt=0;attempt<120;attempt++){try{if(await evaluate('Boolean(globalThis.__game)&&!__game.reloadMarker&&__game.network.active'))return;}catch{}await sleep(50);}throw new Error('Room did not restore after refresh');};
-      const result={profile:profile.name,run:profile.run,...await checkRoom(evaluate,app.multiplayer,room,identity.you,sleep,reload)};results.push(result);console.log(JSON.stringify(result));
+      const capture=async()=>{const screenshot=await call('Page.captureScreenshot',{format:'png'},session);await writeFile(`${output}.${profile.run}.${profile.name}.lobby.png`,Buffer.from(screenshot.data,'base64'));};
+      const result={profile:profile.name,run:profile.run,...await checkRoom(evaluate,app.multiplayer,room,identity.you,sleep,reload,capture)};results.push(result);console.log(JSON.stringify(result));
       await evaluate('__game.network.leave()');await call('Target.closeTarget',{targetId});for(const current of [...app.multiplayer.rooms.values()])for(const member of [...current.members.values()])app.multiplayer.remove(member);continue;
     }
     if(process.argv.includes('--characters')){

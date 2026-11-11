@@ -30,6 +30,8 @@ GitHub Actions runs all seven groups with --functional --repeat 1 on pushes and 
 
 Room checks require refresh to restore the same player, room, host role and scores after going offline. AFK must retain the seat and prevent combat; returning must restore responsive controls. The host can replace the server's only room, invalidating old sessions and invitations. Names survive refresh in a cookie; the separate session cookie is HttpOnly. Lightweight tests also reject replacement by guests and verify fresh input sequencing after resumption. Rooms persist for the lifetime of the Node process, without disk storage.
 
+Guest lobby checks require room setup, map, restart, invitation and duplicate character controls to be hidden while name, character, play request, AFK and fullscreen controls remain usable. Names have no save button: edits reach the server when play is requested or begins. The mobile group verifies this for bomber names too.
+
 The character group verifies seven menu choices, selects the elephant, cricket, and Elon/Roadster through the live lobby, checks that remote players receive the same character, renders all three in WebGL, and schedules their synthesized calls. Roadster turbo and somersault checks require white vapor and a remotely visible somersault. Screenshots are saved alongside the results for visual review. Run it alone with:
 
 ```sh

@@ -13,6 +13,8 @@ export async function checkMobile(evaluate,app,room,id,sleep,capture,rotate,tap,
     for(let i=0;i<100;i++){if(!room.startRequest&&!enemy.wantsToPlay)break;await sleep(10);}
     readyRequestPass=shown&&!room.startRequest&&!enemy.wantsToPlay;
   }
+  const bomberName=id===host.id?'Bomber Oren':'Bomber Sam';
+  await evaluate(`{const input=__game.network.name;input.value=${JSON.stringify(bomberName)};input.dispatchEvent(new Event('input'));}`);
   await evaluate("document.getElementById('start').click()");
   if(id!==room.host){
     for(let i=0;i<100;i++){if(room.startRequest)break;await sleep(10);}
@@ -21,6 +23,7 @@ export async function checkMobile(evaluate,app,room,id,sleep,capture,rotate,tap,
     readyRequestPass=Number.isFinite(deadline)&&app.startNow()>=deadline&&room.world.phase==='countdown';
   }
   for(let i=0;i<200;i++){if(room.world.phase==='countdown')break;await sleep(25);}
+  const bomberNamePass=await evaluate(`__game.network.name.value===${JSON.stringify(bomberName)}&&!__game.network.name.disabled&&!__game.network.panel.textContent.includes('SAVE NAME')`)&&room.members.get(id).name===bomberName;
   const actor=[room.world,...room.world.bots][id],other=[room.world,...room.world.bots][enemy.id];
   Object.assign(room.world,{phase:'racing',supplies:[],projectiles:[]});
   Object.assign(other,{wx:-65,wz:30,speed:0,shield:0,health:3,destroyed:0,name:'Target <img>'});
@@ -109,6 +112,6 @@ export async function checkMobile(evaluate,app,room,id,sleep,capture,rotate,tap,
   await chooseCamera('3d');
   await evaluate("document.getElementById('mobile-fullscreen').click()");
   const exited=await evaluate("!document.querySelector('.race-panel').classList.contains('mobile-fullscreen')");
-  return {readyRequestPass,initialAmmo,fullscreen,overhead,default3D,closeView,portraitKartWidth,mapOption,switchPreservesGame,namedTarget,accurate,spent,immediate,feedbackDelayMs:feedback?.delay,boundedDrops,desktopSawDrop,blast,noKillBonus,stinkRefill,stinkShot,stinkWorks,stinkImmediate,dizzyExpired,refill,refillAt,marginsIgnored,landscape,landscapePass,exited,pass:readyRequestPass&&initialAmmo&&fullscreen&&overhead&&default3D&&closeView&&mapOption&&switchPreservesGame&&namedTarget&&accurate&&spent&&immediate&&boundedDrops&&desktopSawDrop&&blast&&noKillBonus&&stinkRefill&&stinkShot&&stinkWorks&&stinkImmediate&&dizzyExpired&&refill&&marginsIgnored&&landscapePass&&exited};
+  return {bomberNamePass,readyRequestPass,initialAmmo,fullscreen,overhead,default3D,closeView,portraitKartWidth,mapOption,switchPreservesGame,namedTarget,accurate,spent,immediate,feedbackDelayMs:feedback?.delay,boundedDrops,desktopSawDrop,blast,noKillBonus,stinkRefill,stinkShot,stinkWorks,stinkImmediate,dizzyExpired,refill,refillAt,marginsIgnored,landscape,landscapePass,exited,pass:bomberNamePass&&readyRequestPass&&initialAmmo&&fullscreen&&overhead&&default3D&&closeView&&mapOption&&switchPreservesGame&&namedTarget&&accurate&&spent&&immediate&&boundedDrops&&desktopSawDrop&&blast&&noKillBonus&&stinkRefill&&stinkShot&&stinkWorks&&stinkImmediate&&dizzyExpired&&refill&&marginsIgnored&&landscapePass&&exited};
   }finally{clearInterval(fixtureHeartbeat);}
 }

@@ -1,11 +1,16 @@
-export async function checkRoom(evaluate,app,room,id,sleep,reload){
+export async function checkRoom(evaluate,app,room,id,sleep,reload,capture){
   const wait=async predicate=>{for(let attempt=0;attempt<120;attempt++){if(await predicate())return true;await sleep(25);}return false;};
   if(room.members.size===1)app.join(room,{name:'Friend',driver:1});
   const count=room.members.size,code=room.code,host=room.host,name=id===host?'Oren 🦗':'Sam 🦗';
   const roomUrl=await evaluate(`new URL(location.href).searchParams.get('room')===${JSON.stringify(code)}`);
+  await wait(()=>evaluate(`(document.getElementById('restart').getClientRects().length>0)===${id===host}`));
+  const lobby=await evaluate(`(()=>{const visible=node=>node.getClientRects().length>0;const n=__game.network;return {hostControls:[n.hostButton,n.botCount,n.animalChoice,n.share.parentElement,n.help,document.querySelector('.mode-switch'),document.querySelector('.map-switch'),document.getElementById('restart'),document.getElementById('change-track')].map(visible),playerControls:[n.name,n.leaveButton,document.getElementById('drivers'),document.getElementById('start'),document.getElementById('fullscreen')].every(visible),noSaveButton:![...n.panel.querySelectorAll('button')].some(button=>button.textContent==='SAVE NAME')};})()`);
+  const lobbyPass=lobby.hostControls.every(visible=>visible===(id===host))&&lobby.playerControls&&lobby.noSaveButton;
+  if(capture)await capture();
   await evaluate(`{const input=__game.network.name;input.value=${JSON.stringify(name)};input.dispatchEvent(new Event('input'));}`);
-  await evaluate('__game.network.saveName()');
-  const nameSaved=await wait(()=>evaluate(`__game.race.name===${JSON.stringify(name)}&&document.cookie.includes('wild-wheels-name=')&&!document.cookie.includes('wild-wheels-session=')`));
+  const heldUntilStart=room.members.get(id).name!==name;
+  await evaluate(`__game.network.${id===host?"control('start')":"requestPlay()"}`);
+  const nameSaved=heldUntilStart&&await wait(()=>evaluate(`__game.race.name===${JSON.stringify(name)}&&document.cookie.includes('wild-wheels-name=')&&!document.cookie.includes('wild-wheels-session=')`));
   await evaluate('__game.network.leaveButton.click()');
   const away=await wait(()=>evaluate("__game.network.afk&&__game.network.leaveButton.textContent==='BACK TO ARENA'&&__game.network.players.textContent.includes('AFK')"));
   const afkPass=away&&room.members.size===count&&room.host===host&&room.core.snapshot(id).afk;
@@ -35,5 +40,6 @@ export async function checkRoom(evaluate,app,room,id,sleep,reload){
     replacementPass &&= app.rooms.size===1&&!app.rooms.has(code)&&!app.members.has(oldToken)&&app.members.size===1;
     replacementPass &&= await evaluate(`__game.network.isHost&&__game.network.name.value===${JSON.stringify(name)}&&new URL(location.href).searchParams.get('room')===__game.network.state.code`);
   }
-  return {roomUrl,nameSaved,afkPass,back,offlineRetained,refreshPass,controlsPass,replacementPass,pass:roomUrl&&nameSaved&&afkPass&&back&&offlineRetained&&refreshPass&&controlsPass&&replacementPass};
+  const liveControlsPass=id===host||await evaluate("document.getElementById('drivers').getClientRects().length===0&&document.getElementById('restart').getClientRects().length===0&&__game.network.leaveButton.getClientRects().length>0");
+  return {lobbyPass,lobby,liveControlsPass,roomUrl,nameSaved,afkPass,back,offlineRetained,refreshPass,controlsPass,replacementPass,pass:lobbyPass&&liveControlsPass&&roomUrl&&nameSaved&&afkPass&&back&&offlineRetained&&refreshPass&&controlsPass&&replacementPass};
 }

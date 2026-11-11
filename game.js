@@ -198,6 +198,10 @@ function hud(){
   for(const button of modeSwitch.children)button.disabled=network.active;
   for(const button of mapButtons)button.disabled=network.active&&!network.isHost;
   $('change-track').disabled=network.active&&!network.isHost;$('restart').disabled=network.active&&!network.isHost;
+  const guest=network.active&&!network.isHost;
+  for(const node of [modeSwitch,mapSwitch,$('change-track'),$('restart')])node.classList.toggle('hidden',guest);
+  $('drivers').classList.toggle('hidden',guest&&!['ready','finished'].includes(race.phase));
+  document.querySelector('.racer-panel').classList.toggle('hidden',guest&&race.bomber);
   $('start').disabled=network.active&&!network.isHost&&race.phase!=='paused'&&(network.wantsToPlay||network.readyPending||!['ready','finished'].includes(race.phase));
   if(network.active&&!network.isHost&&['ready','finished'].includes(race.phase)){
     const seconds=Math.ceil((network.state.startRequest?.remainingMs??0)/1000);

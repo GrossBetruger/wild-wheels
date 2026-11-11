@@ -27,9 +27,7 @@ export async function checkControls(evaluate,app,room,id,sleep,captureFlip,captu
   popupPass &&= !await evaluate('__game.network.readyDialog.open');
   if(id===host.id){await sleep(3100);popupPass &&= room.world.phase==='ready';}
   const draftPreserved=await evaluate(`__game.network.name.value===${JSON.stringify(displayName)}`);
-  if(id===room.host)await evaluate('__game.network.saveNameButton.click()');
-  if(id!==room.host)await evaluate("__game.network.name.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))");
-  for(let i=0;i<100;i++){if(await evaluate(`__game.network.state.world.name===${JSON.stringify(displayName)}&&__game.network.nameFeedback.textContent==='Name saved.'`))break;await sleep(25);}
+  for(let i=0;i<100;i++){if(await evaluate(`__game.network.state.world.name===${JSON.stringify(displayName)}`))break;await sleep(25);}
   const namePass=editable&&draftPreserved&&await evaluate(`__game.network.state.world.name===${JSON.stringify(displayName)}&&__game.network.players.textContent.includes(${JSON.stringify(displayName)})&&!__game.network.players.querySelector('b')`);
   if(id===host.id)await evaluate(`fetch('/api/ready',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer ${guest.token}'},body:JSON.stringify({ready:true})})`);
   if(id!==host.id)await evaluate("document.getElementById('start').click()");
