@@ -13,7 +13,7 @@ export async function checkPreview(evaluate,app,room,id,sleep,capture){
     renderer.drawPreview=(driver,...args)=>{const result=draw(driver,...args);__game.previewDraws++;if(!__game.previewPixelsWanted)return result;__game.previewPixelsWanted=false;const gl=renderer.gl,pixels=new Uint8Array(gl.drawingBufferWidth*gl.drawingBufferHeight*4);gl.readPixels(0,0,gl.drawingBufferWidth,gl.drawingBufferHeight,gl.RGBA,gl.UNSIGNED_BYTE,pixels);const colors=new Set();for(let i=0;i<pixels.length;i+=4)colors.add(pixels[i]*65536+pixels[i+1]*256+pixels[i+2]);__game.previewPixels={driver,colors:colors.size,error:gl.getError()};return result;};
   }`);
   const selections=[];
-  for(const [driver,name]of [[0,'Pip the Panda'],[1,'Rocco the Raccoon'],[2,'Felix the Fox'],[3,'Benny the Bear'],[4,'Ellie the Elephant'],[5,'Tamar the Cricket'],[6,'Elon Musk'],[7,'Houston the RTPL'],[8,'Avita-Jas']]){
+  for(const [driver,name]of [[0,'Pip the Panda'],[1,'Rocco the Raccoon'],[2,'Felix the Fox'],[3,'Benny the Bear'],[4,'Ellie the Elephant'],[5,'Tamar the Cricket'],[6,'Elon Musk'],[7,'Houston the RTPL'],[8,'Avita-Jas'],[9,'Pearococo']]){
     await evaluate(`__game.network.chooseDriver(${driver})`);
     const selected=await wait(()=>evaluate(`__game.race.driver===${driver}&&__game.preview.driver===${driver}`));
     await evaluate('{__game.preview.clock=1;__game.preview.dirty=true;__game.previewPixelsWanted=true;}');
@@ -24,7 +24,7 @@ export async function checkPreview(evaluate,app,room,id,sleep,capture){
   const gestures=[];
   for(const [clock,gesture]of [[1,'hello'],[5,'cheer'],[9,'look'],[13,'rev']]){
     await evaluate(`{__game.preview.clock=${clock};__game.preview.dirty=true;}`);
-    const shown=await wait(()=>evaluate(`__game.preview.presentation.id===${JSON.stringify(gesture)}`));gestures.push({gesture,shown});await capture(`preview-avita-${gesture}`,'.character-preview');
+    const shown=await wait(()=>evaluate(`__game.preview.presentation.id===${JSON.stringify(gesture)}`));gestures.push({gesture,shown});await capture(`preview-pearococo-${gesture}`,'.character-preview');
   }
   const world=app.snapshot(room,[...room.members.values()].find(member=>member.id===id)).world;
   const noGameActions=world.phase==='ready'&&world.elapsed===0&&world.ammo===10&&world.missiles===1&&world.turbos===1&&world.boost===0&&world.projectiles.length===0;

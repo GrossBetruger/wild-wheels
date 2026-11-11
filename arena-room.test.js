@@ -59,13 +59,13 @@ test('late movement after a finished match is acknowledged without moving or cra
   const after=decodeBinarySnapshot(core.packet(0));assert.equal(after.movementSequence,1);assert.equal(after.world.wx,world.wx);assert.equal(after.world.wz,world.wz);assert.equal(after.world.phase,'finished');
 });
 
-test('elephant, cricket, Roadster, astronaut sloth and worm pilot survive room configuration, packets and client presentation',()=>{
-  const core=ArenaCore.room({code:'11',host:0,arena:0,bots:0,epoch:1,players:[{id:0,name:'Elon',driver:6,role:'driver'},{id:1,name:'Ellie',driver:4,role:'driver'},{id:2,name:'Tamar',driver:5,role:'driver'},{id:3,name:'Houston',driver:7,role:'driver'},{id:4,name:'Avita-Jas',driver:8,role:'driver'}]});
-  for(const [viewer,driver,name]of[[0,6,'Elon'],[1,4,'Ellie'],[2,5,'Tamar'],[3,7,'Houston'],[4,8,'Avita-Jas']]){
+test('elephant, cricket, Roadster, astronaut sloth, worm pilot and Pearococo survive room configuration, packets and client presentation',()=>{
+  const core=ArenaCore.room({code:'11',host:0,arena:0,bots:0,epoch:1,players:[{id:0,name:'Elon',driver:6,role:'driver'},{id:1,name:'Ellie',driver:4,role:'driver'},{id:2,name:'Tamar',driver:5,role:'driver'},{id:3,name:'Houston',driver:7,role:'driver'},{id:4,name:'Avita-Jas',driver:8,role:'driver'},{id:5,name:'Pearococo',driver:9,role:'driver'}]});
+  for(const [viewer,driver,name]of[[0,6,'Elon'],[1,4,'Ellie'],[2,5,'Tamar'],[3,7,'Houston'],[4,8,'Avita-Jas'],[5,9,'Pearococo']]){
     const client=new ArenaClient();client.accept(core.packet(viewer),0);client.frame(0,[],0);const view=client.present();
-    assert.equal(view.driver,driver);assert.equal(view.name,name);assert.equal(view.health,3);assert.equal(view.bots.length,4);
+    assert.equal(view.driver,driver);assert.equal(view.name,name);assert.equal(view.health,3);assert.equal(view.bots.length,5);
   }
-  assert.throws(()=>core.configure({code:'11',host:0,arena:0,bots:0,epoch:1,players:[{id:0,name:'Invalid',driver:9,role:'driver'}]}),/Invalid Rust room/);
+  assert.throws(()=>core.configure({code:'11',host:0,arena:0,bots:0,epoch:1,players:[{id:0,name:'Invalid',driver:10,role:'driver'}]}),/Invalid Rust room/);
 });
 
 test('every Roadster and its chaff remain white across room slots and character changes',()=>{

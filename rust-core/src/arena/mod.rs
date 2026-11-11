@@ -38,13 +38,13 @@ pub fn voice(g:&mut Globals,a:&mut Actor,cue:&str,root_x:f64){
     a.voice_cooldown=1.5;
     g.voices.push(json!({"driver":a.driver,"cue":cue,"pan":match a.id==0 {true=>0.0,false=>((a.wx-root_x)/70.0).clamp(-0.8,0.8)},"volume":match a.id==0 {true=>1.0,false=>0.6}}));
 }
-pub const DRIVER_CUTENESS:[u8;9]=[5,3,4,4,5,5,1,5,5];
-pub const DRIVER_INTELLIGENCE:[u32;9]=[3,5,4,2,4,3,4,5,5];
+pub const DRIVER_CUTENESS:[u8;10]=[5,3,4,4,5,5,1,5,5,5];
+pub const DRIVER_INTELLIGENCE:[u32;10]=[3,5,4,2,4,3,4,5,5,4];
 pub const START_HEDGEHOGS:u32=10;
 pub fn item_capacity(driver:usize,kind:&str)->u32{let intelligence=DRIVER_INTELLIGENCE[driver%DRIVER_INTELLIGENCE.len()];match kind{"hedgehog"=>10+2*(intelligence-1),"missile"|"boost"|"abomb"|"stink"=>intelligence+1,_=>0}}
 pub fn recovery_interval(driver:usize)->f64{14.0-2.0*f64::from(DRIVER_CUTENESS[driver%DRIVER_CUTENESS.len()])}
 pub fn hedgehog_recovery_interval(driver:usize)->f64{2.25-0.25*f64::from(DRIVER_CUTENESS[driver%DRIVER_CUTENESS.len()])}
-pub const DRIVER_NAMES:[&str;9]=["Pip the Panda","Rocco the Raccoon","Felix the Fox","Benny the Bear","Ellie the Elephant","Tamar the Cricket","Elon Musk","Houston the RTPL","Avita-Jas"];
+pub const DRIVER_NAMES:[&str;10]=["Pip the Panda","Rocco the Raccoon","Felix the Fox","Benny the Bear","Ellie the Elephant","Tamar the Cricket","Elon Musk","Houston the RTPL","Avita-Jas","Pearococo"];
 pub fn driver_name(driver:usize)->&'static str { DRIVER_NAMES[driver%DRIVER_NAMES.len()] }
 impl Game {
     pub fn combat_active(&self)->bool{self.global.phase=="racing"}

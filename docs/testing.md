@@ -1,8 +1,10 @@
 # Development checks
 
-The character browser group checks the selection preview for all nine characters, orbiting camera, pause/resume, four gesture stages, and unchanged live-game inventory. Preview rendering must stop once a match starts.
+The character browser group checks the selection preview for all ten characters, orbiting camera, pause/resume, four gesture stages, and unchanged live-game inventory. Preview rendering must stop once a match starts.
 
-Avita-Jas is included in the character browser group: nine-character selection, local/remote Cessna rendering, animated propeller, boost/loop vapor trails, and local/remote electron Vulcan shots. `avita.test.js` verifies ordinary Vulcan damage and ammunition rules in solo and Rust combat; room, recovery, inventory, and Hedgeguard tests include the worm pilot.
+Pearococo coverage includes local and remote royal waves, fairy-dust boost/flip/chaff and protection, and pink ballet-pump Vulcan shots. Combat tests preserve normal damage, inventory and kill credit; recovery and capacity tables include her Cuteness 5 and Intelligence 4.
+
+Avita-Jas is included in the character browser group: character selection, local/remote Cessna rendering, animated propeller, boost/loop vapor trails, and local/remote electron Vulcan shots. `avita.test.js` verifies ordinary Vulcan damage and ammunition rules in solo and Rust combat; room, recovery, inventory, and Hedgeguard tests include the worm pilot.
 
 Hedgeguard coverage in `hedgeguard.test.js` exercises both solo and Rust combat: rare spawn timing, 25-second protection, ordinary/Vulcan/cricket/dollar shot immunity, A-bomb damage immunity, stink-bomb dizziness immunity, missile damage, expiration, death/respawn, and immediate pickup feedback with remote replication. The character browser group checks local and remote orbiting shield/cricket/money auras, the countdown, and expiry under all four network profiles.
 
@@ -38,7 +40,7 @@ Room checks require refresh to restore the same player, room, host role and scor
 
 Guest lobby checks require room setup, map, restart, invitation and duplicate character controls to be hidden while name, character, play request, AFK and fullscreen controls remain usable. Names have no save button: edits reach the server when play is requested or begins. The mobile group verifies this for bomber names too.
 
-The character group verifies eight menu choices, selects the elephant, cricket, astronaut sloth Houston, and Elon/Roadster through the live lobby, checks that remote players receive the same character, renders all four in WebGL, and schedules their synthesized calls. It checks Cuteness and Intelligence bars and authoritative recovery in the local HUD and remote snapshots. Houston's helmet must spin upward during Vulcan activation, stay off afterward, and return when Vulcan ends; the same animation is checked on a remote Houston. Roadster turbo and somersault checks require white vapor and a remotely visible somersault. Screenshots are saved alongside the results for visual review. Run it alone with:
+The character group verifies ten menu choices, selects the elephant, cricket, astronaut sloth Houston, and Elon/Roadster through the live lobby, checks that remote players receive the same character, renders all four in WebGL, and schedules their synthesized calls. It checks Cuteness and Intelligence bars and authoritative recovery in the local HUD and remote snapshots. Houston's helmet must spin upward during Vulcan activation, stay off afterward, and return when Vulcan ends; the same animation is checked on a remote Houston. Roadster turbo and somersault checks require white vapor and a remotely visible somersault. Screenshots are saved alongside the results for visual review. Run it alone with:
 
 ```sh
 npm run test:browser-netcode -- --characters --output /private/tmp/wild-wheels-characters.json

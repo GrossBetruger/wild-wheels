@@ -7,5 +7,6 @@ export function previewPose(driver,time){
     case 2:pose.id='look';pose.label='LOOKING AROUND';pose.yaw=Math.sin(age*Math.PI/2)*.7*ease;break;
     case 3:pose.id='rev';pose.label='REVVING';pose.boost=true;break;
   }
+  if(driver===9&&(stage===0||stage===1)){pose.label='ROYAL WAVE';pose.left=0;pose.right=1.8*ease;pose.bounce=0;}
   return pose;
 }
