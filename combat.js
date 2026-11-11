@@ -1,4 +1,3 @@
-import { configureRustArenas, moveRustKart } from './rust-core.js';
 import { createRace, drivers } from './engine.js';
 export const VULCAN_DURATION=15;
 export const MAX_HEALTH=6;
@@ -15,7 +14,6 @@ export const arenas=[
   {name:'Scrapyard',desc:'Container cover. Wide flanking lanes.',size:96,ground:'#8b927d',wall:'#d7794d',sky:'#b5d3d9',blocks:[[-40,-35,34,10],[40,35,34,10],[-35,35,10,34],[35,-35,10,34],[0,0,14,14]]},
   {name:'Crossfire Court',desc:'A central fortress. Four ways around.',size:96,ground:'#8e849b',wall:'#8063b2',sky:'#c8bbd8',blocks:[[0,0,28,28],[-55,0,12,36],[55,0,12,36],[0,-55,36,12],[0,55,36,12]]},
 ];
-configureRustArenas(arenas);
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
 const angleDelta=(a,b)=>Math.atan2(Math.sin(a-b),Math.cos(a-b));
 const distance=(a,b)=>Math.hypot(a.wx-b.wx,a.wz-b.wz);
@@ -214,16 +212,33 @@ export function ageDriftEffects(r,dt){
   for(const particle of r.driftParticles){particle.age+=dt;particle.wx+=particle.vx*dt;particle.wz+=particle.vz*dt;particle.height=Math.max(.08,particle.height+particle.vy*dt);if(particle.kind==='spark')particle.vy-=12*dt;}
   r.driftParticles=r.driftParticles.filter(p=>p.age<p.life).slice(-240);
 }
-function moveActor(r,actor,steer,gas,brake,dt,handbrake=false,advance=false){
-  const wx=actor.wx,wz=actor.wz;
-  const events=moveRustKart(r,actor,{steer,gas,brake,dt,handbrake,advance});
-  const origin=events&14?{wx,wz,id:actor.id,owner:actor.owner}:actor;
-  if(events&2)sound(r,'driftCharge',origin);
-  if(events&4)sound(r,'driftChargeMax',origin);
-  if(events&8)fx(r,'boost',origin);
-  if(events&1)actor.driftTrail=null;
-  if(events&16)emitDriftTrail(r,actor,dt);
-  if(events&32){fx(r,'crash',actor);actor.wallCooldown=.7;r.shake=.3;voice(r,actor,'hurt');}
+function moveActor(r,actor,steer,gas,brake,dt,handbrake=false){
+  if(actor.dizzy>0)steer=clamp(steer*.6+Math.sin((DIZZY_DURATION-actor.dizzy)*9)*.4,-1,1);
+  // Chassis rotation and travel direction separate while the rear tires slide.
+  const drifting=handbrake&&!(actor.somersault>0)&&!brake&&Math.abs(steer)>.1&&actor.speed>(actor.wasDrifting?70:110);
+  const before=actor.drift;
+  if(drifting){actor.drift=Math.min(1.2,actor.drift+dt);if(before<.45&&actor.drift>=.45)sound(r,'driftCharge',actor);if(before<.85&&actor.drift>=.85)sound(r,'driftChargeMax',actor);}
+  if(!drifting&&actor.wasDrifting){
+    if(!handbrake&&!brake&&actor.speed>90&&actor.drift>=.45&&r.finishCountdown===null){actor.boost=Math.max(actor.boost,actor.drift>=.85?1.35:.8);actor.motionHeading=actor.heading;fx(r,'boost',actor);}
+    actor.drift=0;actor.driftTrail=null;
+  }
+  actor.wasDrifting=drifting;
+  actor.heading-=steer*(drifting?4.8:1.7+Math.min(1,Math.abs(actor.speed)/300)*.7)*dt;
+  actor.speed=clamp(actor.speed+(gas?(drifting?100:300):drifting?-90:-170)*dt-(brake?400*dt:0),brake?-160:0,drifting?400:actor.boost>0?850:520);
+  if(actor.boost>0&&!drifting)actor.speed=Math.min(850,actor.speed+650*dt);
+  actor.motionHeading+=angleDelta(actor.heading,actor.motionHeading)*(1-Math.exp(-(drifting?3.8:14)*dt));
+  if(actor.somersault>0){
+    const progress=clamp(1-actor.somersault/SOMERSAULT_DURATION,0,1),turn=progress*progress*(3-2*progress);
+    actor.cameraHeading=actor.somersaultCameraStart+Math.PI*turn;
+  }
+  if(!(actor.somersault>0))actor.cameraHeading+=angleDelta(actor.heading,actor.cameraHeading)*(1-Math.exp(-(drifting?5:9)*dt));
+  const travel=drifting||actor===r||actor.human?actor.motionHeading:actor.heading;
+  const nx=actor.wx+Math.sin(travel)*actor.speed*.085*dt,nz=actor.wz+Math.cos(travel)*actor.speed*.085*dt;
+  const arena=arenas[r.arena];
+  if(!blocked(arena,nx,nz)){actor.wx=nx;actor.wz=nz;if(drifting)emitDriftTrail(r,actor,dt);return;}
+  if(!blocked(arena,nx,actor.wz))actor.wx=nx;
+  if(!blocked(arena,actor.wx,nz))actor.wz=nz;
+  actor.speed*=.3;actor.drift=0;actor.wasDrifting=false;actor.driftTrail=null;actor.motionHeading=actor.heading;if(actor===r&&actor.wallCooldown<=0){fx(r,'crash',actor);actor.wallCooldown=.7;r.shake=.3;voice(r,actor,'hurt');}
 }
 export function predictKartMovement(world,actor,keys,dt){
   if(actor.bomber||world.phase!=='racing'||world.finishCountdown!==null||actor.destroyed>0)return;
@@ -232,8 +247,12 @@ export function predictKartMovement(world,actor,keys,dt){
   advanceKartMovement(scene,actor,keys,dt);return scene.events;
 }
 function advanceKartMovement(world,actor,keys,dt){
+  actor.dizzy=Math.max(0,(actor.dizzy??0)-dt);
+  actor.somersault=Math.max(0,(actor.somersault??0)-dt);actor.somersaultCooldown=Math.max(0,(actor.somersaultCooldown??0)-dt);
+  actor.boost=Math.max(0,(actor.boost??0)-dt);actor.human=true;
   const steer=keys.steer??(Number(keys.has('arrowright')||keys.has('d'))-Number(keys.has('arrowleft')||keys.has('a')));
-  moveActor(world,actor,steer,keys.has('arrowup')||keys.has('w'),keys.has('arrowdown')||keys.has('s'),dt,keys.has('shift'),true);
+  moveActor(world,actor,steer,keys.has('arrowup')||keys.has('w'),keys.has('arrowdown')||keys.has('s'),dt,keys.has('shift'));
+  actor.yaw=steer*.12;
 }
 export function tickBattle(r,keys,dt,inputs=null){
   dt=clamp(dt,0,.05);if(!['racing','countdown'].includes(r.phase))return;

@@ -45,7 +45,7 @@ class Effect extends Row{get type(){return ['effect','explosion','abomb','boost'
 fields(Effect,[null,'wx','wz','age','life']);
 class World extends Actor{
   get base(){return 32+this.frame.n(21)*44;}
-  get mode(){return 'combat';}get phase(){return this.frame.paused?'paused':phase[this.frame.n(10)];}get resumePhase(){return phase[this.frame.n(10)];}
+  get mode(){return 'combat';}get phase(){const value=phase[this.frame.n(10)];return this.frame.paused&&['countdown','racing'].includes(value)?'paused':value;}get resumePhase(){return phase[this.frame.n(10)];}
   get arena(){return this.frame.n(11);}get elapsed(){return this.frame.n(12);}get countdown(){return this.frame.n(13);}get duration(){return this.frame.n(14);}get targetScore(){return this.frame.n(15);}
   get finishRank(){return this.frame.n(16)<0?null:this.frame.n(16);}get finishTime(){return this.frame.n(17)<0?null:this.frame.n(17);}get finishCountdown(){return this.frame.n(18)<0?null:this.frame.n(18);}
   get rank(){return this.frame.n(19);}get shake(){return this.frame.n(20);}get soundEpoch(){return this.frame.n(22);}get winner(){return this.frame.text.winner;}

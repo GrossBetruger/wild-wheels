@@ -4,6 +4,7 @@ impl Game{
         self.network_time+=frame.dt;
         for input in &frame.inputs{
             let id=input.actor;
+            if let Some(sequence)=input.sequence{self.input_ack[id]=sequence;}
             for action in &input.actions{
                 if action.id.is_some_and(|n|n as i64<=self.accepted_action[id]){continue;}
                 if self.pending[id].len()>=64{continue;}

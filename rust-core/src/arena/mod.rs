@@ -5,6 +5,7 @@ mod tick;
 mod packet;
 mod client;
 mod presentation;
+mod control;
 pub use types::*;
 use serde_json::json;
 
@@ -48,7 +49,7 @@ impl Game {
             for (j,b) in blocks(i).iter().enumerate(){config[j*4..j*4+4].copy_from_slice(b);}
             if crate::set_arena(i,96.0,blocks(i).len())!=1{return Err(());}
         }
-        Ok(Self{global:seed.global,actors,movement_ack:[-1;6],action_ack:[-1;6],accepted_action:[-1;6],pending:vec![Vec::new();6],network_time:0.0,room:Default::default()})
+        Ok(Self{global:seed.global,actors,input_ack:[-1;6],movement_ack:[-1;6],action_ack:[-1;6],accepted_action:[-1;6],pending:vec![Vec::new();6],network_time:0.0,room:Default::default()})
     }
     pub fn view(&self,viewer:usize)->View<'_> {
         View{global:&self.global,player:&self.actors[viewer],bots:self.actors.iter().filter(|a|a.id!=viewer&&!a.inactive).collect()}
@@ -124,4 +125,18 @@ static mut OUTPUT:Vec<u8>=Vec::new();
     if viewer>=6{return 0;}let Some(game)=(unsafe{&*core::ptr::addr_of!(WORLD)}) else{return 0;};
     let output=unsafe{&mut *core::ptr::addr_of_mut!(OUTPUT)};
     match game.encode_packet(viewer,output){Ok(())=>output.len(),Err(_)=>0}
+}
+// Local test harness only; no network route can call these fixture operations.
+#[no_mangle]pub extern "C" fn game_test_snapshot()->usize{
+    let Some(game)=(unsafe{&*core::ptr::addr_of!(WORLD)})else{return 0;};
+    let output=unsafe{&mut *core::ptr::addr_of_mut!(OUTPUT)};output.clear();
+    let view=View{global:&game.global,player:&game.actors[0],bots:game.actors.iter().skip(1).collect()};
+    match serde_json::to_writer(&mut *output,&view){Ok(())=>output.len(),Err(_)=>0}
+}
+#[no_mangle]pub extern "C" fn game_test_edit(len:usize)->u32{
+    if len>IO_MAX{return 0;}let input=unsafe{core::slice::from_raw_parts(game_io_ptr(),len)};
+    let Ok(seed)=serde_json::from_slice::<Seed>(input)else{return 0;};let Ok(mut replacement)=Game::from_seed(seed)else{return 0;};
+    let Some(game)=(unsafe{&mut *core::ptr::addr_of_mut!(WORLD)})else{return 0;};
+    for (old,new) in game.actors.iter().zip(&mut replacement.actors){new.credits=old.credits.clone();}
+    game.global=replacement.global;game.actors=replacement.actors;1
 }

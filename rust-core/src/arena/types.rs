@@ -84,10 +84,10 @@ pub struct Action { #[serde(rename="type")]pub kind:String,pub id:Option<u32>,#[
 fn before_first_move()->i64 { -1 }
 #[derive(Default, Deserialize)]
 #[serde(default,rename_all="camelCase")]
-pub struct Input { pub actor:usize,pub keys:u32,pub steer:Option<f64>,pub moves:Option<Vec<Move>>,pub actions:Vec<Action>,pub action_clock:bool }
+pub struct Input { pub actor:usize,pub keys:u32,pub steer:Option<f64>,pub moves:Option<Vec<Move>>,pub actions:Vec<Action>,pub action_clock:bool,pub sequence:Option<i64> }
 #[derive(Deserialize)]
 pub struct Frame { pub dt:f64,pub inputs:Vec<Input> }
 #[derive(Serialize)]
 pub struct View<'a> { #[serde(flatten)]pub global:&'a Globals,#[serde(flatten)]pub player:&'a Actor,pub bots:Vec<&'a Actor> }
 #[derive(Clone)]
-pub struct Game { pub global:Globals,pub actors:Vec<Actor>,pub movement_ack:[i64;6],pub action_ack:[i64;6],pub accepted_action:[i64;6],pub pending:Vec<Vec<Action>>,pub network_time:f64,pub room:BTreeMap<String,Value> }
+pub struct Game { pub global:Globals,pub actors:Vec<Actor>,pub input_ack:[i64;6],pub movement_ack:[i64;6],pub action_ack:[i64;6],pub accepted_action:[i64;6],pub pending:Vec<Vec<Action>>,pub network_time:f64,pub room:BTreeMap<String,Value> }

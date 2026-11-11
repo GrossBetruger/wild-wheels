@@ -4,10 +4,10 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { Multiplayer } from './multiplayer.js';
 import { createTunnelControl } from './tunnel-control.js';
-const files = new Map([['/', ['index.html', 'text/html']], ['/style.css', ['style.css', 'text/css']], ['/rust-core.wasm',['rust-core.wasm','application/wasm']], ...['rust-core.js','game.js','engine.js','renderer.js','audio.js','track.js','combat.js','network.js','playback.js','prediction.js','action-audio.js','wire.js','binary-wire.js','feedback.js','drift-feedback.js','results.js','combat-notices.js','nameplates.js','mobile.js'].map(file=>['/'+file,[file,'text/javascript']])]);
-export function createGameServer(){
-const multiplayer=new Multiplayer();
-const runtimeHash=createHash('sha256');for(const name of ['server.js','multiplayer.js','ngrok.js','tunnel-control.js','combat.js','rust-core.js','rust-core.wasm','engine.js','track.js','package-lock.json'])runtimeHash.update(name).update(readFileSync(new URL(name,import.meta.url)));const runtimeBuild=runtimeHash.digest('hex');
+const files = new Map([['/', ['index.html', 'text/html']], ['/style.css', ['style.css', 'text/css']], ['/rust-core.wasm',['rust-core.wasm','application/wasm']], ...['arena-core.js','core-view.js','rust-core.js','game.js','engine.js','renderer.js','audio.js','track.js','combat.js','network.js','playback.js','prediction.js','action-audio.js','wire.js','binary-wire.js','feedback.js','drift-feedback.js','results.js','combat-notices.js','nameplates.js','mobile.js'].map(file=>['/'+file,[file,'text/javascript']])]);
+export function createGameServer(options={}){
+const multiplayer=new Multiplayer(options);
+const runtimeHash=createHash('sha256');for(const name of ['server.js','multiplayer.js','ngrok.js','tunnel-control.js','combat.js','arena-core.js','core-view.js','rust-core.js','rust-core.wasm','engine.js','track.js','package-lock.json'])runtimeHash.update(name).update(readFileSync(new URL(name,import.meta.url)));const runtimeBuild=runtimeHash.digest('hex');
 const server=createServer(async (req, res) => {
   if((req.url??'').split('?')[0]==='/build.json'){
     try{
