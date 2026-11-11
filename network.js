@@ -30,7 +30,7 @@ export class NetworkGame {
     this.name.onkeydown=event=>{if(event.key==='Enter'&&this.active){event.preventDefault();event.stopPropagation();this.saveName();}};
     this.invitation=new URL(location.href).searchParams.get('room')??'';
     this.botCount=document.createElement('select');this.botCount.setAttribute('aria-label','Number of multiplayer bots');for(let count=0;count<=5;count++){const option=document.createElement('option');option.value=String(count);option.textContent=`${count} BOT${count===1?'':'S'}`;this.botCount.append(option);}this.botCount.value='1';this.botCount.onchange=()=>{if(this.active)this.control('bots',undefined,Number(this.botCount.value));};
-    this.animalChoice=document.createElement('select');this.animalChoice.className='hidden';this.animalChoice.setAttribute('aria-label','Your multiplayer animal');for(const [index,animal] of drivers.entries()){const option=document.createElement('option');option.value=String(index);option.textContent=`${animal.emoji} ${animal.name}`;this.animalChoice.append(option);}this.animalChoice.onchange=()=>this.chooseDriver(Number(this.animalChoice.value));
+    this.animalChoice=document.createElement('select');this.animalChoice.className='hidden';this.animalChoice.setAttribute('aria-label','Your multiplayer character');for(const [index,animal] of drivers.entries()){const option=document.createElement('option');option.value=String(index);option.textContent=`${animal.emoji} ${animal.name}`;this.animalChoice.append(option);}this.animalChoice.onchange=()=>this.chooseDriver(Number(this.animalChoice.value));
     this.hostButton=this.button('HOST ARENA',()=>this.connect('/api/rooms'));
     this.leaveButton=this.button('LEAVE ROOM',()=>this.leave());this.leaveButton.classList.add('hidden');
     this.status=document.createElement('p');this.status.setAttribute('role','status');this.status.textContent='Host an arena and share the link. Opening it joins the game automatically.';
@@ -171,7 +171,7 @@ export class NetworkGame {
     this.updateShare();this.help.classList.remove('hidden');
     this.botCount.value=String(state.bots);this.botCount.disabled=!this.isHost||!['ready','finished'].includes(state.world.phase);for(const option of this.botCount.options)option.disabled=Number(option.value)>6-state.players.length;
     this.animalChoice.value=String(state.world.driver);this.animalChoice.disabled=!['ready','finished'].includes(state.world.phase);
-    this.status.textContent=`${state.players.length} PLAYER${state.players.length===1?'':'S'} · ${state.bots} BOT${state.bots===1?'':'S'} · ${this.isHost?'Share the link, then press Let’s Battle.':'Choose your animal; the host starts the match.'}`;
+    this.status.textContent=`${state.players.length} PLAYER${state.players.length===1?'':'S'} · ${state.bots} BOT${state.bots===1?'':'S'} · ${this.isHost?'Share the link, then press Let’s Battle.':'Choose your racer; the host starts the match.'}`;
     if(['ready','finished'].includes(state.world.phase)){
       const waiting=state.players.filter(player=>player.id!==state.host&&player.wantsToPlay).map(player=>player.name);
       const seconds=Math.ceil((state.startRequest?.remainingMs??0)/1000);

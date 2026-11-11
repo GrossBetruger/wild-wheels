@@ -13,7 +13,7 @@ console.log(`Regression results: ${directory}. Frame budget: ${functional?'recor
 const results=[];
 for(const [name,command] of [
   ['automated',['--test']],
-  ...['movement','actions','drift','controls','mobile'].map(name=>[name,['scripts/check-browser-netcode.mjs',...(name==='movement'?[]:[name==='actions'?'--feedback':`--${name}`]),'--repeat',String(repeat),'--output',join(directory,`${name}.json`),...(functional?['--functional']:[])]])
+  ...['movement','actions','drift','controls','mobile','characters'].map(name=>[name,['scripts/check-browser-netcode.mjs',...(name==='movement'?[]:[name==='actions'?'--feedback':`--${name}`]),'--repeat',String(repeat),'--output',join(directory,`${name}.json`),...(functional?['--functional']:[])]])
 ]){
   const status=await new Promise(resolve=>{
     const child=spawn(process.execPath,command,{stdio:'inherit'});

@@ -8,7 +8,7 @@ Run lightweight checks before pushing:
 npm test
 ```
 
-Push completed changes to main before heavy browser checks. Revert and push if they find a regression caused by the change. See [the development workflow](../AGENTS.md).
+Push completed changes to main before heavy browser checks. Fix regressions forward, per the user's preference. See [the development workflow](../AGENTS.md).
 
 ## Browser regressions
 
@@ -16,7 +16,7 @@ Push completed changes to main before heavy browser checks. Revert and push if t
 npm run test:regression
 ```
 
-This runs automated tests and five browser groups: movement, projectile/pickup feedback, drift visuals, lobby/item controls, and mobile bombing. Each covers host, guest, 160 ms latency, and jitter profiles, repeated three times (60 scenarios). Results and traces go to the directory printed by the runner. For a shorter check:
+This runs automated tests and six browser groups: movement, projectile/pickup feedback, drift visuals, lobby/item controls, mobile bombing, and character selection/rendering. Each covers host, guest, 160 ms latency, and jitter profiles, repeated three times (72 scenarios). Results and traces go to the directory printed by the runner. For a shorter check:
 
 ```sh
 npm run test:regression -- --repeat 1
@@ -26,7 +26,15 @@ Chrome must be installed. Set CHROME_PATH if it is outside the default macOS loc
 
 Local checks enforce frame time ≤20 ms at the 95th percentile, with guests within 2 ms of the host. Movement checks require position error ≤0.15 units at the 95th percentile (0.5 maximum), camera error ≤1° at the 95th percentile (3° maximum), and no unexplained frozen or backward frames. Action feedback must appear within one rendered frame without duplicate projectiles or pickup cues.
 
-GitHub Actions runs all five groups with --functional --repeat 1 on pushes and pull requests, retaining traces for 30 days. Functional checks enforce behavior and record frame times without enforcing hardware-dependent FPS thresholds.
+GitHub Actions runs all six groups with --functional --repeat 1 on pushes and pull requests, retaining traces for 30 days. Functional checks enforce behavior and record frame times without enforcing hardware-dependent FPS thresholds.
+
+The character group verifies seven menu choices, selects the elephant, cricket, and Elon/Roadster through the live lobby, checks that remote players receive the same character, renders all three in WebGL, and schedules their synthesized calls. Roadster turbo and somersault checks require white vapor and a remotely visible somersault. Screenshots are saved alongside the results for visual review. Run it alone with:
+
+```sh
+npm run test:browser-netcode -- --characters --output /private/tmp/wild-wheels-characters.json
+```
+
+The Roadster's procedural body and effects draw on [Tesla's Roadster reference](https://www.tesla.com/roadster): a low sports-car body, full-width rear light, rear cold-gas thrusters, and perimeter jets for upward/rotational movement. Its four rear nozzles emit white condensation during boost, with additional underbody jets during somersaults. These are visual effects; multiplayer driving and weapon balance stay shared across characters.
 
 ## Targeted checks
 

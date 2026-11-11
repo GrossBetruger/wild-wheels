@@ -24,13 +24,13 @@ impl Room {
         if self.start_request.as_ref().is_some_and(|r|r.id==0||!r.remaining_ms.is_finite()||!(0.0..=3000.0).contains(&r.remaining_ms)){return false;}
         let mut seen=[false;6];
         for p in &self.players {
-            if p.id>=6||seen[p.id]||p.driver>=4||p.name.trim().is_empty()||p.name.encode_utf16().count()>24||!matches!(p.role.as_str(),"driver"|"bomber"){return false;}seen[p.id]=true;
+            if p.id>=6||seen[p.id]||p.driver>=DRIVER_NAMES.len()||p.name.trim().is_empty()||p.name.encode_utf16().count()>24||!matches!(p.role.as_str(),"driver"|"bomber"){return false;}seen[p.id]=true;
         }true
     }
 }
 fn initial_actor(id:usize,skill:f64)->Actor {
     let angle=(id*8/6)as f64*std::f64::consts::FRAC_PI_4;let x=angle.sin()*78.0;let z=angle.cos()*78.0;let heading=(-x).atan2(-z);
-    Actor{id,driver:id%4,color:COLORS[id].into(),wx:x,wz:z,heading,motion_heading:heading,camera_heading:heading,somersault_camera_start:heading,
+    Actor{id,driver:id%DRIVER_NAMES.len(),color:COLORS[id].into(),wx:x,wz:z,heading,motion_heading:heading,camera_heading:heading,somersault_camera_start:heading,
         health:3.0,shield:2.0,ammo:5,missiles:1,turbos:1,item:"hedgehog".into(),fire_cooldown:0.5,chaff:4,skill,..Actor::default()}
 }
 impl Game {

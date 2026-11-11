@@ -38,12 +38,13 @@ pub fn voice(g:&mut Globals,a:&mut Actor,cue:&str,root_x:f64){
     a.voice_cooldown=1.5;
     g.voices.push(json!({"driver":a.driver,"cue":cue,"pan":match a.id==0 {true=>0.0,false=>((a.wx-root_x)/70.0).clamp(-0.8,0.8)},"volume":match a.id==0 {true=>1.0,false=>0.6}}));
 }
-pub fn driver_name(driver:usize)->&'static str { ["Pip the Panda","Rocco the Raccoon","Felix the Fox","Benny the Bear"][driver%4] }
+pub const DRIVER_NAMES:[&str;7]=["Pip the Panda","Rocco the Raccoon","Felix the Fox","Benny the Bear","Ellie the Elephant","Chirp the Cricket","Elon Musk"];
+pub fn driver_name(driver:usize)->&'static str { DRIVER_NAMES[driver%DRIVER_NAMES.len()] }
 impl Game {
     pub fn from_seed(seed:Seed)->Result<Self,()> {
         if seed.global.arena>1||seed.bots.len()!=5||seed.player.id!=0{return Err(());}
         let mut actors=vec![seed.player];actors.extend(seed.bots);
-        if actors.iter().enumerate().any(|(i,a)|a.id!=i||!a.wx.is_finite()||!a.wz.is_finite()){return Err(());}
+        if actors.iter().enumerate().any(|(i,a)|a.id!=i||a.driver>=DRIVER_NAMES.len()||!a.wx.is_finite()||!a.wz.is_finite()){return Err(());}
         for i in 0..2 {
             let config=unsafe{&mut *core::ptr::addr_of_mut!(crate::CONFIG)};
             for (j,b) in blocks(i).iter().enumerate(){config[j*4..j*4+4].copy_from_slice(b);}

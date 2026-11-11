@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {ArenaCore} from './arena-core.js';
 import {decodeBinarySnapshot} from './binary-wire.js';
+import {ArenaClient} from './arena-core.js';
 
 test('a Rust-created multiplayer room spawns distinct drivers and two of each bomb for its bomber',()=>{
   const core=ArenaCore.room({code:'07',host:0,arena:1,bots:2,epoch:3,seed:41,players:[{id:0,name:'Oren',driver:0,role:'driver'},{id:1,name:'Bomber',driver:2,role:'bomber'}]});
@@ -56,4 +57,13 @@ test('late movement after a finished match is acknowledged without moving or cra
   core.step(1/60,[{actor:0,keys:['arrowup'],moves:[{sequence:0,keys:['arrowup']}]}]);
   assert.doesNotThrow(()=>core.step(1/60,[{actor:0,keys:['arrowup'],moves:[{sequence:1,keys:['arrowup']}]}]));
   const after=decodeBinarySnapshot(core.packet(0));assert.equal(after.movementSequence,1);assert.equal(after.world.wx,world.wx);assert.equal(after.world.wz,world.wz);assert.equal(after.world.phase,'finished');
+});
+
+test('elephant, cricket and Roadster drivers survive room configuration, packets and client presentation',()=>{
+  const core=ArenaCore.room({code:'11',host:0,arena:0,bots:0,epoch:1,players:[{id:0,name:'Elon',driver:6,role:'driver'},{id:1,name:'Ellie',driver:4,role:'driver'},{id:2,name:'Chirp',driver:5,role:'driver'}]});
+  for(const [viewer,driver,name]of[[0,6,'Elon'],[1,4,'Ellie'],[2,5,'Chirp']]){
+    const client=new ArenaClient();client.accept(core.packet(viewer),0);client.frame(0,[],0);const view=client.present();
+    assert.equal(view.driver,driver);assert.equal(view.name,name);assert.equal(view.health,3);assert.equal(view.bots.length,2);
+  }
+  assert.throws(()=>core.configure({code:'11',host:0,arena:0,bots:0,epoch:1,players:[{id:0,name:'Invalid',driver:7,role:'driver'}]}),/Invalid Rust room/);
 });

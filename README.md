@@ -1,6 +1,6 @@
 # Wild Wheels
 
-A browser kart game with animal drivers, solo racing, and multiplayer arena battles. Drive on desktop or play as a bomber on mobile. Players need only a browser with WebGL enabled—no accounts or installation.
+A browser kart game with characters, solo racing, and multiplayer arena battles. Drive on desktop or play as a bomber on mobile. Players need only a browser with WebGL enabled—no accounts or installation.
 
 ## Run the game
 
@@ -15,7 +15,7 @@ Open [localhost:5173](http://localhost:5173). Keep the terminal open while playi
 
 ## Play with friends
 
-1. Enter your name, choose an animal, and click **Host Arena**.
+1. Enter your name, choose a character, and click **Host Arena**.
 2. On the same Wi-Fi, copy the invitation and send it to your friends.
 3. For internet play, [install ngrok and connect your account](https://ngrok.com/docs/start) once, then click **Start Internet Link** and **Copy Invite**.
 4. Friends open the link to join. The host can start directly; a guest’s **Let’s Play** request starts automatically after three seconds unless the host refuses.

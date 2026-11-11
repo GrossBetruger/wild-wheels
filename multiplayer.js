@@ -219,8 +219,8 @@ export class Multiplayer {
           this.setReady(member,body.ready);this.broadcast(room);json(200,{ok:true});break;
         }
         case '/api/driver':{
-          if(!['ready','finished'].includes(room.core.status.phase))throw problem(409,'Choose an animal before the next match.');
-          if(!Number.isInteger(body.driver)||body.driver<0||body.driver>=drivers.length)throw problem(400,'Choose an animal.');
+          if(!['ready','finished'].includes(room.core.status.phase))throw problem(409,'Choose a character before the next match.');
+          if(!Number.isInteger(body.driver)||body.driver<0||body.driver>=drivers.length)throw problem(400,'Choose a character.');
           member.driver=body.driver;this.syncRoom(room);
           this.broadcast(room);json(200,{ok:true});break;
         }

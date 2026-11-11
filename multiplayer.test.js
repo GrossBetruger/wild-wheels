@@ -79,12 +79,12 @@ test('joining players get different default animals and distinct kart colors',as
   const guest3=await post('/api/join',{name:'Three',driver:null,code:host.code});
   const guest4=await post('/api/join',{name:'Four',driver:null,code:host.code});
   const guest5=await post('/api/join',{name:'Five',driver:null,code:host.code});
-  assert.deepEqual(guest5.players.map(player=>player.driver),[0,1,2,3,0,1]);
+  assert.deepEqual(guest5.players.map(player=>player.driver),[0,1,2,3,4,5]);
   assert.equal(new Set(guest5.players.map(player=>player.color)).size,6);
   assert.equal(guest1.world.driver,1);
   assert.equal(guest2.world.driver,2);
   assert.equal(guest3.world.driver,3);
-  assert.equal(guest4.world.driver,0);
+  assert.equal(guest4.world.driver,4);
 });
 test('a player can choose an animal in the lobby and keep it for the next match',async t=>{
   const {multiplayer,post}=await serverFor(t);

@@ -5,6 +5,9 @@ export const drivers = [
   { name: 'Rocco the Raccoon', emoji: '🦝', color: '#df7053', desc: 'Your racing line? Consider it stolen.', speed: 5, handling: 3, accel: 4 },
   { name: 'Felix the Fox', emoji: '🦊', color: '#edb84f', desc: 'Quick on the corners. Quicker with trouble.', speed: 4, handling: 4, accel: 5 },
   { name: 'Benny the Bear', emoji: '🐻', color: '#67a99c', desc: 'Big bear. Tiny kart. Absolutely no brakes.', speed: 5, handling: 4, accel: 3 },
+  { name: 'Ellie the Elephant', emoji: '🐘', color: '#81a5bc', desc: 'Big ears. Bigger corner exits.', speed: 4, handling: 4, accel: 5 },
+  { name: 'Chirp the Cricket', emoji: '🦗', color: '#83b64d', desc: 'Six legs. One accelerator. Maximum chirp.', speed: 3, handling: 5, accel: 5 },
+  { name: 'Elon Musk', emoji: '🚘', color: '#e8edf2', desc: 'New Roadster. Cold-gas thrusters. Zero chill.', speed: 5, handling: 3, accel: 5 },
 ];
 export const tracks = [
   { name: 'Sunny Side Circuit', difficulty: 'ROOKIE', desc: 'Rolling hills. Questionable shortcuts.', sky: '#afdadd', grass: '#91b96d', darkGrass: '#88ad65', mountain: '#8ea69b', curve: 1 },
@@ -20,7 +23,7 @@ export function createRace(driver = 0, track = 0, random = Math.random) {
   const skills = [[.94,1],[.86,.93],[.70,.83],[.53,.68],[.35,.51]].map(([low,high])=>low+random()*(high-low));
   for(let i=skills.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[skills[i],skills[j]]=[skills[j],skills[i]];}
   return { phase: 'ready', driver, track, s: 0, x: 0, vx:0, yaw:0, spin:0, shake:0, celebrate:0, events:[], voices:[], effects:[], skids:[], ammo:5, missiles:0, turbos:0, speed: 0, elapsed: 0, countdown: 3, item: 'hedgehog', boost: 0, drift: 0, wasDrifting: false, stun: 0, pickup: -1, notice: '', noticeTime: 0, rank: 6, finishRank: null, finishTime:null, finishOrder:[], finishCountdown:null, winner:null,
-    bots: Array.from({ length: 5 }, (_, i) => ({ s: 140 + i * 170, x: [-.62, .55, -.35, .65, 0][i], vx:0, spin:0, cooldown:0, speed:0, skill:skills[i], laneBias:(random()-.5)*.9, rhythm:random()*Math.PI*2, reaction:.12+(1-skills[i])*.65, decisionIn:0, targetLane:[-.62,.55,-.35,.65,0][i], yaw:0, boost:0, boostCooldown:0, turbo:0, drift:0, driftCooldown:0, pickup:-1, color: ['#edb84f', '#df7053', '#67a99c', '#db8daf', '#777cbb'][i], driver: (i + 1) % 4, stun: 0, finished: false })), projectiles: [] };
+    bots: Array.from({ length: 5 }, (_, i) => ({ s: 140 + i * 170, x: [-.62, .55, -.35, .65, 0][i], vx:0, spin:0, cooldown:0, speed:0, skill:skills[i], laneBias:(random()-.5)*.9, rhythm:random()*Math.PI*2, reaction:.12+(1-skills[i])*.65, decisionIn:0, targetLane:[-.62,.55,-.35,.65,0][i], yaw:0, boost:0, boostCooldown:0, turbo:0, drift:0, driftCooldown:0, pickup:-1, color: ['#edb84f', '#df7053', '#67a99c', '#db8daf', '#777cbb'][i], driver: (i + 1) % drivers.length, stun: 0, finished: false })), projectiles: [] };
 }
 export function notify(r, text) { r.notice = text; r.noticeTime = 2; }
 function effect(r,type,s=r.s,x=r.x,route=r.route){r.events.push(type);r.effects.push({type,s,x,route,age:0,life:type==='explosion'?2.5:type==='hit'?1.1:.65});}

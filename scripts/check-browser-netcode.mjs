@@ -10,6 +10,7 @@ import { checkFeedback } from './check-feedback-scenario.mjs';
 import { checkDrift } from './check-drift-scenario.mjs';
 import { checkControls } from './check-controls-scenario.mjs';
 import { checkMobile } from './check-mobile-scenario.mjs';
+import {checkCharacters} from './check-characters-scenario.mjs';
 import { profilePerformance } from './profile-performance.mjs';
 import { compareEncodingBrowser } from './encoding-lab/browser.mjs';
 import { compareOwnedStateBrowser } from './owned-state-lab/browser.mjs';
@@ -114,6 +115,11 @@ try{
     if(profile.guest){const room={code:'07',arena:0,botCount:0,host:0,members:new Map()};app.multiplayer.makeWorld(room);app.multiplayer.rooms.set('07',room);app.multiplayer.join(room,{name:'Host',driver:1});}
     const identity=await evaluate(`(async()=>{__game.network.botCount.value='0';__game.network.invitation='07';await __game.network.connect('${profile.guest?'/api/join':'/api/rooms'}');return {code:__game.network.state.code,you:__game.network.state.you};})()`);
     const room=app.multiplayer.rooms.get(identity.code);
+    if(process.argv.includes('--characters')){
+      const capture=async label=>{await evaluate("document.querySelector('.viewport').scrollIntoView({block:'center'})");const rect=await evaluate('(()=>{const r=__game.renderer.canvas.getBoundingClientRect();return {x:r.left+scrollX,y:r.top+scrollY,width:r.width,height:r.height,scale:1};})()');const screenshot=await call('Page.captureScreenshot',{format:'png',clip:rect},session);await writeFile(`${output}.${profile.run}.${profile.name}.${label}.png`,Buffer.from(screenshot.data,'base64'));};
+      const result={profile:profile.name,run:profile.run,...await checkCharacters(evaluate,app.multiplayer,room,identity.you,sleep,capture)};results.push(result);console.log(JSON.stringify(result));
+      await evaluate('__game.network.leave()');await call('Target.closeTarget',{targetId});for(const member of [...room.members.values()])app.multiplayer.remove(member);continue;
+    }
     if(process.argv.includes('--profile')){
       for(const measurement of await profilePerformance(evaluate,app.multiplayer,room,sleep)){
         const result={profile:profile.name,run:profile.run,...measurement};results.push(result);console.log(JSON.stringify(result));
