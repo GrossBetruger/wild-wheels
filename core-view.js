@@ -9,7 +9,7 @@ class Pool{
   *[Symbol.iterator](){for(let i=0;i<this.length;i++)yield this.at(i);}
   map(fn){return [...this].map(fn);}filter(fn){return [...this].filter(fn);}find(fn){for(const row of this)if(fn(row))return row;}some(fn){for(const row of this)if(fn(row))return true;return false;}slice(...args){return [...this].slice(...args);}forEach(fn){let i=0;for(const row of this)fn(row,i++);}reduce(fn,initial){return [...this].reduce(fn,initial);}
 }
-const indexed=pool=>new Proxy(pool,{get(target,key,receiver){if(typeof key==='string'&&/^\d+$/.test(key))return target.at(Number(key));return Reflect.get(target,key,receiver);}});
+const indexed=pool=>{const methods=new Map();return new Proxy(pool,{get(target,key){if(typeof key==='string'&&/^\d+$/.test(key))return target.at(Number(key));const value=Reflect.get(target,key,target);if(typeof value!=='function'||key==='constructor')return value;if(!methods.has(key))methods.set(key,value.bind(target));return methods.get(key);}});};
 class Row{constructor(frame,base){this.frame=frame;this.offset=base;}get base(){return typeof this.offset==='function'?this.offset():this.offset;}n(index){return this.frame.n(this.base+index);}}
 function fields(Type,names,{booleans=[],nullable=[]}={}){
   for(const [index,name]of names.entries()){
