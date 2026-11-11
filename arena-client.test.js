@@ -13,6 +13,7 @@ test('Rust-owned prediction and authoritative movement stay identical through co
     server.step(1/60,[{actor:0,...input}]);client.accept(server.packet(),now);client.frame(0,keys,now);
     const expected=server.snapshot(),actual=client.snapshot();
     for(const field of ['wx','wz','heading','cameraHeading','speed'])assert.ok(Math.abs(actual[field]-expected[field])<1e-9,`${field} at tick ${tick}`);
+    assert.equal(client.stats.pendingCommands,0,'acknowledged commands leave the replay backlog');
   }
 });
 
@@ -76,4 +77,17 @@ test('a contested pickup returns a Rust guest to the authoritative inventory',()
   const server=new ArenaCore(seed),client=new ArenaClient();client.accept(server.packet(1),0);client.frame(0,[],.01);assert.equal(client.present().missiles,2);
   server.step(1/60,[{actor:0,keys:[],moves:[]},{actor:1,keys:[],moves:[]}]);client.accept(server.packet(1),.02);client.frame(0,[],.02);
   assert.equal(client.present().missiles,1);
+});
+
+test('fresh drift sparks stay attached to the rendered wheels when network UI updates fall just before a render',()=>{
+  const seed=createBattle();Object.assign(seed,{phase:'racing',multiplayer:true,human:true,wx:-65,wz:70,heading:Math.PI/2,motionHeading:Math.PI/2,cameraHeading:Math.PI/2,speed:250,supplies:[]});
+  for(const bot of seed.bots)Object.assign(bot,{inactive:true,destroyed:1e9});
+  const server=new ArenaCore(seed),client=new ArenaClient();client.accept(server.packet(),0);let fresh=0;
+  for(let frame=1;frame<=24;frame++){
+    const now=frame/60,keys=['arrowup','arrowright','shift'];client.frame(0,keys,now-.0002);client.frame(1/60,keys,now);
+    const view=client.present(),tx=Math.sin(view.heading),tz=Math.cos(view.heading);
+    const wheels=[{wx:view.wx-tx*1.5-tz*1.6,wz:view.wz-tz*1.5+tx*1.6},{wx:view.wx-tx*1.5+tz*1.6,wz:view.wz-tz*1.5-tx*1.6}];
+    for(const spark of view.driftParticles.filter(p=>p.kind==='spark'&&p.age<.001)){fresh++;assert.ok(Math.min(...wheels.map(w=>Math.hypot(spark.wx-w.wx,spark.wz-w.wz)))<=.05,'new sparks originate at the wheels in the displayed frame');}
+  }
+  assert.ok(fresh>0);
 });

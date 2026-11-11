@@ -115,7 +115,7 @@ export async function checkControls(evaluate,app,room,id,sleep,captureFlip,captu
   }`);
   for(let i=0;i<100;i++){if(actor.chaff===1&&await evaluate("document.getElementById('incoming-warning').classList.contains('hidden')&&__game.chaffSounds.length===1"))break;await sleep(10);}
   const warningPass=warning.visible&&warning.blinks&&warning.text.includes('INCOMING MISSILE')&&warning.text.includes('CHAFF')&&actor.chaff===1&&await evaluate("document.getElementById('incoming-warning').classList.contains('hidden')");
-  const ownCloud=room.world.chaffClouds.find(cloud=>cloud.owner===id);
+  const ownCloud=room.world.chaffClouds.map(cloud=>({...cloud})).find(cloud=>cloud.owner===id);
   const colorPass=ownCloud?.color===actor.color&&await evaluate(`__game.network.state.world.chaffClouds.some(cloud=>cloud.owner===${id}&&cloud.color===${JSON.stringify(actor.color)})`);
   if(captureChaff)await captureChaff();
   await sleep(150);

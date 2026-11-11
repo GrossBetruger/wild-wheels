@@ -86,7 +86,9 @@ impl Client{
         let a=&mut self.display.actors[id];a.wx+=self.error[0];a.wz+=self.error[1];a.heading+=self.error[2];a.camera_heading+=self.error[3];
         self.feedback_render(now);
         if keys&32!=0{let action=Action{kind:"fire".into(),after_move: -1,..Action::default()};if self.do_action(action,now){self.feedback_render(now);}}
-        self.feedback_drift(now,fresh);
+        // Only render ticks emit wheel effects. Packet/action previews can arrive
+        // immediately before a draw and otherwise leave brand-new sparks behind it.
+        if dt>0.0{self.feedback_drift(now,fresh);}
         if self.audio.len()>64{self.audio.drain(..self.audio.len()-64);}self.display.global.events=self.audio.clone();self.display.global.voices=self.voice_output.clone();
     }
     fn outbound(&mut self,keys:u32)->serde_json::Value{
@@ -98,6 +100,11 @@ impl Client{
     }
 }
 static mut CLIENT:Option<Client>=None;
+static mut STATUS:[f64;4]=[0.0;4];
+#[no_mangle]pub extern "C" fn client_status_ptr()->*const f64{
+    if let Some(client)=unsafe{&*core::ptr::addr_of!(CLIENT)}{unsafe{*core::ptr::addr_of_mut!(STATUS)=[client.accumulator,client.received,client.history.len()as f64,client.next_sequence as f64];}}
+    core::ptr::addr_of!(STATUS).cast()
+}
 #[no_mangle]pub extern "C" fn client_accept(len:usize,now:f64)->u32{
     if len>super::IO_MAX||!now.is_finite(){return 0;}
     let input=unsafe{core::slice::from_raw_parts(super::game_io_ptr(),len)};
