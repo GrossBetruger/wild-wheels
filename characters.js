@@ -1,4 +1,77 @@
 // Procedural models share the game's existing GPU model cache and kart physics.
+export function drawCessna(m,color){
+  const white='#edf0e5',dark='#354451';
+  m.ball(0,1.3,-.35,.8,.68,2.85,white,12,7);
+  m.ball(0,1.55,1.82,.78,.63,1.12,white,12,7);
+  m.box(0,1.07,.6,1.47,.24,3.8,color);
+  m.box(0,1.85,-.4,1.23,.65,1.4,dark);
+  m.box(0,2.04,.73,1.3,.5,.14,'#87b7c3');
+  // High wing and supporting struts leave the open cockpit and worm visible.
+  m.box(0,3.13,-.8,7.4,.16,1.45,white);
+  for(const side of [-1,1]){
+    m.box(side*3.4,3.23,-.8,.52,.07,1.5,color);
+    for(let i=0;i<8;i++)m.ball(side*(.7+i*.32),1.15+i*.25,-.65,.055,.16,.06,dark,5,3);
+    m.box(side*1.1,.75,-.3,.12,1.15,.12,dark);
+    m.ball(side*1.1,.46,-.3,.24,.46,.46,'#242d37',10,5);
+    m.ball(side*1.3,.46,-.3,.04,.22,.22,'#b8c7cb',8,4);
+    m.box(side*.81,1.52,.6,.06,.15,1.6,color);
+  }
+  m.box(0,.72,2.05,.12,.85,.12,dark);m.ball(0,.38,2.05,.19,.36,.36,'#242d37',8,5);
+  m.box(0,1.48,-2.8,3.05,.13,.85,white);
+  m.box(0,2.07,-2.95,.14,1.35,.8,color);
+  m.box(0,2.77,-2.95,.16,.1,.8,white);
+  m.ball(0,1.65,2.98,.31,.31,.3,color,10,6);
+  for(const side of [-1,1])m.ball(side*.52,1.38,2.71,.16,.12,.06,dark,7,4);
+}
+
+export function drawPilotWorm(m,turn,progress){
+  for(let i=0;i<7;i++){
+    const y=1.7+i*.23,sway=Math.sin(i*.6+progress*3)*turn*.17;
+    m.ball(sway,y,-.05+i*.07,.48-i*.012,.23,.43,'#e6a2a2',10,5);
+    m.ball(sway,y-.09,.31+i*.07,.34,.035,.05,'#c77e91',8,3);
+  }
+  m.ball(0,3.35,.39,.65,.62,.57,'#f1b8b1',12,7);
+  m.ball(0,3.72,.26,.69,.35,.58,'#80513c',12,6);
+  for(const side of [-1,1]){
+    m.ball(side*.6,3.38,.31,.15,.29,.23,'#80513c',8,5);
+    m.ball(side*.25,3.49,.87,.25,.21,.1,'#e6d3a5',10,5);
+    m.ball(side*.25,3.49,.95,.18,.15,.045,'#a0d9de',9,5);
+    m.ball(side*.25,3.48,.99,.065,.09,.025,'#263747',6,4);
+    m.ball(side*.2,3.55,1,.045,.035,.02,'#ffffff',5,3);
+    m.ball(side*.44,3.15,.85,.13,.07,.04,'#e78c9c',7,4);
+  }
+  m.box(0,3.51,.96,.16,.07,.06,'#80513c');
+  m.box(0,3.08,.93,.28,.045,.04,'#9e5969');
+  for(let i=0;i<6;i++)m.ball(-.68-i*.06,2.93-i*.055,-.1-i*.17,.17-i*.015,.08,.14,'#f4d473',7,4);
+}
+
+export function drawCessnaPropeller(m,phase){
+  const angle=phase*Math.PI/8;
+  for(const side of [-1,1]){
+    const x=Math.sin(angle)*side,y=Math.cos(angle)*side,nx=Math.cos(angle)*.12,ny=-Math.sin(angle)*.12;
+    m.quad([x*.2+nx,1.65+y*.2+ny,3.24],[x*1.38+nx,1.65+y*1.38+ny,3.24],[x*1.38-nx,1.65+y*1.38-ny,3.24],[x*.2-nx,1.65+y*.2-ny,3.24],'#364855');
+    m.ball(x*1.25,1.65+y*1.25,3.25,.12,.12,.04,'#f8d86e',6,4);
+  }
+}
+
+export function drawCessnaBoost(glow,smoke,p,angle,clock,jump=null){
+  for(const mesh of [glow,smoke]){mesh.at(p.x,.13+(jump?.height??0),p.z,angle);mesh.pitch=jump?.pitch??0;mesh.pivot=1.87;}
+  for(let i=0;i<24;i++){const a=i*Math.PI/12+clock*25;glow.particle(Math.sin(a)*1.33,1.65+Math.cos(a)*1.33,3.24,.17,[.1,.2,.28]);}
+  for(const side of [-1,1])for(let i=0;i<18;i++){
+    const t=(clock*2.7+i/18)%1;
+    smoke.particle(side*(3.48+Math.sin(t*9-clock*5)*t*.13),3.15+Math.cos(t*9-clock*5)*t*.13,-.8-t*8,(.14+t*.5)*Math.sqrt(1-t),[.82,.92,.98]);
+  }
+  for(let ring=0;ring<3;ring++){
+    const t=(clock*2+ring/3)%1,radius=.6+t*1.1;
+    for(let i=0;i<12;i++){const a=i*Math.PI/6+clock*4;smoke.particle(Math.sin(a)*radius,1.65+Math.cos(a)*radius,2.8-t*7,.16*(1-t),[.65,.8,.87]);}
+  }
+}
+
+export function drawElectron(m){
+  m.ball(0,0,0,.24,.24,.24,'#79dfff',9,5);
+  m.box(0,0,.25,.28,.065,.04,'#f3ffff');
+}
+
 export function drawDollarBundle(m){
   for(let layer=0;layer<4;layer++)m.box(0,-.18+layer*.12,0,1.3,.09,1.7,layer%2?'#e0e7bd':'#4c8751');
   m.box(0,.28,0,1.16,.015,1.52,'#6ca65d');
@@ -32,6 +105,7 @@ export function drawHoustonHelmet(m){
 
 export function drawNewDriver(m,driver,turn,progress,helmet=true){
   if(driver<4)return false;
+  if(driver===8){drawPilotWorm(m,turn,progress);return true;}
   const skin=['#91a9bc','#78ad41','#edc5ab','#a99074'][driver-4];
   const suit=driver===7?'#eef0e9':driver===6?'#20232d':skin;
   m.ball(0,2.2,0,driver===4?1.05:.78,1,.72,suit);

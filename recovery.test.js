@@ -6,7 +6,7 @@ import {ArenaCore} from './arena-core.js';
 
 for(const engine of ['solo','Rust multiplayer']){
   test(`${engine}: cuteness replenishes hedgehogs every one to two seconds, up to the intelligence carrying limit`,()=>{
-    for(const [driver,seconds,limit]of [[0,1,14],[1,1.5,18],[2,1.25,16],[3,1.25,12],[4,1,16],[5,1,14],[6,2,16],[7,1,18]]){
+    for(const [driver,seconds,limit]of [[0,1,14],[1,1.5,18],[2,1.25,16],[3,1.25,12],[4,1,16],[5,1,14],[6,2,16],[7,1,18],[8,1,18]]){
       const seed=createBattle(driver);Object.assign(seed,{phase:'racing',human:true,ammo:0,reload:0,missiles:2,turbos:1,supplies:[]});
       for(const bot of seed.bots)Object.assign(bot,{inactive:true,destroyed:1e9});
       assert.equal(hedgehogRecoveryInterval(driver),seconds);const core=engine==='solo'?null:new ArenaCore(seed);
@@ -20,7 +20,7 @@ for(const engine of ['solo','Rust multiplayer']){
   });
 
   test(`${engine}: each character recovers one heart at their cuteness interval`,()=>{
-    for(const [driver,cuteness,seconds]of [[0,5,4],[1,3,8],[2,4,6],[3,4,6],[4,5,4],[5,5,4],[6,1,12],[7,5,4]]){
+    for(const [driver,cuteness,seconds]of [[0,5,4],[1,3,8],[2,4,6],[3,4,6],[4,5,4],[5,5,4],[6,1,12],[7,5,4],[8,5,4]]){
       const seed=createBattle(driver);Object.assign(seed,{phase:'racing',human:true,health:1,shield:0,supplies:[]});
       for(const bot of seed.bots)Object.assign(bot,{inactive:true,destroyed:1e9});
       assert.equal(drivers[driver].cuteness,cuteness);assert.equal(recoveryInterval(driver),seconds);
