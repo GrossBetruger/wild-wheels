@@ -7,6 +7,7 @@ const scenarios=[
   {name:'six-player-vulcan',players:6,bots:0,drift:true,vulcan:true}
 ];
 const summarize=values=>{
+  if(!values.length)return {samples:0,meanMs:null,p95Ms:null};
   const sorted=[...values].sort((a,b)=>a-b);
   return {samples:values.length,meanMs:values.reduce((sum,n)=>sum+n,0)/values.length,p95Ms:sorted[Math.floor(sorted.length*.95)]??0};
 };
@@ -63,6 +64,30 @@ export async function profilePerformance(evaluate,app,room,sleep){
       object[method]=(...args)=>{const start=performance.now();try{return original(...args);}finally{if(metrics.enabled)metrics[key].push(performance.now()-start);}};
     }
     __game.renderer.setQuality('balanced');
+    const gl=__game.renderer.gl,ext=gl.getExtension('EXT_disjoint_timer_query'),pending=[];
+    metrics.gpuTimerSupported=Boolean(ext&&ext.getQueryEXT(ext.TIME_ELAPSED_EXT,ext.QUERY_COUNTER_BITS_EXT)>0);
+    metrics.gpuElapsed=[];metrics.gpuDisjoint=0;metrics.generation=0;
+    metrics.pollGpu=()=>{
+      if(!metrics.gpuTimerSupported)return;
+      if(gl.getParameter(ext.GPU_DISJOINT_EXT)){
+        for(const item of pending)ext.deleteQueryEXT(item.query);
+        pending.length=0;metrics.gpuElapsed=[];metrics.gpuDisjoint++;return;
+      }
+      while(pending.length&&ext.getQueryObjectEXT(pending[0].query,ext.QUERY_RESULT_AVAILABLE_EXT)){
+        const item=pending.shift(),ns=ext.getQueryObjectEXT(item.query,ext.QUERY_RESULT_EXT);
+        if(item.generation===metrics.generation)metrics.gpuElapsed.push(ns/1e6);
+        ext.deleteQueryEXT(item.query);
+      }
+    };
+    const draw=__game.renderer.draw.bind(__game.renderer);
+    __game.renderer.draw=(...args)=>{
+      metrics.pollGpu();
+      const query=metrics.enabled&&metrics.gpuTimerSupported&&pending.length<8?ext.createQueryEXT():null;
+      if(query)ext.beginQueryEXT(ext.TIME_ELAPSED_EXT,query);
+      try{return draw(...args);}finally{
+        if(query){ext.endQueryEXT(ext.TIME_ELAPSED_EXT);pending.push({query,generation:metrics.generation});}
+      }
+    };
   }`);
   const originalMembers=new Set(room.members.keys());
   try{
@@ -75,14 +100,16 @@ export async function profilePerformance(evaluate,app,room,sleep){
       };
       // Warm shaders, caches, simulation and the JIT before collecting browser samples.
       for(let i=0;i<30;i++){await drive();await sleep(100);}
-      await evaluate(`{Object.assign(__perf,{enabled:true,render:[],network:[],frame:[],intervals:[],last:null});}`);
+      await evaluate(`{Object.assign(__perf,{enabled:true,render:[],network:[],frame:[],intervals:[],last:null,gpuElapsed:[],gpuDisjoint:0,generation:__perf.generation+1});}`);
       for(let i=0;i<60;i++){await drive();await sleep(100);}
+      await evaluate('__perf.enabled=false');
+      await sleep(200); // Let the last GPU queries complete without forcing a pipeline stall.
       const browser=await evaluate(`(()=>{
-        __perf.enabled=false;
-        const {render,network,frame,intervals}=__perf;
-        return {render,network,frame,intervals,gpu:__game.renderer.gpuName,softwareGPU:__game.renderer.softwareGPU,width:__game.renderer.canvas.width,height:__game.renderer.canvas.height,pixelRatio:__game.renderer.pixelRatio(),projectiles:__game.race.projectiles.length};
+        __perf.pollGpu();
+        const {render,network,frame,intervals,gpuElapsed,gpuTimerSupported,gpuDisjoint}=__perf;
+        return {render,network,frame,intervals,gpuElapsed,gpuTimerSupported,gpuDisjoint,gpu:__game.renderer.gpuName,softwareGPU:__game.renderer.softwareGPU,width:__game.renderer.canvas.width,height:__game.renderer.canvas.height,pixelRatio:__game.renderer.pixelRatio(),projectiles:__game.race.projectiles.length};
       })()`);
-      const result={scenario:scenario.name,server,browser:{...browser,render:summarize(browser.render),network:summarize(browser.network),frame:summarize(browser.frame),intervals:summarize(browser.intervals)},pass:browser.render.length>60&&browser.frame.length>60};
+      const result={scenario:scenario.name,server,browser:{...browser,gpuElapsed:summarize(browser.gpuElapsed),render:summarize(browser.render),network:summarize(browser.network),frame:summarize(browser.frame),intervals:summarize(browser.intervals)},pass:browser.render.length>60&&browser.frame.length>60&&(!browser.gpuTimerSupported||browser.gpuElapsed.length>60)};
       results.push(result);
       for(const member of [...room.members.values()])if(!originalMembers.has(member.id))app.remove(member);
     }
