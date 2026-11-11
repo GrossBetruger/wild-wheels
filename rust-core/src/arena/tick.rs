@@ -33,7 +33,7 @@ impl Game{
         for id in 0..self.actors.len(){
             let input=frame.inputs.iter().find(|input|input.actor==id);let action_clock=input.is_some_and(|i|i.action_clock);
             let a=&mut self.actors[id];if a.afk{continue;}a.notice_time=(a.notice_time-dt).max(0.0);
-            for timer in [&mut a.shield,&mut a.celebrate,&mut a.voice_cooldown,&mut a.wall_cooldown,&mut a.vulcan]{*timer=(*timer-dt).max(0.0);}
+            for timer in [&mut a.shield,&mut a.hedge_shield,&mut a.celebrate,&mut a.voice_cooldown,&mut a.wall_cooldown,&mut a.vulcan]{*timer=(*timer-dt).max(0.0);}
             if !action_clock{a.fire_cooldown=(a.fire_cooldown-dt).max(0.0);a.chaff_cooldown=(a.chaff_cooldown-dt).max(0.0);}
             if a.bomber{
                 if !a.inactive&&!ending{let before=a.bomb_reload;a.bomb_reload+=dt;if before<5.0-1e-8&&a.bomb_reload>=5.0-1e-8{a.stink_ammo=(a.stink_ammo+1).min(item_capacity(a.driver,"stink"));a.bomb_reload=a.bomb_reload.max(5.0);}if a.bomb_reload>=10.0-1e-8{a.bomb_ammo=(a.bomb_ammo+1).min(item_capacity(a.driver,"abomb"));a.stink_ammo=(a.stink_ammo+1).min(item_capacity(a.driver,"stink"));a.bomb_reload=(a.bomb_reload-10.0).max(0.0);}}continue;
@@ -88,13 +88,13 @@ impl Game{
         let shots=std::mem::take(&mut self.global.projectiles);
         for mut shot in shots{
             let(impact,victim,decoy)=self.advance_shot(&mut shot,dt);
-            if let Some(victim)=victim{if shot.kind=="hedgehog"{self.damage(victim,shot.owner,1.0);}}
+            if let Some(victim)=victim{if shot.kind=="hedgehog"{self.damage(victim,shot.owner,1.0,"hedgehog");}}
             if !impact&&shot.life>0.0{self.global.projectiles.push(shot);continue;}
             shot.life=0.0;
             if shot.kind=="missile"{
                 effect(&mut self.global,"explosion",shot.owner,shot.wx,shot.wz,None);
                 if shot.chaffed{if let Some(owner)=decoy.and_then(|id|self.actors.get_mut(id)){owner.notice="CHAFF INTERCEPT · MISSILE DESTROYED".into();owner.notice_time=2.0;}if decoy==Some(0){self.global.shake=self.global.shake.max(0.12);}continue;}
-                for id in 0..self.actors.len(){let a=&self.actors[id];if distance(a.wx,a.wz,shot.wx,shot.wz)<10.0&&clear(self.global.arena,shot.wx,shot.wz,a.wx,a.wz){self.damage(id,shot.owner,3.0);}}
+                for id in 0..self.actors.len(){let a=&self.actors[id];if distance(a.wx,a.wz,shot.wx,shot.wz)<10.0&&clear(self.global.arena,shot.wx,shot.wz,a.wx,a.wz){self.damage(id,shot.owner,3.0,"missile");}}
             }
         }
         let bombs=std::mem::take(&mut self.global.bombs);
@@ -102,7 +102,7 @@ impl Game{
             bomb.age+=dt;if bomb.age<0.9-1e-8{self.global.bombs.push(bomb);continue;}
             if bomb.kind=="stink"{self.global.stink_clouds.push(Stink{id:bomb.id,owner:bomb.owner,wx:bomb.wx,wz:bomb.wz,life:5.0,..Stink::default()});sound(&mut self.global,"stinkBurst",bomb.owner,bomb.wx,bomb.wz,None);continue;}
             sound(&mut self.global,"bombExplosion",bomb.owner,bomb.wx,bomb.wz,None);self.global.effects.push(Effect{kind:"abomb".into(),wx:bomb.wx,wz:bomb.wz,life:3.0,color:Some(bomb.color),..Effect::default()});
-            for id in 0..self.actors.len(){if distance(self.actors[id].wx,self.actors[id].wz,bomb.wx,bomb.wz)<=22.0{self.damage(id,bomb.owner,3.0);}}
+            for id in 0..self.actors.len(){if distance(self.actors[id].wx,self.actors[id].wz,bomb.wx,bomb.wz)<=22.0{self.damage(id,bomb.owner,3.0,"abomb");}}
             if !self.actors[0].bomber&&distance(self.actors[0].wx,self.actors[0].wz,bomb.wx,bomb.wz)<44.0{self.global.shake=self.global.shake.max(0.7);}
         }
         {

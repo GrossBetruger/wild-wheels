@@ -19,6 +19,7 @@ function fields(Type,names,{booleans=[],nullable=[]}={}){
 }
 class Actor extends Row{
   get healTimer(){return this.n(43);}
+  get hedgeShield(){return this.n(44);}
   get afk(){return Boolean(this.n(42));}
   get name(){return this.frame.text.actors[this.id]?.name??undefined;}
   get notice(){return this.frame.text.actors[this.id]?.notice??'';}
@@ -36,7 +37,7 @@ class Shot extends Row{
   get orbitAge(){return this.n(15)<0?undefined:this.n(15);}
 }
 fields(Shot,['id','owner',null,'wx','wz','heading','speed','height','vy','life','age','vulcan','actionId','target','decoy',null,'orbitAngle','orbitRadius','orbitHeight','chaffed',null,'orbitDirection'],{booleans:['vulcan','chaffed'],nullable:['actionId','target','decoy']});
-class Supply extends Row{get kind(){return ['hedgehog','missile','boost','health'][this.n(3)];}}
+class Supply extends Row{get kind(){return ['hedgehog','missile','boost','health','hedgeproof'][this.n(3)];}}
 fields(Supply,['id','wx','wz',null,'cooldown','version','collector'],{nullable:['collector']});
 class Bomb extends Row{get kind(){return this.n(2)===1?'stink':'abomb';}get color(){return color(this.n(7));}}
 fields(Bomb,['id','owner',null,'wx','wz','age','actionId'],{nullable:['actionId']});
@@ -46,7 +47,7 @@ class Stink extends Row{}fields(Stink,['id','owner','wx','wz','age','life']);
 class Effect extends Row{get type(){return ['effect','explosion','abomb','boost','pickup','hit','crash','fire','vulcanReady'][this.n(0)];}get color(){return color(this.n(5));}}
 fields(Effect,[null,'wx','wz','age','life']);
 class World extends Actor{
-  get base(){return 32+this.frame.n(21)*44;}
+  get base(){return 32+this.frame.n(21)*48;}
   get mode(){return 'combat';}get phase(){const value=phase[this.frame.n(10)];return this.frame.paused&&['countdown','racing'].includes(value)?'paused':value;}get resumePhase(){return phase[this.frame.n(10)];}
   get arena(){return this.frame.n(11);}get elapsed(){return this.frame.n(12);}get countdown(){return this.frame.n(13);}get duration(){return this.frame.n(14);}get targetScore(){return this.frame.n(15);}
   get finishRank(){return this.frame.n(16)<0?null:this.frame.n(16);}get finishTime(){return this.frame.n(17)<0?null:this.frame.n(17);}get finishCountdown(){return this.frame.n(18)<0?null:this.frame.n(18);}
@@ -57,7 +58,7 @@ class World extends Actor{
 export class CoreView{
   text={actors:[],killFeed:[],events:[],voices:[],room:{}};version=-1;events=[];voices=[];paused=false;botIds=[];bases={};pools={};
   constructor(core){
-    this.core=core;this.world=new World(this,0);this.bots=indexed(new Pool(()=>this.botIds.length,i=>this.actors[this.botIds[i]]));this.actors=Array.from({length:6},(_,i)=>new Actor(this,()=>32+i*44));
+    this.core=core;this.world=new World(this,0);this.bots=indexed(new Pool(()=>this.botIds.length,i=>this.actors[this.botIds[i]]));this.actors=Array.from({length:6},(_,i)=>new Actor(this,()=>32+i*48));
     const groups=[['skids',2,6,Skid],['driftParticles',3,12,Particle],['projectiles',4,96,Shot],['supplies',5,8,Supply],['bombs',6,10,Bomb],['chaffClouds',7,16,Chaff],['stinkClouds',8,8,Stink],['effects',9,8,Effect]];
     this.groups=groups;
     for(const[name,count,stride,Type]of groups)this.pools[name]=indexed(new Pool(()=>this.n(count),i=>new Type(this,()=>this.bases[name]+i*stride)));
@@ -69,7 +70,7 @@ export class CoreView{
   refresh(length){
     if(length<32)throw new Error('Rust presentation unavailable');this.pointer=this.core.presentation_ptr();this.length=length;this.data=new Float64Array(this.core.memory.buffer,this.pointer,length);
     if(this.n(0)!==1)throw new Error('Rust presentation version mismatch');
-    let base=32+this.n(1)*44;for(const[name,count,stride]of this.groups){this.bases[name]=base;base+=this.n(count)*stride;}
+    let base=32+this.n(1)*48;for(const[name,count,stride]of this.groups){this.bases[name]=base;base+=this.n(count)*stride;}
     if(base!==length)throw new Error('Rust presentation layout mismatch');
     this.botIds=[];for(let i=0;i<this.n(1);i++)if(i!==this.n(21)&&!this.actors[i].inactive)this.botIds.push(i);
     const version=this.core.presentation_text_version();

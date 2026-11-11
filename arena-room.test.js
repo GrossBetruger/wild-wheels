@@ -11,7 +11,7 @@ test('a Rust-created multiplayer room spawns distinct drivers and two of each bo
   assert.equal(host.world.phase,'ready');assert.equal(host.world.soundEpoch,3);assert.equal(host.world.health,3);assert.equal(host.world.ammo,10);assert.equal(host.world.chaff,4);
   assert.equal(guest.world.name,'Bomber');assert.equal(guest.world.driver,2);assert.equal(guest.world.bomber,true);assert.equal(guest.world.bombAmmo,2);assert.equal(guest.world.stinkAmmo,2);
   assert.notEqual(host.world.color,guest.world.color);assert.notEqual(host.world.wx,guest.world.wx);
-  assert.equal(host.world.supplies.length,8);assert.equal(host.world.duration,180);assert.equal(host.world.targetScore,10);
+  assert.equal(host.world.supplies.length,9);assert.equal(host.world.duration,180);assert.equal(host.world.targetScore,10);
 });
 
 test('lobby names, animal choices and guest play requests reach every player without rebuilding the world',()=>{

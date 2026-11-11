@@ -1,5 +1,7 @@
 # Development checks
 
+Hedgeguard coverage in `hedgeguard.test.js` exercises both solo and Rust combat: rare spawn timing, twelve-second protection, ordinary/Vulcan/cricket/dollar shots and A-bomb immunity, missile damage, expiration, death/respawn, and immediate pickup feedback with remote replication. The character browser group checks local and remote orbiting shield/cricket/money auras, the countdown, and expiry under all four network profiles.
+
 For CPU/GPU profiling and recorded results, see [Performance measurements](performance.md).
 
 Run lightweight checks before pushing:

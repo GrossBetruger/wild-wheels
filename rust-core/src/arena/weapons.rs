@@ -55,9 +55,9 @@ impl Game{
         if g.multiplayer||distance(a.wx,a.wz,root_x,root_z)<90.0{sound(g,"chaff",id,a.wx,a.wz,None);}
         a.notice=match diverted{0=>"CHAFF RELEASED".into(),1=>"CHAFF · 1 MISSILE DIVERTED".into(),n=>format!("CHAFF · {} MISSILES DIVERTED",n)};a.notice_time=2.0;
     }
-    pub(super) fn damage(&mut self,victim:usize,owner:usize,amount:f64)->bool{
+    pub(super) fn damage(&mut self,victim:usize,owner:usize,amount:f64,kind:&str)->bool{
         let a=&self.actors[victim];
-        if a.bomber||a.inactive||a.afk||self.global.phase!="racing"||a.destroyed>0.0||a.shield>0.0||victim==owner{return false;}
+        if a.bomber||a.inactive||a.afk||self.global.phase!="racing"||a.destroyed>0.0||a.shield>0.0||a.hedge_shield>0.0&&kind!="missile"||victim==owner{return false;}
         let unscored=self.global.finish_countdown.is_some();
         let root_x=self.actors[0].wx;let g=&mut self.global;let a=&mut self.actors[victim];a.health=(a.health-amount).max(0.0);a.heal_timer=0.0;voice(g,a,"hurt",root_x);if victim==0{g.shake=0.5;}
         if a.health>0.0{
@@ -67,7 +67,7 @@ impl Game{
         let mut credit=Vec::new();if owner<self.actors.len(){credit.push(owner);}
         let a=&self.actors[victim];
         if a.dizzy>0.0{for(&id,&expires)in &a.credits{if expires>g.elapsed+1e-8&&self.actors.get(id).is_some_and(|b|b.bomber&&!b.inactive)&&id!=victim&&!credit.contains(&id){credit.push(id);}}}
-        let a=&mut self.actors[victim];a.credits.clear();a.destroyed=3.0;a.speed=0.0;a.boost=0.0;if !unscored{a.deaths+=1;}effect(g,"explosion",victim,a.wx,a.wz,None);a.drift=0.0;a.was_drifting=false;a.drift_trail=None;a.kill_streak=0;a.vulcan=0.0;a.somersault=0.0;a.dizzy=0.0;
+        let a=&mut self.actors[victim];a.credits.clear();a.destroyed=3.0;a.speed=0.0;a.boost=0.0;if !unscored{a.deaths+=1;}effect(g,"explosion",victim,a.wx,a.wz,None);a.drift=0.0;a.was_drifting=false;a.drift_trail=None;a.kill_streak=0;a.vulcan=0.0;a.hedge_shield=0.0;a.somersault=0.0;a.dizzy=0.0;
         if unscored{return true;}
         let victim_name=a.name.clone().unwrap_or_else(||driver_name(a.driver).into());let victim_color=a.color.clone();
         for scorer in credit{
