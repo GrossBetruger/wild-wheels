@@ -34,7 +34,8 @@ pub fn navigate(arena:usize,a:&Actor,b:&Actor)->Vec<Point>{
     while n!=start&&n!= -1{path.push(Point{wx:(n%18*10-85) as f64,wz:(n/18*10-85) as f64});n=previous[n as usize];}path.reverse();path
 }
 impl Game{
-    pub(super) fn move_cart(&mut self,id:usize,steer:f64,keys:u32,dt:f64,advance:bool){
+    pub(super) fn move_cart(&mut self,id:usize,steer:f64,keys:u32,dt:f64,advance:bool,lethal:bool){
+        if self.actors[id].destroyed>0.0||self.actors[id].prediction_crash{return;}
         let g=&mut self.global;let a=&mut self.actors[id];let wx=a.wx;let wz=a.wz;
         let data=[a.wx,a.wz,a.heading,a.motion_heading,a.camera_heading,a.speed,a.drift,a.boost,a.somersault,a.somersault_cooldown,a.dizzy,a.somersault_camera_start,a.yaw,f64::from(a.was_drifting),a.wall_cooldown,0.0];
         // This is entirely inside Wasm: no actor objects cross the JS boundary.
@@ -46,6 +47,10 @@ impl Game{
         if advance{a.human=true;}
         if events&2!=0{sound(g,"driftCharge",id,wx,wz,None);}if events&4!=0{sound(g,"driftChargeMax",id,wx,wz,None);}if events&8!=0{effect(g,"boost",id,wx,wz,None);}if events&1!=0{a.drift_trail=None;}if events&16!=0{emit(g,a,dt);}
         if events&32!=0{effect(g,"crash",id,a.wx,a.wz,None);a.wall_cooldown=0.7;g.shake=0.3;voice(g,a,"hurt",a.wx);}
+        if events&64!=0&&a.boost>0.0{
+            if lethal{self.damage(id,usize::MAX,6.0,"wall");return;}
+            a.prediction_crash=true;a.speed=0.0;a.boost=0.0;a.drift=0.0;a.was_drifting=false;a.somersault=0.0;a.dizzy=0.0;
+        }
     }
     pub(super) fn spawn(&mut self,id:usize){
         let mut candidates:Vec<_>=(0..8).map(|i|{let angle=i as f64*std::f64::consts::PI/4.0;Point{wx:angle.sin()*78.0,wz:angle.cos()*78.0}}).collect();

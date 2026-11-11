@@ -7,6 +7,7 @@ const MAX_CHARGE: u32 = 4;
 const BOOST: u32 = 8;
 const TRAIL: u32 = 16;
 const CRASH: u32 = 32;
+const WALL: u32 = 64;
 #[derive(Clone, Copy)]
 #[repr(C)]
 struct Kart { data: [f64; FIELDS] }
@@ -59,7 +60,7 @@ pub extern "C" fn step(slot: usize, arena_index: usize, steer: f64, dt: f64, fla
         dizzy=(dizzy-dt).max(0.0);flip=(flip-dt).max(0.0);cooldown=(cooldown-dt).max(0.0);boost=(boost-dt).max(0.0);yaw=steer*0.12;
     }
     let mut turn=steer;
-    if dizzy>0.0 { turn=(turn*0.6+((4.0-dizzy)*9.0).sin()*0.4).clamp(-1.0,1.0); }
+    if dizzy>0.0 { let wild=boost>0.0;let control=match wild{true=>0.25,false=>0.4};let frequency=match wild{true=>14.0,false=>10.0};let sway=match wild{true=>1.65,false=>0.95};turn=(turn*control+((arena::DIZZY_DURATION-dizzy)*frequency).sin()*sway).clamp(-1.0,1.0); }
     let drifting=handbrake && flip<=0.0 && !brake && turn.abs()>0.1 && speed>match was!=0.0 { true=>70.0,false=>110.0 };
     let mut events=0;
     if drifting {
@@ -92,6 +93,7 @@ pub extern "C" fn step(slot: usize, arena_index: usize, steer: f64, dt: f64, fla
         x=nx;z=nz;if drifting { events|=TRAIL; }
     }
     if collided {
+        events|=WALL;
         if !blocked(arena,nx,z) { x=nx; }
         if !blocked(arena,x,nz) { z=nz; }
         speed*=0.3;drift=0.0;was_drifting=0.0;motion=heading;events|=CLEAR;

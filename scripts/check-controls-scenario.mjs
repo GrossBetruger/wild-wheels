@@ -154,7 +154,7 @@ export async function checkControls(evaluate,app,room,id,sleep,captureFlip,captu
   const dizzySeen=actor.dizzy>0&&await evaluate("document.getElementById('dizzy-notice').textContent.includes('DIZZY')");
   const stinkSpent=bomberActor.stinkAmmo===0;
   if(captureStink)await captureStink();
-  for(let i=0;i<500;i++){if(actor.dizzy===0&&await evaluate("document.getElementById('dizzy-notice').classList.contains('hidden')"))break;await sleep(10);}
+  for(let i=0;i<900;i++){if(actor.dizzy===0&&await evaluate("document.getElementById('dizzy-notice').classList.contains('hidden')"))break;await sleep(10);}
   const stinkPass=dizzySeen&&actor.dizzy===0&&actor.health===healthBefore&&stinkSpent;
   app.remove(bomber);
   await evaluate(`fetch('/api/name',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer ${shooter.token}'},body:JSON.stringify({name:'Rival <img>'})})`);

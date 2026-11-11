@@ -17,7 +17,7 @@ fn pose_copy(target:&mut Actor,source:&Actor){
 fn move_one(game:&mut Game,id:usize,command:&Move){
     if !game.combat_active()||game.actors[id].destroyed>0.0||game.actors[id].bomber||game.actors[id].afk{return;}
     let steer=command.steer.unwrap_or(f64::from(u8::from(command.keys&4!=0))-f64::from(u8::from(command.keys&8!=0)));
-    game.move_cart(id,steer,command.keys,1.0/60.0,true);
+    game.move_cart(id,steer,command.keys,1.0/60.0,true,false);
 }
 impl Client{
     fn new(game:Game,viewer:usize,now:f64)->Self{

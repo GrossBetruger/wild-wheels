@@ -31,7 +31,7 @@ for(const engine of ['solo','Rust multiplayer']){
     const seed=createBattle();Object.assign(seed,{phase:'racing',human:true,wx:-65,wz:0,shield:0,hedgeShield:2/60,health:3,dizzy:0,supplies:[],stinkClouds:[{id:1,owner:1,wx:-65,wz:0,age:0,life:5,hits:[]}]});for(const bot of seed.bots)Object.assign(bot,{inactive:true,destroyed:1e9});
     const core=engine==='solo'?null:new ArenaCore(seed),step=()=>core?core.step(1/60):tickBattle(seed,new Set(),1/60),read=()=>core?core.snapshot():seed;
     step();assert.equal(read().dizzy,0);assert.equal(read().health,3);
-    step();assert.equal(read().hedgeShield,0);assert.equal(read().dizzy,4);assert.equal(read().health,3);
+    step();assert.equal(read().hedgeShield,0);assert.equal(read().dizzy,8);assert.equal(read().health,3);
   });
 
   test(`${engine}: hedgehogs hurt again when the 25 second protection expires`,()=>{

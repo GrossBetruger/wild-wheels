@@ -25,6 +25,7 @@ pub struct Actor {
     pub drift:f64,pub was_drifting:bool,pub drift_emit:f64,pub drift_trail:Option<Vec<Point>>,
     pub notice:String,pub notice_time:f64,
     #[serde(skip)] pub credits:BTreeMap<usize,f64>,
+    #[serde(skip)] pub prediction_crash:bool,
     #[serde(flatten)] pub extra:BTreeMap<String,Value>,
 }
 #[derive(Clone, Default, Deserialize, Serialize)]

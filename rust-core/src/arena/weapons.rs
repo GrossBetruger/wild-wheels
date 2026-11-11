@@ -57,7 +57,7 @@ impl Game{
     }
     pub(super) fn damage(&mut self,victim:usize,owner:usize,amount:f64,kind:&str)->bool{
         let a=&self.actors[victim];
-        if a.bomber||a.inactive||a.afk||self.global.phase!="racing"||a.destroyed>0.0||a.shield>0.0||a.hedge_shield>0.0&&kind!="missile"||victim==owner{return false;}
+        if a.bomber||a.inactive||a.afk||self.global.phase!="racing"||a.destroyed>0.0||a.shield>0.0&&kind!="wall"||a.hedge_shield>0.0&&kind!="missile"&&kind!="wall"||victim==owner{return false;}
         let unscored=self.global.finish_countdown.is_some();
         let root_x=self.actors[0].wx;let g=&mut self.global;let a=&mut self.actors[victim];a.health=(a.health-amount).max(0.0);a.heal_timer=0.0;voice(g,a,"hurt",root_x);if victim==0{g.shake=0.5;}
         if a.health>0.0{
@@ -71,9 +71,9 @@ impl Game{
         if unscored{return true;}
         let victim_name=a.name.clone().unwrap_or_else(||driver_name(a.driver).into());let victim_color=a.color.clone();
         for scorer in credit{
-            let a=&mut self.actors[scorer];a.kills+=match scorer==owner{true=>1.0,false=>0.5};a.celebrate=1.6;voice(g,a,"cheer",root_x);g.kill_sequence+=1;
+            let a=&mut self.actors[scorer];a.kills+=match scorer==owner||kind=="wall"{true=>1.0,false=>0.5};a.celebrate=1.6;voice(g,a,"cheer",root_x);g.kill_sequence+=1;
             let label=match scorer==0{true=>"YOU".into(),false=>a.name.clone().unwrap_or_else(||driver_name(a.driver).split(' ').next().unwrap_or("RIVAL").into())};
-            g.kill_feed.insert(0,Kill{id:g.kill_sequence,attacker:scorer,victim,victim_name:victim_name.clone(),victim_color:victim_color.clone(),text:format!("{} → {}",label,match victim==0{true=>"YOU",false=>&victim_name}),time:g.elapsed,assist:scorer!=owner});g.kill_feed.truncate(16);
+            g.kill_feed.insert(0,Kill{id:g.kill_sequence,attacker:scorer,victim,victim_name:victim_name.clone(),victim_color:victim_color.clone(),text:format!("{} → {}",label,match victim==0{true=>"YOU",false=>&victim_name}),time:g.elapsed,assist:scorer!=owner&&kind!="wall"});g.kill_feed.truncate(16);
         }
         if let Some(a)=self.actors.get_mut(owner){if !a.bomber&&a.destroyed<=0.0{a.kill_streak+=1;if a.kill_streak%2==0{a.vulcan=15.0;a.health=a.health.max(4.0);a.item="hedgehog".into();a.fire_cooldown=0.0;effect(g,"vulcanReady",owner,a.wx,a.wz,None);a.notice="2-KILL STREAK · HEDGEHOG VULCAN!".into();a.notice_time=3.0;}}}true
     }

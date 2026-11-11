@@ -9,10 +9,11 @@ export const MOVEMENT_DT=1/60;
 export const SOMERSAULT_DURATION=.55;
 export const BOMB_FALL_TIME=.9;
 export const BOMB_RADIUS=22;
+export const BOMB_OUTER_RADIUS=28;
 export const BOMB_START_AMMO=2;
 export const BOMB_RECHARGE=10;
 export const STINK_RADIUS=14;
-export const DIZZY_DURATION=4;
+export const DIZZY_DURATION=8;
 
 export const arenas=[
   {name:'Scrapyard',desc:'Container cover. Wide flanking lanes.',size:96,ground:'#8b927d',wall:'#d7794d',sky:'#b5d3d9',blocks:[[-40,-35,34,10],[40,35,34,10],[-35,35,10,34],[35,-35,10,34],[0,0,14,14]]},
@@ -175,7 +176,7 @@ export function advanceProjectile(r,shot,dt){
   return {impact,victim,decoy};
 }
 export function damageBattle(r,victim,owner,amount,kind='hedgehog'){
-  if(victim.bomber||victim.inactive||!battleActive(r)||victim.destroyed>0||victim.shield>0||victim.hedgeShield>0&&kind!=='missile'||victim.id===owner)return false;
+  if(victim.bomber||victim.inactive||!battleActive(r)||victim.destroyed>0||victim.shield>0&&kind!=='wall'||victim.hedgeShield>0&&kind!=='missile'&&kind!=='wall'||victim.id===owner)return false;
   victim.health=Math.max(0,victim.health-amount);victim.healTimer=0;voice(r,victim,'hurt');
   if(victim===r)r.shake=.5;
   const attacker=[r,...r.bots].find(k=>k.id===owner);
@@ -190,7 +191,7 @@ export function damageBattle(r,victim,owner,amount,kind='hedgehog'){
   victim.destroyed=3;victim.speed=0;victim.boost=0;if(r.finishCountdown===null)victim.deaths++;fx(r,'explosion',victim);
   victim.drift=0;victim.wasDrifting=false;victim.driftTrail=null;victim.killStreak=0;victim.vulcan=0;victim.hedgeShield=0;victim.somersault=0;victim.dizzy=0;
   if(r.finishCountdown!==null)return true;
-  for(const scorer of credited){scorer.kills+=scorer===attacker?1:.5;scorer.celebrate=1.6;voice(r,scorer,'cheer');r.killFeed.unshift({id:r.killSequence=(r.killSequence??0)+1,attacker:scorer.id,assist:scorer!==attacker,victim:victim.id,victimName:victim.name??drivers[victim.driver].name,victimColor:victim.color??drivers[victim.driver].color,text:`${scorer===r?'YOU':scorer.name??drivers[scorer.driver].name.split(' ')[0]} → ${victim===r?'YOU':victim.name??drivers[victim.driver].name.split(' ')[0]}`,time:r.elapsed});r.killFeed=r.killFeed.slice(0,16);}
+  for(const scorer of credited){const full=kind==='wall'||scorer===attacker;scorer.kills+=full?1:.5;scorer.celebrate=1.6;voice(r,scorer,'cheer');r.killFeed.unshift({id:r.killSequence=(r.killSequence??0)+1,attacker:scorer.id,assist:!full,victim:victim.id,victimName:victim.name??drivers[victim.driver].name,victimColor:victim.color??drivers[victim.driver].color,text:`${scorer===r?'YOU':scorer.name??drivers[scorer.driver].name.split(' ')[0]} → ${victim===r?'YOU':victim.name??drivers[victim.driver].name.split(' ')[0]}`,time:r.elapsed});r.killFeed=r.killFeed.slice(0,16);}
   if(attacker&&!attacker.bomber&&!attacker.destroyed){
     attacker.killStreak++;
     if(attacker.killStreak%2===0){attacker.vulcan=VULCAN_DURATION;attacker.health=Math.max(attacker.health,4);attacker.item='hedgehog';attacker.fireCooldown=0;fx(r,'vulcanReady',attacker);attacker.notice='2-KILL STREAK · HEDGEHOG VULCAN!';attacker.noticeTime=3;}
@@ -228,7 +229,7 @@ export function ageDriftEffects(r,dt){
   r.driftParticles=r.driftParticles.filter(p=>p.age<p.life).slice(-240);
 }
 function moveActor(r,actor,steer,gas,brake,dt,handbrake=false){
-  if(actor.dizzy>0)steer=clamp(steer*.6+Math.sin((DIZZY_DURATION-actor.dizzy)*9)*.4,-1,1);
+  if(actor.dizzy>0){const wild=actor.boost>0;steer=clamp(steer*(wild?.25:.4)+Math.sin((DIZZY_DURATION-actor.dizzy)*(wild?14:10))*(wild?1.65:.95),-1,1);}
   // Chassis rotation and travel direction separate while the rear tires slide.
   const drifting=handbrake&&!(actor.somersault>0)&&!brake&&Math.abs(steer)>.1&&actor.speed>(actor.wasDrifting?70:110);
   const before=actor.drift;
@@ -253,15 +254,20 @@ function moveActor(r,actor,steer,gas,brake,dt,handbrake=false){
   if(!blocked(arena,nx,nz)){actor.wx=nx;actor.wz=nz;if(drifting)emitDriftTrail(r,actor,dt);return;}
   if(!blocked(arena,nx,actor.wz))actor.wx=nx;
   if(!blocked(arena,actor.wx,nz))actor.wz=nz;
+  if(actor.boost>0){
+    if(!r.prediction){damageBattle(r,actor,-1,MAX_HEALTH,'wall');return;}
+    actor.predictedCrash=true;actor.speed=0;actor.boost=0;actor.drift=0;actor.wasDrifting=false;actor.somersault=0;actor.dizzy=0;return;
+  }
   actor.speed*=.3;actor.drift=0;actor.wasDrifting=false;actor.driftTrail=null;actor.motionHeading=actor.heading;if(actor===r&&actor.wallCooldown<=0){fx(r,'crash',actor);actor.wallCooldown=.7;r.shake=.3;voice(r,actor,'hurt');}
 }
 export function predictKartMovement(world,actor,keys,dt){
   if(actor.bomber||!battleActive(world)||actor.destroyed>0)return;
   // Reuse movement and wall collisions, without running weapons, damage or AI.
-  const scene={mode:'combat',phase:world.phase,arena:world.arena,elapsed:world.elapsed,finishCountdown:null,events:[],effects:[],skids:[],driftParticles:[]};
+  const scene={prediction:true,mode:'combat',phase:world.phase,arena:world.arena,elapsed:world.elapsed,finishCountdown:null,events:[],effects:[],skids:[],driftParticles:[]};
   advanceKartMovement(scene,actor,keys,dt);return scene.events;
 }
 function advanceKartMovement(world,actor,keys,dt){
+  if(actor.destroyed>0||actor.predictedCrash)return;
   actor.dizzy=Math.max(0,(actor.dizzy??0)-dt);
   actor.somersault=Math.max(0,(actor.somersault??0)-dt);actor.somersaultCooldown=Math.max(0,(actor.somersaultCooldown??0)-dt);
   actor.boost=Math.max(0,(actor.boost??0)-dt);actor.human=true;
@@ -351,7 +357,7 @@ export function tickBattle(r,keys,dt,inputs=null){
       r.stinkClouds.push({id:bomb.id,owner:bomb.owner,wx:bomb.wx,wz:bomb.wz,age:0,life:5,hits:[]});sound(r,'stinkBurst',bomb);continue;
     }
     sound(r,'bombExplosion',bomb);r.effects.push({type:'abomb',wx:bomb.wx,wz:bomb.wz,age:0,life:3,color:bomb.color});
-    for(const victim of actors)if(distance(victim,bomb)<=BOMB_RADIUS)damageBattle(r,victim,bomb.owner,3,'abomb');
+    for(const victim of actors){const radius=distance(victim,bomb);if(radius<=BOMB_OUTER_RADIUS)damageBattle(r,victim,bomb.owner,radius<=BOMB_RADIUS?5:3,'abomb');}
     if(!r.bomber&&distance(r,bomb)<BOMB_RADIUS*2)r.shake=Math.max(r.shake,.7);
   }
   r.bombs=r.bombs.filter(bomb=>bomb.age<BOMB_FALL_TIME-1e-8);

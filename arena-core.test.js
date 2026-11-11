@@ -50,7 +50,7 @@ test('Rust-owned stink assists award a half point to each bomber and a full poin
   for(const bomber of [bomberA,bomberB])Object.assign(bomber,{bomber:true,bombAmmo:2,stinkAmmo:2});
   for(const bot of [unusedA,unusedB])Object.assign(bot,{inactive:true,destroyed:1e9});
   seed.stinkClouds=[{id:0,owner:2,wx:-65,wz:20,age:0,life:5,hits:[]},{id:1,owner:3,wx:-65,wz:20,age:0,life:5,hits:[]}];
-  const core=new ArenaCore(seed);core.step(1/60);assert.equal(core.snapshot().bots[0].dizzy,4);
+  const core=new ArenaCore(seed);core.step(1/60);assert.equal(core.snapshot().bots[0].dizzy,8);
   core.step(1/60,[{actor:0,keys:[],actions:[{type:'fire',id:0,afterMove:-1}]}]);for(let i=0;i<40;i++)core.step(1/60);
   const world=core.snapshot();assert.equal(world.kills,1);assert.equal(world.bots[0].deaths,1);assert.equal(world.bots[1].kills,.5);assert.equal(world.bots[2].kills,.5);
   assert.equal(world.killFeed.filter(event=>event.assist).length,2);
@@ -58,7 +58,7 @@ test('Rust-owned stink assists award a half point to each bomber and a full poin
 
 test('a Rust-owned A-bomb retains its original damage and radius and consumes only A-bomb ammo',()=>{
   const seed=createBattle();Object.assign(seed,{phase:'racing',bomber:true,bombAmmo:2,stinkAmmo:2,supplies:[]});
-  for(const [i,bot]of seed.bots.entries())Object.assign(bot,{human:true,wx:-65,wz:i===0?0:i===1?22:23,health:3,shield:0,destroyed:i>2?1e9:0,speed:0});
+  for(const [i,bot]of seed.bots.entries())Object.assign(bot,{human:true,wx:-65,wz:i===0?0:i===1?22:29,health:3,shield:0,destroyed:i>2?1e9:0,speed:0});
   const core=new ArenaCore(seed);core.step(1/60,[{actor:0,keys:[],actions:[{type:'bomb',kind:'abomb',wx:-65,wz:0,id:0,afterMove:-1}]}]);
   for(let i=0;i<53;i++)core.step(1/60);
   const world=core.snapshot();assert.equal(world.bombAmmo,1);assert.equal(world.stinkAmmo,2);assert.equal(world.kills,2);assert.deepEqual(world.bots.slice(0,3).map(bot=>bot.health),[0,0,3]);

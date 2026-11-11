@@ -52,9 +52,9 @@ impl Game{
                         if movement.sequence<=self.movement_ack[id]{continue;}
                         if action_clock{let a=&mut self.actors[id];for timer in [&mut a.fire_cooldown,&mut a.chaff_cooldown]{let left=*timer-1.0/60.0;*timer=match left<1e-8{true=>0.0,false=>left};}}
                         let steer=movement.steer.unwrap_or(f64::from(u8::from(movement.keys&4!=0))-f64::from(u8::from(movement.keys&8!=0)));
-                        self.move_cart(id,steer,movement.keys,1.0/60.0,true);self.collect(id);self.movement_ack[id]=movement.sequence;self.apply_pending(id,movement.sequence);
+                        self.move_cart(id,steer,movement.keys,1.0/60.0,true,true);self.collect(id);self.movement_ack[id]=movement.sequence;self.apply_pending(id,movement.sequence);
                     },
-                    None=>{let steer=input.and_then(|i|i.steer).unwrap_or(f64::from(u8::from(held&4!=0))-f64::from(u8::from(held&8!=0)));self.move_cart(id,steer,held,dt,true);}
+                    None=>{let steer=input.and_then(|i|i.steer).unwrap_or(f64::from(u8::from(held&4!=0))-f64::from(u8::from(held&8!=0)));self.move_cart(id,steer,held,dt,true,true);}
                 }
                 if held&32!=0{self.fire(id,None);}continue;
             }
@@ -69,7 +69,7 @@ impl Game{
             let (x,z)=match (visible,a.path.first()){(false,Some(p))=>(p.wx,p.wz),_=>(target_x,target_z)};
             let turn=angle((x-a.wx).atan2(z-a.wz),a.heading);let mut steer=-(turn*1.8).clamp(-1.0,1.0);
             if blocked(arena,a.wx+a.heading.sin()*9.0,a.wz+a.heading.cos()*9.0,3.0)&&steer.abs()<0.4{steer=1.0;}
-            let gas=turn.abs()<1.3||a.speed<100.0;self.move_cart(id,steer,u32::from(gas),dt,false);
+            let gas=turn.abs()<1.3||a.speed<100.0;self.move_cart(id,steer,u32::from(gas),dt,false,true);
             let a=&self.actors[id];let aim=angle((target_x-a.wx).atan2(target_z-a.wz),a.heading);
             if visible&&aim.abs()<0.18+(1.0-a.skill)*0.12&&distance(a.wx,a.wz,target_x,target_z)<85.0{self.actors[id].item=match(self.actors[id].vulcan>0.0,self.actors[id].missiles>0){(true,_)=>"hedgehog",(_,true)=>"missile",_=>"hedgehog"}.into();self.fire(id,None);}
         }
@@ -102,7 +102,7 @@ impl Game{
             bomb.age+=dt;if bomb.age<0.9-1e-8{self.global.bombs.push(bomb);continue;}
             if bomb.kind=="stink"{self.global.stink_clouds.push(Stink{id:bomb.id,owner:bomb.owner,wx:bomb.wx,wz:bomb.wz,life:5.0,..Stink::default()});sound(&mut self.global,"stinkBurst",bomb.owner,bomb.wx,bomb.wz,None);continue;}
             sound(&mut self.global,"bombExplosion",bomb.owner,bomb.wx,bomb.wz,None);self.global.effects.push(Effect{kind:"abomb".into(),wx:bomb.wx,wz:bomb.wz,life:3.0,color:Some(bomb.color),..Effect::default()});
-            for id in 0..self.actors.len(){if distance(self.actors[id].wx,self.actors[id].wz,bomb.wx,bomb.wz)<=22.0{self.damage(id,bomb.owner,3.0,"abomb");}}
+            for id in 0..self.actors.len(){let radius=distance(self.actors[id].wx,self.actors[id].wz,bomb.wx,bomb.wz);if radius<=28.0{self.damage(id,bomb.owner,match radius<=22.0{true=>5.0,false=>3.0},"abomb");}}
             if !self.actors[0].bomber&&distance(self.actors[0].wx,self.actors[0].wz,bomb.wx,bomb.wz)<44.0{self.global.shake=self.global.shake.max(0.7);}
         }
         {
@@ -111,7 +111,7 @@ impl Game{
                 if a.bomber||a.inactive||a.afk||a.destroyed>0.0||a.shield>0.0||a.hedge_shield>0.0||cloud.hits.contains(&a.id)||distance(a.wx,a.wz,cloud.wx,cloud.wz)>14.0{continue;}
                 cloud.hits.push(a.id);
                 if a.dizzy<=0.0{g.sound_sequence+=1;g.events.push(match g.multiplayer{true=>json!({"type":"dizzy","owner":a.id,"wx":a.wx,"wz":a.wz,"id":format!("{}:{}",g.sound_epoch,g.sound_sequence)}),false=>json!("dizzy")});}
-                a.dizzy=4.0;a.credits.retain(|_,expires|*expires>g.elapsed+1e-8);if !ending{a.credits.insert(cloud.owner,g.elapsed+4.0);}
+                a.dizzy=DIZZY_DURATION;a.credits.retain(|_,expires|*expires>g.elapsed+1e-8);if !ending{a.credits.insert(cloud.owner,g.elapsed+DIZZY_DURATION);}
             }}
         }
         let order=self.order();let g=&mut self.global;g.rank=order.iter().position(|&id|id==0).map_or(0,|i|i+1);

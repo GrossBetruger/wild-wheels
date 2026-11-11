@@ -19,7 +19,7 @@ test('stinkbombs refill every five seconds and A-bombs every ten',()=>{
 test('a falling A-bomb explodes after 0.9 seconds and kills nearby karts without rewarding ammunition',()=>{
   const world=equipBomber(createBattle());Object.assign(world,{phase:'racing',supplies:[]});
   const [nearby,edge,outside]=world.bots;world.bots=[nearby,edge,outside];
-  Object.assign(nearby,{wx:-65,wz:0,shield:0,health:3,speed:0,human:true});Object.assign(edge,{wx:-65,wz:22,shield:0,health:3,speed:0,human:true});Object.assign(outside,{wx:-65,wz:23,shield:0,health:3,speed:0,human:true});
+  Object.assign(nearby,{wx:-65,wz:0,shield:0,health:3,speed:0,human:true});Object.assign(edge,{wx:-65,wz:22,shield:0,health:3,speed:0,human:true});Object.assign(outside,{wx:-65,wz:29,shield:0,health:3,speed:0,human:true});
   dropBomb(world,world,{wx:-65,wz:0});
   for(let i=0;i<53;i++)tickBattle(world,new Set(),1/60);
   assert.equal(nearby.health,3);assert.equal(edge.health,3);assert.equal(world.bombs.length,1);

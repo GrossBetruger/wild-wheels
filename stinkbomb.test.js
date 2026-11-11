@@ -16,22 +16,22 @@ test('stinkbombs use their own ammunition and show the selected canister immedia
   assert.ok(dropBomb(world,world,{wx:30,wz:40,kind:'stink'},0));feedback.accept({world,actionSequence:0},.1);
   assert.equal(feedback.render(world,world,.1,-1).bombs.length,1);assert.equal(world.bombAmmo,2);assert.equal(world.stinkAmmo,0);
 });
-test('gas makes nearby exposed karts dizzy for four seconds without damaging health or awarding kills',()=>{
+test('gas makes nearby exposed karts dizzy for eight seconds without damaging health or awarding kills',()=>{
   const world=equipBomber(createBattle());Object.assign(world,{phase:'racing',supplies:[],stinkAmmo:1});
   const [nearby,shielded,outside]=world.bots;world.bots=[nearby,shielded,outside];
   Object.assign(nearby,{wx:-65,wz:0,health:3,shield:0,speed:0,human:true});Object.assign(shielded,{wx:-55,wz:0,health:3,shield:6,speed:0,human:true});Object.assign(outside,{wx:-65,wz:20,health:3,shield:0,speed:0,human:true});
   dropBomb(world,world,{wx:-65,wz:0,kind:'stink'});for(let i=0;i<54;i++)tickBattle(world,new Set(),1/60);
-  assert.equal(nearby.dizzy,4);assert.equal(shielded.dizzy,0);assert.equal(outside.dizzy,0);
+  assert.equal(nearby.dizzy,8);assert.equal(shielded.dizzy,0);assert.equal(outside.dizzy,0);
   assert.equal(nearby.health,3);assert.equal(world.kills,0);assert.equal(world.bombAmmo,2);assert.equal(world.stinkClouds.length,1);
-  for(let i=0;i<120;i++)tickBattle(world,new Set(),1/60);assert.ok(Math.abs(nearby.dizzy-2)<1e-8);
-  for(let i=0;i<121;i++)tickBattle(world,new Set(),1/60);assert.equal(nearby.dizzy,0);assert.equal(nearby.health,3);assert.equal(world.stinkClouds.length,1);
+  for(let i=0;i<120;i++)tickBattle(world,new Set(),1/60);assert.ok(Math.abs(nearby.dizzy-6)<1e-8);
+  for(let i=0;i<361;i++)tickBattle(world,new Set(),1/60);assert.equal(nearby.dizzy,0);assert.equal(nearby.health,3);assert.equal(world.stinkClouds.length,0);
   for(let i=0;i<60;i++)tickBattle(world,new Set(),1/60);assert.equal(world.stinkClouds.length,0);
 });
 test('karts entering lingering gas get dizzy, and death clears dizziness',()=>{
   const world=equipBomber(createBattle());Object.assign(world,{phase:'racing',supplies:[],stinkAmmo:1});
   const target=world.bots[0];world.bots=[target];Object.assign(target,{wx:-65,wz:25,health:3,shield:0,speed:0,human:true});
   dropBomb(world,world,{wx:-65,wz:0,kind:'stink'});for(let i=0;i<54;i++)tickBattle(world,new Set(),1/60);assert.equal(target.dizzy,0);
-  target.wz=0;tickBattle(world,new Set(),1/60);assert.equal(target.dizzy,4);
+  target.wz=0;tickBattle(world,new Set(),1/60);assert.equal(target.dizzy,8);
   damageBattle(world,target,world.id,3);assert.equal(target.dizzy,0);
 });
 test('dizzy steering weaves, remains responsive, and returns to normal after the effect expires',()=>{
@@ -70,12 +70,12 @@ test('a bomber who also lands the killing blow gets one point despite multiple g
   tickBattle(world,new Set(),1/60);damageBattle(world,victim,world.id,3);
   assert.equal(world.kills,1);assert.equal(victim.deaths,1);assert.equal(world.bombAmmo,2);
 });
-test('newer gas does not extend another bomber credit beyond their own four seconds',()=>{
+test('newer gas does not extend another bomber credit beyond their own eight seconds',()=>{
   const world=createBattle();Object.assign(world,{phase:'racing',supplies:[]});
   const [bomberA,bomberB,victim]=world.bots;world.bots=[bomberA,bomberB,victim];equipBomber(bomberA);equipBomber(bomberB);
   Object.assign(victim,{wx:-65,wz:0,shield:0,health:3,human:true,speed:0});
   world.stinkClouds=[{owner:bomberA.id,wx:-65,wz:0,age:0,life:2.5,hits:[]}];tickBattle(world,new Set(),1/60);
-  for(let i=0;i<180;i++)tickBattle(world,new Set(),1/60);
+  for(let i=0;i<420;i++)tickBattle(world,new Set(),1/60);
   world.stinkClouds=[{owner:bomberB.id,wx:-65,wz:0,age:0,life:2.5,hits:[]}];tickBattle(world,new Set(),1/60);
   for(let i=0;i<61;i++)tickBattle(world,new Set(),1/60);
   damageBattle(world,victim,world.id,3);
@@ -86,7 +86,7 @@ test('expired gas earns no point and gas credit does not carry across respawn',(
   const [bomber,victim]=world.bots;world.bots=[bomber,victim];equipBomber(bomber);
   Object.assign(victim,{wx:-65,wz:0,shield:0,health:3,human:true,speed:0});
   world.stinkClouds=[{owner:bomber.id,wx:-65,wz:0,age:0,life:2.5,hits:[]}];tickBattle(world,new Set(),1/60);
-  for(let i=0;i<241;i++)tickBattle(world,new Set(),1/60);
+  for(let i=0;i<481;i++)tickBattle(world,new Set(),1/60);
   damageBattle(world,victim,world.id,3);assert.deepEqual([world.kills,bomber.kills],[1,0]);
   for(let i=0;i<310;i++)tickBattle(world,new Set(),1/60);
   damageBattle(world,victim,world.id,3);assert.deepEqual([world.kills,bomber.kills,victim.deaths],[2,0,2]);
@@ -116,7 +116,7 @@ test('stink gas still affects a new arrival after three seconds and disperses af
   dropBomb(world,world,{wx:-65,wz:0,kind:'stink'});
   for(let i=0;i<234;i++)tickBattle(world,new Set(),1/60);
   assert.equal(world.stinkClouds.length,1);assert.equal(victim.dizzy,0);
-  victim.wz=0;tickBattle(world,new Set(),1/60);assert.equal(victim.dizzy,4);
+  victim.wz=0;tickBattle(world,new Set(),1/60);assert.equal(victim.dizzy,8);
   for(let i=0;i<118;i++)tickBattle(world,new Set(),1/60);assert.equal(world.stinkClouds.length,1);
   for(let i=0;i<2;i++)tickBattle(world,new Set(),1/60);assert.equal(world.stinkClouds.length,0);assert.ok(victim.dizzy>1.9);assert.equal(victim.health,3);
 });
