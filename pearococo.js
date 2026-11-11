@@ -30,14 +30,17 @@ export function drawRococoChariot(m,color){
   m.ball(0,1.42,2.52,.19,.2,.1,'#c773b7',8,5);
 }
 
-export function drawPearococo(m){
+export function drawPeacockTail(m){
   // A real peacock fan: tapered feather blades, gold shafts and jeweled eyes.
   for(let i=0;i<11;i++){
     const a=(i-5)*.23,dx=Math.sin(a),dy=Math.cos(a),length=3.8+(i%2)*.15;
     const point=(t,w,z)=>[dx*t+dy*w,1.75+dy*t-dx*w,z];
-    const tip=point(length,0,-1.45),left=point(length*.77,-.4,-1.4),base=point(.2,0,-1.05),right=point(length*.77,.4,-1.4);
-    m.quad(base,left,tip,right,i%2?'#74bfae':'#60a5b5');
-    m.quad(right,tip,left,base,i%2?'#74bfae':'#60a5b5');
+    // Subdivisions let the GPU bend the blade, shaft and eyes together.
+    for(let j=0;j<12;j++){
+      const t=j/12,u=(j+1)/12,w=Math.sin(t*Math.PI)*.43,v=Math.sin(u*Math.PI)*.43;
+      const a=point(t*length,-w,-1.05-t*.4),b=point(u*length,-v,-1.05-u*.4),c=point(u*length,v,-1.05-u*.4),d=point(t*length,w,-1.05-t*.4);
+      m.quad(a,b,c,d,i%2?'#74bfae':'#60a5b5');m.quad(d,c,b,a,i%2?'#74bfae':'#60a5b5');
+    }
     for(let j=1;j<=9;j++){const p=point(j*length/10,0,-1.34);m.ball(...p,.035,.08,.035,gold,5,3);}
     const [x,y]=point(length*.82,0,0);
     for(const side of [-1,1]){
@@ -47,6 +50,9 @@ export function drawPearococo(m){
       pearl(m,x-.04,y+.08,-1.45+side*.23);
     }
   }
+}
+
+export function drawPearococo(m){
   // Pink panniers, ivory lace and strings of pearls.
   m.ball(0,2.04,0,1.36,.78,.86,pink,12,7);
   for(const side of [-1,1]){
@@ -110,9 +116,10 @@ export function drawFairyStar(m){
 
 export function drawFairyBoost(glow,smoke,p,angle,clock,jump=null){
   for(const mesh of [glow,smoke]){mesh.at(p.x,.13+(jump?.height??0),p.z,angle);mesh.pitch=jump?.pitch??0;mesh.pivot=1.87;}
-  for(const side of [-1,1])for(let i=0;i<22;i++){
-    const t=(clock*1.4+i/22)%1,x=side*1.3+Math.sin(i*2.4+clock*3)*t,y=1+t*1.7+Math.cos(i*1.7)*t*.6,z=-2.3-t*7,fade=1-t;
-    glow.particle(x,y,z,(.13+.2*Math.sin(i+clock*8)**2)*fade,i%2?[.9*fade,.5*fade,.13*fade]:[.8*fade,.15*fade,.4*fade]);
-    if(i%4===0)smoke.particle(x,y,z,(.4+t)*fade,i%2?[1,.77,.51]:[.96,.57,.77]);
+  for(const side of [-1,1])for(let i=0;i<48;i++){
+    const t=(clock*1.25+i/48)%1,x=side*1.3+Math.sin(i*2.4+clock*2)*t*1.8,y=1+t*2.2+Math.cos(i*1.7)*t*.8,z=-2.3-t*11,fade=1-t;
+    glow.particle(x,y,z,(.24+.5*Math.sin(i+clock*8)**2)*Math.sqrt(fade),i%2?[fade,.62*fade,.2*fade]:[.9*fade,.2*fade,.58*fade]);
+    if(i%2===0)smoke.particle(x,y,z,(1.3+t*3.3)*Math.sqrt(fade),i%4===0?[.76,.34,.92]:[.98,.52,.77]);
+    if(i%8===0)glow.particle(x,y,z,1.5*fade,[.19*fade,.05*fade,.17*fade]);
   }
 }

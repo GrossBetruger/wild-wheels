@@ -5,7 +5,7 @@ import { kartNameplates } from './nameplates.js';
 import { bomberCamera } from './mobile.js';
 import {drawNewDriver,drawRoadster,drawRoadsterJets,drawCricketHaze,drawCricketProjectile,drawHoustonHelmet,drawDollarBundle,drawCessna,drawCessnaPropeller,drawCessnaBoost,drawElectron,drawPilotWorm} from './characters.js';
 import {previewPose} from './preview-pose.js';
-import {drawRococoChariot,drawPearococo,drawRoyalWing,drawBalletPump,drawFairyStar,drawFairyBoost} from './pearococo.js';
+import {drawRococoChariot,drawPearococo,drawPeacockTail,drawRoyalWing,drawBalletPump,drawFairyStar,drawFairyBoost} from './pearococo.js';
 const rgb=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255);
 const sub=(a,b)=>a.map((v,i)=>v-b[i]);
 const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
@@ -40,13 +40,14 @@ export class Renderer {
     this.models=new Map();this.instances=[];this.quality='auto';this.resolution=1.25;this.fps=0;this.fpsStart=0;this.frameCount=0;this.slowWindows=0;this.fastWindows=0;
     const debug=gl.getExtension('WEBGL_debug_renderer_info');this.gpuName=debug?gl.getParameter(debug.UNMASKED_RENDERER_WEBGL):'WebGL';this.softwareGPU=/swiftshader|llvmpipe|software/i.test(this.gpuName);if(this.softwareGPU)this.resolution=.75;
     this.program=gl.createProgram();
-    gl.attachShader(this.program,shader(gl,gl.VERTEX_SHADER,`attribute vec3 position;attribute vec3 normal;attribute vec3 color;uniform mat4 matrix;uniform vec3 eye;uniform vec3 origin;uniform vec2 rotation;uniform vec2 pitch;uniform float emission;uniform float fogScale;varying vec3 shade;varying float distanceToEye;vec3 tilt(vec3 v){return vec3(v.x,v.y*pitch.x-v.z*pitch.y,v.y*pitch.y+v.z*pitch.x);}void main(){vec3 a=tilt(position-vec3(0.,2.,0.))+vec3(0.,2.,0.);vec3 b=tilt(normal);vec3 p=vec3(a.x*rotation.x+a.z*rotation.y,a.y,-a.x*rotation.y+a.z*rotation.x)+origin;vec3 n=vec3(b.x*rotation.x+b.z*rotation.y,b.y,-b.x*rotation.y+b.z*rotation.x);gl_Position=matrix*vec4(p,1.0);float light=.62+.38*max(0.,dot(normalize(n),normalize(vec3(-.5,1.,.3))));shade=color*mix(light,1.,emission);distanceToEye=length(p-eye)*fogScale;}`));
+    gl.attachShader(this.program,shader(gl,gl.VERTEX_SHADER,`attribute vec3 position;attribute vec3 normal;attribute vec3 color;uniform mat4 matrix;uniform vec3 eye;uniform vec3 origin;uniform vec2 rotation;uniform vec2 pitch;uniform vec2 plumage;uniform float emission;uniform float fogScale;varying vec3 shade;varying float distanceToEye;vec3 tilt(vec3 v){return vec3(v.x,v.y*pitch.x-v.z*pitch.y,v.y*pitch.y+v.z*pitch.x);}void main(){vec3 local=position;vec3 tint=color;if(plumage.x>.5){float reach=clamp((position.y-1.75)/3.8,0.,1.);float wave=plumage.y*1.15+position.x*.85+position.y*.45;local.z+=sin(wave)*reach*.55;local.x+=sin(wave*.7)*reach*.16;local.y+=cos(wave)*reach*.14;if(color.b>color.r*.85&&color.g>color.r*1.1){float hue=plumage.y*.32+position.x*.5+position.y*.55;vec3 silk=vec3(.59+.32*sin(hue),.56+.22*sin(hue+2.1),.72+.19*sin(hue+4.2));tint=mix(color,silk,.85);}}vec3 a=tilt(local-vec3(0.,2.,0.))+vec3(0.,2.,0.);vec3 b=tilt(normal);vec3 p=vec3(a.x*rotation.x+a.z*rotation.y,a.y,-a.x*rotation.y+a.z*rotation.x)+origin;vec3 n=vec3(b.x*rotation.x+b.z*rotation.y,b.y,-b.x*rotation.y+b.z*rotation.x);gl_Position=matrix*vec4(p,1.0);float light=.62+.38*max(0.,dot(normalize(n),normalize(vec3(-.5,1.,.3))));shade=tint*mix(light,1.,emission);distanceToEye=length(p-eye)*fogScale;}`));
     gl.attachShader(this.program,shader(gl,gl.FRAGMENT_SHADER,`precision mediump float;varying vec3 shade;varying float distanceToEye;uniform vec3 fog;void main(){float amount=smoothstep(130.,950.,distanceToEye);gl_FragColor=vec4(mix(shade,fog,amount*.92),1.);}`));
     gl.linkProgram(this.program);if(!gl.getProgramParameter(this.program,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(this.program));gl.useProgram(this.program);
     this.attributes=['position','normal','color'].map(n=>gl.getAttribLocation(this.program,n));this.matrix=gl.getUniformLocation(this.program,'matrix');this.eyeUniform=gl.getUniformLocation(this.program,'eye');this.fog=gl.getUniformLocation(this.program,'fog');this.emission=gl.getUniformLocation(this.program,'emission');this.staticBuffer=gl.createBuffer();this.dynamicBuffer=gl.createBuffer();this.glowBuffer=gl.createBuffer();gl.enable(gl.DEPTH_TEST);this.track=-1;this.eye=null;
     this.originUniform=gl.getUniformLocation(this.program,'origin');this.rotationUniform=gl.getUniformLocation(this.program,'rotation');gl.uniform3f(this.originUniform,0,0,0);gl.uniform2f(this.rotationUniform,1,0);
     this.pitchUniform=gl.getUniformLocation(this.program,'pitch');gl.uniform2f(this.pitchUniform,1,0);
     this.fogScale=gl.getUniformLocation(this.program,'fogScale');
+    this.plumageUniform=gl.getUniformLocation(this.program,'plumage');gl.uniform2f(this.plumageUniform,0,0);
     this.particleProgram=gl.createProgram();
     gl.attachShader(this.particleProgram,shader(gl,gl.VERTEX_SHADER,`attribute vec3 position;attribute float size;attribute vec3 color;uniform mat4 matrix;uniform float height;varying vec3 tint;void main(){gl_Position=matrix*vec4(position,1.);gl_PointSize=clamp(size*height/max(.1,gl_Position.w),1.,180.);tint=color;}`));
     gl.attachShader(this.particleProgram,shader(gl,gl.FRAGMENT_SHADER,`precision mediump float;varying vec3 tint;uniform float smoke;void main(){vec2 p=gl_PointCoord*2.-1.;float r=length(p);float glow=exp(-r*r*3.5)*(1.-smoothstep(.65,1.,r));gl_FragColor=smoke>.5?vec4(tint,glow*.5):vec4(tint*glow,1.);}`));
@@ -63,10 +64,10 @@ export class Renderer {
   }
   setQuality(quality){this.quality=quality;this.resolution=({high:2,balanced:1,low:.65,auto:this.softwareGPU?.75:1.25})[quality];this.slowWindows=0;this.fastWindows=0;}
   pixelRatio(){return Math.min(devicePixelRatio,this.resolution);}
-  model(key,x,y,z,angle,build,pitch=0){
+  model(key,x,y,z,angle,build,pitch=0,plumage=null){
     let model=this.models.get(key);
     if(!model){const mesh=new Mesh();this.buildingModel=true;try{build(mesh);}finally{this.buildingModel=false;}const buffer=this.gl.createBuffer();this.gl.bindBuffer(this.gl.ARRAY_BUFFER,buffer);this.gl.bufferData(this.gl.ARRAY_BUFFER,new Float32Array(mesh.data),this.gl.STATIC_DRAW);model={buffer,count:mesh.data.length/9};this.models.set(key,model);}
-    this.instances.push({...model,x,y,z,angle,pitch});
+    this.instances.push({...model,x,y,z,angle,pitch,plumage});
   }
   scenery(track){
     const m=new Mesh(),sunset=track===1;const grass=sunset?'#91a856':'#6da94d';
@@ -168,8 +169,12 @@ export class Renderer {
     this.model(`kart:9:${color}`,p.x,height,p.z,angle,mesh=>{mesh.at(0,.13,0);drawRococoChariot(mesh,color);},pitch);
     const facing=angle+(gesture?.yaw??0),lean=pitch+(gesture?.lean??0);
     this.model('pearococo:queen',p.x,height,p.z,facing,drawPearococo,lean);
+    this.royalTail(p,height,facing,lean,clock);
     this.royalWave(p,height,facing,lean,clock,celebrate>0||(gesture?.right??0)>0);
     if(boost||jump)this.afterburner(p,angle,clock,jump,9);
+  }
+  royalTail(p,height,angle,pitch,clock){
+    this.model('pearococo:tail',p.x,height,p.z,angle,drawPeacockTail,pitch,clock);
   }
   royalWave(p,height,angle,pitch,clock,waving){
     const phase=waving?Math.floor(clock*6)%8:-1;
@@ -436,8 +441,8 @@ export class Renderer {
   }
   flush(m,view,height){
     const gl=this.gl;
-    for(const instance of this.instances){gl.uniform3f(this.originUniform,instance.x,instance.y,instance.z);gl.uniform2f(this.rotationUniform,Math.cos(instance.angle),Math.sin(instance.angle));gl.uniform2f(this.pitchUniform,Math.cos(instance.pitch),Math.sin(instance.pitch));this.drawBuffer(instance.buffer,instance.count);}
-    gl.uniform3f(this.originUniform,0,0,0);gl.uniform2f(this.rotationUniform,1,0);gl.uniform2f(this.pitchUniform,1,0);
+    for(const instance of this.instances){gl.uniform3f(this.originUniform,instance.x,instance.y,instance.z);gl.uniform2f(this.rotationUniform,Math.cos(instance.angle),Math.sin(instance.angle));gl.uniform2f(this.pitchUniform,Math.cos(instance.pitch),Math.sin(instance.pitch));gl.uniform2f(this.plumageUniform,instance.plumage===null?0:1,instance.plumage??0);this.drawBuffer(instance.buffer,instance.count);}
+    gl.uniform3f(this.originUniform,0,0,0);gl.uniform2f(this.rotationUniform,1,0);gl.uniform2f(this.pitchUniform,1,0);gl.uniform2f(this.plumageUniform,0,0);
     gl.bindBuffer(gl.ARRAY_BUFFER,this.dynamicBuffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(m.data),gl.DYNAMIC_DRAW);this.drawBuffer(this.dynamicBuffer,m.data.length/9);
     gl.enable(gl.BLEND);gl.depthMask(false);
     if(this.smoke.sprites.length){gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);this.drawParticles(this.smoke.sprites,view,height,true);}
