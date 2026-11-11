@@ -1,0 +1,2122 @@
+{
+  "created": "2026-11-11T12:06:09.204Z",
+  "javascriptRevision": "7b8ef3d",
+  "rustRevision": "3cf3fc89c5762bf8661fdc499f93e41353272d42",
+  "wasmSha256": "a7670cc4e422ec7e34aa009bd59fccf88d24547d37a27bb0bc9bd2cbd8fdb49c",
+  "order": [
+    "/private/tmp/wild-wheels-profile-released-js-1.json",
+    "/private/tmp/wild-wheels-profile-released-rust-1.json",
+    "/private/tmp/wild-wheels-profile-released-rust-2.json",
+    "/private/tmp/wild-wheels-profile-released-js-2.json"
+  ],
+  "method": "Two samples per scene and pipeline, JS/Rust/Rust/JS order. CPU totals normalize to 60 simulation/render ticks and 30 snapshot/receive updates per second. Browser total includes packet handling outside requestAnimationFrame. GPU uses disjoint timer queries when available. Full-frame CPU includes rendering/UI/audio; this is a local benchmark, not a claim about internet RTT.",
+  "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+  "regressions": {
+    "frameBudgetEnforced": true,
+    "repeat": 1,
+    "results": [
+      {
+        "name": "automated",
+        "status": 0
+      },
+      {
+        "name": "movement",
+        "status": 0
+      },
+      {
+        "name": "actions",
+        "status": 0
+      },
+      {
+        "name": "drift",
+        "status": 0
+      },
+      {
+        "name": "controls",
+        "status": 0
+      },
+      {
+        "name": "mobile",
+        "status": 0
+      }
+    ],
+    "groups": [
+      {
+        "name": "movement",
+        "passed": 4,
+        "total": 4,
+        "errors": [],
+        "transportErrors": [],
+        "results": [
+          {
+            "profile": "local-host",
+            "run": 1,
+            "frames": 481,
+            "frameP95Ms": 16.8,
+            "frameP99Ms": 16.8,
+            "positionP95": 0,
+            "positionMax": 0,
+            "cameraP95Degrees": 0,
+            "cameraMaxDegrees": 0,
+            "freezeFrames": 0,
+            "backwardFrames": 0,
+            "maxUpdateAgeMs": 45.7,
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+            "behaviorPass": true,
+            "frameBudgetPass": true,
+            "pass": true
+          },
+          {
+            "profile": "local-guest",
+            "run": 1,
+            "frames": 481,
+            "frameP95Ms": 16.7,
+            "frameP99Ms": 16.8,
+            "positionP95": 0,
+            "positionMax": 0,
+            "cameraP95Degrees": 0,
+            "cameraMaxDegrees": 0,
+            "freezeFrames": 0,
+            "backwardFrames": 0,
+            "maxUpdateAgeMs": 44.8,
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+            "behaviorPass": true,
+            "frameBudgetPass": true,
+            "pass": true
+          },
+          {
+            "profile": "160ms-guest",
+            "run": 1,
+            "frames": 481,
+            "frameP95Ms": 16.8,
+            "frameP99Ms": 16.8,
+            "positionP95": 0,
+            "positionMax": 0,
+            "cameraP95Degrees": 0,
+            "cameraMaxDegrees": 0,
+            "freezeFrames": 0,
+            "backwardFrames": 0,
+            "maxUpdateAgeMs": 46.6,
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+            "behaviorPass": true,
+            "frameBudgetPass": true,
+            "pass": true
+          },
+          {
+            "profile": "160ms-jitter-guest",
+            "run": 1,
+            "frames": 481,
+            "frameP95Ms": 16.7,
+            "frameP99Ms": 16.8,
+            "positionP95": 0,
+            "positionMax": 0,
+            "cameraP95Degrees": 0,
+            "cameraMaxDegrees": 0,
+            "freezeFrames": 0,
+            "backwardFrames": 0,
+            "maxUpdateAgeMs": 85.7,
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+            "behaviorPass": true,
+            "frameBudgetPass": true,
+            "pass": true
+          }
+        ]
+      },
+      {
+        "name": "actions",
+        "passed": 4,
+        "total": 4,
+        "errors": [],
+        "transportErrors": [],
+        "results": [
+          {
+            "profile": "local-host",
+            "run": 1,
+            "shotDelays": [
+              {
+                "kind": "hedgehog",
+                "delayMs": 0
+              },
+              {
+                "kind": "missile",
+                "delayMs": 0
+              }
+            ],
+            "pickupHiddenMs": 0,
+            "pickupInventoryMs": 0,
+            "pickupSoundMs": 0.1,
+            "duplicateShots": false,
+            "projectileBackwardFrames": 0,
+            "projectileStepErrorP95": 0,
+            "pickupSounds": 1,
+            "pass": true,
+            "requests": [
+              {
+                "kind": "hedgehog",
+                "time": 0.212
+              },
+              {
+                "kind": "missile",
+                "time": 1.5787000000029803
+              }
+            ],
+            "sounds": [
+              {
+                "type": "fire",
+                "time": 0.2135
+              },
+              {
+                "type": "pickup",
+                "time": 1.2787999999970199
+              },
+              {
+                "type": "missile",
+                "time": 1.5787999999970197
+              }
+            ]
+          },
+          {
+            "profile": "local-guest",
+            "run": 1,
+            "shotDelays": [
+              {
+                "kind": "hedgehog",
+                "delayMs": 0
+              },
+              {
+                "kind": "missile",
+                "delayMs": 0
+              }
+            ],
+            "pickupHiddenMs": 0,
+            "pickupInventoryMs": 0,
+            "pickupSoundMs": 0.2,
+            "duplicateShots": false,
+            "projectileBackwardFrames": 0,
+            "projectileStepErrorP95": 0.0174,
+            "pickupSounds": 1,
+            "pass": true,
+            "requests": [
+              {
+                "kind": "hedgehog",
+                "time": 0.21479999999701976
+              },
+              {
+                "kind": "missile",
+                "time": 1.5652999999970199
+              }
+            ],
+            "sounds": [
+              {
+                "type": "fire",
+                "time": 0.2155
+              },
+              {
+                "type": "pickup",
+                "time": 1.2650999999940395
+              },
+              {
+                "type": "missile",
+                "time": 1.5655999999940395
+              }
+            ]
+          },
+          {
+            "profile": "160ms-guest",
+            "run": 1,
+            "shotDelays": [
+              {
+                "kind": "hedgehog",
+                "delayMs": 0
+              },
+              {
+                "kind": "missile",
+                "delayMs": 0
+              }
+            ],
+            "pickupHiddenMs": 0,
+            "pickupInventoryMs": 0,
+            "pickupSoundMs": 0.1,
+            "duplicateShots": false,
+            "projectileBackwardFrames": 0,
+            "projectileStepErrorP95": 0.009,
+            "pickupSounds": 1,
+            "pass": true,
+            "requests": [
+              {
+                "kind": "hedgehog",
+                "time": 0.2115
+              },
+              {
+                "kind": "missile",
+                "time": 1.5621000000014902
+              }
+            ],
+            "sounds": [
+              {
+                "type": "fire",
+                "time": 0.21230000000447036
+              },
+              {
+                "type": "pickup",
+                "time": 1.2622000000029803
+              },
+              {
+                "type": "missile",
+                "time": 1.5622000000029803
+              }
+            ]
+          },
+          {
+            "profile": "160ms-jitter-guest",
+            "run": 1,
+            "shotDelays": [
+              {
+                "kind": "hedgehog",
+                "delayMs": 0
+              },
+              {
+                "kind": "missile",
+                "delayMs": 0
+              }
+            ],
+            "pickupHiddenMs": 0,
+            "pickupInventoryMs": 0,
+            "pickupSoundMs": 0.2,
+            "duplicateShots": false,
+            "projectileBackwardFrames": 0,
+            "projectileStepErrorP95": 0.009,
+            "pickupSounds": 1,
+            "pass": true,
+            "requests": [
+              {
+                "kind": "hedgehog",
+                "time": 0.20109999999403955
+              },
+              {
+                "kind": "missile",
+                "time": 1.5517999999970198
+              }
+            ],
+            "sounds": [
+              {
+                "type": "fire",
+                "time": 0.20189999999850988
+              },
+              {
+                "type": "pickup",
+                "time": 1.2515
+              },
+              {
+                "type": "missile",
+                "time": 1.55189999999851
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "drift",
+        "passed": 4,
+        "total": 4,
+        "errors": [],
+        "transportErrors": [],
+        "results": [
+          {
+            "profile": "local-host",
+            "run": 1,
+            "smokeMs": 0,
+            "skidsMs": 0,
+            "chargeMs": [
+              0,
+              0
+            ],
+            "lateEmissions": 0,
+            "freshWheelGapMax": 0,
+            "frameP95Ms": 16.8,
+            "behaviorPass": true,
+            "frameBudgetPass": true,
+            "pass": true
+          },
+          {
+            "profile": "local-guest",
+            "run": 1,
+            "smokeMs": 0,
+            "skidsMs": 0,
+            "chargeMs": [
+              0,
+              0
+            ],
+            "lateEmissions": 0,
+            "freshWheelGapMax": 0,
+            "frameP95Ms": 16.7,
+            "behaviorPass": true,
+            "frameBudgetPass": true,
+            "pass": true
+          },
+          {
+            "profile": "160ms-guest",
+            "run": 1,
+            "smokeMs": 0,
+            "skidsMs": 0,
+            "chargeMs": [
+              0,
+              0
+            ],
+            "lateEmissions": 0,
+            "freshWheelGapMax": 0,
+            "frameP95Ms": 16.8,
+            "behaviorPass": true,
+            "frameBudgetPass": true,
+            "pass": true
+          },
+          {
+            "profile": "160ms-jitter-guest",
+            "run": 1,
+            "smokeMs": 0,
+            "skidsMs": 0,
+            "chargeMs": [
+              0,
+              0
+            ],
+            "lateEmissions": 0,
+            "freshWheelGapMax": 0,
+            "frameP95Ms": 16.7,
+            "behaviorPass": true,
+            "frameBudgetPass": true,
+            "pass": true
+          }
+        ]
+      },
+      {
+        "name": "controls",
+        "passed": 4,
+        "total": 4,
+        "errors": [],
+        "transportErrors": [],
+        "results": [
+          {
+            "profile": "local-host",
+            "run": 1,
+            "readyPass": true,
+            "readyCleared": true,
+            "readyUI": {
+              "status": "Ready Friend wants to play. Auto-start in 3s unless you refuse.",
+              "button": "LET’S BATTLE ↗",
+              "disabled": false,
+              "roster": "🐼 Player 1 · HOST · YOU🦝 Ready Friend · READY ✓"
+            },
+            "popupPass": true,
+            "popup": {
+              "open": true,
+              "text": "🏁Ready Friend wants to play!Starts automatically unless you refuse. You can also start now.AUTO-START IN 3…🦝Ready FriendSTART NOW ↗REFUSE",
+              "centered": true
+            },
+            "refusalPass": true,
+            "autoStartPass": true,
+            "namePass": true,
+            "pickupKeptVulcan": true,
+            "turboPass": true,
+            "flipPass": true,
+            "cameraPass": true,
+            "remoteSawFlip": true,
+            "desktopManual": true,
+            "warningPass": true,
+            "warning": {
+              "visible": true,
+              "text": "⚠ INCOMING MISSILEC / CHAFF TO BREAK THE LOCK",
+              "blinks": true
+            },
+            "chaffPass": true,
+            "chaffColor": "#8456cf",
+            "chaffSoundCount": 1,
+            "greenNoticePass": true,
+            "orbitPass": true,
+            "orbitRotation": 17.81296209221968,
+            "desktopBombPass": true,
+            "stinkPass": true,
+            "whackPass": true,
+            "coWhackPass": true,
+            "whack": {
+              "background": "linear-gradient(135deg, rgb(255, 247, 183), rgb(255, 226, 250))",
+              "text": "✦ YOU WHACKED ✦“Rival <img>”",
+              "visible": true,
+              "jumps": true,
+              "aboveAction": true,
+              "safe": true
+            },
+            "resultsPass": true,
+            "leaderboard": [
+              [
+                "1",
+                "Rival <img>",
+                "10",
+                "2"
+              ],
+              [
+                "2",
+                "Alex <b> · YOU",
+                "3",
+                "4"
+              ]
+            ],
+            "pass": true
+          },
+          {
+            "profile": "local-guest",
+            "run": 1,
+            "readyPass": true,
+            "readyCleared": true,
+            "readyUI": {
+              "status": "Starting in 3s unless the host refuses.",
+              "button": "STARTING IN 3…",
+              "disabled": true,
+              "roster": "🦝 Host · HOST🐼 Player 2 · YOU · READY ✓"
+            },
+            "popupPass": true,
+            "popup": {
+              "open": false,
+              "text": "🏁Starts automatically unless you refuse. You can also start now.START NOW ↗REFUSE",
+              "centered": false
+            },
+            "refusalPass": true,
+            "autoStartPass": true,
+            "namePass": true,
+            "pickupKeptVulcan": true,
+            "turboPass": true,
+            "flipPass": true,
+            "cameraPass": true,
+            "remoteSawFlip": true,
+            "desktopManual": true,
+            "warningPass": true,
+            "warning": {
+              "visible": true,
+              "text": "⚠ INCOMING MISSILEC / CHAFF TO BREAK THE LOCK",
+              "blinks": true
+            },
+            "chaffPass": true,
+            "chaffColor": "#df7053",
+            "chaffSoundCount": 1,
+            "greenNoticePass": true,
+            "orbitPass": true,
+            "orbitRotation": 17.962104720797612,
+            "desktopBombPass": true,
+            "stinkPass": true,
+            "whackPass": true,
+            "coWhackPass": true,
+            "whack": {
+              "background": "linear-gradient(135deg, rgb(255, 247, 183), rgb(255, 226, 250))",
+              "text": "✦ YOU WHACKED ✦“Rival <img>”",
+              "visible": true,
+              "jumps": true,
+              "aboveAction": true,
+              "safe": true
+            },
+            "resultsPass": true,
+            "leaderboard": [
+              [
+                "1",
+                "Rival <img>",
+                "10",
+                "2"
+              ],
+              [
+                "2",
+                "Sam <b> · YOU",
+                "3",
+                "4"
+              ]
+            ],
+            "pass": true
+          },
+          {
+            "profile": "160ms-guest",
+            "run": 1,
+            "readyPass": true,
+            "readyCleared": true,
+            "readyUI": {
+              "status": "Starting in 3s unless the host refuses.",
+              "button": "STARTING IN 3…",
+              "disabled": true,
+              "roster": "🦝 Host · HOST🐼 Player 2 · YOU · READY ✓"
+            },
+            "popupPass": true,
+            "popup": {
+              "open": false,
+              "text": "🏁Starts automatically unless you refuse. You can also start now.START NOW ↗REFUSE",
+              "centered": false
+            },
+            "refusalPass": true,
+            "autoStartPass": true,
+            "namePass": true,
+            "pickupKeptVulcan": true,
+            "turboPass": true,
+            "flipPass": true,
+            "cameraPass": true,
+            "remoteSawFlip": true,
+            "desktopManual": true,
+            "warningPass": true,
+            "warning": {
+              "visible": true,
+              "text": "⚠ INCOMING MISSILEC / CHAFF TO BREAK THE LOCK",
+              "blinks": true
+            },
+            "chaffPass": true,
+            "chaffColor": "#df7053",
+            "chaffSoundCount": 1,
+            "greenNoticePass": true,
+            "orbitPass": true,
+            "orbitRotation": 17.994195691474907,
+            "desktopBombPass": true,
+            "stinkPass": true,
+            "whackPass": true,
+            "coWhackPass": true,
+            "whack": {
+              "background": "linear-gradient(135deg, rgb(255, 247, 183), rgb(255, 226, 250))",
+              "text": "✦ YOU WHACKED ✦“Rival <img>”",
+              "visible": true,
+              "jumps": true,
+              "aboveAction": true,
+              "safe": true
+            },
+            "resultsPass": true,
+            "leaderboard": [
+              [
+                "1",
+                "Rival <img>",
+                "10",
+                "2"
+              ],
+              [
+                "2",
+                "Sam <b> · YOU",
+                "3",
+                "4"
+              ]
+            ],
+            "pass": true
+          },
+          {
+            "profile": "160ms-jitter-guest",
+            "run": 1,
+            "readyPass": true,
+            "readyCleared": true,
+            "readyUI": {
+              "status": "Starting in 3s unless the host refuses.",
+              "button": "STARTING IN 3…",
+              "disabled": true,
+              "roster": "🦝 Host · HOST🐼 Player 2 · YOU · READY ✓"
+            },
+            "popupPass": true,
+            "popup": {
+              "open": false,
+              "text": "🏁Starts automatically unless you refuse. You can also start now.START NOW ↗REFUSE",
+              "centered": false
+            },
+            "refusalPass": true,
+            "autoStartPass": true,
+            "namePass": true,
+            "pickupKeptVulcan": true,
+            "turboPass": true,
+            "flipPass": true,
+            "cameraPass": true,
+            "remoteSawFlip": true,
+            "desktopManual": true,
+            "warningPass": true,
+            "warning": {
+              "visible": true,
+              "text": "⚠ INCOMING MISSILEC / CHAFF TO BREAK THE LOCK",
+              "blinks": true
+            },
+            "chaffPass": true,
+            "chaffColor": "#df7053",
+            "chaffSoundCount": 1,
+            "greenNoticePass": true,
+            "orbitPass": true,
+            "orbitRotation": 18.338940237323044,
+            "desktopBombPass": true,
+            "stinkPass": true,
+            "whackPass": true,
+            "coWhackPass": true,
+            "whack": {
+              "background": "linear-gradient(135deg, rgb(255, 247, 183), rgb(255, 226, 250))",
+              "text": "✦ YOU WHACKED ✦“Rival <img>”",
+              "visible": true,
+              "jumps": true,
+              "aboveAction": true,
+              "safe": true
+            },
+            "resultsPass": true,
+            "leaderboard": [
+              [
+                "1",
+                "Rival <img>",
+                "10",
+                "2"
+              ],
+              [
+                "2",
+                "Sam <b> · YOU",
+                "3",
+                "4"
+              ]
+            ],
+            "pass": true
+          }
+        ]
+      },
+      {
+        "name": "mobile",
+        "passed": 4,
+        "total": 4,
+        "errors": [],
+        "transportErrors": [],
+        "results": [
+          {
+            "profile": "local-host",
+            "run": 1,
+            "readyRequestPass": true,
+            "initialAmmo": true,
+            "fullscreen": true,
+            "overhead": true,
+            "default3D": true,
+            "closeView": true,
+            "portraitKartWidth": 23.260793064606133,
+            "mapOption": true,
+            "switchPreservesGame": true,
+            "namedTarget": true,
+            "accurate": true,
+            "spent": true,
+            "immediate": true,
+            "feedbackDelayMs": 15.100000001490116,
+            "boundedDrops": true,
+            "desktopSawDrop": true,
+            "blast": true,
+            "noKillBonus": true,
+            "stinkRefill": true,
+            "stinkShot": true,
+            "stinkWorks": true,
+            "stinkImmediate": true,
+            "dizzyExpired": true,
+            "refill": true,
+            "refillAt": 10.016666666666744,
+            "marginsIgnored": true,
+            "landscape": [
+              {
+                "angle": 0,
+                "view": "3d",
+                "hit": true,
+                "panPass": true,
+                "zoomPass": true,
+                "kartWidthPx": 23.260793350149942,
+                "detailPass": true,
+                "ammo": 0,
+                "bomb": {
+                  "wx": 64.99999713230773,
+                  "wz": -29.999998044755266
+                }
+              },
+              {
+                "angle": 0,
+                "view": "map",
+                "hit": true,
+                "panPass": true,
+                "zoomPass": true,
+                "kartWidthPx": null,
+                "detailPass": true,
+                "ammo": 0,
+                "bomb": {
+                  "wx": 65,
+                  "wz": -29.999997728924427
+                }
+              },
+              {
+                "angle": 90,
+                "view": "3d",
+                "hit": true,
+                "panPass": true,
+                "zoomPass": true,
+                "kartWidthPx": 9.89579021785935,
+                "detailPass": true,
+                "ammo": 0,
+                "bomb": {
+                  "wx": 65,
+                  "wz": -29.99999999999998
+                }
+              },
+              {
+                "angle": 90,
+                "view": "map",
+                "hit": true,
+                "panPass": true,
+                "zoomPass": true,
+                "kartWidthPx": null,
+                "detailPass": true,
+                "ammo": 0,
+                "bomb": {
+                  "wx": 65,
+                  "wz": -29.999999298446482
+                }
+              },
+              {
+                "angle": 270,
+                "view": "3d",
+                "hit": true,
+                "panPass": true,
+                "zoomPass": true,
+                "kartWidthPx": 9.89579021785935,
+                "detailPass": true,
+                "ammo": 0,
+                "bomb": {
+                  "wx": 65,
+                  "wz": -29.99999999999998
+                }
+              },
+              {
+                "angle": 270,
+                "view": "map",
+                "hit": true,
+                "panPass": true,
+                "zoomPass": true,
+                "kartWidthPx": null,
+                "detailPass": true,
+                "ammo": 0,
+                "bomb": {
+                  "wx": 65,
+                  "wz": -29.999999298446482
+                }
+              }
+            ],
+            "landscapePass": true,
+            "exited": true,
+            "pass": true
+          },
+          {
+            "profile": "local-guest",
+            "run": 1,
+            "readyRequestPass": true,
+            "initialAmmo": true,
+            "fullscreen": true,
+            "overhead": true,
+            "default3D": true,
+            "closeView": true,
+            "portraitKartWidth": 23.260793064606133,
+            "mapOption": true,
+            "switchPreservesGame": true,
+            "namedTarget": true,
+            "accurate": true,
+            "spent": true,
+            "immediate": true,
+            "feedbackDelayMs": 14.699999995529652,
+            "boundedDrops": true,
+            "desktopSawDrop": true,
+            "blast": true,
+            "noKillBonus": true,
+            "stinkRefill": true,
+            "stinkShot": true,
+            "stinkWorks": true,
+            "stinkImmediate": true,
+            "dizzyExpired": true,
+            "refill": true,
+            "refillAt": 10.033333333333411,
+            "marginsIgnored": true,
+            "landscape": [
+              {
+                "angle": 0,
+                "view": "3d",
+                "hit": true,
+                "panPass": true,
+                "zoomPass": true,
+                "kartWidthPx": 23.260793350149942,
+                "detailPass": true,
+                "ammo": 0,
+                "bomb": {
+                  "wx": 64.99999713230773,
+                  "wz": -29.999998044755266
+                }
+              },
+              {
+                "angle": 0,
+                "view": "map",
+                "hit": true,
+                "panPass": true,
+                "zoomPass": true,
+                "kartWidthPx": null,
+                "detailPass": true,
+                "ammo": 0,
+                "bomb": {
+                  "wx": 65,
+                  "wz": -29.999997728924427
+                }
+              },
+              {
+                "angle": 90,
+                "view": "3d",
+                "hit": true,
+                "panPass": true,
+                "zoomPass": true,
+                "kartWidthPx": 9.89579021785935,
+                "detailPass": true,
+                "ammo": 0,
+                "bomb": {
+                  "wx": 65,
+                  "wz": -29.99999999999998
+                }
+              },
+              {
+                "angle": 90,
+                "view": "map",
+                "hit": true,
+                "panPass": true,
+                "zoomPass": true,
+                "kartWidthPx": null,
+                "detailPass": true,
+                "ammo": 0,
+                "bomb": {
+                  "wx": 65,
+                  "wz": -29.999999298446482
+                }
+              },
+              {
+                "angle": 270,
+                "view": "3d",
+                "hit": true,
+                "panPass": true,
+                "zoomPass": true,
+                "kartWidthPx": 9.89579021785935,
+                "detailPass": true,
+                "ammo": 0,
+                "bomb": {
+                  "wx": 65,
+                  "wz": -29.99999999999998
+                }
+              },
+              {
+                "angle": 270,
+                "view": "map",
+                "hit": true,
+                "panPass": true,
+                "zoomPass": true,
+                "kartWidthPx": null,
+                "detailPass": true,
+                "ammo": 0,
+                "bomb": {
+                  "wx": 65,
+                  "wz": -29.999999298446482
+                }
+              }
+            ],
+            "landscapePass": true,
+            "exited": true,
+            "pass": true
+          },
+          {
+            "profile": "160ms-guest",
+            "run": 1,
+            "readyRequestPass": true,
+            "initialAmmo": true,
+            "fullscreen": true,
+            "overhead": true,
+            "default3D": true,
+            "closeView": true,
+            "portraitKartWidth": 23.260793064606133,
+            "mapOption": true,
+            "switchPreservesGame": true,
+            "namedTarget": true,
+            "accurate": true,
+            "spent": true,
+            "immediate": true,
+            "feedbackDelayMs": 15.100000001490116,
+            "boundedDrops": true,
+            "desktopSawDrop": true,
+            "blast": true,
+            "noKillBonus": true,
+            "stinkRefill": true,
+            "stinkShot": true,
+            "stinkWorks": true,
+            "stinkImmediate": true,
+            "dizzyExpired": true,
+            "refill": true,
+            "refillAt": 10.183333333333419,
+            "marginsIgnored": true,
+            "landscape": [
+              {
+                "angle": 0,
+                "view": "3d",
+                "hit": true,
+                "panPass": true,
+                "zoomPass": true,
+                "kartWidthPx": 23.260793350149942,
+                "detailPass": true,
+                "ammo": 0,
+                "bomb": {
+                  "wx": 64.99999713230773,
+                  "wz": -29.999998044755266
+                }
+              },
+              {
+                "angle": 0,
+                "view": "map",
+                "hit": true,
+                "panPass": true,
+                "zoomPass": true,
+                "kartWidthPx": null,
+                "detailPass": true,
+                "ammo": 0,
+                "bomb": {
+                  "wx": 65,
+                  "wz": -29.999997728924427
+                }
+              },
+              {
+                "angle": 90,
+                "view": "3d",
+                "hit": true,
+                "panPass": true,
+                "zoomPass": true,
+                "kartWidthPx": 9.89579021785935,
+                "detailPass": true,
+                "ammo": 0,
+                "bomb": {
+                  "wx": 65,
+                  "wz": -29.99999999999998
+                }
+              },
+              {
+                "angle": 90,
+                "view": "map",
+                "hit": true,
+                "panPass": true,
+                "zoomPass": true,
+                "kartWidthPx": null,
+                "detailPass": true,
+                "ammo": 0,
+                "bomb": {
+                  "wx": 65,
+                  "wz": -29.999999298446482
+                }
+              },
+              {
+                "angle": 270,
+                "view": "3d",
+                "hit": true,
+                "panPass": true,
+                "zoomPass": true,
+                "kartWidthPx": 9.89579021785935,
+                "detailPass": true,
+                "ammo": 0,
+                "bomb": {
+                  "wx": 65,
+                  "wz": -29.99999999999998
+                }
+              },
+              {
+                "angle": 270,
+                "view": "map",
+                "hit": true,
+                "panPass": true,
+                "zoomPass": true,
+                "kartWidthPx": null,
+                "detailPass": true,
+                "ammo": 0,
+                "bomb": {
+                  "wx": 65,
+                  "wz": -29.999999298446482
+                }
+              }
+            ],
+            "landscapePass": true,
+            "exited": true,
+            "pass": true
+          },
+          {
+            "profile": "160ms-jitter-guest",
+            "run": 1,
+            "readyRequestPass": true,
+            "initialAmmo": true,
+            "fullscreen": true,
+            "overhead": true,
+            "default3D": true,
+            "closeView": true,
+            "portraitKartWidth": 23.260793064606133,
+            "mapOption": true,
+            "switchPreservesGame": true,
+            "namedTarget": true,
+            "accurate": true,
+            "spent": true,
+            "immediate": true,
+            "feedbackDelayMs": 14.800000004470348,
+            "boundedDrops": true,
+            "desktopSawDrop": true,
+            "blast": true,
+            "noKillBonus": true,
+            "stinkRefill": true,
+            "stinkShot": true,
+            "stinkWorks": true,
+            "stinkImmediate": true,
+            "dizzyExpired": true,
+            "refill": true,
+            "refillAt": 10.200000000000086,
+            "marginsIgnored": true,
+            "landscape": [
+              {
+                "angle": 0,
+                "view": "3d",
+                "hit": true,
+                "panPass": true,
+                "zoomPass": true,
+                "kartWidthPx": 23.260793350149942,
+                "detailPass": true,
+                "ammo": 0,
+                "bomb": {
+                  "wx": 64.99999713230773,
+                  "wz": -29.999998044755266
+                }
+              },
+              {
+                "angle": 0,
+                "view": "map",
+                "hit": true,
+                "panPass": true,
+                "zoomPass": true,
+                "kartWidthPx": null,
+                "detailPass": true,
+                "ammo": 0,
+                "bomb": {
+                  "wx": 65,
+                  "wz": -29.999997728924427
+                }
+              },
+              {
+                "angle": 90,
+                "view": "3d",
+                "hit": true,
+                "panPass": true,
+                "zoomPass": true,
+                "kartWidthPx": 9.89579021785935,
+                "detailPass": true,
+                "ammo": 0,
+                "bomb": {
+                  "wx": 65,
+                  "wz": -29.99999999999998
+                }
+              },
+              {
+                "angle": 90,
+                "view": "map",
+                "hit": true,
+                "panPass": true,
+                "zoomPass": true,
+                "kartWidthPx": null,
+                "detailPass": true,
+                "ammo": 0,
+                "bomb": {
+                  "wx": 65,
+                  "wz": -29.999999298446482
+                }
+              },
+              {
+                "angle": 270,
+                "view": "3d",
+                "hit": true,
+                "panPass": true,
+                "zoomPass": true,
+                "kartWidthPx": 9.89579021785935,
+                "detailPass": true,
+                "ammo": 0,
+                "bomb": {
+                  "wx": 65,
+                  "wz": -29.99999999999998
+                }
+              },
+              {
+                "angle": 270,
+                "view": "map",
+                "hit": true,
+                "panPass": true,
+                "zoomPass": true,
+                "kartWidthPx": null,
+                "detailPass": true,
+                "ammo": 0,
+                "bomb": {
+                  "wx": 65,
+                  "wz": -29.999999298446482
+                }
+              }
+            ],
+            "landscapePass": true,
+            "exited": true,
+            "pass": true
+          }
+        ]
+      }
+    ]
+  },
+  "cases": [
+    {
+      "scenario": "driving",
+      "serverCpuMsPerSecond": {
+        "javascript": 2.61111,
+        "rust": 0.80964,
+        "speedup": 3.225
+      },
+      "clientCoreCpuMsPerSecond": {
+        "javascript": 10.13947,
+        "rust": 12.31909,
+        "speedup": 0.82307
+      },
+      "browserTotalCpuMsPerSecond": {
+        "javascript": 53.39735,
+        "rust": 71.14599,
+        "speedup": 0.75053
+      },
+      "renderCpuMsPerFrame": {
+        "javascript": 0.52584,
+        "rust": 0.71742,
+        "speedup": 0.73296
+      },
+      "frameIntervalP95Ms": {
+        "javascript": 16.8,
+        "rust": 16.75,
+        "speedup": 1.00299
+      },
+      "gpuMsPerFrame": {
+        "javascript": 0.19338,
+        "rust": 0.19085,
+        "speedup": 1.01325
+      }
+    },
+    {
+      "scenario": "drifting",
+      "serverCpuMsPerSecond": {
+        "javascript": 3.71919,
+        "rust": 1.16738,
+        "speedup": 3.18594
+      },
+      "clientCoreCpuMsPerSecond": {
+        "javascript": 12.46728,
+        "rust": 12.64911,
+        "speedup": 0.98562
+      },
+      "browserTotalCpuMsPerSecond": {
+        "javascript": 85.90563,
+        "rust": 108.67241,
+        "speedup": 0.7905
+      },
+      "renderCpuMsPerFrame": {
+        "javascript": 1.00411,
+        "rust": 1.318,
+        "speedup": 0.76185
+      },
+      "frameIntervalP95Ms": {
+        "javascript": 16.7,
+        "rust": 16.7,
+        "speedup": 1
+      },
+      "gpuMsPerFrame": {
+        "javascript": 0.2118,
+        "rust": 0.20034,
+        "speedup": 1.05719
+      }
+    },
+    {
+      "scenario": "six-player-vulcan",
+      "serverCpuMsPerSecond": {
+        "javascript": 23.9889,
+        "rust": 8.95705,
+        "speedup": 2.67821
+      },
+      "clientCoreCpuMsPerSecond": {
+        "javascript": 17.46008,
+        "rust": 16.8123,
+        "speedup": 1.03853
+      },
+      "browserTotalCpuMsPerSecond": {
+        "javascript": 130.91229,
+        "rust": 163.94238,
+        "speedup": 0.79853
+      },
+      "renderCpuMsPerFrame": {
+        "javascript": 1.60269,
+        "rust": 2.09864,
+        "speedup": 0.76368
+      },
+      "frameIntervalP95Ms": {
+        "javascript": 16.75,
+        "rust": 16.7,
+        "speedup": 1.00299
+      },
+      "gpuMsPerFrame": {
+        "javascript": 0.28335,
+        "rust": 0.32329,
+        "speedup": 0.87648
+      }
+    }
+  ],
+  "samples": [
+    {
+      "path": "/private/tmp/wild-wheels-profile-released-js-1.json",
+      "frameBudgetEnforced": true,
+      "errors": [],
+      "transportErrors": [],
+      "serverGaps": [
+        {
+          "profile": "1:cpu-profile",
+          "gapMs": 106.95
+        },
+        {
+          "profile": "1:cpu-profile",
+          "gapMs": 121.33
+        },
+        {
+          "profile": "1:cpu-profile",
+          "gapMs": 759.83
+        }
+      ],
+      "results": [
+        {
+          "profile": "cpu-profile",
+          "run": 1,
+          "scenario": "driving",
+          "server": {
+            "pipeline": "javascript",
+            "simulation": {
+              "samples": 1800,
+              "meanMs": 0.00932211222222261,
+              "p95Ms": 0.016125000000101863
+            },
+            "snapshot": {
+              "samples": 900,
+              "meanMs": 0.03668086444444637,
+              "p95Ms": 0.05137499999989359
+            },
+            "encoding": {
+              "samples": 900,
+              "meanMs": 0.03347406222222604,
+              "p95Ms": 0.046459000000140804
+            },
+            "uncompressedMbpsPerRecipient": 0.9184597333333333
+          },
+          "browser": {
+            "render": {
+              "samples": 364,
+              "meanMs": 0.40851648366795135,
+              "p95Ms": 1.1000000014901161
+            },
+            "network": {
+              "samples": 364,
+              "meanMs": 0.07197802206808394,
+              "p95Ms": 0.20000000298023224
+            },
+            "receive": {
+              "samples": 182,
+              "meanMs": 0.1478021978349476,
+              "p95Ms": 0.20000000298023224
+            },
+            "frame": {
+              "samples": 364,
+              "meanMs": 0.6450549450467576,
+              "p95Ms": 1.2999999970197678
+            },
+            "intervals": {
+              "samples": 363,
+              "meanMs": 16.666391184573,
+              "p95Ms": 16.799999999999272
+            },
+            "gpuElapsed": {
+              "samples": 364,
+              "meanMs": 0.1954791456043956,
+              "p95Ms": 0.263416
+            },
+            "gpuTimerSupported": true,
+            "gpuDisjoint": 0,
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+            "softwareGPU": false,
+            "width": 668,
+            "height": 418,
+            "pixelRatio": 1,
+            "projectiles": 0
+          },
+          "pass": true
+        },
+        {
+          "profile": "cpu-profile",
+          "run": 1,
+          "scenario": "drifting",
+          "server": {
+            "pipeline": "javascript",
+            "simulation": {
+              "samples": 1800,
+              "meanMs": 0.012972473333340733,
+              "p95Ms": 0.02183300000069721
+            },
+            "snapshot": {
+              "samples": 900,
+              "meanMs": 0.03473266777778513,
+              "p95Ms": 0.04874999999992724
+            },
+            "encoding": {
+              "samples": 900,
+              "meanMs": 0.06142866333331161,
+              "p95Ms": 0.13449999999829743
+            },
+            "uncompressedMbpsPerRecipient": 3.3074784
+          },
+          "browser": {
+            "render": {
+              "samples": 365,
+              "meanMs": 0.8336986301492338,
+              "p95Ms": 1.2000000029802322
+            },
+            "network": {
+              "samples": 365,
+              "meanMs": 0.09726027444209139,
+              "p95Ms": 0.20000000298023224
+            },
+            "receive": {
+              "samples": 182,
+              "meanMs": 0.17802197842316314,
+              "p95Ms": 0.30000000447034836
+            },
+            "frame": {
+              "samples": 365,
+              "meanMs": 1.1315068495600191,
+              "p95Ms": 1.5
+            },
+            "intervals": {
+              "samples": 364,
+              "meanMs": 16.665934065934064,
+              "p95Ms": 16.700000000000728
+            },
+            "gpuElapsed": {
+              "samples": 365,
+              "meanMs": 0.2136778493150685,
+              "p95Ms": 0.301874
+            },
+            "gpuTimerSupported": true,
+            "gpuDisjoint": 0,
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+            "softwareGPU": false,
+            "width": 668,
+            "height": 418,
+            "pixelRatio": 1,
+            "projectiles": 0
+          },
+          "pass": true
+        },
+        {
+          "profile": "cpu-profile",
+          "run": 1,
+          "scenario": "six-player-vulcan",
+          "server": {
+            "pipeline": "javascript",
+            "simulation": {
+              "samples": 1800,
+              "meanMs": 0.026044411666674327,
+              "p95Ms": 0.044874999999592546
+            },
+            "snapshot": {
+              "samples": 900,
+              "meanMs": 0.17540178333339604,
+              "p95Ms": 0.21679100000255858
+            },
+            "encoding": {
+              "samples": 900,
+              "meanMs": 0.580895403333347,
+              "p95Ms": 0.8254159999996773
+            },
+            "uncompressedMbpsPerRecipient": 9.28415768888889
+          },
+          "browser": {
+            "render": {
+              "samples": 364,
+              "meanMs": 1.3645604393230035,
+              "p95Ms": 1.8999999985098839
+            },
+            "network": {
+              "samples": 364,
+              "meanMs": 0.15824175830725784,
+              "p95Ms": 0.30000000447034836
+            },
+            "receive": {
+              "samples": 182,
+              "meanMs": 0.21923076930445629,
+              "p95Ms": 0.30000000447034836
+            },
+            "frame": {
+              "samples": 364,
+              "meanMs": 1.7934065934393433,
+              "p95Ms": 2.2999999970197678
+            },
+            "intervals": {
+              "samples": 363,
+              "meanMs": 16.666115702479345,
+              "p95Ms": 16.799999999999272
+            },
+            "gpuElapsed": {
+              "samples": 364,
+              "meanMs": 0.29175166483516496,
+              "p95Ms": 0.389624
+            },
+            "gpuTimerSupported": true,
+            "gpuDisjoint": 0,
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+            "softwareGPU": false,
+            "width": 668,
+            "height": 418,
+            "pixelRatio": 1,
+            "projectiles": 38
+          },
+          "pass": true
+        }
+      ]
+    },
+    {
+      "path": "/private/tmp/wild-wheels-profile-released-rust-1.json",
+      "frameBudgetEnforced": true,
+      "errors": [],
+      "transportErrors": [],
+      "serverGaps": [
+        {
+          "profile": "1:cpu-profile",
+          "gapMs": 111.96
+        },
+        {
+          "profile": "1:cpu-profile",
+          "gapMs": 636.96
+        },
+        {
+          "profile": "1:cpu-profile",
+          "gapMs": 1852.88
+        }
+      ],
+      "results": [
+        {
+          "profile": "cpu-profile",
+          "run": 1,
+          "scenario": "driving",
+          "server": {
+            "pipeline": "rust-owned",
+            "simulation": {
+              "samples": 1800,
+              "meanMs": 0.004086728888890055,
+              "p95Ms": 0.00620800000001509
+            },
+            "snapshot": {
+              "samples": 0,
+              "meanMs": null,
+              "p95Ms": null
+            },
+            "encoding": {
+              "samples": 900,
+              "meanMs": 0.01908903111111095,
+              "p95Ms": 0.025792000000137705
+            },
+            "uncompressedMbpsPerRecipient": 1.0203146666666667
+          },
+          "browser": {
+            "render": {
+              "samples": 365,
+              "meanMs": 0.6427397261743676,
+              "p95Ms": 1.2999999970197678
+            },
+            "network": {
+              "samples": 365,
+              "meanMs": 0.05232876718860783,
+              "p95Ms": 0.10000000149011612
+            },
+            "receive": {
+              "samples": 183,
+              "meanMs": 0.2808743168910344,
+              "p95Ms": 0.4000000059604645
+            },
+            "frame": {
+              "samples": 365,
+              "meanMs": 0.9268493151215658,
+              "p95Ms": 1.7000000029802322
+            },
+            "intervals": {
+              "samples": 364,
+              "meanMs": 16.666208791208792,
+              "p95Ms": 16.799999999999272
+            },
+            "gpuElapsed": {
+              "samples": 365,
+              "meanMs": 0.18818227123287692,
+              "p95Ms": 0.258749
+            },
+            "gpuTimerSupported": true,
+            "gpuDisjoint": 0,
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+            "softwareGPU": false,
+            "width": 668,
+            "height": 418,
+            "pixelRatio": 1,
+            "projectiles": 0
+          },
+          "pass": true
+        },
+        {
+          "profile": "cpu-profile",
+          "run": 1,
+          "scenario": "drifting",
+          "server": {
+            "pipeline": "rust-owned",
+            "simulation": {
+              "samples": 1800,
+              "meanMs": 0.005045597777744762,
+              "p95Ms": 0.008499999999912689
+            },
+            "snapshot": {
+              "samples": 0,
+              "meanMs": null,
+              "p95Ms": null
+            },
+            "encoding": {
+              "samples": 900,
+              "meanMs": 0.02800650999996934,
+              "p95Ms": 0.0395829999979469
+            },
+            "uncompressedMbpsPerRecipient": 3.299622933333333
+          },
+          "browser": {
+            "render": {
+              "samples": 367,
+              "meanMs": 1.2444141690469568,
+              "p95Ms": 1.6000000014901161
+            },
+            "network": {
+              "samples": 367,
+              "meanMs": 0.06021798377709428,
+              "p95Ms": 0.10000000149011612
+            },
+            "receive": {
+              "samples": 183,
+              "meanMs": 0.3021857922113007,
+              "p95Ms": 0.3999999985098839
+            },
+            "frame": {
+              "samples": 367,
+              "meanMs": 1.5460490464392735,
+              "p95Ms": 2.0999999940395355
+            },
+            "intervals": {
+              "samples": 366,
+              "meanMs": 16.666120218579234,
+              "p95Ms": 16.700000000000728
+            },
+            "gpuElapsed": {
+              "samples": 367,
+              "meanMs": 0.20456738692098103,
+              "p95Ms": 0.287291
+            },
+            "gpuTimerSupported": true,
+            "gpuDisjoint": 0,
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+            "softwareGPU": false,
+            "width": 668,
+            "height": 418,
+            "pixelRatio": 1,
+            "projectiles": 1
+          },
+          "pass": true
+        },
+        {
+          "profile": "cpu-profile",
+          "run": 1,
+          "scenario": "six-player-vulcan",
+          "server": {
+            "pipeline": "rust-owned",
+            "simulation": {
+              "samples": 1800,
+              "meanMs": 0.012492507777771809,
+              "p95Ms": 0.021125000002939487
+            },
+            "snapshot": {
+              "samples": 0,
+              "meanMs": null,
+              "p95Ms": null
+            },
+            "encoding": {
+              "samples": 900,
+              "meanMs": 0.26427385111110197,
+              "p95Ms": 0.35108300000501913
+            },
+            "uncompressedMbpsPerRecipient": 9.580651911111111
+          },
+          "browser": {
+            "render": {
+              "samples": 369,
+              "meanMs": 2.0373983739958548,
+              "p95Ms": 2.600000001490116
+            },
+            "network": {
+              "samples": 369,
+              "meanMs": 0.10054200542409246,
+              "p95Ms": 0.20000000298023224
+            },
+            "receive": {
+              "samples": 185,
+              "meanMs": 0.39243243272240097,
+              "p95Ms": 0.5
+            },
+            "frame": {
+              "samples": 369,
+              "meanMs": 2.5002710026736827,
+              "p95Ms": 3.1999999955296516
+            },
+            "intervals": {
+              "samples": 368,
+              "meanMs": 16.66576086956522,
+              "p95Ms": 16.700000000000728
+            },
+            "gpuElapsed": {
+              "samples": 369,
+              "meanMs": 0.3831838997289977,
+              "p95Ms": 0.937249
+            },
+            "gpuTimerSupported": true,
+            "gpuDisjoint": 0,
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+            "softwareGPU": false,
+            "width": 668,
+            "height": 418,
+            "pixelRatio": 1,
+            "projectiles": 33
+          },
+          "pass": true
+        }
+      ]
+    },
+    {
+      "path": "/private/tmp/wild-wheels-profile-released-rust-2.json",
+      "frameBudgetEnforced": true,
+      "errors": [],
+      "transportErrors": [],
+      "serverGaps": [
+        {
+          "profile": "1:cpu-profile",
+          "gapMs": 123.5
+        },
+        {
+          "profile": "1:cpu-profile",
+          "gapMs": 651.76
+        },
+        {
+          "profile": "1:cpu-profile",
+          "gapMs": 1922.83
+        }
+      ],
+      "results": [
+        {
+          "profile": "cpu-profile",
+          "run": 1,
+          "scenario": "driving",
+          "server": {
+            "pipeline": "rust-owned",
+            "simulation": {
+              "samples": 1800,
+              "meanMs": 0.004008626666666765,
+              "p95Ms": 0.005999999999971806
+            },
+            "snapshot": {
+              "samples": 0,
+              "meanMs": null,
+              "p95Ms": null
+            },
+            "encoding": {
+              "samples": 900,
+              "meanMs": 0.0186965166666654,
+              "p95Ms": 0.025083999999992557
+            },
+            "uncompressedMbpsPerRecipient": 0.9927562666666667
+          },
+          "browser": {
+            "render": {
+              "samples": 367,
+              "meanMs": 0.7920980925496658,
+              "p95Ms": 1.5
+            },
+            "network": {
+              "samples": 367,
+              "meanMs": 0.05940054501191147,
+              "p95Ms": 0.20000000298023224
+            },
+            "receive": {
+              "samples": 183,
+              "meanMs": 0.3169398912396587,
+              "p95Ms": 0.5
+            },
+            "frame": {
+              "samples": 367,
+              "meanMs": 1.1457765670417115,
+              "p95Ms": 1.9000000059604645
+            },
+            "intervals": {
+              "samples": 366,
+              "meanMs": 16.665846994535517,
+              "p95Ms": 16.700000000000728
+            },
+            "gpuElapsed": {
+              "samples": 367,
+              "meanMs": 0.19351983106267037,
+              "p95Ms": 0.26125
+            },
+            "gpuTimerSupported": true,
+            "gpuDisjoint": 0,
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+            "softwareGPU": false,
+            "width": 668,
+            "height": 418,
+            "pixelRatio": 1,
+            "projectiles": 2
+          },
+          "pass": true
+        },
+        {
+          "profile": "cpu-profile",
+          "run": 1,
+          "scenario": "drifting",
+          "server": {
+            "pipeline": "rust-owned",
+            "simulation": {
+              "samples": 1800,
+              "meanMs": 0.005093652777753353,
+              "p95Ms": 0.009208000001308392
+            },
+            "snapshot": {
+              "samples": 0,
+              "meanMs": null,
+              "p95Ms": null
+            },
+            "encoding": {
+              "samples": 900,
+              "meanMs": 0.029540053333342562,
+              "p95Ms": 0.042042000000947155
+            },
+            "uncompressedMbpsPerRecipient": 3.299585066666667
+          },
+          "browser": {
+            "render": {
+              "samples": 368,
+              "meanMs": 1.3915760869808171,
+              "p95Ms": 2.600000001490116
+            },
+            "network": {
+              "samples": 368,
+              "meanMs": 0.06521739146631697,
+              "p95Ms": 0.20000000298023224
+            },
+            "receive": {
+              "samples": 184,
+              "meanMs": 0.29021739141772623,
+              "p95Ms": 0.5
+            },
+            "frame": {
+              "samples": 368,
+              "meanMs": 1.7801630433608333,
+              "p95Ms": 3.399999998509884
+            },
+            "intervals": {
+              "samples": 367,
+              "meanMs": 16.66621253405994,
+              "p95Ms": 16.700000000000728
+            },
+            "gpuElapsed": {
+              "samples": 368,
+              "meanMs": 0.196118176630435,
+              "p95Ms": 0.269625
+            },
+            "gpuTimerSupported": true,
+            "gpuDisjoint": 0,
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+            "softwareGPU": false,
+            "width": 668,
+            "height": 418,
+            "pixelRatio": 1,
+            "projectiles": 2
+          },
+          "pass": true
+        },
+        {
+          "profile": "cpu-profile",
+          "run": 1,
+          "scenario": "six-player-vulcan",
+          "server": {
+            "pipeline": "rust-owned",
+            "simulation": {
+              "samples": 1800,
+              "meanMs": 0.013540625000003073,
+              "p95Ms": 0.025250000002415618
+            },
+            "snapshot": {
+              "samples": 0,
+              "meanMs": null,
+              "p95Ms": null
+            },
+            "encoding": {
+              "samples": 900,
+              "meanMs": 0.28079662333347694,
+              "p95Ms": 0.37312500000189175
+            },
+            "uncompressedMbpsPerRecipient": 9.580895466666666
+          },
+          "browser": {
+            "render": {
+              "samples": 369,
+              "meanMs": 2.1598915990169454,
+              "p95Ms": 4.199999995529652
+            },
+            "network": {
+              "samples": 369,
+              "meanMs": 0.07615176152165343,
+              "p95Ms": 0.20000000298023224
+            },
+            "receive": {
+              "samples": 184,
+              "meanMs": 0.375000000283446,
+              "p95Ms": 0.6000000014901161
+            },
+            "frame": {
+              "samples": 369,
+              "meanMs": 2.580758807579999,
+              "p95Ms": 5
+            },
+            "intervals": {
+              "samples": 368,
+              "meanMs": 16.66576086956522,
+              "p95Ms": 16.700000000000728
+            },
+            "gpuElapsed": {
+              "samples": 369,
+              "meanMs": 0.2633881897018973,
+              "p95Ms": 0.378291
+            },
+            "gpuTimerSupported": true,
+            "gpuDisjoint": 0,
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+            "softwareGPU": false,
+            "width": 668,
+            "height": 418,
+            "pixelRatio": 1,
+            "projectiles": 42
+          },
+          "pass": true
+        }
+      ]
+    },
+    {
+      "path": "/private/tmp/wild-wheels-profile-released-js-2.json",
+      "frameBudgetEnforced": true,
+      "errors": [],
+      "transportErrors": [],
+      "serverGaps": [
+        {
+          "profile": "1:cpu-profile",
+          "gapMs": 133.29
+        },
+        {
+          "profile": "1:cpu-profile",
+          "gapMs": 733.68
+        }
+      ],
+      "results": [
+        {
+          "profile": "cpu-profile",
+          "run": 1,
+          "scenario": "driving",
+          "server": {
+            "pipeline": "javascript",
+            "simulation": {
+              "samples": 1800,
+              "meanMs": 0.00905685555555566,
+              "p95Ms": 0.016792000000009466
+            },
+            "snapshot": {
+              "samples": 900,
+              "meanMs": 0.03570851222222207,
+              "p95Ms": 0.0525830000001406
+            },
+            "encoding": {
+              "samples": 900,
+              "meanMs": 0.031452316666664676,
+              "p95Ms": 0.04512499999998454
+            },
+            "uncompressedMbpsPerRecipient": 0.9088618666666667
+          },
+          "browser": {
+            "render": {
+              "samples": 366,
+              "meanMs": 0.6431693990251731,
+              "p95Ms": 1.3000000044703484
+            },
+            "network": {
+              "samples": 366,
+              "meanMs": 0.0969945353155579,
+              "p95Ms": 0.20000000298023224
+            },
+            "receive": {
+              "samples": 184,
+              "meanMs": 0.19021739170927068,
+              "p95Ms": 0.30000000447034836
+            },
+            "frame": {
+              "samples": 366,
+              "meanMs": 0.9658469945762327,
+              "p95Ms": 1.8999999985098839
+            },
+            "intervals": {
+              "samples": 365,
+              "meanMs": 16.66630136986301,
+              "p95Ms": 16.799999999999272
+            },
+            "gpuElapsed": {
+              "samples": 366,
+              "meanMs": 0.19128042349726787,
+              "p95Ms": 0.254208
+            },
+            "gpuTimerSupported": true,
+            "gpuDisjoint": 0,
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+            "softwareGPU": false,
+            "width": 668,
+            "height": 418,
+            "pixelRatio": 1,
+            "projectiles": 0
+          },
+          "pass": true
+        },
+        {
+          "profile": "cpu-profile",
+          "run": 1,
+          "scenario": "drifting",
+          "server": {
+            "pipeline": "javascript",
+            "simulation": {
+              "samples": 1800,
+              "meanMs": 0.013275308888913867,
+              "p95Ms": 0.023499999999330612
+            },
+            "snapshot": {
+              "samples": 900,
+              "meanMs": 0.03546351000002485,
+              "p95Ms": 0.04916700000103447
+            },
+            "encoding": {
+              "samples": 900,
+              "meanMs": 0.06382575444447663,
+              "p95Ms": 0.1714590000010503
+            },
+            "uncompressedMbpsPerRecipient": 3.3106357333333336
+          },
+          "browser": {
+            "render": {
+              "samples": 365,
+              "meanMs": 1.174520548116671,
+              "p95Ms": 2
+            },
+            "network": {
+              "samples": 365,
+              "meanMs": 0.1254794519241542,
+              "p95Ms": 0.29999999701976776
+            },
+            "receive": {
+              "samples": 183,
+              "meanMs": 0.20765027334618438,
+              "p95Ms": 0.3999999985098839
+            },
+            "frame": {
+              "samples": 365,
+              "meanMs": 1.539178082081553,
+              "p95Ms": 2.600000001490116
+            },
+            "intervals": {
+              "samples": 364,
+              "meanMs": 16.666208791208796,
+              "p95Ms": 16.700000000000728
+            },
+            "gpuElapsed": {
+              "samples": 365,
+              "meanMs": 0.20992402465753426,
+              "p95Ms": 0.317583
+            },
+            "gpuTimerSupported": true,
+            "gpuDisjoint": 0,
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+            "softwareGPU": false,
+            "width": 668,
+            "height": 418,
+            "pixelRatio": 1,
+            "projectiles": 0
+          },
+          "pass": true
+        },
+        {
+          "profile": "cpu-profile",
+          "run": 1,
+          "scenario": "six-player-vulcan",
+          "server": {
+            "pipeline": "javascript",
+            "simulation": {
+              "samples": 1800,
+              "meanMs": 0.030900939444432476,
+              "p95Ms": 0.053708999999798834
+            },
+            "snapshot": {
+              "samples": 900,
+              "meanMs": 0.1650187766666689,
+              "p95Ms": 0.20945899999787798
+            },
+            "encoding": {
+              "samples": 900,
+              "meanMs": 0.5640530833333065,
+              "p95Ms": 0.7978759999969043
+            },
+            "uncompressedMbpsPerRecipient": 9.28415768888889
+          },
+          "browser": {
+            "render": {
+              "samples": 365,
+              "meanMs": 1.8408219179061993,
+              "p95Ms": 2.100000001490116
+            },
+            "network": {
+              "samples": 365,
+              "meanMs": 0.17726027406241796,
+              "p95Ms": 0.3999999985098839
+            },
+            "receive": {
+              "samples": 183,
+              "meanMs": 0.27377049201498915,
+              "p95Ms": 0.4000000059604645
+            },
+            "frame": {
+              "samples": 365,
+              "meanMs": 2.323835616589409,
+              "p95Ms": 2.8000000044703484
+            },
+            "intervals": {
+              "samples": 364,
+              "meanMs": 16.66565934065935,
+              "p95Ms": 16.700000000000728
+            },
+            "gpuElapsed": {
+              "samples": 365,
+              "meanMs": 0.27495285205479447,
+              "p95Ms": 0.367458
+            },
+            "gpuTimerSupported": true,
+            "gpuDisjoint": 0,
+            "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+            "softwareGPU": false,
+            "width": 668,
+            "height": 418,
+            "pixelRatio": 1,
+            "projectiles": 39
+          },
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile, writeFile } from 'node:fs/promises';
 import { constants, deflateRawSync } from 'node:zlib';
 import { Multiplayer } from '../multiplayer.js';
+import {arenaFixture} from './arena-fixture.mjs';
 import { createCodecs } from './encoding-lab/codecs.mjs';
 
 const wasm=process.argv[2],output=process.argv[3];
@@ -12,7 +13,7 @@ const stats=values=>{
   return {samples:values.length,meanMs:values.reduce((a,b)=>a+b,0)/values.length,p50Ms:sorted[Math.floor(sorted.length*.5)],p95Ms:sorted[Math.floor(sorted.length*.95)]};
 };
 function corpus(scenario){
-  const app=new Multiplayer();clearInterval(app.timer);app.broadcast=()=>{};
+  const app=new Multiplayer({fixtureWorld:arenaFixture});clearInterval(app.timer);app.broadcast=()=>{};
   const random=Math.random;let seed=123;Math.random=()=>((seed=Math.imul(seed,1664525)+1013904223>>>0)/4294967296);
   try{
     const room={code:'07',arena:0,botCount:scenario.bots,host:0,members:new Map()};app.makeWorld(room);app.rooms.set('07',room);

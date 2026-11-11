@@ -22,7 +22,8 @@ const cases=[...new Set(rows.map(row=>row.scenario))].map(scenario=>{
   return value;
 });
 const summary=JSON.parse(await readFile(regressions+'/summary.json','utf8'));
-const groups=await Promise.all(['movement','actions','drift','controls','mobile'].map(async name=>{const data=JSON.parse(await readFile(regressions+'/'+name+'.json','utf8'));return {name,passed:data.results.filter(row=>row.pass).length,total:data.results.length,errors:data.errors,transportErrors:data.transportErrors};}));
+const traces=new Set(['trace','flipTrace','orbitTrace']);
+const groups=await Promise.all(['movement','actions','drift','controls','mobile'].map(async name=>{const data=JSON.parse(await readFile(regressions+'/'+name+'.json','utf8'));return {name,passed:data.results.filter(row=>row.pass).length,total:data.results.length,errors:data.errors,transportErrors:data.transportErrors,results:data.results.map(row=>Object.fromEntries(Object.entries(row).filter(([key])=>!traces.has(key))))};}));
 const wasm=await readFile(new URL('../rust-core.wasm',import.meta.url));
 const result={created:new Date().toISOString(),javascriptRevision:'7b8ef3d',rustRevision:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),wasmSha256:createHash('sha256').update(wasm).digest('hex'),order:paths,method:'Two samples per scene and pipeline, JS/Rust/Rust/JS order. CPU totals normalize to 60 simulation/render ticks and 30 snapshot/receive updates per second. Browser total includes packet handling outside requestAnimationFrame. GPU uses disjoint timer queries when available. Full-frame CPU includes rendering/UI/audio; this is a local benchmark, not a claim about internet RTT.',gpu:rows[0].browser.gpu,regressions:{...summary,groups},cases,samples:sources};
 await writeFile(output,JSON.stringify(result,null,2)+'\n');
