@@ -44,6 +44,14 @@ export async function checkControls(evaluate,app,room,id,sleep,captureFlip,captu
   if(id!==room.host)room.world.destroyed=999;
   for(let i=0;i<100;i++){if(await evaluate('__game.network.state.world.phase==="racing"&&__game.network.state.world.vulcan>9&&__game.network.state.world.missiles===1&&__game.network.state.world.turbos===1'))break;await sleep(25);}
   const pickupKeptVulcan=actor.item==='hedgehog'&&await evaluate("__game.network.state.world.item==='hedgehog'");
+  await evaluate("window.dispatchEvent(new KeyboardEvent('keydown',{key:'Meta',metaKey:true,bubbles:true}));window.dispatchEvent(new KeyboardEvent('keydown',{key:'Meta',metaKey:true,repeat:true,bubbles:true}));window.dispatchEvent(new KeyboardEvent('keyup',{key:'Meta',bubbles:true}));");
+  for(let i=0;i<100;i++){if(actor.item==='missile'&&await evaluate("__game.race.item==='missile'"))break;await sleep(10);}
+  const commandOnce=actor.item==='missile'&&await evaluate("__game.race.item==='missile'");
+  await evaluate("__game.network.name.dispatchEvent(new KeyboardEvent('keydown',{key:'Meta',metaKey:true,bubbles:true}));");
+  const typingSafe=await evaluate("__game.race.item==='missile'");
+  await evaluate("window.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true}));window.dispatchEvent(new KeyboardEvent('keyup',{key:'Tab',bubbles:true}));");
+  for(let i=0;i<100;i++){if(actor.item==='hedgehog'&&await evaluate("__game.race.item==='hedgehog'"))break;await sleep(10);}
+  const commandPass=commandOnce&&typingSafe&&actor.item==='hedgehog'&&await evaluate("__game.race.item==='hedgehog'");
   await evaluate(`{
     const game=__game,render=game.network.render.bind(game.network),start=performance.now();let boosted=false,fired=false;
     game.controlsTrace=[];game.controlsDone=false;game.keys.add('arrowup');
@@ -178,6 +186,6 @@ export async function checkControls(evaluate,app,room,id,sleep,captureFlip,captu
   for(let i=0;i<100;i++){if(await evaluate("!document.getElementById('match-results').classList.contains('hidden')&&document.querySelectorAll('#match-results tbody tr').length===2"))break;await sleep(25);}
   const leaderboard=await evaluate("[...document.querySelectorAll('#match-results tbody tr')].map(row=>[...row.cells].map(cell=>cell.textContent))");
   const resultsPass=JSON.stringify(leaderboard)===JSON.stringify([['1',other.name,'10','2'],['2',displayName+' · YOU','3','4']])&&await evaluate("document.querySelectorAll('#match-results tbody .you').length===1&&!document.querySelector('#match-results b')");
-  return {readyPass,readyCleared,readyUI,popupPass,popup,refusalPass,autoStartPass,namePass,pickupKeptVulcan,turboPass,flipPass,cameraPass,remoteSawFlip,flipTrace,desktopManual,warningPass,warning,chaffPass,chaffColor:ownCloud?.color,chaffSoundCount,greenNoticePass,orbitPass,orbitRotation,orbitTrace,desktopBombPass,stinkPass,whackPass,coWhackPass,whack,endingPass,resultsPass,leaderboard,pass:readyPass&&readyCleared&&popupPass&&refusalPass&&autoStartPass&&namePass&&pickupKeptVulcan&&turboPass&&flipPass&&desktopManual&&warningPass&&chaffPass&&greenNoticePass&&orbitPass&&desktopBombPass&&stinkPass&&whackPass&&coWhackPass&&endingPass&&resultsPass,trace};
+  return {readyPass,readyCleared,readyUI,popupPass,popup,refusalPass,autoStartPass,namePass,pickupKeptVulcan,commandPass,turboPass,flipPass,cameraPass,remoteSawFlip,flipTrace,desktopManual,warningPass,warning,chaffPass,chaffColor:ownCloud?.color,chaffSoundCount,greenNoticePass,orbitPass,orbitRotation,orbitTrace,desktopBombPass,stinkPass,whackPass,coWhackPass,whack,endingPass,resultsPass,leaderboard,pass:readyPass&&readyCleared&&popupPass&&refusalPass&&autoStartPass&&namePass&&pickupKeptVulcan&&commandPass&&turboPass&&flipPass&&desktopManual&&warningPass&&chaffPass&&greenNoticePass&&orbitPass&&desktopBombPass&&stinkPass&&whackPass&&coWhackPass&&endingPass&&resultsPass,trace};
   }finally{clearInterval(fixtureHeartbeat);}
 }

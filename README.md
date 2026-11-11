@@ -37,7 +37,7 @@ Each running server keeps one room. Refresh to reconnect; names are remembered i
 | Arrow keys / WASD | Drive and steer; Down / S brakes and reverses in arenas |
 | Shift + steering | Drift; release for a boost |
 | Space | Fire the selected weapon |
-| Q / Tab | Switch hedgehogs and missiles |
+| Q / Tab / ⌘ Command | Switch hedgehogs and missiles |
 | X | Use a turbo |
 | C | Deploy chaff to divert incoming missiles in arenas |
 | Z | Somersault and turn 180° in arenas |

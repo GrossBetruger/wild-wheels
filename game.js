@@ -132,7 +132,7 @@ for(const [type,icon,label] of [['hedgehog','🦔','HEDGEHOGS'],['missile','🚀
   const count=document.createElement('b');count.id=`${type}-count`;const name=document.createElement('span');name.className='ammo-label';name.textContent=label;
   button.append(symbol,count,name);button.onclick=()=>type==='boost'?turbo():network.active?network.action('select',type):selectItem(race,type);ammoRack.append(button);ammoCards.set(type,{button,count,label,name});
 }
-document.querySelector('.item-box').prepend(ammoRack);document.querySelector('.item-box small').textContent='SPACE TO FIRE · TAB / Q WEAPONS · X TURBO';
+document.querySelector('.item-box').prepend(ammoRack);document.querySelector('.item-box small').textContent='SPACE TO FIRE · TAB / Q / ⌘ WEAPONS · X TURBO';
 const vulcanStatus=document.createElement('div');vulcanStatus.className='vulcan-status hidden';const vulcanTitle=document.createElement('strong'),vulcanTime=document.createElement('progress');vulcanTime.max=VULCAN_DURATION;vulcanTime.setAttribute('aria-label','Hedgehog Vulcan seconds remaining');vulcanStatus.append(vulcanTitle,vulcanTime);document.querySelector('.item-box').prepend(vulcanStatus);
 const finishFlash=document.createElement('div');finishFlash.className='finish-flash hidden';finishFlash.setAttribute('role','status');finishFlash.setAttribute('aria-live','polite');
 const finishTitle=document.createElement('strong'),finishDetail=document.createElement('span');finishFlash.append(finishTitle,finishDetail);document.querySelector('.viewport').append(finishFlash);
@@ -250,8 +250,8 @@ function hud(){
   const battle=mode==='combat',controls=document.querySelectorAll('.control');brakeButton.classList.toggle('hidden',!battle);
   controls[0].querySelector('span').textContent=battle?'WASD works · ↓ / S reverses':'WASD works, too';
   controls[1].querySelector('kbd').textContent='SHIFT';controls[1].querySelector('strong').textContent=battle?'Slide into a U-turn':'Drift the corners';controls[1].querySelector('span').textContent=battle?'Hold + steer, release to launch':'Hold + steer, release to boost';
-  controls[2].querySelector('span').textContent=battle?'Q weapons · X turbo · C chaff · Z flip':'Space fires · Q weapons · X turbo';controls[3].querySelector('span').textContent=battle?'Pause your battle':'Pause your race';
-  canvas.setAttribute('aria-label',battle?'Combat arena. Arrow keys drive, Shift and steering drift into a U-turn, release Shift to boost. Hold Space to shoot, Tab or Q changes weapons, X uses turbo, Z jumps and turns 180 degrees, C releases chaff to distract missiles.':'Kart racing track. Arrow keys drive, Shift drifts, Space fires, Tab or Q changes weapons, X uses turbo.');
+  controls[2].querySelector('span').textContent=battle?'Q / ⌘ weapons · X turbo · C chaff · Z flip':'Space fires · Q / ⌘ weapons · X turbo';controls[3].querySelector('span').textContent=battle?'Pause your battle':'Pause your race';
+  canvas.setAttribute('aria-label',battle?'Combat arena. Arrow keys drive, Shift and steering drift into a U-turn, release Shift to boost. Hold Space to shoot, Tab, Q or Command changes weapons, X uses turbo, Z jumps and turns 180 degrees, C releases chaff to distract missiles.':'Kart racing track. Arrow keys drive, Shift drifts, Space fires, Tab, Q or Command changes weapons, X uses turbo.');
   if(race.bomber)canvas.setAttribute('aria-label','Bomber arena. Select A-bombs or stinkbombs, then tap a target. Start with two A-bombs and two stinkbombs. Stinkbombs refill every five seconds; A-bombs every ten seconds. Drag to pan; use plus and minus to zoom.');
   $('map').setAttribute('aria-label',battle?'Arena map with cover and fighter positions':'Track map with alternate routes and racer positions');
   if(['ready','countdown','finished','paused'].includes(race.phase))finishFlash.classList.add('hidden');
@@ -280,8 +280,8 @@ $('fullscreen').onclick=async()=>{try{if(document.fullscreenElement){await docum
 window.addEventListener('keydown',e=>{
   if(e.target instanceof HTMLInputElement||e.target instanceof HTMLTextAreaElement||e.target instanceof HTMLSelectElement||e.target.isContentEditable)return;
   const playing=['racing','countdown'].includes(race.phase),key=e.key.toLowerCase();
-  if(key==='tab'){
-    if(!playing||e.shiftKey||e.ctrlKey||e.altKey||e.metaKey)return;
+  if(key==='tab'||key==='meta'){
+    if(!playing||e.shiftKey||e.ctrlKey||e.altKey||key==='tab'&&e.metaKey)return;
     e.preventDefault();if(!e.repeat)switchWeapon();return;
   }
   if(e.target instanceof HTMLButtonElement&&[' ','Enter'].includes(e.key)&&!playing)return;
