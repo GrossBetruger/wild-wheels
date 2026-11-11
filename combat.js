@@ -3,6 +3,7 @@ export const VULCAN_DURATION=15;
 export const MAX_HEALTH=6;
 export const RECOVERY_HEALTH=3;
 export function recoveryInterval(driver){return 14-2*drivers[driver].cuteness;}
+export function hedgehogRecoveryInterval(driver){return 2.25-.25*drivers[driver].cuteness;}
 export const MOVEMENT_DT=1/60;
 export const SOMERSAULT_DURATION=.55;
 export const BOMB_FALL_TIME=.9;
@@ -293,7 +294,7 @@ export function tickBattle(r,keys,dt,inputs=null){
       if(actor.healTimer>=interval-1e-8){actor.health=Math.min(RECOVERY_HEALTH,actor.health+1);actor.healTimer=actor.health>=RECOVERY_HEALTH?0:Math.max(0,actor.healTimer-interval);}
     }
     if(actor.health>=RECOVERY_HEALTH)actor.healTimer=0;
-    actor.reload+=dt;if(actor.reload>=2){actor.ammo=Math.min(6,actor.ammo+1);actor.reload=0;}
+    actor.reload+=dt;const reloadInterval=hedgehogRecoveryInterval(actor.driver);if(actor.reload>=reloadInterval-1e-8){actor.ammo=Math.min(6,actor.ammo+1);actor.reload=Math.max(0,actor.reload-reloadInterval);}
     if((actor===r&&!r.multiplayer)||actor.human){
       const control=inputs?.get(actor.id)??(actor===r?keys:new Set());
       const held=control.keys instanceof Set?control.keys:control;

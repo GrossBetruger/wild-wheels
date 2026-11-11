@@ -134,10 +134,10 @@ test('two kills without dying automatically equip a fifteen-second Hedgehog Vulc
   damageBattle(r,r.bots[1],0,3);assert.equal(r.killStreak,2);assert.equal(r.vulcan,15);assert.equal(r.item,'hedgehog');assert.equal(r.kills,2);
   damageBattle(r,r.bots[1],0,3);assert.equal(r.killStreak,2);assert.equal(r.events.filter(e=>e==='vulcanReady').length,1);
 });
-test('Vulcan fires twelve shots in one second without spending carried hedgehogs',()=>{
+test('Vulcan fires twelve free shots per second while carried hedgehogs regenerate',()=>{
   const r=createBattle(0,0,()=>.5);Object.assign(r,{phase:'racing',vulcan:15,ammo:2,fireCooldown:0,bots:[],supplies:[]});
   for(let frame=0;frame<60;frame++)tickBattle(r,new Set([' ']),1/60);
-  assert.equal(r.events.filter(e=>e==='vulcanFire').length,12);assert.equal(r.ammo,2);assert.ok(r.vulcan>13.99&&r.vulcan<14.01);
+  assert.equal(r.events.filter(e=>e==='vulcanFire').length,12);assert.equal(r.ammo,3);assert.ok(r.vulcan>13.99&&r.vulcan<14.01);
 });
 test('Vulcan expires after fifteen seconds and ordinary shots spend ammo again',()=>{
   const r=createBattle(0,0,()=>.5);Object.assign(r,{phase:'racing',vulcan:15,ammo:5,bots:[],supplies:[]});

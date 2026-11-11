@@ -105,7 +105,7 @@ test('held Vulcan fire produces twelve authoritative shots per second and keeps 
     app.controls(member,{sequence:frame,epoch:room.world.soundEpoch,keys:[],moves:[{sequence:frame,keys:[]}],actions:feedback.commands()});app.step(1/60);
     feedback.accept(decodeSnapshot(JSON.parse(encodeSnapshot(app.snapshot(room,member)))),(frame+1)/60);
   }
-  assert.equal(room.world.projectiles.length,12);assert.equal(room.world.ammo,5);assert.equal(room.world.kills,0);
+  assert.equal(room.world.projectiles.length,12);assert.equal(room.world.ammo,6);assert.equal(room.world.kills,0);
 });
 
 test('a delayed movement batch collects a passed pickup and can fire its missile at the contact position',t=>{

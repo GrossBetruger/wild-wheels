@@ -44,7 +44,7 @@ impl Game{
                 if a.heal_timer>=interval-1e-8{a.health=(a.health+1.0).min(3.0);a.heal_timer=match a.health>=3.0{true=>0.0,false=>(a.heal_timer-interval).max(0.0)};}
             }
             if a.health>=3.0{a.heal_timer=0.0;}
-            a.reload+=dt;if a.reload>=2.0{a.ammo=(a.ammo+1).min(6);a.reload=0.0;}
+            a.reload+=dt;let reload_interval=hedgehog_recovery_interval(a.driver);if a.reload>=reload_interval-1e-8{a.ammo=(a.ammo+1).min(6);a.reload=(a.reload-reload_interval).max(0.0);}
             if id==0&&!self.global.multiplayer||a.human{
                 let held=input.map_or(0,|i|i.keys);
                 match input.and_then(|i|i.moves.as_ref()){

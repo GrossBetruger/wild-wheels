@@ -28,7 +28,7 @@ Each running server keeps one room. Refresh to reconnect; names are remembered i
 
 **Grand Prix:** race three laps against computer opponents. Collect weapons and turbo cells, drift for boosts, and use alternate routes to get ahead. This mode is solo.
 
-**Arena Battle:** fight other players and computer opponents. First to ten points wins, or the highest score after three minutes. Destroyed drivers respawn; collect ammo, health, and turbos around the arena. Cuteness determines how quickly lost hearts recover. Two consecutive kills unlock the rapid-fire Hedgehog Vulcan.
+**Arena Battle:** fight other players and computer opponents. First to ten points wins, or the highest score after three minutes. Destroyed drivers respawn; collect ammo, health, and turbos around the arena. Cuteness determines how quickly lost hearts and hedgehog ammo recover. Two consecutive kills unlock the rapid-fire Hedgehog Vulcan.
 
 ### Desktop controls
 

@@ -1,10 +1,24 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {drivers} from './engine.js';
-import {createBattle,tickBattle,recoveryInterval} from './combat.js';
+import {createBattle,tickBattle,recoveryInterval,hedgehogRecoveryInterval} from './combat.js';
 import {ArenaCore} from './arena-core.js';
 
 for(const engine of ['solo','Rust multiplayer']){
+  test(`${engine}: cuteness replenishes hedgehogs every one to two seconds, up to six carried`,()=>{
+    for(const [driver,seconds]of [[0,1],[1,1.5],[2,1.25],[3,1.25],[4,1],[5,1],[6,2]]){
+      const seed=createBattle(driver);Object.assign(seed,{phase:'racing',human:true,ammo:0,reload:0,missiles:2,turbos:1,supplies:[]});
+      for(const bot of seed.bots)Object.assign(bot,{inactive:true,destroyed:1e9});
+      assert.equal(hedgehogRecoveryInterval(driver),seconds);const core=engine==='solo'?null:new ArenaCore(seed);
+      for(let frame=0;frame<seconds*60-1;frame++){if(core)core.step(1/60);if(!core)tickBattle(seed,new Set(),1/60);}
+      assert.equal((core?core.snapshot():seed).ammo,0);
+      if(core)core.step(1/60);if(!core)tickBattle(seed,new Set(),1/60);
+      assert.equal((core?core.snapshot():seed).ammo,1);
+      for(let frame=0;frame<seconds*60*7;frame++){if(core)core.step(1/60);if(!core)tickBattle(seed,new Set(),1/60);}
+      const after=core?core.snapshot():seed;assert.equal(after.ammo,6);assert.equal(after.missiles,2);assert.equal(after.turbos,1);
+    }
+  });
+
   test(`${engine}: each character recovers one heart at their cuteness interval`,()=>{
     for(const [driver,cuteness,seconds]of [[0,5,4],[1,3,8],[2,4,6],[3,4,6],[4,5,4],[5,5,4],[6,1,12]]){
       const seed=createBattle(driver);Object.assign(seed,{phase:'racing',human:true,health:1,shield:0,supplies:[]});
