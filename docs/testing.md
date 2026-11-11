@@ -1,5 +1,7 @@
 # Development checks
 
+For CPU/GPU profiling and recorded results, see [Performance measurements](performance.md).
+
 Run lightweight checks before pushing:
 
 ```sh
