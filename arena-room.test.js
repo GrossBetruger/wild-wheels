@@ -48,3 +48,12 @@ test('invalid or out of match room changes leave the current Rust game untouched
   assert.deepEqual(core.packet(0),before);
   assert.throws(()=>ArenaCore.room({...config,code:'../'}),/Invalid Rust arena/);
 });
+
+test('late movement after a finished match is acknowledged without moving or crashing the game',()=>{
+  const core=ArenaCore.room({code:'09',host:0,arena:0,bots:0,epoch:1,players:[{id:0,name:'Host',driver:0,role:'driver'}]});
+  const world=core.snapshot();world.phase='finished';for(let id=1;id<6;id++)world.bots.push({id,inactive:true,destroyed:1e9});
+  core.write(world);assert.equal(core.core.game_test_edit(core.inputLength),1);
+  core.step(1/60,[{actor:0,keys:['arrowup'],moves:[{sequence:0,keys:['arrowup']}]}]);
+  assert.doesNotThrow(()=>core.step(1/60,[{actor:0,keys:['arrowup'],moves:[{sequence:1,keys:['arrowup']}]}]));
+  const after=decodeBinarySnapshot(core.packet(0));assert.equal(after.movementSequence,1);assert.equal(after.world.wx,world.wx);assert.equal(after.world.wz,world.wz);assert.equal(after.world.phase,'finished');
+});

@@ -183,6 +183,17 @@ test('irrelevant action fields cannot corrupt a match and action identifiers sta
   assert.equal((await post('/api/input',{sequence:1,keys:[],actions:[{type:'fire',id:4294967296,afterMove:-1}]},host.token)).status,400);
   multiplayer.step(1/60);assert.equal(room.world.ammo,4);
 });
+test('a rematch accepts the new client command sequence immediately after the previous game',async t=>{
+  const {multiplayer,post}=await serverFor(t);const host=await post('/api/rooms',{name:'Host',driver:0,arena:0,bots:0});const room=multiplayer.rooms.get(host.code);
+  await post('/api/input',{sequence:150,keys:[],actions:[]},host.token);room.world.phase='finished';
+  assert.equal((await post('/api/control',{action:'start'},host.token)).status,200);
+  for(let i=0;i<181;i++)multiplayer.step(1/60);
+  room.world.fireCooldown=0;
+  const epoch=room.world.soundEpoch;
+  assert.equal((await post('/api/input',{sequence:0,epoch,keys:['arrowup'],moves:[{sequence:0,keys:['arrowup']}],actions:[{type:'fire',id:0,afterMove:0}]},host.token)).status,200);
+  multiplayer.step(1/60);
+  assert.equal(room.world.ammo,4);assert.equal(room.world.projectiles.length,1);assert.equal(multiplayer.snapshot(room,multiplayer.members.get(host.token)).movementSequence,0);
+});
 test('a transferred host can remove all bots and see only their own kart',async t=>{
   const {multiplayer,post}=await serverFor(t);const host=await post('/api/rooms',{name:'Host',driver:0,arena:0});const guest=await post('/api/join',{name:'Guest',driver:1,code:host.code});await post('/api/leave',{},host.token);
   assert.equal((await post('/api/control',{action:'bots',bots:0},guest.token)).status,200);

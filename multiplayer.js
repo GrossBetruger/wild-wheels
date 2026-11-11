@@ -96,7 +96,7 @@ export class Multiplayer {
     room.startRequest=null;
     for(const player of room.members.values()){if(player.wantsToPlay)player.playRequestRefused=true;player.wantsToPlay=false;}
   }
-  assign(room,member){member.keys=new Set();member.actions=[];member.moveQueue=[];member.acceptedMove=-1;member.lastMove=-1;member.moveCredit=0;member.acceptedAction=-1;member.actionAck=-1;member.commandMode=false;member.predictedActions=false;}
+  assign(room,member){member.keys=new Set();member.actions=[];member.sequence=-1;member.inputAt=0;member.moveQueue=[];member.acceptedMove=-1;member.lastMove=-1;member.moveCredit=0;member.acceptedAction=-1;member.actionAck=-1;member.commandMode=false;member.predictedActions=false;}
   roster(room){room.botCount=Math.min(room.botCount,6-room.members.size);this.syncRoom(room);}
   join(room,body){
     const identity=person(body);if(room.members.size>=6)throw problem(409,'This room is full (6 players).');

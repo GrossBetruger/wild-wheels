@@ -1,5 +1,10 @@
 use super::*;
 impl Game{
+    fn acknowledge_idle_commands(&mut self,frame:&Frame){
+        // Transport still consumes commands after the simulation stops. Keep its
+        // sequence in lockstep so late packets cannot create a gap next frame.
+        for input in &frame.inputs{if let Some(last)=input.moves.as_ref().and_then(|moves|moves.last()){self.movement_ack[input.actor]=last.sequence;self.apply_pending(input.actor,last.sequence);}}
+    }
     pub fn tick(&mut self,frame:Frame){
         self.network_time+=frame.dt;
         for input in &frame.inputs{
@@ -11,9 +16,10 @@ impl Game{
                 if let Some(n)=action.id{self.accepted_action[id]=n as i64;}self.pending[id].push(action.clone());
             }self.apply_pending(id,self.movement_ack[id]);
         }
-        if !matches!(self.global.phase.as_str(),"racing"|"countdown"){return;}
+        if !matches!(self.global.phase.as_str(),"racing"|"countdown"){self.acknowledge_idle_commands(&frame);return;}
         let mut dt=frame.dt;
         if self.global.phase=="countdown"{
+            self.acknowledge_idle_commands(&frame);
             self.global.countdown-=dt;
             if self.global.countdown<=0.0{self.global.phase="racing".into();self.actors[0].notice="BATTLE ON! · FIRST TO 10 KILLS".into();self.actors[0].notice_time=3.0;}return;
         }
