@@ -109,3 +109,15 @@ test('kills against each new character show its actual name in the kill announce
     assert.equal(core.snapshot().kills,1);assert.equal(core.snapshot().killFeed[0].victimName,name);
   }
 });
+
+test('a Rust-owned chaffed missile completes one circle then crashes without more turns or damage',()=>{
+  const seed=createBattle();Object.assign(seed,{phase:'racing',human:true,wx:-65,wz:0,shield:0,supplies:[],chaffClouds:[{id:0,owner:0,wx:-65,wz:20,age:0,life:.1}],projectiles:[{id:1,kind:'missile',owner:1,target:null,decoy:0,decoyOwner:0,decoyCenter:{wx:-65,wz:20},wx:-60,wz:20,heading:Math.PI,speed:70,height:1.3,life:4,trail:[],orbitAge:0,orbitAngle:Math.PI/2,orbitRadius:5,orbitHeight:1.3,chaffed:true}]});
+  for(const bot of seed.bots)Object.assign(bot,{inactive:true,destroyed:1e9});
+  const core=new ArenaCore(seed);let rotation=0,previous=Math.PI/2,sawFall=false;
+  for(let frame=0;frame<120;frame++){
+    core.step(1/60);const shot=core.snapshot().projectiles[0];if(!shot)continue;
+    const angle=Math.atan2(shot.wx+65,shot.wz-20);rotation+=Math.atan2(Math.sin(angle-previous),Math.cos(angle-previous));previous=angle;
+    if(shot.orbitAge>.6&&shot.height<2)sawFall=true;
+  }
+  const world=core.snapshot();assert.ok(Math.abs(rotation-Math.PI*2)<1e-6);assert.equal(sawFall,true);assert.equal(world.projectiles.length,0);assert.equal(world.health,3);assert.ok(world.effects.some(effect=>effect.type==='explosion'));
+});

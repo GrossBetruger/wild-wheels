@@ -131,7 +131,7 @@ function collectSupplies(r,actor){
 // Shared visual trajectory; damage remains exclusively in tickBattle.
 function orbitChaff(shot,decoy,dt){
   shot.orbitAge+=dt;
-  const circling=Math.min(1,shot.orbitAge/1.8),fall=Math.max(0,shot.orbitAge-1.8),angle=shot.orbitAngle+Math.PI*6*circling+fall*5;
+  const circling=Math.min(1,shot.orbitAge/.6),fall=Math.max(0,shot.orbitAge-.6),angle=shot.orbitAngle+Math.PI*2*circling;
   const radius=shot.orbitRadius*(1-.3*circling)*Math.max(.6,1-fall*.5);
   shot.wx=decoy.wx+Math.sin(angle)*radius;shot.wz=decoy.wz+Math.cos(angle)*radius;
   shot.heading=angle+Math.PI/2;

@@ -78,7 +78,7 @@ impl Game{
         shot.age+=dt;shot.life-=dt;shot.trail.push(Sample{wx:shot.wx,wz:shot.wz,height:shot.height});if shot.trail.len()>24{shot.trail.remove(0);}
         let decoy=shot.decoy.and_then(|id|self.global.chaff_clouds.iter().find(|c|c.id==id).map(|c|(c.wx,c.wz,c.owner))).or_else(||shot.decoy_center.as_ref().map(|p|(p.wx,p.wz,shot.decoy_owner.unwrap_or(0))));
         let orbit=|shot:&mut Shot,point:(f64,f64,usize)|{
-            let age=shot.orbit_age.unwrap_or(0.0)+dt;shot.orbit_age=Some(age);let circling=(age/1.8).min(1.0);let fall=(age-1.8).max(0.0);let angle=shot.orbit_angle+std::f64::consts::PI*6.0*circling+fall*5.0;let radius=shot.orbit_radius*(1.0-0.3*circling)*(1.0-fall*0.5).max(0.6);
+            let age=shot.orbit_age.unwrap_or(0.0)+dt;shot.orbit_age=Some(age);let circling=(age/0.6).min(1.0);let fall=(age-0.6).max(0.0);let angle=shot.orbit_angle+std::f64::consts::PI*2.0*circling;let radius=shot.orbit_radius*(1.0-0.3*circling)*(1.0-fall*0.5).max(0.6);
             shot.wx=point.0+angle.sin()*radius;shot.wz=point.1+angle.cos()*radius;shot.heading=angle+std::f64::consts::PI/2.0;shot.height=shot.orbit_height+(4.2-shot.orbit_height)*(age/0.35).min(1.0)-7.0*fall*fall;let impact=shot.height<=0.15;if impact{shot.height=0.15;shot.life=0.0;}(impact,None,Some(point.2))
         };
         if let Some(point)=decoy{if shot.orbit_age.is_some(){return orbit(shot,point);}}

@@ -129,8 +129,8 @@ export async function checkControls(evaluate,app,room,id,sleep,captureFlip,captu
     if(sawOrbit&&!shot)break;await sleep(20);
   }
   let orbitRotation=0,previousAngle=null;
-  for(const shot of orbitTrace.filter(shot=>shot.age!==null&&shot.age<=1.8)){const angle=Math.atan2(shot.wx-ownCloud.wx,shot.wz-ownCloud.wz);if(previousAngle!==null)orbitRotation+=Math.atan2(Math.sin(angle-previousAngle),Math.cos(angle-previousAngle));previousAngle=angle;}
-  const orbitPass=sawOrbit&&orbitRotation>Math.PI*4.8&&orbitTrace.some(shot=>shot.height>3.5)&&orbitTrace.some(shot=>shot.age>1.8&&shot.height<2)&&room.world.projectiles.every(shot=>shot.decoy==null);
+  for(const shot of orbitTrace.filter(shot=>shot.age!==null)){const angle=Math.atan2(shot.wx-ownCloud.wx,shot.wz-ownCloud.wz);if(previousAngle!==null)orbitRotation+=Math.atan2(Math.sin(angle-previousAngle),Math.cos(angle-previousAngle));previousAngle=angle;}
+  const orbitPass=sawOrbit&&orbitRotation>Math.PI*1.6&&orbitRotation<=Math.PI*2.2&&orbitTrace.some(shot=>shot.height>3.5)&&orbitTrace.some(shot=>shot.age>.6&&shot.height<2)&&room.world.projectiles.every(shot=>shot.decoy==null);
   const bomber=app.join(room,{name:'Phone Bomber',driver:2,role:'bomber'});
   app.controls(bomber,{sequence:0,keys:[],actions:[{type:'bomb',id:0,afterMove:-1,wx:-65,wz:30}],epoch:room.world.soundEpoch});
   for(let i=0;i<100;i++){if(await evaluate('__game.race.bombs.some(bomb=>bomb.wx===-65&&bomb.wz===30)'))break;await sleep(10);}
