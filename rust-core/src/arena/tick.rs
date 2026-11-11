@@ -108,7 +108,7 @@ impl Game{
         {
             let g=&mut self.global;
             for cloud in &mut g.stink_clouds{for a in &mut self.actors{
-                if a.bomber||a.inactive||a.afk||a.destroyed>0.0||a.shield>0.0||cloud.hits.contains(&a.id)||distance(a.wx,a.wz,cloud.wx,cloud.wz)>14.0{continue;}
+                if a.bomber||a.inactive||a.afk||a.destroyed>0.0||a.shield>0.0||a.hedge_shield>0.0||cloud.hits.contains(&a.id)||distance(a.wx,a.wz,cloud.wx,cloud.wz)>14.0{continue;}
                 cloud.hits.push(a.id);
                 if a.dizzy<=0.0{g.sound_sequence+=1;g.events.push(match g.multiplayer{true=>json!({"type":"dizzy","owner":a.id,"wx":a.wx,"wz":a.wz,"id":format!("{}:{}",g.sound_epoch,g.sound_sequence)}),false=>json!("dizzy")});}
                 a.dizzy=4.0;a.credits.retain(|_,expires|*expires>g.elapsed+1e-8);if !ending{a.credits.insert(cloud.owner,g.elapsed+4.0);}
