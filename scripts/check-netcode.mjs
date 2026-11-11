@@ -2,7 +2,8 @@ import { pathToFileURL } from 'node:url';
 import { writeFile } from 'node:fs/promises';
 import { Multiplayer } from '../multiplayer.js';
 import { LocalPrediction } from '../prediction.js';
-import { encodeSnapshot, decodeSnapshot } from '../wire.js';
+import { createBinaryEncoder, decodeBinarySnapshot } from '../binary-wire.js';
+const encodeSnapshot=createBinaryEncoder();
 
 export const profiles=[
   {name:'local',rtt:0,jitter:0},
@@ -38,9 +39,9 @@ export function simulate(profile,scenario){
     if(direction==='up')return lastUp=Math.max(lastUp,due);
     return lastDown=Math.max(lastDown,due);
   };
-  member.socket={readyState:1,send:(text,done)=>{down.push({at:deliverAt('down'),state:decodeSnapshot(JSON.parse(text))});done();}};
+  member.socket={readyState:1,send:(data,done)=>{down.push({at:deliverAt('down'),state:decodeBinarySnapshot(data)});done();}};
   const accept=state=>prediction.accept(state.world,now,prediction.commands?{sequence:state.movementSequence}:profile.rtt/2);
-  accept(decodeSnapshot(JSON.parse(encodeSnapshot(app.snapshot(room,member)))));
+  accept(decodeBinarySnapshot(encodeSnapshot(app.snapshot(room,member))));
   try{
     for(let frame=0;now<scenario.seconds-1e-8;frame++){
       const dt=scenario.renderTimes?.[frame%scenario.renderTimes.length]??1/60;

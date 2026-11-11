@@ -2,7 +2,7 @@ import { drivers } from './engine.js';
 import { NetworkPlayback } from './playback.js';
 import { LocalPrediction } from './prediction.js';
 import { ActionAudio } from './action-audio.js';
-import { decodeSnapshot } from './wire.js';
+import { decodeBinarySnapshot } from './binary-wire.js';
 import { LocalFeedback } from './feedback.js';
 import { LocalDrift } from './drift-feedback.js';
 
@@ -237,8 +237,9 @@ export class NetworkGame {
   }
   stream(){
     const token=this.token,url=new URL('/api/socket',location.href);url.protocol=location.protocol==='https:'?'wss:':'ws:';const socket=this.socket=new WebSocket(url);
+    socket.binaryType='arraybuffer';
     socket.onopen=()=>{if(this.token===token){this.prediction.resend();this.feedback.resend();socket.send(JSON.stringify({type:'authenticate',token}));}};
-    socket.onmessage=event=>{try{if(typeof event.data!=='string'||event.data.length>512*1024)throw new Error();const state=JSON.parse(event.data);if(this.token!==token)return;if(state.type==='state')this.accept(decodeSnapshot(state));if(state.type==='pong'&&state.sent===this.lastPing)this.rtt=Math.max(0,Math.min(.3,performance.now()/1000-state.sent));}catch{socket.close();}};
+    socket.onmessage=event=>{try{if(this.token!==token)return;const binary=event.data instanceof ArrayBuffer;if(!binary&&(typeof event.data!=='string'||event.data.length>512*1024))throw new Error();const state=binary?decodeBinarySnapshot(event.data):JSON.parse(event.data);if(state.type==='state'){if(!binary)throw new Error();this.accept(state);}if(state.type==='pong'&&state.sent===this.lastPing)this.rtt=Math.max(0,Math.min(.3,performance.now()/1000-state.sent));}catch{socket.close();}};
     socket.onerror=()=>{};
     socket.onclose=()=>{if(this.token===token){this.keys.clear();this.status.textContent='Reconnecting to the room…';setTimeout(()=>{if(this.token===token)this.stream();},500);}};
   }

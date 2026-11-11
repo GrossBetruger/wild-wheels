@@ -1,6 +1,8 @@
 import { constants, deflateRawSync } from 'node:zlib';
 import { Multiplayer } from '../multiplayer.js';
 import { encodeSnapshot, decodeSnapshot } from '../wire.js';
+import { createBinaryEncoder, decodeBinarySnapshot } from '../binary-wire.js';
+const encodeBinary=createBinaryEncoder();
 
 // Thirty simulated seconds per scenario, sampled at the game's 30 Hz send rate.
 // Estimates payload bandwidth; excludes TCP/TLS/framing and real network latency.
@@ -20,7 +22,7 @@ for(const scenario of scenarios){
     app.makeWorld(room);app.rooms.set(room.code,room);
     const members=Array.from({length:scenario.players},(_,i)=>app.join(room,{name:`Player ${i+1}`,driver:null}));
     room.world.phase='racing';
-    let rawBytes=0,compactBytes=0,compressedBytes=0,samples=0;
+    let rawBytes=0,compactBytes=0,binaryBytes=0,compressedBytes=0,samples=0,legacyMs=0,binaryMs=0;
     for(let frame=0;frame<1800;frame++){
       for(const member of members){
         member.inputAt=member.lastSeen=Date.now();
@@ -29,14 +31,17 @@ for(const scenario of scenarios){
       }
       app.step(1/60);
       if(frame%2)continue;
-      const state=app.snapshot(room,members.at(-1)),encoded=encodeSnapshot(state);
+      const state=app.snapshot(room,members.at(-1));
+      let start=performance.now();const encoded=encodeSnapshot(state);legacyMs+=performance.now()-start;
       decodeSnapshot(JSON.parse(encoded)); // Exercise the browser decoder, including effect limits.
+      start=performance.now();const binary=encodeBinary(state);binaryMs+=performance.now()-start;decodeBinarySnapshot(binary);
       rawBytes+=Buffer.byteLength(JSON.stringify(state));
       compactBytes+=Buffer.byteLength(encoded);
-      compressedBytes+=deflateRawSync(encoded,{level:1,finishFlush:constants.Z_SYNC_FLUSH}).length-4;
+      binaryBytes+=binary.length;
+      compressedBytes+=deflateRawSync(binary,{level:1,finishFlush:constants.Z_SYNC_FLUSH}).length-4;
       samples++;
     }
     const mbps=bytes=>+(bytes/samples*30*8/1e6).toFixed(2);
-    console.log(JSON.stringify({scenario:scenario.name,seconds:30,snapshots:samples,rawMbpsPerGuest:mbps(rawBytes),compactMbpsPerGuest:mbps(compactBytes),compressedMbpsPerGuest:mbps(compressedBytes),reductionPercent:+((1-compressedBytes/rawBytes)*100).toFixed(1)}));
+    console.log(JSON.stringify({scenario:scenario.name,seconds:30,snapshots:samples,rawMbpsPerGuest:mbps(rawBytes),compactJsonMbpsPerGuest:mbps(compactBytes),binaryMbpsPerGuest:mbps(binaryBytes),compressedMbpsPerGuest:mbps(compressedBytes),legacyEncodeMeanMs:legacyMs/samples,binaryEncodeMeanMs:binaryMs/samples,reductionPercent:+((1-compressedBytes/rawBytes)*100).toFixed(1)}));
   }finally{app.close();Math.random=originalRandom;}
 }

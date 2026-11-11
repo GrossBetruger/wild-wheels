@@ -1,5 +1,6 @@
 import { Multiplayer } from '../multiplayer.js';
-import { encodeSnapshot } from '../wire.js';
+import { createBinaryEncoder } from '../binary-wire.js';
+const encodeSnapshot=createBinaryEncoder();
 
 const scenarios=[
   {name:'driving',players:2,bots:1,drift:false,vulcan:false},

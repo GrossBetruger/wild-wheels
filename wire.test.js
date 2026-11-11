@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createBattle, predictKartMovement } from './combat.js';
 import { Multiplayer } from './multiplayer.js';
 import { encodeSnapshot, decodeSnapshot } from './wire.js';
+import { decodeBinarySnapshot } from './binary-wire.js';
 
 test('older compact snapshots still display their drift effects',()=>{
   const world=createBattle();world.skids=[[1,2,3,4,5]];world.driftParticles=[[1,2,.3,4,5,6,.1,.9,1,2]];
@@ -37,7 +38,7 @@ test('a busy connection sends the latest position and retains intervening action
   const app=new Multiplayer();t.after(()=>app.close());clearInterval(app.timer);
   const room={code:'07',arena:0,botCount:0,host:0,members:new Map()};app.makeWorld(room);
   const member=app.join(room,{name:'Host',driver:0}),sent=[];
-  member.socket={readyState:1,send:(text,done)=>sent.push({state:decodeSnapshot(JSON.parse(text)),done})};
+  member.socket={readyState:1,send:(text,done)=>sent.push({state:decodeBinarySnapshot(text),done})};
   room.world.wx=1;app.send(member,app.snapshot(room,member));
   room.world.wx=2;room.events=[{id:'1:1',owner:0,type:'fire'}];app.send(member,app.snapshot(room,member));
   room.world.wx=3;room.world.health=2;room.events=[{id:'1:2',owner:0,type:'chaff'}];app.send(member,app.snapshot(room,member));
@@ -53,7 +54,7 @@ test('a new match discards queued sounds from the previous match',t=>{
   const app=new Multiplayer();t.after(()=>app.close());clearInterval(app.timer);
   const room={code:'07',arena:0,botCount:0,host:0,members:new Map()};app.makeWorld(room);
   const member=app.join(room,{name:'Host',driver:0}),sent=[];
-  member.socket={readyState:1,send:(text,done)=>sent.push({state:decodeSnapshot(JSON.parse(text)),done})};
+  member.socket={readyState:1,send:(text,done)=>sent.push({state:decodeBinarySnapshot(text),done})};
   app.send(member,app.snapshot(room,member));
   room.events=[{id:'1:1',owner:0,type:'explosion'}];app.send(member,app.snapshot(room,member));
   app.makeWorld(room);app.send(member,app.snapshot(room,member));

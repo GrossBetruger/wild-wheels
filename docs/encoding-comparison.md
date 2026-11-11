@@ -1,5 +1,7 @@
 # JSON, JavaScript binary, and Rust/Wasm comparison
 
+Production integration: WebSocket snapshots now use the JavaScript codec in binary-wire.js. It packs cosmetics directly, preserves gameplay precision, checks packet sizes and effect counts, and returns independently owned packets for asynchronous socket writes. WebSocket inputs/pongs and HTTP requests remain JSON. The lab codecs below remain isolated comparison implementations; their staging overhead differs from the production encoder.
+
 Measured November 11, 2026 on an Apple M4 Pro, Node 22.19.0, Rust 1.90.0, and Chrome 157. Experimental codecs are isolated from production gameplay.
 
 ## Result

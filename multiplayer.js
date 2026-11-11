@@ -4,7 +4,8 @@ import { WebSocketServer } from 'ws';
 import { createBattle, tickBattle, fireBattle, releaseChaff, useBattleTurbo, somersaultBattle, standings, equipBomber, dropBomb, validBombTarget } from './combat.js';
 import { drivers, selectItem, cycleItem } from './engine.js';
 import { ngrokOrigin } from './ngrok.js';
-import { encodeSnapshot } from './wire.js';
+import { createBinaryEncoder, decodeBinarySnapshot } from './binary-wire.js';
+const encodeBinarySnapshot=createBinaryEncoder();
 
 const KEYS=new Set(['arrowup','arrowdown','arrowleft','arrowright','w','a','s','d','shift',' ']);
 const PLAYER_COLORS=['#8456cf','#df7053','#67a99c','#edb84f','#777cbb','#db8daf'];
@@ -144,7 +145,7 @@ export class Multiplayer {
   send(member,data){
     const socket=member.socket;
     if(socket?.readyState===1){
-      const packet={text:encodeSnapshot(data),epoch:data.world.soundEpoch,events:[...data.world.events],voices:[...data.world.voices]};
+      const packet={data:encodeBinarySnapshot(data),epoch:data.world.soundEpoch,events:[...data.world.events],voices:[...data.world.voices]};
       if(member.sendingSocket===socket){
         // Keep one current update behind the active write, preserving bounded sound cues.
         const previous=member.pendingPacket;
@@ -159,9 +160,9 @@ export class Multiplayer {
   }
   sendPacket(member,socket,packet){
     member.sendingSocket=socket;
-    let text=packet.text;
-    if(packet.merged){const state=JSON.parse(text);state.world.events=packet.events;state.world.voices=packet.voices;text=JSON.stringify(state);}
-    socket.send(text,error=>{
+    let data=packet.data;
+    if(packet.merged){const state=decodeBinarySnapshot(data);state.world.events=packet.events;state.world.voices=packet.voices;data=encodeBinarySnapshot(state);}
+    socket.send(data,error=>{
       if(member.sendingSocket!==socket)return;
       member.sendingSocket=null;
       if(error||member.socket!==socket||socket.readyState!==1){member.pendingPacket=null;return;}
