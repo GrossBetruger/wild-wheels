@@ -4,6 +4,7 @@ import { arenas, combatPose, somersaultPose, BOMB_FALL_TIME, BOMB_RADIUS, STINK_
 import { kartNameplates } from './nameplates.js';
 import { bomberCamera } from './mobile.js';
 import {drawNewDriver,drawRoadster,drawRoadsterJets,drawCricketHaze,drawCricketProjectile,drawHoustonHelmet,drawDollarBundle,drawCessna,drawCessnaPropeller,drawCessnaBoost,drawElectron,drawPilotWorm} from './characters.js';
+import {previewPose} from './preview-pose.js';
 const rgb=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255);
 const sub=(a,b)=>a.map((v,i)=>v-b[i]);
 const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
@@ -107,10 +108,10 @@ export class Renderer {
     const stand=sampleTrack(.025,-2.05);m.at(stand.x,0,stand.z,Math.atan2(stand.tx,stand.tz));for(let i=0;i<4;i++){m.box(-i*2,0,0,2,1+i*1.5,24,'#ded3b8');for(let j=0;j<12;j++){m.ball(-i*2,2+i*1.5,-11+j*2,.5,.8,.5,['#edbf60','#865dbc','#e07862','#659fae'][(i+j)%4],6,4);}}
     m.at(0,0,0);this.gl.bindBuffer(this.gl.ARRAY_BUFFER,this.staticBuffer);this.gl.bufferData(this.gl.ARRAY_BUFFER,new Float32Array(m.data),this.gl.STATIC_DRAW);this.staticCount=m.data.length/9;this.track=track;
   }
-  kart(m,p,color,driver,yaw=0,spin=0,boost=false,clock=0,celebrate=0,jump=null,helmet=true){
-    if(driver===8&&!this.buildingModel){this.pilotPlane(m,p,color,yaw,spin,boost,clock,celebrate,jump);return;}
+  kart(m,p,color,driver,yaw=0,spin=0,boost=false,clock=0,celebrate=0,jump=null,helmet=true,gesture=null){
+    if(driver===8&&!this.buildingModel){this.pilotPlane(m,p,color,yaw,spin,boost,clock,celebrate,jump,gesture);return;}
     if(driver===6)color='#e8edf2';
-    if(!this.buildingModel&&(celebrate<=0||jump)){const angle=Math.atan2(p.tx,p.tz)-yaw+spin;m.at(p.x,.13,p.z,angle);m.disc(.2,0,.25,2.3,3,'#3a4147');this.model(`kart:${driver}:${color}${driver===7&&!helmet?':bare':''}`,p.x,jump?.height??0,p.z,angle,mesh=>this.kart(mesh,{x:0,z:0,tx:0,tz:1},color,driver,0,0,false,0,0,null,helmet),jump?.pitch??0);if(boost||jump)this.afterburner(p,angle,clock,jump,driver);return;}
+    if(!gesture&&!this.buildingModel&&(celebrate<=0||jump)){const angle=Math.atan2(p.tx,p.tz)-yaw+spin;m.at(p.x,.13,p.z,angle);m.disc(.2,0,.25,2.3,3,'#3a4147');this.model(`kart:${driver}:${color}${driver===7&&!helmet?':bare':''}`,p.x,jump?.height??0,p.z,angle,mesh=>this.kart(mesh,{x:0,z:0,tx:0,tz:1},color,driver,0,0,false,0,0,null,helmet),jump?.pitch??0);if(boost||jump)this.afterburner(p,angle,clock,jump,driver);return;}
     const angle=Math.atan2(p.tx,p.tz)-yaw+spin;m.at(p.x,.13,p.z,angle);if(!this.buildingModel)m.disc(.2,0,.25,2.3,3,'#3a4147');
     if(driver===6)drawRoadster(m);
     if(driver!==6){
@@ -121,8 +122,8 @@ export class Renderer {
     // Rotate only the driver, leaving the chassis, wheels and steering untouched.
     const progress=1.6-celebrate,envelope=celebrate>0?Math.min(1,progress/.25,celebrate/.4):0;
     const turn=envelope*envelope*(3-2*envelope),bounce=turn*Math.sin(progress*15)*.1;
-    m.at(p.x,.13+bounce,p.z,angle+Math.PI*turn);
-    if(!drawNewDriver(m,driver,turn,progress,helmet)){
+    m.at(p.x,.13+bounce+(gesture?.bounce??0),p.z,angle+Math.PI*turn+(gesture?.yaw??0));m.pitch=gesture?.lean??0;m.pivot=2;
+    if(!drawNewDriver(m,driver,turn,progress,helmet,gesture)){
     m.ball(0,2.2,0,1,1.1,.8,driver===0?'#252b36':['#9a9ba0','#d3883f','#8c5f42'][driver-1]);
     const fur=['#eee8d8','#969798','#e69a43','#9b7250'][driver];
     m.ball(0,3.55,.15,1.05,1.05,.94,fur,12,7);
@@ -133,8 +134,8 @@ export class Renderer {
     // The same face becomes visible when the driver looks back to celebrate.
     for(const side of [-1,1]){
       if(driver===0)m.ball(side*.42,3.65,.91,.29,.32,.11,'#292d39');m.ball(side*.4,3.7,1.01,.1,.13,.05,'#242838');
-      const handY=2.1+turn*(2.1+Math.sin(progress*18+side)*.22),handX=side*(.85+turn*.5),handZ=1-turn*.7;
-      m.ball(side*(.85+turn*.2),(2.1+handY)/2,(handZ+.3)/2,.24,.3+turn*.55,.24,fur,8,5);
+      const lift=(side>0?gesture?.right:gesture?.left)??0,handY=2.1+turn*(2.1+Math.sin(progress*18+side)*.22)+lift,handX=side*(.85+turn*.5+lift*.16),handZ=1-turn*.7;
+      m.ball(side*(.85+turn*.2),(2.1+handY)/2,(handZ+.3)/2,.24,.3+turn*.55+lift*.35,.24,fur,8,5);
       m.ball(handX,handY,handZ,.32,.32,.32,fur);
     }
     m.ball(0,3.35,1.02,.43,.3,.3,'#f3dfb6');m.ball(0,3.45,1.3,.17,.12,.1,'#252a32');
@@ -159,17 +160,17 @@ export class Renderer {
     const progress=age/1.1,behind=progress*3;
     this.model('houston:helmet',p.x-Math.sin(actor.heading)*behind,.13+(jump?.height??0)+progress*6+progress*progress*4,p.z-Math.cos(actor.heading)*behind,actor.heading+progress*Math.PI*2,drawHoustonHelmet);
   }
-  pilotPlane(m,p,color,yaw,spin,boost,clock,celebrate,jump){
+  pilotPlane(m,p,color,yaw,spin,boost,clock,celebrate,jump,gesture=null){
     const angle=Math.atan2(p.tx,p.tz)-yaw+spin;
     m.at(p.x,.13,p.z,angle);m.disc(.2,0,.25,2.3,3,'#3a4147');
     this.model(`kart:8:${color}`,p.x,jump?.height??0,p.z,angle,mesh=>{mesh.at(0,.13,0);drawCessna(mesh,color);},jump?.pitch??0);
-    this.wormPilot(p,angle,clock,celebrate,jump);
+    this.wormPilot(p,angle,clock,celebrate,jump,gesture);
     this.planePropeller(p,angle,clock,jump,boost);
     if(boost||jump)this.afterburner(p,angle,clock,jump,8);
   }
-  wormPilot(p,angle,clock,celebrate,jump){
+  wormPilot(p,angle,clock,celebrate,jump,gesture=null){
     const phase=Math.floor(clock*8)%8,progress=1.6-celebrate,envelope=celebrate>0?Math.min(1,progress/.25,celebrate/.4):0,turn=envelope*envelope*(3-2*envelope);
-    this.model(`avita:worm:${phase}`,p.x,jump?.height??0,p.z,angle+Math.PI*turn,mesh=>{mesh.at(0,.13,0);drawPilotWorm(mesh,0,0,Math.sin(phase*Math.PI/4));},jump?.pitch??0);
+    this.model(`avita:worm:${phase}`,p.x,(jump?.height??0)+(gesture?.bounce??0),p.z,angle+Math.PI*turn+(gesture?.yaw??0),mesh=>{mesh.at(0,.13,0);drawPilotWorm(mesh,0,0,Math.sin(phase*Math.PI/4));},(jump?.pitch??0)+(gesture?.lean??0));
   }
   planePropeller(p,angle,clock,jump=null,boost=false){
     const phase=Math.floor(clock*(boost||jump?50:20))%8;
@@ -238,6 +239,18 @@ export class Renderer {
         default:this.hedgeguardIcon(x,y,z,-a);break;
       }
     }
+  }
+  drawPreview(driver,color,time){
+    const gl=this.gl,canvas=this.canvas,width=Math.max(1,Math.round(canvas.clientWidth*this.pixelRatio())),height=Math.max(1,Math.round(canvas.clientHeight*this.pixelRatio()));
+    if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;}gl.viewport(0,0,width,height);
+    this.instances=[];this.glow=new Mesh();this.smoke=new Mesh();
+    const pose=previewPose(driver,time),orbit=time*.28+.35,eye=[Math.sin(orbit)*12,7.4,Math.cos(orbit)*12],view=cameraMatrix(eye,[0,2.55,0],width/height,.8),sky=rgb('#e5deef');
+    gl.clearColor(...sky,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(this.program);
+    gl.uniformMatrix4fv(this.matrix,false,view);gl.uniform3fv(this.eyeUniform,eye);gl.uniform3fv(this.fog,sky);gl.uniform1f(this.fogScale,1);gl.uniform1f(this.emission,0);
+    const m=new Mesh();m.disc(0,-.22,0,40,40,'#e5deef',48);m.disc(0,-.12,0,4.7,4.7,'#c6bad6',48);m.disc(0,-.08,0,4.5,4.5,'#f8f3e5',48);
+    for(let i=0;i<24;i++){const a=i*Math.PI/12;m.at(Math.sin(a)*4.58,-.06,Math.cos(a)*4.58,a);m.box(0,0,0,.1,.025,.14,color);}
+    this.kart(m,{x:0,z:0,tx:0,tz:1},color,driver,0,0,pose.boost,time,0,null,true,pose);this.flush(m,view,height);
+    return {...pose,cameraAngle:orbit};
   }
   draw(r,time){
     this.instances=[];

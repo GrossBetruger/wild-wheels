@@ -1,0 +1,11 @@
+export function previewPose(driver,time){
+  const stage=Math.floor(time/4)%4,age=time%4,ramp=Math.min(1,age/.4,(4-age)/.4),ease=ramp*ramp*(3-2*ramp);
+  const pose={id:'hello',label:driver===8?'WORM SALUTE':'WAVING',left:0,right:0,yaw:0,lean:0,bounce:0,boost:false};
+  switch(stage){
+    case 0:pose.right=(1.8+Math.sin(time*9)*.3)*ease;pose.lean=driver===8?.24*ease:0;break;
+    case 1:pose.id='cheer';pose.label=driver===8?'HAPPY WRIGGLE':'CHEERING';pose.left=pose.right=(2+Math.sin(time*7)*.15)*ease;pose.bounce=Math.abs(Math.sin(time*5))*.18*ease;break;
+    case 2:pose.id='look';pose.label='LOOKING AROUND';pose.yaw=Math.sin(age*Math.PI/2)*.7*ease;break;
+    case 3:pose.id='rev';pose.label='REVVING';pose.boost=true;break;
+  }
+  return pose;
+}

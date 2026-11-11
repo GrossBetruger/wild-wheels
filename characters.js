@@ -119,7 +119,7 @@ export function drawHoustonHelmet(m){
   m.box(-.45,4.61,.03,.055,.4,.055,'#8ca5af');m.ball(-.45,5.03,.03,.1,.1,.1,'#e79a50',7,4);
 }
 
-export function drawNewDriver(m,driver,turn,progress,helmet=true){
+export function drawNewDriver(m,driver,turn,progress,helmet=true,gesture=null){
   if(driver<4)return false;
   if(driver===8){drawPilotWorm(m,turn,progress);return true;}
   const skin=['#91a9bc','#78ad41','#edc5ab','#a99074'][driver-4];
@@ -178,8 +178,8 @@ export function drawNewDriver(m,driver,turn,progress,helmet=true){
       break;
   }
   for(const side of [-1,1]){
-    const y=2.12+turn*(2.1+Math.sin(progress*18+side)*.22),x=side*(.83+turn*.5),z=1-turn*.7;
-    m.ball(side*(.85+turn*.2),(2.12+y)/2,(z+.3)/2,.23,.31+turn*.55,.23,suit,8,5);
+    const lift=(side>0?gesture?.right:gesture?.left)??0,y=2.12+turn*(2.1+Math.sin(progress*18+side)*.22)+lift,x=side*(.83+turn*.5+lift*.16),z=1-turn*.7;
+    m.ball(side*(.85+turn*.2),(2.12+y)/2,(z+.3)/2,.23,.31+turn*.55+lift*.35,.23,suit,8,5);
     m.ball(x,y,z,.29,.29,.29,driver===7?'#e7e6d7':skin,8,5);
     if(driver===7)for(const claw of [-1,0,1])m.ball(x+claw*.12,y-.09,z+.25,.055,.08,.15,'#a99b82',6,4);
   }

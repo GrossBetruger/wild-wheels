@@ -1,5 +1,7 @@
 # Development checks
 
+The character browser group checks the selection preview for all nine characters, orbiting camera, pause/resume, four gesture stages, and unchanged live-game inventory. Preview rendering must stop once a match starts.
+
 Avita-Jas is included in the character browser group: nine-character selection, local/remote Cessna rendering, animated propeller, boost/loop vapor trails, and local/remote electron Vulcan shots. `avita.test.js` verifies ordinary Vulcan damage and ammunition rules in solo and Rust combat; room, recovery, inventory, and Hedgeguard tests include the worm pilot.
 
 Hedgeguard coverage in `hedgeguard.test.js` exercises both solo and Rust combat: rare spawn timing, 25-second protection, ordinary/Vulcan/cricket/dollar shot immunity, A-bomb damage immunity, stink-bomb dizziness immunity, missile damage, expiration, death/respawn, and immediate pickup feedback with remote replication. The character browser group checks local and remote orbiting shield/cricket/money auras, the countdown, and expiry under all four network profiles.

@@ -49,7 +49,7 @@ if(encodingLab){
 }
 const server=createServer((req,res)=>{
   const lab=labFiles.get(req.url);if(lab){res.writeHead(200,{'Content-Type':lab.type,'Cache-Control':'no-store','Content-Security-Policy':"default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'",...(ownedStateLab?{'Cross-Origin-Opener-Policy':'same-origin','Cross-Origin-Embedder-Policy':'require-corp'}:{})});res.end(lab.body);return;}
-  if(req.url==='/game.js'){res.writeHead(200,{'Content-Type':'text/javascript','Cache-Control':'no-store'});res.end(gameSource+'\nglobalThis.__game={network,renderer,keys,audio,get race(){return race}};');return;}
+  if(req.url==='/game.js'){res.writeHead(200,{'Content-Type':'text/javascript','Cache-Control':'no-store'});res.end(gameSource+'\nglobalThis.__game={network,renderer,keys,audio,get preview(){return characterPreview},get race(){return race}};');return;}
   app.server.emit('request',req,res);
 });
 server.on('upgrade',(...args)=>app.server.emit('upgrade',...args));
@@ -123,7 +123,7 @@ try{
       await evaluate('__game.network.leave()');await call('Target.closeTarget',{targetId});for(const current of [...app.multiplayer.rooms.values()])for(const member of [...current.members.values()])app.multiplayer.remove(member);continue;
     }
     if(process.argv.includes('--characters')){
-      const capture=async label=>{await evaluate("document.querySelector('.viewport').scrollIntoView({block:'center'})");const rect=await evaluate('(()=>{const r=__game.renderer.canvas.getBoundingClientRect();return {x:r.left+scrollX,y:r.top+scrollY,width:r.width,height:r.height,scale:1};})()');const screenshot=await call('Page.captureScreenshot',{format:'png',clip:rect},session);await writeFile(`${output}.${profile.run}.${profile.name}.${label}.png`,Buffer.from(screenshot.data,'base64'));};
+      const capture=async(label,selector='#game')=>{await evaluate(`document.querySelector(${JSON.stringify(selector)}).scrollIntoView({block:'center'})`);const rect=await evaluate(`(()=>{const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return {x:r.left+scrollX,y:r.top+scrollY,width:r.width,height:r.height,scale:1};})()`);const screenshot=await call('Page.captureScreenshot',{format:'png',clip:rect},session);await writeFile(`${output}.${profile.run}.${profile.name}.${label}.png`,Buffer.from(screenshot.data,'base64'));};
       const result={profile:profile.name,run:profile.run,...await checkCharacters(evaluate,app.multiplayer,room,identity.you,sleep,capture)};results.push(result);console.log(JSON.stringify(result));
       await evaluate('__game.network.leave()');await call('Target.closeTarget',{targetId});for(const member of [...room.members.values()])app.multiplayer.remove(member);continue;
     }

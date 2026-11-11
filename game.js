@@ -7,9 +7,11 @@ import { NetworkGame } from './network.js';
 import { matchResults, battleTieNotice } from './results.js';
 import { KillCelebration, ChaffNotice } from './combat-notices.js';
 import { usesMobileControls, bombTarget, panBomber } from './mobile.js';
+import {CharacterPreview} from './character-preview.js';
 const $ = id => document.getElementById(id);
 const canvas = $('game'), map = $('map').getContext('2d');
 const keys = new Set(), audio = new RaceAudio(), renderer = new Renderer(canvas);
+const characterPreview=new CharacterPreview(document.querySelector('.racer-panel'));
 let uiNotice=null;
 const mobile=usesMobileControls(navigator.maxTouchPoints,matchMedia('(pointer:coarse)').matches);document.body.classList.toggle('mobile-bomber',mobile);
 const racePanel=document.querySelector('.race-panel');let mobileImmersive=false,mobileNativeFullscreen=false;
@@ -143,6 +145,7 @@ function announceFinish(){
 }
 function finishText(){return (battleTieNotice(race)?battleTieNotice(race)+' · ':'')+`${mode==='combat'?`${race.kills} KILLS`:timeLabel(race.finishTime)} · ${mode==='combat'?'BATTLE':'RACE'} ENDING IN ${Math.ceil(race.finishCountdown)}…`;}
 function draw(){
+  characterPreview.frame(performance.now(),selected,race.color??drivers[selected].color,race.phase);
   renderer.draw(race,race.elapsed);drawMap();
   const visible=new Set();
   for(const plate of renderer.nameplates??[]){
