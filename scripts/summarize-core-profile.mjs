@@ -1,0 +1,29 @@
+import {readFile,writeFile} from 'node:fs/promises';
+import {createHash} from 'node:crypto';
+import {execFileSync} from 'node:child_process';
+
+const [output,regressions,...paths]=process.argv.slice(2);
+if(!output||!regressions||paths.length!==4)throw new Error('Usage: node scripts/summarize-core-profile.mjs output.json regressions-directory js-1.json rust-1.json rust-2.json js-2.json');
+const sources=await Promise.all(paths.map(async path=>({path,...JSON.parse(await readFile(path,'utf8'))})));
+const rows=sources.flatMap(source=>source.results);
+if(rows.length!==12||rows.some(row=>!row.pass))throw new Error('Expected four successful profiles, each containing all three scenes');
+const mean=values=>values.reduce((sum,value)=>sum+value,0)/values.length;
+const round=value=>value===null?null:+value.toFixed(5);
+const compare=(js,rust)=>({javascript:round(js),rust:round(rust),speedup:js&&rust?round(js/rust):null});
+const cases=[...new Set(rows.map(row=>row.scenario))].map(scenario=>{
+  const pick=pipeline=>rows.filter(row=>row.scenario===scenario&&row.server.pipeline===pipeline);
+  const js=pick('javascript'),rust=pick('rust-owned');if(js.length!==2||rust.length!==2)throw new Error('Missing paired pipeline samples for '+scenario);
+  const metric=(list,fn)=>mean(list.map(fn));
+  const server=row=>60*row.server.simulation.meanMs+30*((row.server.snapshot.meanMs??0)+row.server.encoding.meanMs);
+  const client=row=>60*row.browser.network.meanMs+30*row.browser.receive.meanMs;
+  const frame=row=>60*row.browser.frame.meanMs+30*row.browser.receive.meanMs;
+  const value={scenario,serverCpuMsPerSecond:compare(metric(js,server),metric(rust,server)),clientCoreCpuMsPerSecond:compare(metric(js,client),metric(rust,client)),browserTotalCpuMsPerSecond:compare(metric(js,frame),metric(rust,frame)),renderCpuMsPerFrame:compare(metric(js,r=>r.browser.render.meanMs),metric(rust,r=>r.browser.render.meanMs)),frameIntervalP95Ms:compare(metric(js,r=>r.browser.intervals.p95Ms),metric(rust,r=>r.browser.intervals.p95Ms)),gpuMsPerFrame:null};
+  if([...js,...rust].every(row=>row.browser.gpuTimerSupported&&row.browser.gpuElapsed.samples>60))value.gpuMsPerFrame=compare(metric(js,r=>r.browser.gpuElapsed.meanMs),metric(rust,r=>r.browser.gpuElapsed.meanMs));
+  return value;
+});
+const summary=JSON.parse(await readFile(regressions+'/summary.json','utf8'));
+const groups=await Promise.all(['movement','actions','drift','controls','mobile'].map(async name=>{const data=JSON.parse(await readFile(regressions+'/'+name+'.json','utf8'));return {name,passed:data.results.filter(row=>row.pass).length,total:data.results.length,errors:data.errors,transportErrors:data.transportErrors};}));
+const wasm=await readFile(new URL('../rust-core.wasm',import.meta.url));
+const result={created:new Date().toISOString(),javascriptRevision:'7b8ef3d',rustRevision:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),wasmSha256:createHash('sha256').update(wasm).digest('hex'),order:paths,method:'Two samples per scene and pipeline, JS/Rust/Rust/JS order. CPU totals normalize to 60 simulation/render ticks and 30 snapshot/receive updates per second. Browser total includes packet handling outside requestAnimationFrame. GPU uses disjoint timer queries when available. Full-frame CPU includes rendering/UI/audio; this is a local benchmark, not a claim about internet RTT.',gpu:rows[0].browser.gpu,regressions:{...summary,groups},cases,samples:sources};
+await writeFile(output,JSON.stringify(result,null,2)+'\n');
+console.log(JSON.stringify({cases,regressions:groups.map(({name,passed,total})=>({name,passed,total}))},null,2));

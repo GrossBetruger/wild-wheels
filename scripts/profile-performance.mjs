@@ -64,6 +64,8 @@ export async function profilePerformance(evaluate,app,room,sleep){
       const original=object[method].bind(object);
       object[method]=(...args)=>{const start=performance.now();try{return original(...args);}finally{if(metrics.enabled)metrics[key].push(performance.now()-start);}};
     }
+    const socket=__game.network.socket,receive=socket.onmessage;
+    socket.onmessage=event=>{const start=performance.now();try{return receive.call(socket,event);}finally{if(metrics.enabled&&event.data instanceof ArrayBuffer)metrics.receive.push(performance.now()-start);}};
     __game.renderer.setQuality('balanced');
     const gl=__game.renderer.gl,ext=gl.getExtension('EXT_disjoint_timer_query'),pending=[];
     metrics.gpuTimerSupported=Boolean(ext&&ext.getQueryEXT(ext.TIME_ELAPSED_EXT,ext.QUERY_COUNTER_BITS_EXT)>0);
@@ -101,16 +103,16 @@ export async function profilePerformance(evaluate,app,room,sleep){
       };
       // Warm shaders, caches, simulation and the JIT before collecting browser samples.
       for(let i=0;i<30;i++){await drive();await sleep(100);}
-      await evaluate(`{Object.assign(__perf,{enabled:true,render:[],network:[],frame:[],intervals:[],last:null,gpuElapsed:[],gpuDisjoint:0,generation:__perf.generation+1});}`);
+      await evaluate(`{Object.assign(__perf,{enabled:true,render:[],network:[],receive:[],frame:[],intervals:[],last:null,gpuElapsed:[],gpuDisjoint:0,generation:__perf.generation+1});}`);
       for(let i=0;i<60;i++){await drive();await sleep(100);}
       await evaluate('__perf.enabled=false');
       await sleep(200); // Let the last GPU queries complete without forcing a pipeline stall.
       const browser=await evaluate(`(()=>{
         __perf.pollGpu();
-        const {render,network,frame,intervals,gpuElapsed,gpuTimerSupported,gpuDisjoint}=__perf;
-        return {render,network,frame,intervals,gpuElapsed,gpuTimerSupported,gpuDisjoint,gpu:__game.renderer.gpuName,softwareGPU:__game.renderer.softwareGPU,width:__game.renderer.canvas.width,height:__game.renderer.canvas.height,pixelRatio:__game.renderer.pixelRatio(),projectiles:__game.race.projectiles.length};
+        const {render,network,receive,frame,intervals,gpuElapsed,gpuTimerSupported,gpuDisjoint}=__perf;
+        return {render,network,receive,frame,intervals,gpuElapsed,gpuTimerSupported,gpuDisjoint,gpu:__game.renderer.gpuName,softwareGPU:__game.renderer.softwareGPU,width:__game.renderer.canvas.width,height:__game.renderer.canvas.height,pixelRatio:__game.renderer.pixelRatio(),projectiles:__game.race.projectiles.length};
       })()`);
-      const result={scenario:scenario.name,server,browser:{...browser,gpuElapsed:summarize(browser.gpuElapsed),render:summarize(browser.render),network:summarize(browser.network),frame:summarize(browser.frame),intervals:summarize(browser.intervals)},pass:browser.render.length>60&&browser.frame.length>60&&(!browser.gpuTimerSupported||browser.gpuElapsed.length>60)};
+      const result={scenario:scenario.name,server,browser:{...browser,gpuElapsed:summarize(browser.gpuElapsed),render:summarize(browser.render),network:summarize(browser.network),receive:summarize(browser.receive),frame:summarize(browser.frame),intervals:summarize(browser.intervals)},pass:browser.render.length>60&&browser.frame.length>60&&browser.receive.length>60&&(!browser.gpuTimerSupported||browser.gpuElapsed.length>60)};
       results.push(result);
       for(const member of [...room.members.values()])if(!originalMembers.has(member.id))app.remove(member);
     }
