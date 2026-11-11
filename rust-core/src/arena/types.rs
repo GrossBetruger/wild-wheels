@@ -16,7 +16,7 @@ pub struct Actor {
     pub speed:f64,pub health:f64,pub kills:f64,pub deaths:u32,pub kill_streak:u32,
     pub destroyed:f64,pub shield:f64,pub celebrate:f64,pub fire_cooldown:f64,
     pub reload:f64,pub brain:f64,pub skill:f64,pub path:Vec<Point>,
-    pub human:bool,pub bomber:bool,pub inactive:bool,
+    pub human:bool,pub bomber:bool,pub inactive:bool,pub afk:bool,
     pub bomb_ammo:u32,pub stink_ammo:u32,pub bomb_reload:f64,
     pub ammo:u32,pub missiles:u32,pub turbos:u32,pub item:String,
     pub chaff:u32,pub chaff_cooldown:f64,pub vulcan:f64,pub boost:f64,

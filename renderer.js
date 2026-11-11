@@ -253,7 +253,7 @@ export class Renderer {
       m.quad([skid.ax+nx,.025,skid.az+nz],[skid.bx+nx,.025,skid.bz+nz],[skid.bx-nx,.025,skid.bz-nz],[skid.ax-nx,.025,skid.az-nz],color);
     }
     for(const actor of [r,...r.bots]){
-      if(actor.bomber||actor.inactive)continue;
+      if(actor.bomber||actor.inactive||actor.afk)continue;
       const pose=combatPose(actor);if(actor.destroyed){m.at(pose.x,.1,pose.z);m.disc(0,0,0,2,3,'#343344');continue;}
       if(overview){m.at(pose.x,.08,pose.z);m.disc(0,0,0,3.6,3.6,actor.color??drivers[actor.driver].color);}
       const jump=somersaultPose(actor);

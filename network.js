@@ -2,6 +2,10 @@ import { drivers } from './engine.js';
 import {ArenaClient} from './arena-core.js';
 import {createBinaryEncoder} from './binary-wire.js';
 const bootstrapPacket=createBinaryEncoder();
+export function savedPlayerName(cookies){
+  const value=cookies.split(';').map(part=>part.trim()).find(part=>part.startsWith('wild-wheels-name='))?.slice(17);
+  try{const name=decodeURIComponent(value??'').trim();return name&&name.length<=24?name:'Player';}catch{return 'Player';}
+}
 
 export function invitationUrl(pageUrl,code,{publicOrigin,lan}={}){
   const page=new URL(pageUrl);
@@ -23,16 +27,16 @@ export class NetworkGame {
     Object.assign(this,{keys,driver,arena,onState,onLeave,unlock,sound,role});
     this.panel=document.createElement('section');this.panel.className='network-panel';this.panel.setAttribute('aria-label','Multiplayer arena lobby');
     const title=document.createElement('strong');title.textContent='PLAY TOGETHER · UP TO 6 PLAYERS';
-    this.name=document.createElement('input');this.name.placeholder='Your name';this.name.value='Player';this.name.maxLength=24;this.name.setAttribute('aria-label','Player name');
+    this.name=document.createElement('input');this.name.placeholder='Your name';this.name.value=savedPlayerName(document.cookie);this.name.maxLength=24;this.name.setAttribute('aria-label','Player name');
     this.saveNameButton=this.button('SAVE NAME',()=>this.saveName());this.saveNameButton.classList.add('hidden');this.saveNameButton.disabled=true;
     this.nameFeedback=document.createElement('span');this.nameFeedback.className='network-name-status';this.nameFeedback.setAttribute('role','status');
-    this.name.oninput=()=>{this.nameDirty=true;this.nameFeedback.textContent='';this.saveNameButton.disabled=!this.name.value.trim()||this.namePending||this.name.value.trim()===this.state?.world.name;};
+    this.name.oninput=()=>{this.rememberName();this.nameDirty=true;this.nameFeedback.textContent='';this.saveNameButton.disabled=!this.name.value.trim()||this.namePending||this.name.value.trim()===this.state?.world.name;};
     this.name.onkeydown=event=>{if(event.key==='Enter'&&this.active){event.preventDefault();event.stopPropagation();this.saveName();}};
     this.invitation=new URL(location.href).searchParams.get('room')??'';
     this.botCount=document.createElement('select');this.botCount.setAttribute('aria-label','Number of multiplayer bots');for(let count=0;count<=5;count++){const option=document.createElement('option');option.value=String(count);option.textContent=`${count} BOT${count===1?'':'S'}`;this.botCount.append(option);}this.botCount.value='1';this.botCount.onchange=()=>{if(this.active)this.control('bots',undefined,Number(this.botCount.value));};
     this.animalChoice=document.createElement('select');this.animalChoice.className='hidden';this.animalChoice.setAttribute('aria-label','Your multiplayer character');for(const [index,animal] of drivers.entries()){const option=document.createElement('option');option.value=String(index);option.textContent=`${animal.emoji} ${animal.name}`;this.animalChoice.append(option);}this.animalChoice.onchange=()=>this.chooseDriver(Number(this.animalChoice.value));
     this.hostButton=this.button('HOST ARENA',()=>this.connect('/api/rooms'));
-    this.leaveButton=this.button('LEAVE ROOM',()=>this.leave());this.leaveButton.classList.add('hidden');
+    this.leaveButton=this.button('AFK',()=>this.setAway(!this.afk));this.leaveButton.classList.add('hidden');
     this.status=document.createElement('p');this.status.setAttribute('role','status');this.status.textContent='Host an arena and share the link. Opening it joins the game automatically.';
     this.players=document.createElement('div');this.players.className='network-players';
     this.share=document.createElement('input');this.share.className='hidden';this.share.setAttribute('aria-label','Room invitation link');this.share.addEventListener('input',()=>{this.shareEdited=true;});
@@ -64,9 +68,10 @@ export class NetworkGame {
     this.refreshInfo();
     this.infoTimer=setInterval(()=>{if(this.active&&this.isHost)this.refreshInfo();},5000);
     this.timer=setInterval(()=>this.input(),1000/30);
-    if(this.invitation)queueMicrotask(()=>this.connect('/api/join'));
+    this.hostButton.disabled=true;queueMicrotask(()=>this.restore());
   }
   get active(){return Boolean(this.token);}
+  get afk(){return Boolean(this.state?.players.find(player=>player.id===this.state.you)?.afk);}
   get isHost(){return this.state?.host===this.state?.you;}
   get wantsToPlay(){return Boolean(this.state?.players.find(player=>player.id===this.state.you)?.wantsToPlay);}
   get playRequestRefused(){return Boolean(this.state?.players.find(player=>player.id===this.state.you)?.playRequestRefused);}
@@ -110,6 +115,20 @@ export class NetworkGame {
     try{await this.request('/api/ready',{ready:true});}catch(error){this.status.textContent=error.message;}finally{this.readyPending=false;}
   }
   button(label,action){const button=document.createElement('button');button.type='button';button.textContent=label;button.onclick=action;return button;}
+  rememberName(){const name=this.name.value.trim();if(!name||name.length>24)return;document.cookie=`wild-wheels-name=${encodeURIComponent(name)}; Path=/; SameSite=Lax; Max-Age=31536000${location.protocol==='https:'?'; Secure':''}`;}
+  adopt(reply){
+    this.token=reply.token;this.socket?.close();this.nameDirty=false;this.namePending=false;this.sequence=0;this.pending=null;this.failures=0;this.shareEdited=false;this.actions=[];this.keys.clear();this.paused=Boolean(reply.players.find(player=>player.id===reply.you)?.afk);this.client=new ArenaClient();this.accept(bootstrapPacket(reply));this.rememberName();this.stream();
+  }
+  async restore(){
+    try{this.adopt(await this.request('/api/session',{}));}
+    catch(error){if(error.status!==401){this.status.textContent=error.message;return;}if(this.active){this.leave('This room is no longer available.',false);return;}if(this.invitation)await this.connect('/api/join');}
+    finally{this.hostButton.disabled=this.active&&!this.isHost;}
+  }
+  async setAway(afk){
+    if(!this.active||this.awayPending)return;this.awayPending=true;this.leaveButton.disabled=true;
+    try{this.adopt(await this.request('/api/afk',{afk}));}catch(error){this.status.textContent=error.message;}
+    finally{this.awayPending=false;this.leaveButton.disabled=false;}
+  }
   async refreshInfo(){
     try{
       const response=await fetch('/api/info',{signal:AbortSignal.timeout(2000)});if(!response.ok)return;
@@ -148,16 +167,17 @@ export class NetworkGame {
   }
   async request(path,body){
     const response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json',...(this.token?{Authorization:`Bearer ${this.token}`}:{})},body:JSON.stringify(body),signal:AbortSignal.timeout(3000)});
-    const value=await response.json();if(!response.ok)throw new Error(value.error??'Connection failed.');return value;
+    const value=await response.json();if(!response.ok)throw Object.assign(new Error(value.error??'Connection failed.'),{status:response.status});return value;
   }
   async connect(path){
-    if(this.active)return;
+    if(this.connecting||this.active&&(path!=='/api/rooms'||!this.isHost))return;
+    this.connecting=true;
     this.hostButton.disabled=true;this.status.textContent='Connecting…';
     try{
       this.unlock().catch(()=>{});if(path==='/api/rooms')await this.refreshInfo();const reply=await this.request(path,{name:this.name.value.trim(),driver:path==='/api/join'?null:this.driver(),role:this.role,arena:this.arena(),bots:Number(this.botCount.value),code:this.invitation.toUpperCase()});
-      this.token=reply.token;this.nameDirty=false;this.namePending=false;this.sequence=0;this.pending=null;this.failures=0;this.shareEdited=false;this.actions=[];this.keys.clear();this.paused=false;this.client=new ArenaClient();this.accept(bootstrapPacket(reply));this.stream();
+      this.adopt(reply);
     }catch(error){this.status.textContent=error.message;}
-    this.hostButton.disabled=this.active;this.name.disabled=false;
+    this.connecting=false;this.hostButton.disabled=this.active&&!this.isHost;this.name.disabled=false;
   }
   accept(packet){
     if(!this.active)return;
@@ -165,6 +185,7 @@ export class NetworkGame {
     const state=this.client.state();
     const rosterKey=JSON.stringify([state.host,state.you,state.players]);
     this.state=state;this.leaveButton.classList.remove('hidden');this.share.classList.remove('hidden');this.copyButton.classList.remove('hidden');this.animalChoice.classList.remove('hidden');
+    this.leaveButton.textContent=this.afk?'BACK TO ARENA':'AFK';this.hostButton.disabled=this.connecting||!this.isHost;
     this.saveNameButton.classList.remove('hidden');
     if(!this.nameDirty&&!this.namePending&&this.name.value!==state.world.name)this.name.value=state.world.name;
     this.saveNameButton.disabled=this.namePending||!this.name.value.trim()||this.name.value.trim()===state.world.name;
@@ -180,14 +201,15 @@ export class NetworkGame {
       if(!this.isHost&&this.playRequestRefused)this.status.textContent='The host refused your play request. You can ask again.';
     }
     if(['countdown','racing'].includes(state.world.phase))this.status.textContent=`MATCH LIVE · ${state.players.length} players + ${state.bots} bots`;
-    if(rosterKey!==this.rosterKey){this.rosterKey=rosterKey;this.players.replaceChildren(...state.players.map(player=>{const label=document.createElement('span');label.textContent=`${player.role==='bomber'?'✈':drivers[player.driver].emoji} ${player.name}${player.role==='bomber'?' · BOMBER':''}${player.id===state.host?' · HOST':''}${player.id===state.you?' · YOU':''}${player.wantsToPlay?' · READY ✓':''}`;label.style.borderLeft=`4px solid ${player.color}`;return label;}));}
+    if(this.afk)this.status.textContent='AFK · Your place and scores are saved. Press BACK TO ARENA to return.';
+    if(rosterKey!==this.rosterKey){this.rosterKey=rosterKey;this.players.replaceChildren(...state.players.map(player=>{const label=document.createElement('span');label.textContent=`${player.role==='bomber'?'✈':drivers[player.driver].emoji} ${player.name}${player.role==='bomber'?' · BOMBER':''}${player.id===state.host?' · HOST':''}${player.id===state.you?' · YOU':''}${player.afk?' · AFK':''}${player.wantsToPlay?' · READY ✓':''}`;label.style.borderLeft=`4px solid ${player.color}`;return label;}));}
     this.updatePlayRequest();
     this.onState(this.view());
   }
   view(){if(!this.state)return null;this.client.view.paused=this.paused;return this.client.view.world;}
   render(dt,keys=this.keys){
     if(!this.client||!this.state)return null;
-    this.client.view.paused=this.paused;this.client.frame(dt,this.paused?0:keys,performance.now()/1000);
+    this.client.view.paused=this.paused;this.client.frame(this.afk?0:dt,this.paused?0:keys,performance.now()/1000);
     return this.client.present();
   }
   action(type,item){
@@ -206,7 +228,7 @@ export class NetworkGame {
     socket.onopen=()=>{if(this.token===token){this.client.resend();socket.send(JSON.stringify({type:'authenticate',token}));}};
     socket.onmessage=event=>{try{if(this.token!==token)return;if(event.data instanceof ArrayBuffer){this.accept(event.data);return;}if(typeof event.data!=='string'||event.data.length>2048)throw new Error();const state=JSON.parse(event.data);if(state.type!=='pong')throw new Error();if(state.sent===this.lastPing)this.rtt=Math.max(0,Math.min(.3,performance.now()/1000-state.sent));}catch{socket.close();}};
     socket.onerror=()=>{};
-    socket.onclose=()=>{if(this.token===token){this.keys.clear();this.status.textContent='Reconnecting to the room…';setTimeout(()=>{if(this.token===token)this.stream();},500);}};
+    socket.onclose=event=>{if(this.token!==token||this.socket!==socket)return;this.keys.clear();if([4001,4004].includes(event.code)){if(this.awayPending||this.connecting)return;this.leave(event.code===4004?'The host replaced this room. Open the new invitation.':'This player resumed in another tab.',false);return;}this.status.textContent='Reconnecting to the room…';setTimeout(()=>{if(this.token===token)this.restore();},500);};
   }
   async control(action,arena,bots){try{await this.request('/api/control',{action,arena,bots});this.paused=false;}catch(error){this.status.textContent=error.message;}}
   async chooseDriver(driver){
@@ -214,11 +236,11 @@ export class NetworkGame {
     try{await this.request('/api/driver',{driver});}catch(error){this.status.textContent=error.message;}
   }
   pause(){this.paused=!this.paused;this.keys.clear();this.actions=[];this.input();this.onState(this.view());}
-  leave(message='You left the room.'){
+  leave(message='You left the room.',notify=true){
     if(!this.active)return;
     this.readyDialog.close();this.playRequestPrompt=new PlayRequestPrompt();
     this.saveNameButton.classList.add('hidden');this.nameFeedback.textContent='';this.nameDirty=false;this.namePending=false;
-    this.request('/api/leave',{}).catch(()=>{});this.token=null;this.socket?.close();this.state=null;this.pending=null;this.actions=[];this.keys.clear();this.client=null;this.rtt=0;this.lastPing=-Infinity;
+    if(notify)this.request('/api/leave',{}).catch(()=>{});this.token=null;this.socket?.close();this.state=null;this.pending=null;this.actions=[];this.keys.clear();this.client=null;this.rtt=0;this.lastPing=-Infinity;
     this.internetError=false;this.hostButton.disabled=false;this.name.disabled=false;this.botCount.disabled=false;for(const option of this.botCount.options)option.disabled=false;this.leaveButton.classList.add('hidden');this.copyButton.classList.add('hidden');this.internetButton.classList.add('hidden');this.animalChoice.classList.add('hidden');this.share.classList.add('hidden');this.help.classList.add('hidden');this.players.replaceChildren();this.status.textContent=message;this.onLeave();
   }
 }

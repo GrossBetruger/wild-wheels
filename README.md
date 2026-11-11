@@ -22,6 +22,8 @@ Open [localhost:5173](http://localhost:5173). Keep the terminal open while playi
 
 Arena rooms support up to six participants. Choose a map and bot count in the lobby. Phones join as bombers automatically, and everyone can edit their player name.
 
+Each running server keeps one room. Refresh to reconnect; names are remembered in cookies. Use **AFK** to step away and **Back to Arena** to return. Clicking **Host Arena** again replaces the room and creates a new invitation.
+
 ## Basic gameplay
 
 **Grand Prix:** race three laps against computer opponents. Collect weapons and turbo cells, drift for boosts, and use alternate routes to get ahead. This mode is solo.

@@ -5,12 +5,14 @@ import { createGameServer } from './server.js';
 import WebSocket from 'ws';
 import { allocateRoomCode } from './multiplayer.js';
 import { decodeBinarySnapshot } from './binary-wire.js';
+import {ArenaClient} from './arena-core.js';
+import {savedPlayerName} from './network.js';
 
 async function serverFor(t){
   const app=createGameServer({fixtureWorld:arenaFixture});clearInterval(app.multiplayer.timer);await new Promise(resolve=>app.server.listen(0,'127.0.0.1',resolve));
   t.after(()=>{app.multiplayer.close();app.server.closeAllConnections();app.server.close();});
   const origin=`http://127.0.0.1:${app.server.address().port}`;
-  const post=async(path,body,token,headers={})=>{const response=await fetch(origin+path,{method:'POST',headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`} :{}),...headers},body:JSON.stringify(body),signal:AbortSignal.timeout(3000)});return {status:response.status,...await response.json()};};
+  const post=async(path,body,token,headers={})=>{const response=await fetch(origin+path,{method:'POST',headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`} :{}),...headers},body:JSON.stringify(body),signal:AbortSignal.timeout(3000)});return {status:response.status,cookie:response.headers.get('set-cookie'),...await response.json()};};
   return {...app,post,origin};
 }
 test('players can rename themselves in a room and names survive the next match',async t=>{
@@ -129,11 +131,11 @@ test('guests cannot start or change a match and invalid or cross-origin controls
   assert.equal((await post('/api/input',{sequence:0,keys:['teleport'],actions:[]},host.token)).status,400);assert.equal((await post('/api/input',{sequence:0,keys:[],actions:[{type:'set-health',health:99}]},host.token)).status,400);
   assert.equal((await post('/api/control',{action:'start'},host.token,{Origin:'https://example.invalid'})).status,403);assert.equal((await post('/api/control',{action:'start'})).status,401);
 });
-test('host departure transfers control and a room never accepts more than six players',async t=>{
+test('host AFK preserves host control and a room never accepts more than six players',async t=>{
   const {multiplayer,post}=await serverFor(t);const host=await post('/api/rooms',{name:'Host',driver:0,arena:0});const guests=[];
   for(let index=1;index<6;index++)guests.push(await post('/api/join',{name:`Player ${index}`,driver:index%4,code:host.code}));
   assert.equal((await post('/api/join',{name:'Extra',driver:1,code:host.code})).status,409);await post('/api/leave',{},host.token);
-  const room=multiplayer.rooms.get(host.code);assert.equal(room.host,guests[0].you);assert.equal((await post('/api/control',{action:'start'},guests[0].token)).status,200);
+  const room=multiplayer.rooms.get(host.code);assert.equal(room.host,host.you);assert.equal(room.members.size,6);assert.equal(room.members.get(host.you).afk,true);assert.equal((await post('/api/control',{action:'start'},guests[0].token)).status,403);assert.equal((await post('/api/control',{action:'start'},host.token)).status,200);
   for(let frame=0;frame<120;frame++)multiplayer.step(1/30);assert.ok(Number.isFinite(room.world.wx));assert.ok(Number.isFinite(room.world.heading));
 });
 test('stale input stops accelerating and duplicate messages cannot spend chaff twice',async t=>{
@@ -194,20 +196,64 @@ test('a rematch accepts the new client command sequence immediately after the pr
   multiplayer.step(1/60);
   assert.equal(room.world.ammo,4);assert.equal(room.world.projectiles.length,1);assert.equal(multiplayer.snapshot(room,multiplayer.members.get(host.token)).movementSequence,0);
 });
-test('a transferred host can remove all bots and see only their own kart',async t=>{
+test('a guest cannot change bots while the original host is AFK',async t=>{
   const {multiplayer,post}=await serverFor(t);const host=await post('/api/rooms',{name:'Host',driver:0,arena:0});const guest=await post('/api/join',{name:'Guest',driver:1,code:host.code});await post('/api/leave',{},host.token);
-  assert.equal((await post('/api/control',{action:'bots',bots:0},guest.token)).status,200);
-  const member=multiplayer.members.get(guest.token),snapshot=multiplayer.snapshot(member.room,member);assert.equal(snapshot.bots,0);assert.equal(snapshot.world.bots.length,0);assert.equal(snapshot.world.id,1);assert.equal(snapshot.world.inactive,false);
+  assert.equal((await post('/api/control',{action:'bots',bots:0},guest.token)).status,403);
+  const back=await post('/api/afk',{afk:false},host.token);assert.equal((await post('/api/control',{action:'bots',bots:0},back.token)).status,200);
+  const member=multiplayer.members.get(guest.token),snapshot=multiplayer.snapshot(member.room,member);assert.equal(snapshot.bots,0);assert.equal(snapshot.world.bots.length,1);assert.equal(snapshot.world.id,1);assert.equal(snapshot.world.inactive,false);
 });
-test('room links use unique two-digit codes that other players can join',async t=>{
-  const {post}=await serverFor(t);const first=await post('/api/rooms',{name:'First',driver:0,arena:0});const second=await post('/api/rooms',{name:'Second',driver:1,arena:1});
+test('hosting again replaces the only room and invalidates old invitations and sessions',async t=>{
+  const {post,multiplayer}=await serverFor(t);const first=await post('/api/rooms',{name:'First',driver:0,arena:0});const oldGuest=await post('/api/join',{name:'Friend',driver:2,code:first.code});
+  assert.equal((await post('/api/rooms',{name:'Intruder',driver:0,arena:0})).status,403);assert.equal((await post('/api/rooms',{name:'Guest',driver:0,arena:0},oldGuest.token)).status,403);
+  const second=await post('/api/rooms',{name:'Second',driver:1,arena:1},first.token);
   assert.match(first.code,/^[0-9]{2}$/);assert.match(second.code,/^[0-9]{2}$/);assert.notEqual(first.code,second.code);
-  const guest=await post('/api/join',{name:'Guest',driver:2,code:first.code});assert.equal(guest.status,200);assert.equal(guest.code,first.code);assert.equal(guest.players.length,2);
+  assert.equal(multiplayer.rooms.size,1);assert.equal(multiplayer.members.size,1);assert.equal((await post('/api/session',{},first.token)).status,401);assert.equal((await post('/api/session',{},oldGuest.token)).status,401);assert.equal((await post('/api/join',{name:'Guest',driver:2,code:first.code})).status,404);
+  const guest=await post('/api/join',{name:'Guest',driver:2,code:second.code});assert.equal(guest.status,200);assert.equal(guest.code,second.code);assert.equal(guest.players.length,2);
   for(const code of ['7','007','A1','12345678'])assert.equal((await post('/api/join',{name:'Guest',driver:2,code})).status,400);
 });
 test('two-digit allocation preserves a leading zero and never takes an active code',()=>{
   const occupied=new Map(Array.from({length:100},(_,number)=>[String(number).padStart(2,'0'),{}]));occupied.delete('07');assert.equal(allocateRoomCode(occupied),'07');
   occupied.set('07',{});assert.throws(()=>allocateRoomCode(occupied),error=>error.status===503);
+});
+test('a host resumes from an HttpOnly cookie after going offline without losing the room, scores or input sequencing',async t=>{
+  const {multiplayer,post}=await serverFor(t);
+  const host=await post('/api/rooms',{name:'Oren',driver:5,arena:0,bots:0});const guest=await post('/api/join',{name:'Friend',driver:1,code:host.code});
+  assert.match(host.cookie,/HttpOnly/);assert.match(host.cookie,/SameSite=Lax/);
+  const room=multiplayer.rooms.get(host.code);Object.assign(room.world,{phase:'racing',kills:4,deaths:2,wx:-65,wz:0,heading:0,motionHeading:0,cameraHeading:0,supplies:[]});
+  await post('/api/input',{sequence:40,epoch:room.soundEpoch,keys:['arrowup'],moves:[{sequence:0,keys:['arrowup']}],actions:[]},host.token);multiplayer.step(1/60);
+  await post('/api/input',{sequence:41,epoch:room.soundEpoch,keys:[],moves:[],actions:[{type:'chaff',id:0,afterMove:1}]},host.token);multiplayer.step(1/60);
+  multiplayer.members.get(host.token).lastSeen=Date.now()-16000;multiplayer.step(1/60);
+  assert.equal(room.host,host.you);assert.equal(room.members.size,2);assert.equal(room.members.get(host.you).afk,true);
+  const resumed=await post('/api/session',{},undefined,{Cookie:host.cookie.split(';')[0]});
+  assert.equal(resumed.status,200);assert.notEqual(resumed.token,host.token);assert.equal(resumed.code,host.code);assert.equal(resumed.you,host.you);assert.equal(resumed.host,host.you);
+  assert.deepEqual([resumed.world.name,resumed.world.driver,resumed.world.kills,resumed.world.deaths],['Oren',5,4,2]);assert.equal(resumed.players.length,2);assert.equal(resumed.world.afk,false);
+  assert.equal((await post('/api/control',{action:'reset'},host.token)).status,401);assert.equal((await post('/api/control',{action:'reset'},guest.token)).status,403);
+  const client=new ArenaClient();client.accept(room.core.packet(host.you),0);client.frame(1/60,new Set(['arrowup']),1/60);assert.equal(client.action('chaff',undefined,1/60),true);
+  assert.equal((await post('/api/input',client.outbound(['arrowup']),resumed.token)).status,200);multiplayer.step(1/60);
+  const state=multiplayer.snapshot(room,multiplayer.members.get(resumed.token));assert.equal(state.movementSequence,1);assert.ok(state.world.speed>0);assert.equal(state.world.chaff,3);assert.equal(multiplayer.rooms.size,1);
+});
+test('AFK keeps a player and their scores in the room, prevents combat, and allows returning to the same kart',async t=>{
+  const {multiplayer,post}=await serverFor(t);
+  const host=await post('/api/rooms',{name:'Host',driver:0,arena:0,bots:0}),guest=await post('/api/join',{name:'Sam',driver:1,code:host.code});
+  const room=multiplayer.rooms.get(host.code);Object.assign(room.world,{phase:'racing',wx:-65,wz:0,heading:0,motionHeading:0,cameraHeading:0,shield:0,health:3,fireCooldown:0,supplies:[]});Object.assign(room.world.bots[0],{wx:-65,wz:20,heading:Math.PI,motionHeading:Math.PI,cameraHeading:Math.PI,shield:0,health:3,kills:2,deaths:1});
+  const away=await post('/api/afk',{afk:true},guest.token);assert.equal(away.status,200);assert.equal(away.world.afk,true);assert.equal(away.players.find(player=>player.id===guest.you).afk,true);
+  await post('/api/input',{sequence:0,keys:['arrowup',' '],actions:[{type:'fire'}]},away.token);
+  await post('/api/input',{sequence:0,keys:[],actions:[{type:'select',item:'missile'},{type:'fire'}]},host.token);
+  for(let i=0;i<60;i++)multiplayer.step(1/60);
+  const waiting=multiplayer.snapshot(room,multiplayer.members.get(away.token));assert.deepEqual([waiting.world.wx,waiting.world.wz,waiting.world.health,waiting.world.kills,waiting.world.deaths],[-65,20,3,2,1]);assert.equal(waiting.players.length,2);assert.ok(waiting.world.projectiles.every(shot=>shot.owner!==guest.you));
+  const back=await post('/api/afk',{afk:false},away.token);assert.equal(back.you,guest.you);assert.equal(back.world.afk,false);assert.equal(back.world.kills,2);
+  await post('/api/input',{sequence:0,keys:['arrowup'],actions:[]},back.token);multiplayer.step(1/60);assert.ok(multiplayer.snapshot(room,multiplayer.members.get(back.token)).world.speed>0);
+});
+test('a saved room cookie rejoins the same player rather than allocating a second seat',async t=>{
+  const {post}=await serverFor(t);const host=await post('/api/rooms',{name:'Host',driver:0,arena:0,bots:0},undefined,{'X-Forwarded-Proto':'https'});
+  assert.match(host.cookie,/; Secure/);
+  const joined=await post('/api/join',{name:'Other name',driver:1,code:host.code},undefined,{Cookie:host.cookie.split(';')[0]});
+  assert.equal(joined.you,host.you);assert.equal(joined.world.name,'Host');assert.equal(joined.players.length,1);assert.equal(joined.host,joined.you);
+});
+test('saved name cookies preserve names and treat malformed cookies as an empty preference',()=>{
+  assert.equal(savedPlayerName('other=1; wild-wheels-name=Tamar%20%F0%9F%A6%97'),'Tamar 🦗');
+  assert.equal(savedPlayerName('wild-wheels-name=Sam%20%3Cb%3E'),'Sam <b>');
+  assert.equal(savedPlayerName('wild-wheels-name=%invalid'),'Player');assert.equal(savedPlayerName(''),'Player');assert.equal(savedPlayerName(`wild-wheels-name=${'x'.repeat(25)}`),'Player');
 });
 test('browsers can compare stable build IDs without receiving cached version information',async t=>{
   const {origin}=await serverFor(t);const first=await fetch(origin+'/build.json'),build=await first.json();const again=await fetch(origin+'/build.json').then(response=>response.json());

@@ -157,7 +157,7 @@ function drawMap(){
   map.clearRect(0,0,280,126);
   if(mode==='combat'){
     map.fillStyle='#e5e0d9';map.fillRect(78,3,124,120);map.fillStyle='#92839d';for(const [x,z,w,d] of arenas[track].blocks)map.fillRect(140+(x-w/2)*.6,63+(z-d/2)*.6,w*.6,d*.6);
-    for(const actor of [race,...race.bots]){if(actor.bomber||actor.destroyed)continue;map.fillStyle=actor.color;map.beginPath();map.arc(140+actor.wx*.6,63+actor.wz*.6,actor===race?4:3,0,7);map.fill();}return;
+    for(const actor of [race,...race.bots]){if(actor.bomber||actor.destroyed||actor.afk)continue;map.fillStyle=actor.color;map.beginPath();map.arc(140+actor.wx*.6,63+actor.wz*.6,actor===race?4:3,0,7);map.fill();}return;
   }
   map.beginPath();for(let i=0;i<=120;i++){const [x,y]=mapPoint(i/120*Math.PI*2);if(i===0)map.moveTo(x,y);if(i>0)map.lineTo(x,y);}map.closePath();map.strokeStyle='#ded9cf';map.lineWidth=17;map.stroke();map.strokeStyle='#faf8f0';map.lineWidth=10;map.stroke();
   for(const [i,branch] of branches.entries()){map.beginPath();for(let j=0;j<=40;j++){const[x,y]=mapPoint((branch.start+(branch.end-branch.start)*j/40)*Math.PI*2,i+1);if(j===0)map.moveTo(x,y);if(j>0)map.lineTo(x,y);}map.strokeStyle='#c6a258';map.lineWidth=4;map.stroke();}

@@ -6,7 +6,7 @@ const COLORS:[&str;6]=["#8456cf","#df7053","#67a99c","#edb84f","#777cbb","#db8da
 #[serde(rename_all="camelCase",deny_unknown_fields)]
 struct Player {
     id:usize,name:String,driver:usize,role:String,
-    #[serde(default)]wants_to_play:bool,#[serde(default)]play_request_refused:bool,
+    #[serde(default)]afk:bool,#[serde(default)]wants_to_play:bool,#[serde(default)]play_request_refused:bool,
 }
 #[derive(Deserialize,Serialize)]
 #[serde(rename_all="camelCase",deny_unknown_fields)]
@@ -54,7 +54,7 @@ impl Game {
             let active=person.is_some()||bots>0;
             if person.is_none()&&active{bots-=1;}
             if active&&actor.inactive{actor.destroyed=0.0;actor.health=3.0;actor.shield=2.0;actor.speed=0.0;}
-            actor.human=person.is_some();actor.inactive=!active;actor.color=match person.map_or(actor.driver,|p|p.driver){6=>"#e8edf2",_=>COLORS[id]}.into();
+            actor.human=person.is_some();actor.inactive=!active;actor.afk=person.is_some_and(|p|p.afk);if actor.afk{actor.speed=0.0;actor.boost=0.0;actor.was_drifting=false;actor.drift=0.0;actor.somersault=0.0;}actor.color=match person.map_or(actor.driver,|p|p.driver){6=>"#e8edf2",_=>COLORS[id]}.into();
             if !active{actor.destroyed=1e9;actor.speed=0.0;}
             match person {
                 Some(p)=>{
@@ -66,7 +66,7 @@ impl Game {
             }
         }
         self.room.clear();
-        for (key,value) in [("code",json!(room.code)),("host",json!(room.host)),("arena",json!(room.arena)),("bots",json!(room.bots)),("startRequest",json!(room.start_request)),("players",json!(room.players.iter().map(|p|json!({"id":p.id,"name":p.name.trim(),"driver":p.driver,"color":self.actors[p.id].color,"role":p.role,"wantsToPlay":p.wants_to_play,"playRequestRefused":p.play_request_refused})).collect::<Vec<_>>()))]{self.room.insert(key.into(),value);}
+        for (key,value) in [("code",json!(room.code)),("host",json!(room.host)),("arena",json!(room.arena)),("bots",json!(room.bots)),("startRequest",json!(room.start_request)),("players",json!(room.players.iter().map(|p|json!({"id":p.id,"name":p.name.trim(),"driver":p.driver,"color":self.actors[p.id].color,"role":p.role,"afk":p.afk,"wantsToPlay":p.wants_to_play,"playRequestRefused":p.play_request_refused})).collect::<Vec<_>>()))]{self.room.insert(key.into(),value);}
     }
 }
 #[no_mangle]pub extern "C" fn game_create(len:usize)->u32 {
@@ -84,6 +84,11 @@ impl Game {
     // Driver/role changes during a running match are denied before any mutation.
     if !matches!(game.global.phase.as_str(),"ready"|"finished")&&room.players.iter().any(|p|{let a=&game.actors[p.id];a.human&&(a.driver!=p.driver||a.bomber!=(p.role=="bomber"))}){return 0;}
     game.configure_room(&room);1
+}
+#[no_mangle]pub extern "C" fn game_resume(viewer:usize)->u32 {
+    let Some(game)=(unsafe{&mut *core::ptr::addr_of_mut!(super::WORLD)})else{return 0;};
+    if viewer>=game.actors.len()||!game.actors[viewer].human{return 0;}
+    game.pending[viewer].clear();game.accepted_action[viewer]=game.action_ack[viewer];1
 }
 #[no_mangle]pub extern "C" fn game_start()->u32 {
     let Some(game)=(unsafe{&mut *core::ptr::addr_of_mut!(super::WORLD)})else{return 0;};

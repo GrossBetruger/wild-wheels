@@ -14,7 +14,7 @@ export function kartNameplates(world,matrix,eye){
   if(world.mode!=='combat'||!['racing','paused'].includes(world.phase))return [];
   const labels=[];
   for(const actor of world.bots){
-    if(actor.bomber||actor.destroyed||actor.inactive||!world.bomber&&Math.hypot(actor.wx-world.wx,actor.wz-world.wz)<28)continue;
+    if(actor.bomber||actor.destroyed||actor.inactive||actor.afk||!world.bomber&&Math.hypot(actor.wx-world.wx,actor.wz-world.wz)<28)continue;
     const jump=somersaultPose(actor)?.height??0;
     if(!visibleBody(arenas[world.arena],eye,actor,2+jump))continue;
     const point=[actor.wx,7.2+jump,actor.wz,1],clip=[0,1,2,3].map(row=>point.reduce((sum,value,column)=>sum+matrix[column*4+row]*value,0));

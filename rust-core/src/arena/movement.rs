@@ -55,7 +55,7 @@ impl Game{
         a.motion_heading=a.heading;a.camera_heading=a.heading;a.drift=0.0;a.was_drifting=false;a.drift_trail=None;a.drift_emit=0.0;a.kill_streak=0;a.vulcan=0.0;a.chaff=4;a.chaff_cooldown=0.0;a.somersault=0.0;a.somersault_cooldown=0.0;a.somersault_camera_start=a.camera_heading;a.dizzy=0.0;a.credits.clear();
     }
     pub(super) fn collect(&mut self,id:usize){
-        let a=&mut self.actors[id];if a.bomber||a.destroyed>0.0{return;}
+        let a=&mut self.actors[id];if a.bomber||a.afk||a.destroyed>0.0{return;}
         let g=&mut self.global;
         for supply in &mut g.supplies{
             if supply.cooldown>0.0||distance(a.wx,a.wz,supply.wx,supply.wz)>=4.0||supply.kind=="health"&&a.health>=6.0{continue;}

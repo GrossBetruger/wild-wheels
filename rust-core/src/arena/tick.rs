@@ -32,7 +32,7 @@ impl Game{
         super::movement::age(g,dt);
         for id in 0..self.actors.len(){
             let input=frame.inputs.iter().find(|input|input.actor==id);let action_clock=input.is_some_and(|i|i.action_clock);
-            let a=&mut self.actors[id];a.notice_time=(a.notice_time-dt).max(0.0);
+            let a=&mut self.actors[id];if a.afk{continue;}a.notice_time=(a.notice_time-dt).max(0.0);
             for timer in [&mut a.shield,&mut a.celebrate,&mut a.voice_cooldown,&mut a.wall_cooldown,&mut a.vulcan]{*timer=(*timer-dt).max(0.0);}
             if !action_clock{a.fire_cooldown=(a.fire_cooldown-dt).max(0.0);a.chaff_cooldown=(a.chaff_cooldown-dt).max(0.0);}
             if a.bomber{
@@ -55,7 +55,7 @@ impl Game{
             }
             if ending{a.speed=0.0;a.boost=0.0;continue;}
             a.dizzy=(a.dizzy-dt).max(0.0);a.somersault=(a.somersault-dt).max(0.0);a.somersault_cooldown=(a.somersault_cooldown-dt).max(0.0);a.boost=(a.boost-dt).max(0.0);
-            let target=self.actors.iter().filter(|b|b.id!=id&&!b.bomber&&!b.inactive&&b.destroyed<=0.0).map(|b|b.id).min_by(|&x,&y|distance(self.actors[id].wx,self.actors[id].wz,self.actors[x].wx,self.actors[x].wz).total_cmp(&distance(self.actors[id].wx,self.actors[id].wz,self.actors[y].wx,self.actors[y].wz)).then(x.cmp(&y)));
+            let target=self.actors.iter().filter(|b|b.id!=id&&!b.bomber&&!b.inactive&&!b.afk&&b.destroyed<=0.0).map(|b|b.id).min_by(|&x,&y|distance(self.actors[id].wx,self.actors[id].wz,self.actors[x].wx,self.actors[x].wz).total_cmp(&distance(self.actors[id].wx,self.actors[id].wz,self.actors[y].wx,self.actors[y].wz)).then(x.cmp(&y)));
             let Some(target)=target else{continue;};let arena=self.global.arena;let visible=clear(arena,self.actors[id].wx,self.actors[id].wz,self.actors[target].wx,self.actors[target].wz);
             self.actors[id].brain-=dt;
             if self.actors[id].brain<=0.0{self.actors[id].path=match visible{true=>Vec::new(),false=>super::movement::navigate(arena,&self.actors[id],&self.actors[target])};self.actors[id].brain=0.4+(1.0-self.actors[id].skill)*0.4;}
@@ -71,7 +71,7 @@ impl Game{
         for input in &frame.inputs{if let Some(last)=input.moves.as_ref().and_then(|moves|moves.last()){self.movement_ack[input.actor]=last.sequence;}}
         for i in 0..self.actors.len(){for j in i+1..self.actors.len(){
             let a=&self.actors[i];let b=&self.actors[j];let d=distance(a.wx,a.wz,b.wx,b.wz);
-            if a.bomber||b.bomber||a.destroyed>0.0||b.destroyed>0.0||d>=3.8{continue;}
+            if a.bomber||b.bomber||a.afk||b.afk||a.destroyed>0.0||b.destroyed>0.0||d>=3.8{continue;}
             let dx=(a.wx-b.wx)/match d==0.0{true=>1.0,false=>d};let dz=match d==0.0{true=>1.0,false=>(a.wz-b.wz)/d};let push=(3.8-d)/2.0;let arena=self.global.arena;
             if !blocked(arena,a.wx+dx*push,a.wz+dz*push,2.0){self.actors[i].wx+=dx*push;self.actors[i].wz+=dz*push;}
             let b=&self.actors[j];if !blocked(arena,b.wx-dx*push,b.wz-dz*push,2.0){self.actors[j].wx-=dx*push;self.actors[j].wz-=dz*push;}
@@ -103,7 +103,7 @@ impl Game{
         {
             let g=&mut self.global;
             for cloud in &mut g.stink_clouds{for a in &mut self.actors{
-                if a.bomber||a.inactive||a.destroyed>0.0||a.shield>0.0||cloud.hits.contains(&a.id)||distance(a.wx,a.wz,cloud.wx,cloud.wz)>14.0{continue;}
+                if a.bomber||a.inactive||a.afk||a.destroyed>0.0||a.shield>0.0||cloud.hits.contains(&a.id)||distance(a.wx,a.wz,cloud.wx,cloud.wz)>14.0{continue;}
                 cloud.hits.push(a.id);
                 if a.dizzy<=0.0{g.sound_sequence+=1;g.events.push(match g.multiplayer{true=>json!({"type":"dizzy","owner":a.id,"wx":a.wx,"wz":a.wz,"id":format!("{}:{}",g.sound_epoch,g.sound_sequence)}),false=>json!("dizzy")});}
                 a.dizzy=4.0;a.credits.retain(|_,expires|*expires>g.elapsed+1e-8);if !ending{a.credits.insert(cloud.owner,g.elapsed+4.0);}

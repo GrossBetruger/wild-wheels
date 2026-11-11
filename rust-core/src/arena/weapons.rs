@@ -1,8 +1,8 @@
 use super::*;
 impl Game{
-    fn active(&self,id:usize)->bool{let a=&self.actors[id];self.combat_active()&&a.destroyed<=0.0&&!a.bomber&&!a.inactive&&(self.global.finish_countdown.is_none()||self.human_controlled(id))}
+    fn active(&self,id:usize)->bool{let a=&self.actors[id];self.combat_active()&&a.destroyed<=0.0&&!a.bomber&&!a.inactive&&!a.afk&&(self.global.finish_countdown.is_none()||self.human_controlled(id))}
     pub(super) fn target(&self,id:usize)->Option<usize>{
-        let a=&self.actors[id];self.actors.iter().filter(|b|b.id!=id&&!b.bomber&&!b.inactive&&b.destroyed<=0.0&&b.shield<=0.0&&distance(a.wx,a.wz,b.wx,b.wz)<100.0&&angle((b.wx-a.wx).atan2(b.wz-a.wz),a.heading).abs()<0.65&&clear(self.global.arena,a.wx,a.wz,b.wx,b.wz)).map(|a|a.id).min_by(|&x,&y|distance(a.wx,a.wz,self.actors[x].wx,self.actors[x].wz).total_cmp(&distance(a.wx,a.wz,self.actors[y].wx,self.actors[y].wz)).then(x.cmp(&y)))
+        let a=&self.actors[id];self.actors.iter().filter(|b|b.id!=id&&!b.bomber&&!b.inactive&&!b.afk&&b.destroyed<=0.0&&b.shield<=0.0&&distance(a.wx,a.wz,b.wx,b.wz)<100.0&&angle((b.wx-a.wx).atan2(b.wz-a.wz),a.heading).abs()<0.65&&clear(self.global.arena,a.wx,a.wz,b.wx,b.wz)).map(|a|a.id).min_by(|&x,&y|distance(a.wx,a.wz,self.actors[x].wx,self.actors[x].wz).total_cmp(&distance(a.wx,a.wz,self.actors[y].wx,self.actors[y].wz)).then(x.cmp(&y)))
     }
     pub(super) fn fire(&mut self,id:usize,action_id:Option<u32>){
         if !self.active(id)||self.actors[id].fire_cooldown>0.0{return;}
@@ -27,7 +27,7 @@ impl Game{
     pub(super) fn bomb(&mut self,id:usize,action:&Action){
         if self.global.finish_countdown.is_some()&&!self.human_controlled(id){return;}
         let a=&mut self.actors[id];let kind=action.bomb_kind.as_deref().unwrap_or("abomb");
-        if !a.bomber||a.inactive||self.global.phase!="racing"||!matches!(kind,"stink"|"abomb")||action.wx.abs()>96.0||action.wz.abs()>96.0{return;}
+        if !a.bomber||a.inactive||a.afk||self.global.phase!="racing"||!matches!(kind,"stink"|"abomb")||action.wx.abs()>96.0||action.wz.abs()>96.0{return;}
         let ammo=match kind{"stink"=>&mut a.stink_ammo,_=>&mut a.bomb_ammo};if *ammo==0{return;}*ammo-=1;
         let g=&mut self.global;g.bomb_sequence+=1;g.bombs.push(Bomb{id:g.bomb_sequence,kind:kind.into(),owner:id,wx:action.wx,wz:action.wz,color:a.color.clone(),action_id:action.id,..Bomb::default()});
         sound(g,"bombDrop",id,action.wx,action.wz,action.id.map(|id|format!("action:{}",id)));
@@ -57,7 +57,7 @@ impl Game{
     }
     pub(super) fn damage(&mut self,victim:usize,owner:usize,amount:f64)->bool{
         let a=&self.actors[victim];
-        if a.bomber||a.inactive||self.global.phase!="racing"||a.destroyed>0.0||a.shield>0.0||victim==owner{return false;}
+        if a.bomber||a.inactive||a.afk||self.global.phase!="racing"||a.destroyed>0.0||a.shield>0.0||victim==owner{return false;}
         let unscored=self.global.finish_countdown.is_some();
         let root_x=self.actors[0].wx;let g=&mut self.global;let a=&mut self.actors[victim];a.health=(a.health-amount).max(0.0);voice(g,a,"hurt",root_x);if victim==0{g.shake=0.5;}
         if a.health>0.0{
@@ -88,14 +88,14 @@ impl Game{
             let impact=shot.height<=0.15||fall>0.0&&blocked(self.global.arena,shot.wx,shot.wz,0.3);if impact{shot.height=shot.height.max(0.15);shot.life=0.0;}(impact,None,Some(point.2))
         };
         if let Some(point)=decoy{if shot.orbit_age.is_some(){return orbit(shot,point,dt);}}
-        let target=decoy.map(|p|(p.0,p.1)).or_else(||shot.target.and_then(|id|self.actors.get(id)).filter(|a|a.destroyed<=0.0).map(|a|(a.wx,a.wz)));
+        let target=decoy.map(|p|(p.0,p.1)).or_else(||shot.target.and_then(|id|self.actors.get(id)).filter(|a|a.destroyed<=0.0&&!a.afk).map(|a|(a.wx,a.wz)));
         let mut steering=0.0;
         if shot.kind=="missile"{if let Some((x,z))=target{let rate=match decoy.is_some(){true=>4.5,false=>1.6};steering=angle((x-shot.wx).atan2(z-shot.wz),shot.heading).clamp(-rate*dt,rate*dt);shot.heading+=steering;}}
         let steps=(shot.speed*dt/1.5).ceil() as usize;
         for step in 0..steps{
             shot.wx+=shot.heading.sin()*shot.speed*dt/steps as f64;shot.wz+=shot.heading.cos()*shot.speed*dt/steps as f64;
             if let Some(point)=decoy{if distance(shot.wx,shot.wz,point.0,point.1)<6.0{shot.orbit_age=Some(0.0);shot.orbit_direction=match steering<0.0{true=>-1.0,false=>1.0};shot.orbit_angle=shot.heading-shot.orbit_direction*std::f64::consts::FRAC_PI_2;shot.orbit_radius=shot.speed*0.6/std::f64::consts::TAU;shot.orbit_height=shot.height;shot.orbit_center=Some(Point{wx:shot.wx-shot.orbit_angle.sin()*shot.orbit_radius,wz:shot.wz-shot.orbit_angle.cos()*shot.orbit_radius});shot.chaffed=true;shot.life=shot.life.max(3.0);return orbit(shot,point,dt*(steps-step-1)as f64/steps as f64);}}
-            let victim=match decoy.is_some(){true=>None,false=>self.actors.iter().find(|a|a.id!=shot.owner&&!a.bomber&&a.destroyed<=0.0&&a.shield<=0.0&&distance(a.wx,a.wz,shot.wx,shot.wz)<2.7).map(|a|a.id)};
+            let victim=match decoy.is_some(){true=>None,false=>self.actors.iter().find(|a|a.id!=shot.owner&&!a.bomber&&!a.afk&&a.destroyed<=0.0&&a.shield<=0.0&&distance(a.wx,a.wz,shot.wx,shot.wz)<2.7).map(|a|a.id)};
             if blocked(self.global.arena,shot.wx,shot.wz,0.3)||victim.is_some(){shot.life=0.0;return(true,victim,decoy.map(|p|p.2));}
         }(false,None,decoy.map(|p|p.2))
     }

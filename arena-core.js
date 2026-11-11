@@ -9,6 +9,7 @@ export class ArenaCore{
   static room(config){return new ArenaCore(config,{room:true});}
   configure(config){this.write(config);const accepted=this.core.game_configure(this.inputLength);this.view.rebind();if(!accepted)throw new Error('Invalid Rust room configuration');this.revision++;}
   start(){const accepted=this.core.game_start();this.view.rebind();if(!accepted)throw new Error('Rust arena is not ready');this.revision++;}
+  resume(viewer){if(!this.core.game_resume(viewer))throw new Error('Invalid arena player');this.view.rebind();this.revision++;}
   get status(){const data=new Float64Array(this.core.memory.buffer,this.core.game_status_ptr(),5);return {phase:['ready','countdown','racing','paused','finished'][data[0]],soundEpoch:data[1],arena:data[2],time:data[3],elapsed:data[4]};}
   write(value){const bytes=encoder.encode(JSON.stringify(value));if(bytes.length>512*1024)throw new Error('Rust command exceeds input capacity');new Uint8Array(this.core.memory.buffer,this.core.game_io_ptr(),bytes.length).set(bytes);this.inputLength=bytes.length;}
   step(dt,inputs=[]){

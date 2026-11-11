@@ -63,7 +63,7 @@ impl Client{
         }}actor
     }
     pub(super) fn do_action(&mut self,mut action:Action,now:f64)->bool{
-        if self.ops.len()>=64{return false;}let mut actor=self.inventory();let id=self.next_action;action.id=Some(id);let sequence=self.next_sequence-1;
+        if self.ops.len()>=64||self.pred.actors[self.viewer].afk{return false;}let mut actor=self.inventory();let id=self.next_action;action.id=Some(id);let sequence=self.next_sequence-1;
         let after=self.ops.iter().filter_map(|op|match op{Op::Pickup{after,..}=>Some(*after),_=>None}).fold(sequence,i64::max);action.after_move=after;
         if actor.bomber{
             let kind=action.bomb_kind.as_deref().unwrap_or("abomb");let resource=match kind{"stink"=>"stinkAmmo",_=>"bombAmmo"};

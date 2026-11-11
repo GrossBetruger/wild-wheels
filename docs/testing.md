@@ -16,7 +16,7 @@ Push completed changes to main before heavy browser checks. Fix regressions forw
 npm run test:regression
 ```
 
-This runs automated tests and six browser groups: movement, projectile/pickup feedback, drift visuals, lobby/item controls, mobile bombing, and character selection/rendering. Each covers host, guest, 160 ms latency, and jitter profiles, repeated three times (72 scenarios). Results and traces go to the directory printed by the runner. For a shorter check:
+This runs automated tests and seven browser groups: movement, projectile/pickup feedback, drift visuals, lobby/item controls, mobile bombing, character selection/rendering, and room persistence. Each covers host, guest, 160 ms latency, and jitter profiles, repeated three times (84 scenarios). Results and traces go to the directory printed by the runner. For a shorter check:
 
 ```sh
 npm run test:regression -- --repeat 1
@@ -26,7 +26,9 @@ Chrome must be installed. Set CHROME_PATH if it is outside the default macOS loc
 
 Local checks enforce frame time ≤20 ms at the 95th percentile, with guests within 2 ms of the host. Movement checks require position error ≤0.15 units at the 95th percentile (0.5 maximum), camera error ≤1° at the 95th percentile (3° maximum), and no unexplained frozen or backward frames. Action feedback must appear within one rendered frame without duplicate projectiles or pickup cues.
 
-GitHub Actions runs all six groups with --functional --repeat 1 on pushes and pull requests, retaining traces for 30 days. Functional checks enforce behavior and record frame times without enforcing hardware-dependent FPS thresholds.
+GitHub Actions runs all seven groups with --functional --repeat 1 on pushes and pull requests, retaining traces for 30 days. Functional checks enforce behavior and record frame times without enforcing hardware-dependent FPS thresholds.
+
+Room checks require refresh to restore the same player, room, host role and scores after going offline. AFK must retain the seat and prevent combat; returning must restore responsive controls. The host can replace the server's only room, invalidating old sessions and invitations. Names survive refresh in a cookie; the separate session cookie is HttpOnly. Lightweight tests also reject replacement by guests and verify fresh input sequencing after resumption. Rooms persist for the lifetime of the Node process, without disk storage.
 
 The character group verifies seven menu choices, selects the elephant, cricket, and Elon/Roadster through the live lobby, checks that remote players receive the same character, renders all three in WebGL, and schedules their synthesized calls. Roadster turbo and somersault checks require white vapor and a remotely visible somersault. Screenshots are saved alongside the results for visual review. Run it alone with:
 
@@ -45,6 +47,7 @@ npm run test:browser-netcode -- --feedback --repeat 3
 npm run test:browser-netcode -- --drift --repeat 3
 npm run test:browser-netcode -- --controls
 npm run test:browser-netcode -- --mobile
+npm run test:browser-netcode -- --room
 npm run profile:network
 ```
 

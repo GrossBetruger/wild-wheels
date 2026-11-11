@@ -15,7 +15,7 @@ fn pose_copy(target:&mut Actor,source:&Actor){
     target.wx=source.wx;target.wz=source.wz;target.heading=source.heading;target.motion_heading=source.motion_heading;target.camera_heading=source.camera_heading;target.speed=source.speed;target.drift=source.drift;target.was_drifting=source.was_drifting;target.boost=source.boost;target.yaw=source.yaw;target.somersault=source.somersault;target.somersault_cooldown=source.somersault_cooldown;target.dizzy=source.dizzy;
 }
 fn move_one(game:&mut Game,id:usize,command:&Move){
-    if !game.combat_active()||game.actors[id].destroyed>0.0||game.actors[id].bomber{return;}
+    if !game.combat_active()||game.actors[id].destroyed>0.0||game.actors[id].bomber||game.actors[id].afk{return;}
     let steer=command.steer.unwrap_or(f64::from(u8::from(command.keys&4!=0))-f64::from(u8::from(command.keys&8!=0)));
     game.move_cart(id,steer,command.keys,1.0/60.0,true);
 }
@@ -47,7 +47,7 @@ impl Client{
     }
     fn frame(&mut self,dt:f64,keys:u32,steer:Option<f64>,now:f64){
         let fresh=now-self.received<0.5;
-        if fresh&&self.pred.global.phase=="racing"&&self.history.len()<120&&!self.pred.actors[self.viewer].bomber{
+        if fresh&&self.pred.global.phase=="racing"&&self.history.len()<120&&!self.pred.actors[self.viewer].bomber&&!self.pred.actors[self.viewer].afk{
             self.accumulator+=dt.clamp(0.0,0.05);
             while self.accumulator>=1.0/60.0-1e-8&&self.history.len()<120{
                 let command=Move{sequence:self.next_sequence,keys:keys&31,steer};self.next_sequence+=1;
