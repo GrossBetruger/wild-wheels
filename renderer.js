@@ -40,7 +40,45 @@ export class Renderer {
     this.models=new Map();this.instances=[];this.quality='auto';this.resolution=1.25;this.fps=0;this.fpsStart=0;this.frameCount=0;this.slowWindows=0;this.fastWindows=0;
     const debug=gl.getExtension('WEBGL_debug_renderer_info');this.gpuName=debug?gl.getParameter(debug.UNMASKED_RENDERER_WEBGL):'WebGL';this.softwareGPU=/swiftshader|llvmpipe|software/i.test(this.gpuName);if(this.softwareGPU)this.resolution=.75;
     this.program=gl.createProgram();
-    gl.attachShader(this.program,shader(gl,gl.VERTEX_SHADER,`attribute vec3 position;attribute vec3 normal;attribute vec3 color;uniform mat4 matrix;uniform vec3 eye;uniform vec3 origin;uniform vec2 rotation;uniform vec2 pitch;uniform vec2 plumage;uniform float emission;uniform float fogScale;varying vec3 shade;varying float distanceToEye;vec3 tilt(vec3 v){return vec3(v.x,v.y*pitch.x-v.z*pitch.y,v.y*pitch.y+v.z*pitch.x);}void main(){vec3 local=position;vec3 tint=color;if(plumage.x>.5){float reach=clamp((position.y-1.75)/3.8,0.,1.);float wave=plumage.y*1.15+position.x*.85+position.y*.45;local.z+=sin(wave)*reach*.55;local.x+=sin(wave*.7)*reach*.16;local.y+=cos(wave)*reach*.14;if(color.b>color.r*.85&&color.g>color.r*1.1){float hue=plumage.y*.32+position.x*.5+position.y*.55;vec3 silk=vec3(.59+.32*sin(hue),.56+.22*sin(hue+2.1),.72+.19*sin(hue+4.2));tint=mix(color,silk,.85);}}vec3 a=tilt(local-vec3(0.,2.,0.))+vec3(0.,2.,0.);vec3 b=tilt(normal);vec3 p=vec3(a.x*rotation.x+a.z*rotation.y,a.y,-a.x*rotation.y+a.z*rotation.x)+origin;vec3 n=vec3(b.x*rotation.x+b.z*rotation.y,b.y,-b.x*rotation.y+b.z*rotation.x);gl_Position=matrix*vec4(p,1.0);float light=.62+.38*max(0.,dot(normalize(n),normalize(vec3(-.5,1.,.3))));shade=tint*mix(light,1.,emission);distanceToEye=length(p-eye)*fogScale;}`));
+    gl.attachShader(this.program,shader(gl,gl.VERTEX_SHADER,`
+      attribute vec3 position;attribute vec3 normal;attribute vec3 color;
+      uniform mat4 matrix;uniform vec3 eye;uniform vec3 origin;
+      uniform vec2 rotation;uniform vec2 pitch;uniform vec2 plumage;
+      uniform float emission;uniform float fogScale;
+      varying vec3 shade;varying float distanceToEye;
+      vec3 tilt(vec3 v){return vec3(v.x,v.y*pitch.x-v.z*pitch.y,v.y*pitch.y+v.z*pitch.x);}
+      void main(){
+        vec3 local=position,localNormal=normal,tint=color;
+        if(plumage.x>.5){
+          float reach=clamp((position.y-1.75)/3.8,0.,1.);
+          float slope=position.y>1.75&&position.y<5.55?1./3.8:0.;
+          float wave=plumage.y*1.15+position.x*.85+position.y*.45;
+          local+=vec3(sin(wave*.7)*.16,cos(wave)*.14,sin(wave)*.55)*reach;
+          // Bend the surface normals with the feathers so their sheen follows the motion.
+          vec3 dx=vec3(1.+cos(wave*.7)*.16*reach*.7*.85,-sin(wave)*.14*reach*.85,cos(wave)*.55*reach*.85);
+          vec3 dy=vec3(.16*(slope*sin(wave*.7)+reach*cos(wave*.7)*.7*.45),1.+.14*(slope*cos(wave)-reach*sin(wave)*.45),.55*(slope*sin(wave)+reach*cos(wave)*.45));
+          vec3 dz=vec3(0.,0.,1.);
+          localNormal=cross(dy,dz)*normal.x+cross(dz,dx)*normal.y+cross(dx,dy)*normal.z;
+        }
+        vec3 a=tilt(local-vec3(0.,2.,0.))+vec3(0.,2.,0.),b=tilt(localNormal);
+        vec3 p=vec3(a.x*rotation.x+a.z*rotation.y,a.y,-a.x*rotation.y+a.z*rotation.x)+origin;
+        vec3 n=normalize(vec3(b.x*rotation.x+b.z*rotation.y,b.y,-b.x*rotation.y+b.z*rotation.x));
+        vec3 lamp=normalize(vec3(-.5,1.,.3));
+        float light=.62+.38*max(0.,dot(n,lamp));
+        if(plumage.x>.5&&color.b>color.r*.85&&color.g>color.r*1.1){
+          // Iridescence depends on light/view angles, never a timed hue cycle.
+          vec3 sight=normalize(eye-p),halfway=normalize(lamp+sight);
+          float facing=abs(dot(n,sight)),reflection=abs(dot(n,halfway));
+          float grazing=1.-(.7*facing+.3*reflection);
+          vec3 silk=mix(vec3(.12,.52,.43),vec3(.17,.3,.7),smoothstep(.12,.72,grazing));
+          silk=mix(silk,vec3(.51,.24,.64),smoothstep(.6,.95,grazing)*.7);
+          float sheen=pow(reflection,22.);
+          tint=mix(mix(color,silk,.85),vec3(.85,.94,.72),sheen*.55);
+          light=.62+.38*abs(dot(n,lamp));
+        }
+        gl_Position=matrix*vec4(p,1.0);shade=tint*mix(light,1.,emission);distanceToEye=length(p-eye)*fogScale;
+      }
+    `));
     gl.attachShader(this.program,shader(gl,gl.FRAGMENT_SHADER,`precision mediump float;varying vec3 shade;varying float distanceToEye;uniform vec3 fog;void main(){float amount=smoothstep(130.,950.,distanceToEye);gl_FragColor=vec4(mix(shade,fog,amount*.92),1.);}`));
     gl.linkProgram(this.program);if(!gl.getProgramParameter(this.program,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(this.program));gl.useProgram(this.program);
     this.attributes=['position','normal','color'].map(n=>gl.getAttribLocation(this.program,n));this.matrix=gl.getUniformLocation(this.program,'matrix');this.eyeUniform=gl.getUniformLocation(this.program,'eye');this.fog=gl.getUniformLocation(this.program,'fog');this.emission=gl.getUniformLocation(this.program,'emission');this.staticBuffer=gl.createBuffer();this.dynamicBuffer=gl.createBuffer();this.glowBuffer=gl.createBuffer();gl.enable(gl.DEPTH_TEST);this.track=-1;this.eye=null;
