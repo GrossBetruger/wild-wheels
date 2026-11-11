@@ -11,7 +11,7 @@ test('Houston has maximum Fuel and every other character has at most three',()=>
 
 for(const engine of ['Grand Prix','solo arena','Rust multiplayer']){
   test(`${engine}: Fuel determines how long one turbo lasts for every character`,()=>{
-    for(const [driver,fuel,seconds]of [[0,3,2.5],[1,2,2],[2,2,2],[3,3,2.5],[4,3,2.5],[5,2,2],[6,3,2.5],[7,5,3.5],[8,3,2.5],[9,3,2.5]]){
+    for(const [driver,fuel,seconds]of [[0,3,3.6],[1,2,2.8],[2,2,2.8],[3,3,3.6],[4,3,3.6],[5,2,2.8],[6,3,3.6],[7,5,5.2],[8,3,3.6],[9,3,3.6]]){
       assert.equal(drivers[driver].fuel,fuel);assert.equal(boostDuration(driver),seconds);
       if(engine==='Grand Prix'){
         const race=createRace(driver);Object.assign(race,{phase:'racing',turbos:1});assert.equal(useTurbo(race),true);assert.equal(race.boost,seconds);assert.equal(race.turbos,0);continue;
@@ -26,7 +26,7 @@ for(const engine of ['Grand Prix','solo arena','Rust multiplayer']){
 }
 
 test('predicted Fuel durations agree with the server for immediate and queued turbo actions',()=>{
-  for(const [driver,seconds]of [[1,2],[7,3.5]])for(const moves of [0,1]){
+  for(const [driver,seconds]of [[1,2.8],[7,5.2]])for(const moves of [0,1]){
     const seed=createBattle(driver);Object.assign(seed,{phase:'racing',human:true,multiplayer:true,wx:-65,wz:0,heading:0,motionHeading:0,cameraHeading:0,speed:0,turbos:1,supplies:[]});for(const bot of seed.bots)Object.assign(bot,{inactive:true,destroyed:1e9});
     const server=new ArenaCore(seed),client=new ArenaClient();client.accept(server.packet(),0);client.frame(moves/60,[],moves/60);
     assert.equal(client.action('turbo',undefined,moves/60),true);assert.ok(Math.abs(client.snapshot().boost-seconds)<1e-6);assert.equal(client.snapshot().turbos,0);

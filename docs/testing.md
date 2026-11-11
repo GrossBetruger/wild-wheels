@@ -1,6 +1,6 @@
 # Development checks
 
-Fuel controls each turbo's duration: `1 + 0.5 × Fuel` seconds. Houston alone has 5 Fuel (3.5 seconds); every other character has at most 3. `fuel.test.js` checks all character durations in Grand Prix, solo Arena and Rust multiplayer, plus immediate/queued client prediction and server agreement. The character browser group checks Fuel bars and duration tooltips.
+Fuel controls each turbo's duration: `2 + 0.8 × (Fuel − 1)` seconds. Houston alone has 5 Fuel (5.2 seconds); every other character has at most 3. `fuel.test.js` checks all character durations in Grand Prix, solo Arena and Rust multiplayer, plus immediate/queued client prediction and server agreement. The character browser group checks Fuel bars and duration tooltips.
 
 The character browser group checks the selection preview for all ten characters, orbiting camera, pause/resume, four gesture stages, and unchanged live-game inventory. Preview rendering must stop once a match starts.
 

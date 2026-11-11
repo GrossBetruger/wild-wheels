@@ -13,7 +13,7 @@ export const drivers = [
   { name: 'Avita-Jas', emoji: '🪱', color: '#e69d52', desc: 'Tiny worm. Trusty Cessna. Express electron delivery.', speed: 4, handling: 3, accel: 4, cuteness: 5, intelligence: 5, fuel: 3 },
   { name: 'Pearococo', emoji: '🦚', color: '#ed9fc5', desc: 'Her feathered majesty. Fairy dust. Furiously fabulous.', speed: 3, handling: 5, accel: 4, cuteness: 5, intelligence: 4, fuel: 3 },
 ];
-export function boostDuration(driver){return 1+.5*drivers[driver].fuel;}
+export function boostDuration(driver){return 2+.8*(drivers[driver].fuel-1);}
 export function itemCapacity(driver,kind){
   const intelligence=drivers[driver].intelligence;
   switch(kind){case 'hedgehog':return 10+2*(intelligence-1);case 'missile':case 'boost':case 'abomb':case 'stink':return intelligence+1;default:return 0;}

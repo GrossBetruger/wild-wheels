@@ -27,7 +27,7 @@ test('a separate turbo accelerates immediately and replays once until acknowledg
   assert.equal(replay.speed,boosted.speed);assert.equal(replay.boost,boosted.boost);
   prediction.accept({...world,speed:boosted.speed,wz:boosted.wz,boost:boosted.boost,turbos:0},.2,{sequence:0,actionSequence:0});
   const settled=prediction.sample(new Set(),1/60,.2167);
-  assert.ok(settled.boost<2.48);assert.equal(world.turbos,1);
+  assert.ok(settled.boost>3.56&&settled.boost<3.58);assert.equal(world.turbos,1);
 });
 
 test('guest movement prediction matches the server while accelerating through a turn',()=>{

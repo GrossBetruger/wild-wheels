@@ -60,7 +60,7 @@ export async function checkCharacters(evaluate,app,room,id,sleep,capture){
     const paint=driver!==6||remote?.color==='#e8edf2'&&pixels.white>30&&await evaluate("__game.race.color==='#e8edf2'");
     const cutenessStat=await evaluate(`document.querySelectorAll('#cuteness-stat i.on').length===${cuteness}&&document.getElementById('cuteness-stat').parentElement.title.includes('every ${recoverySeconds} seconds')`);
     const intelligenceStat=await evaluate(`document.querySelectorAll('#intelligence-stat i.on').length===${({4:4,5:3,7:5,8:5,9:4,6:4})[driver]}&&document.getElementById('intelligence-stat').parentElement.title.includes('Carrying limits')`);
-    const fuelStat=await evaluate(`document.querySelectorAll('#fuel-stat i.on').length===${driver===7?5:driver===5?2:3}&&document.getElementById('fuel-stat').parentElement.title.includes('${driver===7?3.5:driver===5?2:2.5} seconds')`);
+    const fuelStat=await evaluate(`document.querySelectorAll('#fuel-stat i.on').length===${driver===7?5:driver===5?2:3}&&document.getElementById('fuel-stat').parentElement.title.includes('${driver===7?5.2:driver===5?2.8:3.6} seconds')`);
     const recovery=await wait(()=>evaluate("__game.race.health===3&&document.getElementById('lap').textContent==='♥♥♥'"))&&app.snapshot(room,observer).world.bots.find(actor=>actor.id===id)?.health===3;
     const ammoRecovery=await wait(()=>evaluate("__game.race.ammo>=1&&Number(document.getElementById('hedgehog-count').textContent)>=1"))&&app.snapshot(room,observer).world.bots.find(actor=>actor.id===id)?.ammo>=1;
     const own=[room.world,...room.world.bots].find(actor=>actor.id===id),peer=[room.world,...room.world.bots].find(actor=>actor.id===observer.id);
