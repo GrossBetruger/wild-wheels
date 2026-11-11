@@ -1,7 +1,5 @@
 # Development checks
 
-For rebuilding and validating the production Wasm movement core, see [Rust core migration](rust-core.md).
-
 For CPU/GPU profiling and recorded results, see [Performance measurements](performance.md).
 
 Run lightweight checks before pushing:

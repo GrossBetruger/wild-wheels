@@ -4,10 +4,10 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { Multiplayer } from './multiplayer.js';
 import { createTunnelControl } from './tunnel-control.js';
-const files = new Map([['/', ['index.html', 'text/html']], ['/style.css', ['style.css', 'text/css']], ['/rust-core.wasm',['rust-core.wasm','application/wasm']], ...['rust-core.js','game.js','engine.js','renderer.js','audio.js','track.js','combat.js','network.js','playback.js','prediction.js','action-audio.js','wire.js','binary-wire.js','feedback.js','drift-feedback.js','results.js','combat-notices.js','nameplates.js','mobile.js'].map(file=>['/'+file,[file,'text/javascript']])]);
+const files = new Map([['/', ['index.html', 'text/html']], ['/style.css', ['style.css', 'text/css']], ...['game.js','engine.js','renderer.js','audio.js','track.js','combat.js','network.js','playback.js','prediction.js','action-audio.js','wire.js','binary-wire.js','feedback.js','drift-feedback.js','results.js','combat-notices.js','nameplates.js','mobile.js'].map(file=>['/'+file,[file,'text/javascript']])]);
 export function createGameServer(){
 const multiplayer=new Multiplayer();
-const runtimeHash=createHash('sha256');for(const name of ['server.js','multiplayer.js','ngrok.js','tunnel-control.js','combat.js','rust-core.js','rust-core.wasm','engine.js','track.js','package-lock.json'])runtimeHash.update(name).update(readFileSync(new URL(name,import.meta.url)));const runtimeBuild=runtimeHash.digest('hex');
+const runtimeHash=createHash('sha256');for(const name of ['server.js','multiplayer.js','ngrok.js','tunnel-control.js','combat.js','engine.js','track.js','package-lock.json'])runtimeHash.update(name).update(readFileSync(new URL(name,import.meta.url)));const runtimeBuild=runtimeHash.digest('hex');
 const server=createServer(async (req, res) => {
   if((req.url??'').split('?')[0]==='/build.json'){
     try{
@@ -26,7 +26,7 @@ const server=createServer(async (req, res) => {
     const host=/^[a-zA-Z0-9.\[\]:-]+$/.test(req.headers.host??'')?req.headers.host:'localhost';
     const local=['localhost',`localhost:${multiplayer.port}`,'127.0.0.1',`127.0.0.1:${multiplayer.port}`].includes(host);
     const control=local&&multiplayer.controlPort?` http://127.0.0.1:${multiplayer.controlPort}`:'';
-    res.writeHead(200, { 'Content-Type': file[1]==='application/wasm'?file[1]:file[1]+'; charset=utf-8', 'Cache-Control':'no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data:; connect-src 'self' ws://${host} wss://${host}${control}; object-src 'none'; base-uri 'none'; frame-ancestors 'none'` });
+    res.writeHead(200, { 'Content-Type': file[1] + '; charset=utf-8', 'Cache-Control':'no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' ws://${host} wss://${host}${control}; object-src 'none'; base-uri 'none'; frame-ancestors 'none'` });
     res.end(req.method==='HEAD'?undefined:body);
   } catch { res.writeHead(500); res.end('Unable to load game'); }
 });
