@@ -1,3 +1,5 @@
+import {OwlFlight} from './knowitowl.js';
+import {DarkFog,darkHumorState} from './dark-humor.js';
 import {drawCalculator,drawAnt,drawTaxAudit,ReceiptRolls,drawXylophone} from './fourmidable.js';
 import { sampleTrack, branches } from './track.js';
 import { LENGTH, drivers, pickupType } from './engine.js';
@@ -46,7 +48,7 @@ export class Renderer {
     this.models=new Map();this.instances=[];this.quality='auto';this.resolution=1.25;this.fps=0;this.fpsStart=0;this.frameCount=0;this.slowWindows=0;this.fastWindows=0;
     this.tailFolds=new Map();
     this.yudaDrift=new YudaDrift();
-    this.chopperTilts=new Map();this.receiptRolls=new ReceiptRolls();
+    this.chopperTilts=new Map();this.receiptRolls=new ReceiptRolls();this.owlFlight=new OwlFlight();
     this.yudaJackets=new YudaJackets();this.yudaStunts=new YudaStunts();this.yudaExhaust=new YudaExhaust();
     this.lastBodies=new Map();this.ashBodies=new Map();
     const debug=gl.getExtension('WEBGL_debug_renderer_info');this.gpuName=debug?gl.getParameter(debug.UNMASKED_RENDERER_WEBGL):'WebGL';this.softwareGPU=/swiftshader|llvmpipe|software/i.test(this.gpuName);if(this.softwareGPU)this.resolution=.75;
@@ -55,7 +57,7 @@ export class Renderer {
       attribute vec3 position;attribute vec3 normal;attribute vec3 color;
       uniform mat4 matrix;uniform vec3 eye;uniform vec3 origin;
       uniform vec2 rotation;uniform vec2 pitch;uniform vec2 roll;uniform vec4 plumage;
-      uniform float emission;uniform float fogScale;
+      uniform float emission;uniform float fogScale;uniform float xray;
       varying vec3 shade;varying float distanceToEye;
       vec3 tilt(vec3 v){return vec3(v.x,v.y*pitch.x-v.z*pitch.y,v.y*pitch.y+v.z*pitch.x);}
       void main(){
@@ -99,12 +101,13 @@ export class Renderer {
           tint=mix(mix(color,silk,.85),vec3(.85,.94,.72),sheen*.55);
           light=.62+.38*abs(dot(n,lamp));
         }
+        if(xray>0.){float rim=pow(1.-abs(dot(normalize(n),normalize(eye-p))),2.);tint=vec3(.12,.6,.7)+vec3(.4,.4,.25)*rim;}
         gl_Position=matrix*vec4(p,1.0);shade=tint*mix(light,1.,emission);distanceToEye=length(p-eye)*fogScale;
       }
     `));
     gl.attachShader(this.program,shader(gl,gl.FRAGMENT_SHADER,`precision mediump float;varying vec3 shade;varying float distanceToEye;uniform vec3 fog;void main(){float amount=smoothstep(130.,950.,distanceToEye);gl_FragColor=vec4(mix(shade,fog,amount*.92),1.);}`));
     gl.linkProgram(this.program);if(!gl.getProgramParameter(this.program,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(this.program));gl.useProgram(this.program);
-    this.attributes=['position','normal','color'].map(n=>gl.getAttribLocation(this.program,n));this.matrix=gl.getUniformLocation(this.program,'matrix');this.eyeUniform=gl.getUniformLocation(this.program,'eye');this.fog=gl.getUniformLocation(this.program,'fog');this.emission=gl.getUniformLocation(this.program,'emission');this.staticBuffer=gl.createBuffer();this.dynamicBuffer=gl.createBuffer();this.glowBuffer=gl.createBuffer();gl.enable(gl.DEPTH_TEST);this.track=-1;this.eye=null;
+    this.attributes=['position','normal','color'].map(n=>gl.getAttribLocation(this.program,n));this.matrix=gl.getUniformLocation(this.program,'matrix');this.eyeUniform=gl.getUniformLocation(this.program,'eye');this.fog=gl.getUniformLocation(this.program,'fog');this.emission=gl.getUniformLocation(this.program,'emission');this.xray=gl.getUniformLocation(this.program,'xray');this.staticBuffer=gl.createBuffer();this.dynamicBuffer=gl.createBuffer();this.glowBuffer=gl.createBuffer();gl.enable(gl.DEPTH_TEST);this.track=-1;this.eye=null;
     this.originUniform=gl.getUniformLocation(this.program,'origin');this.rotationUniform=gl.getUniformLocation(this.program,'rotation');gl.uniform3f(this.originUniform,0,0,0);gl.uniform2f(this.rotationUniform,1,0);
     this.pitchUniform=gl.getUniformLocation(this.program,'pitch');gl.uniform2f(this.pitchUniform,1,0);
     this.rollUniform=gl.getUniformLocation(this.program,'roll');gl.uniform2f(this.rollUniform,1,0);
@@ -173,6 +176,7 @@ export class Renderer {
     m.at(0,0,0);this.gl.bindBuffer(this.gl.ARRAY_BUFFER,this.staticBuffer);this.gl.bufferData(this.gl.ARRAY_BUFFER,new Float32Array(m.data),this.gl.STATIC_DRAW);this.staticCount=m.data.length/9;this.track=track;
   }
   kart(m,p,color,driver,yaw=0,spin=0,boost=false,clock=0,celebrate=0,jump=null,helmet=true,gesture=null){
+    if(driver===14){this.owlFlight.draw(this,m,p,color,yaw,spin,boost,clock,celebrate,jump,gesture);return;}
     if(driver===13){const angle=Math.atan2(p.tx,p.tz)-yaw+spin,height=jump?.height??0,pitch=jump?.pitch??0,phase=Math.floor(clock*8)%8,wave=celebrate>0||(gesture?.right??0)>0;this.model('kart:13:'+color,p.x,height,p.z,angle,mesh=>drawCalculator(mesh,color),pitch);this.model('fourmidable:'+phase+':'+wave,p.x,height+(gesture?.bounce??0),p.z,angle+(gesture?.yaw??0),mesh=>drawAnt(mesh,phase,wave),pitch);this.receiptRolls.draw(m,p,angle,clock,jump,boost||Boolean(jump));return;}
     if(driver===12){this.nurseAmbulance(m,p,color,yaw,spin,boost,clock,celebrate,jump,gesture);return;}
     if(driver===11){this.lionChopper(m,p,color,yaw,spin,boost,clock,celebrate,jump,gesture);return;}
@@ -503,13 +507,13 @@ export class Renderer {
     const gl=this.gl,canvas=this.canvas,width=Math.max(1,Math.round(canvas.clientWidth*this.pixelRatio())),height=Math.max(1,Math.round(canvas.clientHeight*this.pixelRatio()));
     if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;}gl.viewport(0,0,width,height);
     this.instances=[];this.glow=new Mesh();this.smoke=new Mesh();
-    const tall=driver===11||driver===12;
+    const tall=driver===11||driver===12||driver===14;
     const pose=previewPose(driver,time),orbit=time*.28+.35,radius=tall?15:12,eye=[Math.sin(orbit)*radius,tall?9.5:7.4,Math.cos(orbit)*radius],view=cameraMatrix(eye,[0,tall?4:2.55,0],width/height,.8),sky=rgb('#e5deef');
     gl.clearColor(...sky,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(this.program);
     gl.uniformMatrix4fv(this.matrix,false,view);gl.uniform3fv(this.eyeUniform,eye);gl.uniform3fv(this.fog,sky);gl.uniform1f(this.fogScale,1);gl.uniform1f(this.emission,0);
     const m=new Mesh();m.disc(0,-.22,0,40,40,'#e5deef',48);m.disc(0,-.12,0,4.7,4.7,'#c6bad6',48);m.disc(0,-.08,0,4.5,4.5,'#f8f3e5',48);
     for(let i=0;i<24;i++){const a=i*Math.PI/12;m.at(Math.sin(a)*4.58,-.06,Math.cos(a)*4.58,a);m.box(0,0,0,.1,.025,.14,color);}
-    this.kart(m,{x:0,z:0,tx:0,tz:1},color,driver,0,0,pose.boost,time,0,null,true,pose);this.flush(m,view,height);
+    this.kart(m,{x:0,z:0,tx:0,tz:1},color,driver,0,0,pose.boost,time,0,null,true,pose);this.owlFlight.trail(m);this.flush(m,view,height);
     return {...pose,cameraAngle:orbit};
   }
   draw(r,time){
@@ -563,7 +567,7 @@ export class Renderer {
     this.arenaExhaust=true;this.yudaExhaust.update(`${r.arena}:${r.soundEpoch}:${r.id}`,time);
     this.yudaDrift.update(r,time);
     const helmetScene=`${r.arena}:${r.soundEpoch}:${r.id}`;
-    if(this.helmetScene!==helmetScene||time<(this.helmetTime??0)){this.helmetScene=helmetScene;this.helmetFlights=new Map();this.tailFolds.clear();this.receiptRolls.rolls.clear();this.yudaJackets.riders.clear();this.yudaStunts.riders.clear();this.lastBodies.clear();this.ashBodies.clear();}this.helmetTime=time;
+    if(this.helmetScene!==helmetScene||time<(this.helmetTime??0)){this.helmetScene=helmetScene;this.helmetFlights=new Map();this.tailFolds.clear();this.receiptRolls.rolls.clear();this.owlFlight.riders.clear();this.owlFlight.feathers=[];this.yudaJackets.riders.clear();this.yudaStunts.riders.clear();this.lastBodies.clear();this.ashBodies.clear();}this.helmetTime=time;
     if(this.track!==`arena-${r.arena}`)this.arenaScenery(r.arena);
     const gl=this.gl,canvas=this.canvas,width=Math.round(canvas.clientWidth*this.pixelRatio()),height=Math.round(canvas.clientHeight*this.pixelRatio());if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;}gl.viewport(0,0,width,height);
     const sky=rgb(arenas[r.arena].sky);gl.clearColor(...sky,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(this.program);
@@ -697,7 +701,19 @@ export class Renderer {
     }
     this.bikerSparks();this.yudaExhaust.draw(this.smoke,time);
     if(r.wasDrifting&&r.driver!==10){this.glow.at(p.x,.25,p.z,r.heading);const color=r.drift>=.85?[.5,.08,.9]:r.drift>=.45?[0,.4,.9]:[.6,.2,.02];for(const side of [-1,1])this.glow.particle(side*1.65,0,-1.4,1,color);}
-    this.flush(m,view,overview?.halfHeight?height/(2*overview.halfHeight):height);
+    this.owlFlight.trail(m);this.flush(m,view,overview?.halfHeight?height/(2*overview.halfHeight):height);
+    const dark=darkHumorState(r);this.darkState=dark;
+    if(dark.strength>0){
+      this.darkFog??=new DarkFog(gl);this.darkFog.draw(this,time,dark.strength);
+      this.nameplates=[];
+      if(dark.xray){
+        gl.disable(gl.DEPTH_TEST);gl.uniform1f(this.xray,1);gl.uniform1f(this.emission,1);gl.uniform1f(this.fogScale,0);
+        for(const actor of [r,...r.bots]){if(actor.destroyed||actor.inactive||actor.afk||actor.bomber)continue;
+          for(const instance of this.lastBodies.get(actor.id)?.parts??[]){gl.uniform3f(this.originUniform,instance.x,instance.y,instance.z);gl.uniform2f(this.rotationUniform,Math.cos(instance.angle),Math.sin(instance.angle));gl.uniform2f(this.pitchUniform,Math.cos(instance.pitch),Math.sin(instance.pitch));gl.uniform2f(this.rollUniform,Math.cos(instance.roll),Math.sin(instance.roll));this.drawBuffer(instance.buffer,instance.count);}
+        }
+        gl.uniform1f(this.xray,0);gl.uniform1f(this.emission,0);gl.uniform1f(this.fogScale,overview?.fogScale??1);gl.uniform3f(this.originUniform,0,0,0);gl.uniform2f(this.rotationUniform,1,0);gl.uniform2f(this.pitchUniform,1,0);gl.uniform2f(this.rollUniform,1,0);gl.enable(gl.DEPTH_TEST);
+      }
+    }
   }
   bikerSparks(){
     for(const rider of this.yudaDrift.riders.values())if(rider.contact){this.glow.at(rider.contact.x,.18,rider.contact.z);this.glow.particle(0,0,0,1,[[.7,.22,.02],[.02,.4,.85],[.6,.08,.9]][rider.level]);}

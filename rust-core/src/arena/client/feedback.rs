@@ -79,7 +79,7 @@ impl Client{
         if !self.pred.combat_active()||actor.destroyed>0.0||now-self.received>0.5{return false;}
         let pending=|kind:&str|self.ops.iter().any(|op|matches!(op,Op::Action{action,..}if action.kind==kind));
         let (kind,resource,ready)=match action.kind.as_str(){
-            "special"=>{if !self.pred.global.special_abilities||!matches!(actor.driver,7|8|9|11|12|13)||actor.driver==12&&actor.health>=6.0||actor.special_cooldown>0.0||pending("special"){return false;}(String::new(),String::new(),0)},
+            "special"=>{if !self.pred.global.special_abilities||!matches!(actor.driver,7|8|9|11|12|13|14)||actor.driver==12&&actor.health>=6.0||actor.special_cooldown>0.0||pending("special"){return false;}(String::new(),String::new(),0)},
             "somersault"=>{if actor.somersault_cooldown>1e-8||pending("somersault"){return false;}action.after_move=sequence;{let enabled=self.pred.global.special_abilities;if self.pred.actors[self.viewer].driver==5{self.pred.global.special_abilities=false;}self.pred.flip(self.viewer);self.pred.global.special_abilities=enabled;};self.error[2]=0.0;self.error[3]=0.0;(String::new(),String::new(),0)},
             "turbo"=>{if actor.turbos==0||actor.boost>0.0||pending("turbo"){return false;}if action.after_move<self.next_sequence{self.pred.actors[self.viewer].boost=boost_duration(actor.driver);}self.emit("boost",now,Some(format!("action:{}",id)),true);(String::new(),"turbos".into(),0)},
             "chaff"=>{if sequence<self.chaff_tick||actor.chaff==0{return false;}self.chaff_tick=after+39;self.emit("chaff",now,None,true);(String::new(),"chaff".into(),self.chaff_tick)},

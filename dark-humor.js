@@ -1,0 +1,39 @@
+export function darkHumorState(world){
+  if(world.specialAbilities===false||world.phase!=='racing')return {strength:0,xray:false};
+  const active=[world,...world.bots].filter(a=>a.driver===14&&a.specialActive>0&&!a.destroyed&&!a.inactive&&!a.afk&&!a.bomber);
+  const strength=active.reduce((best,a)=>Math.max(best,Math.min(1,(7-a.specialActive)/.4,a.specialActive/.6)),0);
+  return {strength,xray:active.some(a=>a.id===world.id),remaining:Math.max(0,...active.map(a=>a.specialActive))};
+}
+function compile(gl,type,source){const s=gl.createShader(type);gl.shaderSource(s,source);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s;}
+export class DarkFog{
+  constructor(gl){
+    this.gl=gl;this.program=gl.createProgram();
+    gl.attachShader(this.program,compile(gl,gl.VERTEX_SHADER,'attribute vec2 position;varying vec2 uv;void main(){uv=position*.5+.5;gl_Position=vec4(position,0.,1.);}'));
+    gl.attachShader(this.program,compile(gl,gl.FRAGMENT_SHADER,`precision mediump float;
+      varying vec2 uv;uniform float clock;uniform float strength;uniform float aspect;
+      float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+      float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}
+      float fbm(vec2 p){float n=0.,w=.5;for(int i=0;i<4;i++){n+=noise(p)*w;p=mat2(1.6,1.2,-1.2,1.6)*p;w*=.5;}return n;}
+      void main(){
+        vec2 p=(uv-.5)*vec2(aspect,1.)*3.;float t=clock*.22;
+        vec2 q=vec2(fbm(p+vec2(t,-t)),fbm(p+vec2(4.1,-t*.6)));
+        float clouds=fbm(p*1.8+q*3.+vec2(-t,t*.4));
+        float tendrils=pow(max(0.,1.-abs(clouds-.48)*7.),3.);
+        float pulse=.72+.28*sin(clock*1.7+clouds*11.);
+        vec3 color=vec3(.008,.004,.022)+vec3(.09,.015,.18)*clouds+vec3(.035,.12,.13)*tendrils*pulse;
+        float vignette=smoothstep(.1,1.2,length((uv-.5)*vec2(1.1,1.4)));
+        color*=1.-vignette*.65;
+        gl_FragColor=vec4(color,strength*(.955+.035*clouds));
+      }`));
+    gl.linkProgram(this.program);if(!gl.getProgramParameter(this.program,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(this.program));
+    this.position=gl.getAttribLocation(this.program,'position');this.clock=gl.getUniformLocation(this.program,'clock');this.strength=gl.getUniformLocation(this.program,'strength');this.aspect=gl.getUniformLocation(this.program,'aspect');
+    this.buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,this.buffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]),gl.STATIC_DRAW);
+  }
+  draw(renderer,time,strength){
+    const gl=this.gl;for(const a of renderer.attributes)gl.disableVertexAttribArray(a);
+    gl.useProgram(this.program);gl.disable(gl.DEPTH_TEST);gl.depthMask(false);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+    gl.bindBuffer(gl.ARRAY_BUFFER,this.buffer);gl.enableVertexAttribArray(this.position);gl.vertexAttribPointer(this.position,2,gl.FLOAT,false,0,0);
+    gl.uniform1f(this.clock,time);gl.uniform1f(this.strength,strength);gl.uniform1f(this.aspect,gl.drawingBufferWidth/gl.drawingBufferHeight);gl.drawArrays(gl.TRIANGLES,0,6);
+    gl.disableVertexAttribArray(this.position);gl.disable(gl.BLEND);gl.depthMask(true);gl.enable(gl.DEPTH_TEST);gl.useProgram(renderer.program);
+  }
+}

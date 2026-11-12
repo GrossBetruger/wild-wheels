@@ -16,6 +16,7 @@ export const drivers = [
   { name: 'R-yeah', emoji: '🦁', color: '#bc8e38', desc: 'Majestic mane. Black kippah. King of the JetRanger.', speed: 4, handling: 4, accel: 4, cuteness: 5, intelligence: 4, fuel: 3 },
   { name: 'Catheterpillar', emoji: '🦋', color: '#e9a1c3', desc: 'Beautiful wings. Boundless empathy. Your nurse in a tiny ambulance.', speed: 3, handling: 5, accel: 4, cuteness: 5, intelligence: 5, fuel: 3 },
   { name: 'Fourmidable', emoji: '🐜', color: '#c97c69', desc: 'Six little hands. Every decimal checked. Did I forget a receipt?', speed: 3, handling: 5, accel: 4, cuteness: 5, intelligence: 5, fuel: 2 },
+  { name: 'KnowItOwl', emoji: '🦉', color: '#e7edf2', desc: 'Impeccable plumage. Questionable jokes. Obviously I knew that.', speed: 4, handling: 5, accel: 4, cuteness: 4, intelligence: 5, fuel: 3 },
 ];
 export function boostDuration(driver){return 2+.8*(drivers[driver].fuel-1);}
 export function itemCapacity(driver,kind){

@@ -12,5 +12,6 @@ export function previewPose(driver,time){
   if(driver===11)pose.label=['REGAL WAVE','ROYAL ROAR','LOOKING AROUND','ROTOR WASH'][stage];
   if(driver===12)pose.label=['A CARING WAVE','BUTTERFLY JOY','CHECKING ON EVERYONE','CARE ON THE WAY'][stage];
   if(driver===13)pose.label=['NERVOUS HELLO','BOOKS BALANCED!','CHECKING THE TOTALS','CRUNCHING NUMBERS'][stage];
+  if(driver===14)pose.label=['MONOCLE SALUTE','TAKE A BOW','KNOWING WINK','TOO COOL TO PEDAL'][stage];
   return pose;
 }
