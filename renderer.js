@@ -6,7 +6,7 @@ import { bomberCamera } from './mobile.js';
 import {drawNewDriver,drawRoadster,drawRoadsterJets,drawCricketHaze,drawCricketProjectile,drawHoustonHelmet,drawDollarBundle,drawCessna,drawCessnaPropeller,drawCessnaBoost,drawElectron,drawPilotWorm,drawStarship,drawStarshipThrust} from './characters.js';
 import {previewPose} from './preview-pose.js';
 import {drawRococoChariot,drawPearococo,drawPeacockFeather,drawRoyalWing,drawBalletPump,drawFairyStar,drawFairyBoost} from './pearococo.js';
-import {drawMotorcycle,drawYuda,drawBikerBadge,drawMotorcycleBoost} from './master-yuda.js';
+import {drawMotorcycle,drawYuda,drawYudaJacket,YudaJackets,drawBikerBadge,drawMotorcycleBoost} from './master-yuda.js';
 import {YudaDrift} from './yuda-drift.js';
 const rgb=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255);
 const sub=(a,b)=>a.map((v,i)=>v-b[i]);
@@ -43,6 +43,7 @@ export class Renderer {
     this.models=new Map();this.instances=[];this.quality='auto';this.resolution=1.25;this.fps=0;this.fpsStart=0;this.frameCount=0;this.slowWindows=0;this.fastWindows=0;
     this.tailFolds=new Map();
     this.yudaDrift=new YudaDrift();
+    this.yudaJackets=new YudaJackets();
     this.lastBodies=new Map();this.ashBodies=new Map();
     const debug=gl.getExtension('WEBGL_debug_renderer_info');this.gpuName=debug?gl.getParameter(debug.UNMASKED_RENDERER_WEBGL):'WebGL';this.softwareGPU=/swiftshader|llvmpipe|software/i.test(this.gpuName);if(this.softwareGPU)this.resolution=.75;
     this.program=gl.createProgram();
@@ -220,7 +221,16 @@ export class Renderer {
     this.model(`kart:10:${color}`,p.x,height,p.z,angle,mesh=>drawMotorcycle(mesh,color),pitch,null,roll);
     const saluting=!jump&&Math.abs(roll)<.2&&(celebrate>0||(gesture?.right??0)>0),phase=saluting?Math.floor(clock*5)%8:0;
     const tuck=Boolean(jump)||boost||Math.abs(roll)>.2;
-    this.model(`yuda:rider:${phase}:${tuck}`,p.x,height,p.z,angle+(gesture?.yaw??0)*.35,mesh=>drawYuda(mesh,phase,tuck),pitch+(tuck?.18:0),null,roll);
+    const outfit=this.yudaJackets.update(p.id??'preview',clock,boost||p.vulcan>0,{x:p.x,z:p.z,height,angle});
+    const dressing=outfit.dressing===null?-1:Math.min(7,Math.floor(outfit.dressing*8));
+    this.model(`yuda:rider:${phase}:${tuck}:${!outfit.bare}:${dressing}`,p.x,height,p.z,angle+(gesture?.yaw??0)*.35,mesh=>drawYuda(mesh,phase,tuck,!outfit.bare,dressing),pitch+(tuck?.18:0),null,roll);
+    // Detached clothing is cosmetic and does not become part of his ashes.
+    if(outfit.flight){const f=outfit.flight,t=(clock-f.start)/1.2,distance=t*9;
+      this.model(`yuda:jacket:${Math.floor(t*8)%4}`,f.x-Math.sin(f.angle)*distance,f.height+2.5+Math.sin(t*Math.PI)*4+t*2,f.z-Math.cos(f.angle)*distance,f.angle+t*7,mesh=>drawYudaJacket(mesh,Math.sin(Math.floor(t*8)%4*Math.PI/2)),t*5);this.instances.at(-1).detached=true;
+    }
+    if(outfit.dressing!==null){const t=outfit.dressing,lift=Math.sin(t*Math.PI);
+      this.model(`yuda:dressing:${dressing}`,p.x,height+2.35+lift*1.5,p.z,angle,mesh=>{mesh.at(0,0,-.52);drawYudaJacket(mesh,Math.sin(dressing*Math.PI/7));},pitch+lift*.4,null,roll);
+    }
     // Restrained neon underglow is always present; protection adds winged badges.
     this.bikerAura(m,p,angle,clock,jump);
     if(boost||jump)this.afterburner(p,angle,clock,jump,10);
@@ -446,7 +456,7 @@ export class Renderer {
   drawBattle(r,time){
     this.yudaDrift.update(r,time);
     const helmetScene=`${r.arena}:${r.soundEpoch}:${r.id}`;
-    if(this.helmetScene!==helmetScene||time<(this.helmetTime??0)){this.helmetScene=helmetScene;this.helmetFlights=new Map();this.tailFolds.clear();this.lastBodies.clear();this.ashBodies.clear();}this.helmetTime=time;
+    if(this.helmetScene!==helmetScene||time<(this.helmetTime??0)){this.helmetScene=helmetScene;this.helmetFlights=new Map();this.tailFolds.clear();this.yudaJackets.riders.clear();this.lastBodies.clear();this.ashBodies.clear();}this.helmetTime=time;
     if(this.track!==`arena-${r.arena}`)this.arenaScenery(r.arena);
     const gl=this.gl,canvas=this.canvas,width=Math.round(canvas.clientWidth*this.pixelRatio()),height=Math.round(canvas.clientHeight*this.pixelRatio());if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;}gl.viewport(0,0,width,height);
     const sky=rgb(arenas[r.arena].sky);gl.clearColor(...sky,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(this.program);
@@ -471,7 +481,7 @@ export class Renderer {
     const ashKeys=new Set(r.effects.filter(f=>f.type==='ash').map(f=>`${f.wx}:${f.wz}`));for(const key of this.ashBodies.keys())if(!ashKeys.has(key))this.ashBodies.delete(key);
     for(const actor of [r,...r.bots]){
       if(actor.bomber||actor.inactive||actor.afk)continue;
-      const pose={...combatPose(actor),id:actor.id,bikeRoll:this.yudaDrift.roll(actor.id)};if(actor.destroyed){
+      const pose={...combatPose(actor),id:actor.id,vulcan:actor.vulcan,bikeRoll:this.yudaDrift.roll(actor.id)};if(actor.destroyed){
         const ash=r.effects.find(f=>f.type==='ash'&&Math.hypot(f.wx-pose.x,f.wz-pose.z)<.1),key=`${pose.x}:${pose.z}`;
         if(ash&&(!this.ashBodies.has(key)||ash.age<this.ashBodies.get(key).age)){
           if(!this.lastBodies.has(actor.id)){
@@ -630,6 +640,7 @@ export class Renderer {
     return [...points.values()];
   }
   rememberBody(actor,parts,dynamic){
+    parts=parts.filter(part=>!part.detached);
     this.lastBodies.set(actor.id,{x:actor.wx,z:actor.wz,parts,dynamic:parts.length?[]:this.rubbleSamples(dynamic)});
   }
   bodyRubble({x,z,parts,dynamic}){
