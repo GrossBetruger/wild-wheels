@@ -4,14 +4,14 @@ import {createBattle,tickBattle} from './combat.js';
 import {ArenaCore} from './arena-core.js';
 import {tickFireRings,fireRingBlocks} from './fire-ring.js';
 
-test('Yuda ignites only after completing a full charged drifting circle in solo and Rust arenas',()=>{
+test('Yuda ignites at the existing full drift charge in solo and Rust arenas',()=>{
   const world=createBattle(10);Object.assign(world,{driver:10,phase:'racing',wx:70,wz:0,speed:200,heading:0,motionHeading:0,shield:0,supplies:[]});for(const a of world.bots){a.inactive=true;a.destroyed=1e9;}
   const native=new ArenaCore(structuredClone(world)),keys=new Set(['w','shift','arrowright']);
   for(let step=0;step<40;step++){tickBattle(world,keys,1/60);native.step(1/60,[{actor:0,keys}]);}
   assert.equal(world.effects.some(f=>f.type==='fireRing'),false);assert.equal(native.snapshot().effects.some(f=>f.type==='fireRing'),false);
   for(let step=0;step<65;step++){tickBattle(world,keys,1/60);native.step(1/60,[{actor:0,keys}]);}
   assert.equal(world.effects.some(f=>f.type==='fireRing'),true);assert.equal(native.snapshot().effects.some(f=>f.type==='fireRing'),true);
-  tickBattle(world,new Set(['w']),1/60);native.step(1/60,[{actor:0,keys:['w']}]);
+  for(let i=0;i<12;i++){tickBattle(world,new Set(['w']),1/60);native.step(1/60,[{actor:0,keys:['w']}]);}
   assert.equal(world.effects.some(f=>f.type==='fireRing'),false);assert.equal(native.snapshot().effects.some(f=>f.type==='fireRing'),false);
 });
 
@@ -42,4 +42,11 @@ test('native and solo fire absorb missiles without blast damage and burn enemies
   assert.equal(solo.projectiles.length,0);assert.equal(native.snapshot().projectiles.length,0);
   assert.equal(solo.health,6);assert.equal(native.snapshot().health,6);
   assert.equal(solo.bots[0].health,4);assert.equal(native.snapshot().bots[0].health,4);
+});
+
+test('the existing maximum boost charge ignites without a full revolution and survives network command gaps',()=>{
+  const seed=createBattle();Object.assign(seed,{driver:10,phase:'racing',wx:70,wz:0,speed:200,heading:0,motionHeading:0,ringHeading:0,drift:.84,wasDrifting:true,supplies:[]});for(const a of seed.bots){a.inactive=true;a.destroyed=1e9;}
+  const core=new ArenaCore(seed),keys=['w','shift','arrowright'];
+  core.step(1/60,[{actor:0,keys,moves:[{sequence:0,keys}]}]);assert.equal(core.snapshot().effects.some(f=>f.type==='fireRing'),true);
+  core.step(1/60,[{actor:0,keys,moves:[]}]);assert.equal(core.snapshot().effects.some(f=>f.type==='fireRing'),true);
 });
