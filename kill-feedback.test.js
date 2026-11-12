@@ -3,6 +3,15 @@ import assert from 'node:assert/strict';
 import { createBattle, damageBattle, equipBomber, tickBattle } from './combat.js';
 import { KillCelebration, ChaffNotice } from './combat-notices.js';
 
+test('whacking Master-Yuda names the player and adds his unimpressed reaction regardless of their name',()=>{
+  for(const [driver,name,subtitle]of [[10,'Oren',"he's unimpressed..."],[10,'Master-Yuda',"he's unimpressed..."],[0,'Master-Yuda','']]){
+    const world=createBattle();Object.assign(world,{phase:'racing',elapsed:1});
+    const victim=world.bots[0];Object.assign(victim,{driver,name,health:1,shield:0});
+    const feedback=new KillCelebration();feedback.sample(world,0);damageBattle(world,victim,world.id,1);
+    const message=feedback.sample(world,.1);assert.equal(message.title,'✦ YOU WHACKED ✦');assert.equal(message.name,name);assert.equal(message.subtitle,subtitle);
+  }
+});
+
 test('a radiation kill celebrates you chernowhacked and names its victim',()=>{
   const world=equipBomber(createBattle());Object.assign(world,{phase:'racing',supplies:[]});
   const victim=world.bots[0];Object.assign(victim,{name:'Sam',wx:-65,wz:0,health:1,shield:0,human:true,speed:0});for(const bot of world.bots.slice(1))Object.assign(bot,{inactive:true,destroyed:1e9});

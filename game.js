@@ -199,6 +199,7 @@ function hud(){
       const copy=document.createElement('div');copy.className='cherno-copy';copy.append(title,name);card.append(svg,copy);
     }
     if(!whack.radiation)card.append(title,name);
+    if(whack.subtitle){const subtitle=document.createElement('small');subtitle.className='whack-subtitle';subtitle.textContent=whack.subtitle;card.append(subtitle);}
     whackBanner.replaceChildren(card);
   }
   const threats=incomingMissiles(race);
