@@ -18,6 +18,11 @@ export async function checkSpecials(evaluate,app,room,id,sleep,capture){
   const resumed=await wait(()=>evaluate('__game.race.timeStop===0'));app.controls(peer,{sequence:1,keys:['arrowup'],actions:[],epoch:room.world.soundEpoch});
   const movesAgain=await wait(()=>app.snapshot(room,peer).world.wz>stoppedAt+.05);
   const cooldown=await evaluate("__game.race.specialCooldown>15&&__game.network.action('special')!==true");
+  Object.assign(room.world,{timeStop:2.5,timeOwner:peer.id});app.broadcast(room);
+  const frozenClient=await wait(()=>evaluate("__game.race.timeStop>1&&document.querySelector('.special-status').textContent.includes('TIME FROZEN')"));
+  const heldAt=await evaluate('__game.race.wz');await evaluate("__game.keys.add('arrowup')");await sleep(400);
+  const clientStaysStill=await evaluate(`Math.abs(__game.race.wz-${heldAt})<.01&&__game.network.action('fire')!==true`);await capture('frozen-opponent');
+  await evaluate('__game.keys.clear()');Object.assign(room.world,{timeStop:0,timeOwner:null});app.broadcast(room);
   // Keep the room's canonical actors; reset just the scenario, not the connection.
   Object.assign(own,{driver:11,wx:65,wz:40,speed:0,tehilim:0});other.speed=0;app.broadcast(room);
   const holy=await wait(()=>evaluate("__game.race.driver===11&&document.querySelector('.special-status').textContent==='HOLY AURA'"));await capture('holy-aura');
@@ -25,7 +30,7 @@ export async function checkSpecials(evaluate,app,room,id,sleep,capture){
   const heal=await wait(()=>evaluate('__game.race.driver===12&&__game.race.health===6'));
   Object.assign(own,{driver:10,wx:65,wz:40,heading:0,boost:1});Object.assign(other,{wx:65,wz:35,boost:0,dizzy:0});app.broadcast(room);
   const smoke=await wait(()=>app.snapshot(room,peer).world.dizzy>7);
-  room.specialAbilities=false;app.syncRoom(room);app.broadcast(room);
+  member.driver=10;room.specialAbilities=false;app.syncRoom(room);app.broadcast(room);
   const disabled=await wait(()=>evaluate("__game.race.specialAbilities===false&&__game.network.abilities.textContent.includes('OFF')&&document.querySelector('.special-status').classList.contains('hidden')"));
-  return {available,activate,moves,frozen,notice,resumed,movesAgain,cooldown,holy,heal,smoke,disabled,pass:available&&activate&&moves&&frozen&&notice&&resumed&&movesAgain&&cooldown&&holy&&heal&&smoke&&disabled};
+  return {available,activate,moves,frozen,notice,resumed,movesAgain,cooldown,frozenClient,clientStaysStill,holy,heal,smoke,disabled,pass:available&&activate&&moves&&frozen&&notice&&resumed&&movesAgain&&cooldown&&frozenClient&&clientStaysStill&&holy&&heal&&smoke&&disabled};
 }
