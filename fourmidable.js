@@ -34,15 +34,36 @@ export function drawAnt(m,phase,wave){
   m.box(0,3.26,.79,.13,.035,.04,'#bfa365');m.ball(0,2.82,.67,.12,.08,.03,ink,8,4);
 }
 export function drawTaxAudit(m,e,angle){
-  const t=e.age,fade=Math.min(1,(e.life-t)*2),height=7+Math.sin(Math.min(1,t*4)*Math.PI)*1.1;
-  m.at(e.wx,height,e.wz,angle+Math.PI);
-  m.box(0,-1.6,0,3,3.8,.09,'#fff4d4');m.box(0,1.65,.08,2.7,.12,.04,'#355e54');
-  // Clearly lettered TAX form, itemized rows and a red assessment stamp.
-  const letters={T:['111','010','010','010','010'],A:['010','101','111','101','101'],X:['101','101','010','101','101']};
-  for(const [i,c]of [...'TAX'].entries())for(let y=0;y<5;y++)for(let x=0;x<3;x++)if(letters[c][y][x]==='1')m.box(-1+i*.78+x*.18,1.4-y*.18,.1,.16,.16,.04,ink);
-  for(let i=0;i<5;i++){m.box(-.25,.1-i*.28,.1,1.8,.045,.025,'#8c9c8a');m.box(1,.1-i*.28,.1,.3,.08,.025,'#355e54');}
-  const stamp=Math.max(0,1-t*4);m.box(0,-1.25,.2+stamp*3,2.5,.18,.12,'#d83e4b');m.box(0,-.75,.2+stamp*3,2.5,.18,.12,'#d83e4b');
-  for(let i=0;i<12;i++){const a=i*2.399+t*2,r=1.6+t*.9;m.box(Math.cos(a)*r,Math.sin(a)*r,.2,.25*fade,.4*fade,.03,'#e3bd61');}
+  const t=e.age,clamp=v=>Math.max(0,Math.min(1,v)),smooth=v=>{v=clamp(v);return v*v*(3-2*v);},impact=.52;
+  const rise=smooth((t-.72)/.65),vanish=1-smooth((t-1.12)/.5),drop=1-smooth(t/impact),press=Math.sin(clamp((t-impact)/.2)*Math.PI)*.22;
+  const height=6.4+drop*7+rise*5-press,scale=smooth(t/.15)*vanish;
+  // Turned walnut handle, brass shoulder and a broad rubber stamping face.
+  if(scale>0){
+    m.at(e.wx,height,e.wz,angle+Math.PI);m.roll=drop*.23-rise*.3;
+    const point=m.point;m.point=function([x,y,z]){return point.call(this,[x*scale,y*scale,z*scale]);};
+    try{
+      const profile=[[0,2.5],[.2,2.5],[.24,2.65],[.48,2.65],[.56,2.35],[.85,1.9],[1.05,1.45],[1.18,.65],[1.4,.48],[2.3,.42],[2.55,.62],[2.72,.94],[3.05,1.1],[3.4,1],[3.63,.6],[3.7,0]];
+      for(let j=0;j<profile.length-1;j++)for(let i=0;i<40;i++){
+        const a=i*Math.PI/20,b=(i+1)*Math.PI/20,[y,r]=profile[j],[yy,rr]=profile[j+1],color=j<1?'#402831':j<5?'#c39b53':i%7<2?'#81472f':'#653824';
+        m.quad([Math.cos(a)*r,y,Math.sin(a)*r],[Math.cos(b)*r,y,Math.sin(b)*r],[Math.cos(b)*rr,yy,Math.sin(b)*rr],[Math.cos(a)*rr,yy,Math.sin(a)*rr],color);
+      }
+      m.disc(0,-.015,0,2.48,2.48,'#522536',40);
+      for(const y of [1.45,2.35])m.ball(0,y,0,.49,.075,.49,'#b48d50',20,4);
+    }finally{m.point=point;}
+  }
+  if(t<impact)return;
+  // The fresh red impression starts flat at contact, then turns toward the viewer.
+  const reveal=smooth((t-impact)/.12),tilt=smooth((t-.78)/.4)*Math.PI/2,sealScale=reveal*(1-smooth((t-e.life+.35)/.35));
+  m.at(e.wx,6.4+smooth((t-.78)/.4)*1.5,e.wz,angle+Math.PI);m.roll=-.12;
+  const point=m.point;m.point=function([x,y,z]){return point.call(this,[x*sealScale,(y*Math.sin(tilt)+z*Math.cos(tilt))*sealScale,(y*Math.cos(tilt)-z*Math.sin(tilt))*sealScale]);};
+  try{
+    const red='#ce304b';
+    for(const [radius,width]of [[2.55,.2],[2.23,.07]])for(let i=0;i<96;i++){
+      const a=i*Math.PI/48,b=(i+1)*Math.PI/48,r=radius+Math.sin(i*7)*.018;
+      m.quad([Math.cos(a)*r,Math.sin(a)*r,0],[Math.cos(b)*r,Math.sin(b)*r,0],[Math.cos(b)*(r-width),Math.sin(b)*(r-width),0],[Math.cos(a)*(r-width),Math.sin(a)*(r-width),0],red);
+    }
+    m.box(-.65,-1.35,0,.48,2.7,.07,red);m.box(.13,.87,0,1.65,.48,.07,red);m.box(-.03,-.08,0,1.33,.43,.07,red);
+  }finally{m.point=point;}
 }
 const glyphs=['111101101101111','010110010010111','111001111100111','111001111001111','101101111001001','111100111001111','111100111101111','111001010010010','111101111101111','111101111001111','000010111010000','000000111000000','000111000111000','010000111000010','111101101101101','111100010100111'];
 export function drawMathDust(m,p,angle,clock,jump){
