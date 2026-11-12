@@ -1,5 +1,5 @@
 export async function checkSpecials(evaluate,app,room,id,sleep,capture){
-  const wait=async predicate=>{for(let i=0;i<160;i++){if(await predicate())return true;await sleep(25);}return false;};
+  const wait=async predicate=>{for(let i=0;i<160;i++){for(const m of room.members.values())if(!m.socket)m.lastSeen=Date.now();if(await predicate())return true;await sleep(25);}return false;};
   if(room.members.size<2)app.join(room,{name:'Ability opponent',driver:1});
   const peer=[...room.members.values()].find(m=>m.id!==id),member=room.members.get([...room.members.keys()].find(k=>room.members.get(k).id===id));
   member.driver=8;peer.driver=10;app.syncRoom(room);
