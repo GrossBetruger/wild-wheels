@@ -16,5 +16,10 @@ export async function checkRyeah(evaluate,app,room,id,observer,wait,sleep,captur
   const flip=await evaluate("__game.network.action('somersault')===true")&&await wait(()=>evaluate(`__game.chopperFlips.has(${id})`));await capture('r-yeah-helicopter-flip');
   Object.assign(peer,{destroyed:0,boost:1,somersault:.55});app.broadcast(room);
   const remoteFlip=await wait(()=>evaluate(`__game.chopperFlips.has(${observer.id})`));await capture('r-yeah-remote-flip');
-  peer.destroyed=999;return {mane,boostMane,localRotor,remoteRotor,boost,flip,remoteFlip,pass:mane&&boostMane&&localRotor&&remoteRotor&&boost&&flip&&remoteFlip};
+  Object.assign(own,{boost:0,somersault:0,vulcan:8,item:'hedgehog',fireCooldown:0});
+  Object.assign(peer,{boost:0,somersault:0,vulcan:8,item:'hedgehog',destroyed:0});app.broadcast(room);
+  const mountedVulcans=await wait(()=>evaluate("(()=>{const r=__game.renderer,buffers=new Set([...r.models].filter(([key])=>key.startsWith('r-yeah:vulcan:')).map(([,model])=>model.buffer));return r.instances.filter(part=>buffers.has(part.buffer)).length===2;})()"));
+  const vulcanFires=await evaluate("__game.network.action('fire')===true")&&await wait(()=>app.snapshot(room,observer).world.projectiles.some(shot=>shot.owner===id&&shot.vulcan));
+  await evaluate('__game.characterAngle=Math.PI/2');await capture('r-yeah-mounted-vulcan');
+  own.vulcan=0;peer.vulcan=0;peer.destroyed=999;return {mane,boostMane,localRotor,remoteRotor,boost,flip,remoteFlip,mountedVulcans,vulcanFires,pass:mane&&boostMane&&localRotor&&remoteRotor&&boost&&flip&&remoteFlip&&mountedVulcans&&vulcanFires};
 }

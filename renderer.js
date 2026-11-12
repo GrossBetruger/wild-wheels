@@ -9,7 +9,7 @@ import {previewPose} from './preview-pose.js';
 import {drawRococoChariot,drawPearococo,drawPeacockFeather,drawRoyalWing,drawBalletPump,drawFairyStar,drawFairyBoost} from './pearococo.js';
 import {drawMotorcycle,drawYuda,drawYudaJacket,YudaJackets,YudaStunts,YudaExhaust,drawBikerBadge,drawMotorcycleBoost} from './master-yuda.js';
 import {YudaDrift} from './yuda-drift.js';
-import {drawJetRanger,miniJetRanger,drawLionPilot,drawLionMane,drawJetRangerRotors,drawRotorWash} from './r-yeah.js';
+import {drawJetRanger,miniJetRanger,hangingLion,drawChopperVulcan,drawLionPilot,drawLionMane,drawJetRangerRotors,drawRotorWash} from './r-yeah.js';
 const rgb=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255);
 const sub=(a,b)=>a.map((v,i)=>v-b[i]);
 const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
@@ -233,15 +233,22 @@ export class Renderer {
     m.at(p.x,.05,p.z,angle);m.disc(0,0,-.5,2.4,4,'#3b4247');
     this.model(`kart:11:${color}`,p.x,height,p.z,angle,mesh=>miniJetRanger(mesh,m=>drawJetRanger(m,color)),pitch);
     const waving=!boost&&(celebrate>0||(gesture?.right??0)>0),phase=waving?Math.floor(clock*6)%8:0,roaring=celebrate>0||gesture?.id==='cheer';
-    const lion={...p,x:p.x-1.3*Math.cos(angle),z:p.z+1.3*Math.sin(angle)};
-    this.model(`r-yeah:lion:${phase}:${roaring}:${boost}`,lion.x,height,lion.z,angle,mesh=>drawLionPilot(mesh,phase,roaring,boost?2:true),pitch);
+    const lion=p;
+    this.model(`r-yeah:lion:${phase}:${roaring}:${boost}`,lion.x,height,lion.z,angle,mesh=>hangingLion(mesh,m=>drawLionPilot(m,phase,roaring,boost?2:true)),pitch);
     this.lionMane(lion,height,angle,pitch,clock,boost);
     this.chopperRotors(p,height,angle,pitch,clock,boost);
     if(boost||jump)drawRotorWash(this.glow,this.smoke,p,angle,clock,{height,pitch});
   }
+  chopperVulcan(p,actor,time,jump){
+    const angle=Math.atan2(p.tx,p.tz),height=(jump?.height??0)+.18+Math.sin(time*3)*.08,pitch=jump?.pitch??0,phase=Math.floor(time*36)%8;
+    this.model(`r-yeah:vulcan:${phase}`,p.x,height,p.z,angle,mesh=>drawChopperVulcan(mesh,phase),pitch);
+    if(actor.item!=='hedgehog'||actor.fireCooldown<=.035)return;
+    this.glow.at(p.x,height,p.z,angle);this.glow.pitch=pitch;this.glow.pivot=2;
+    this.glow.particle(1.3,4.56,3.2,1,[1,.55,.08]);this.glow.particle(1.3,4.56,3.6,.5,[1,.85,.4]);
+  }
   lionMane(p,height,angle,pitch,time,boost){
     const phase=Math.floor(time*(boost?24:8))%12;
-    this.model(`r-yeah:mane:${phase}:${boost}`,p.x,height,p.z,angle,mesh=>drawLionMane(mesh,phase,boost),pitch);
+    this.model(`r-yeah:mane:${phase}:${boost}`,p.x,height,p.z,angle,mesh=>hangingLion(mesh,m=>drawLionMane(m,phase,boost)),pitch);
   }
   chopperRotors(p,height,angle,pitch,time,boost){
     const key=p.id??'preview';let state=this.chopperTilts.get(key);
@@ -575,10 +582,13 @@ export class Renderer {
         const pulse=.8+.2*Math.sin(time*4);this.glow.at(pose.x,.15,pose.z);
         for(let i=0;i<32;i++){const a=i/32*Math.PI*2,b=(i+1)/32*Math.PI*2;this.glow.quad([Math.cos(a)*3.3,0,Math.sin(a)*3.3],[Math.cos(b)*3.3,0,Math.sin(b)*3.3],[Math.cos(b)*3.65,0,Math.sin(b)*3.65],[Math.cos(a)*3.65,0,Math.sin(a)*3.65],[.55*pulse,.23*pulse,.02]);}
         for(let i=0;i<8;i++){const a=time*1.5+i*Math.PI/4;this.glow.particle(Math.cos(a)*3.5,.3+Math.sin(a*2)*.12,Math.sin(a)*3.5,.8,[.8*pulse,.35*pulse,.03]);}
-        m.at(pose.x,.85,pose.z,actor.heading);for(const side of [-1,1])m.box(side*1.72,0,0,.12,.24,3.7,'#ffd066');
-        m.at(pose.x,1.6,pose.z,actor.heading);m.box(0,0,1.4,1,.55,1.2,actor.driver===9?'#ffd2df':'#3e4251');
-        for(let i=0;i<3;i++){const a=time*35+i*Math.PI*2/3;m.box(Math.sin(a)*.25,.28+Math.cos(a)*.25,2.3,.18,.18,1.4,actor.driver===9?'#e9bc65':'#b3b9c6');}
-        if(actor.item==='hedgehog'&&actor.fireCooldown>.035){this.glow.at(pose.x,1.9,pose.z,actor.heading);this.glow.particle(0,0,3.2,1.4,[1,.55,.08]);this.glow.particle(0,0,3.7,.65,[1,.85,.4]);}
+        if(actor.driver===11)this.chopperVulcan(pose,actor,time,jump);
+        if(actor.driver!==11){
+          m.at(pose.x,.85,pose.z,actor.heading);for(const side of [-1,1])m.box(side*1.72,0,0,.12,.24,3.7,'#ffd066');
+          m.at(pose.x,1.6,pose.z,actor.heading);m.box(0,0,1.4,1,.55,1.2,actor.driver===9?'#ffd2df':'#3e4251');
+          for(let i=0;i<3;i++){const a=time*35+i*Math.PI*2/3;m.box(Math.sin(a)*.25,.28+Math.cos(a)*.25,2.3,.18,.18,1.4,actor.driver===9?'#e9bc65':'#b3b9c6');}
+          if(actor.item==='hedgehog'&&actor.fireCooldown>.035){this.glow.at(pose.x,1.9,pose.z,actor.heading);this.glow.particle(0,0,3.2,1.4,[1,.55,.08]);this.glow.particle(0,0,3.7,.65,[1,.85,.4]);}
+        }
       }
       m.at(pose.x,6,pose.z,r.heading);for(let i=0;i<actor.health;i++)m.box((i-(actor.health-1)/2)*.6,0,0,.5,.25,.15,i>=3?'#ffe095':'#b8ef8e');
       if(actor.shield>0&&actor.driver===9)this.fairyProtection(m,pose,time,Math.min(1,actor.shield),jump);

@@ -51,17 +51,40 @@ export function drawJetRanger(m,color){
 export function miniJetRanger(m,build){
   const point=m.point;m.point=function(p){return point.call(this,[1.3+p[0]*.6,4.5+p[1]*.6,-.4+p[2]*.6]);};build(m);m.point=point;
 }
+// Lean inward and trail backward around the gripping paw, beneath the same skid.
+function hangingPoint([x,y,z],inverse=false){
+  const c=Math.cos(.27),s=Math.sin(.27),cp=Math.cos(.18),sp=Math.sin(.18);
+  if(inverse){x-=.31;y-=4.77;z-=.1;const yy=y*cp+z*sp,zz=-y*sp+z*cp;return [x*c+yy*s-.85,-x*s+yy*c+5.15,zz];}
+  x+=.85;y-=5.15;const xx=x*c-y*s,yy=x*s+y*c;return [.31+xx,4.77+yy*cp-z*sp,.1+yy*sp+z*cp];
+}
+export function hangingLion(m,build){
+  const point=m.point;m.point=function(p){return point.call(this,hangingPoint(p));};
+  try{build(m);}finally{m.point=point;}
+}
+export function drawChopperVulcan(m,phase=0){
+  // Belly-mounted gimbal and six-barrel rotary cannon, ahead of the hanging lion.
+  for(const side of [-1,1])strut(m,[1.3+side*.33,5.45,.8],[1.3+side*.33,4.65,1.15],.09,navy);
+  m.ball(1.3,4.65,1.15,.43,.32,.4,'#566472',10,6);
+  m.box(1.3,4.32,1.35,.65,.48,.9,'#293541');
+  m.box(1.85,4.35,1,.42,.4,.65,navy);
+  for(let i=0;i<6;i++){
+    const a=phase*Math.PI/12+i*Math.PI/3,x=1.3+Math.sin(a)*.23,y=4.56+Math.cos(a)*.23;
+    strut(m,[x,y,1.65],[x,y,2.9],.075,'#9caeb7');m.ball(x,y,2.96,.055,.055,.025,'#15212b',6,4);
+  }
+  for(const z of [1.8,2.65])m.ball(1.3,4.56,z,.32,.32,.08,'#455766',12,5);
+}
 export function drawLionPilot(m,phase=0,cheer=false,hanging=false){
   m.ball(0,2.6,.2,.7,.8,.6,gold,12,7);
   for(const side of [-1,1]){
     const swing=Math.sin(phase*Math.PI/4+side)*.15;
     if(hanging){strut(m,[side*.4,2.2,.2],[side*.45,1.15,.35+swing],.22,gold);m.ball(side*.45,1,.5+swing,.3,.24,.42,gold,9,5);}
     if(!hanging)m.ball(side*.5,2.04,.9,.32,.28,.48,gold,9,5);
-    const raised=(hanging?side<0:side>0)?Math.max(0,Math.sin(phase*Math.PI/4)):0;
-    const holding=hanging&&(side>0||hanging===2);
-    const hand=holding?[1.61,4.77,side>0?.8:0]:[side*(.75+raised*.3),2.5+raised*1.3,1.15-raised*.4];
+    const raised=side>0?Math.max(0,Math.sin(phase*Math.PI/4)):0;
+    const holding=hanging&&(side<0||hanging===2);
+    const grip=[.31,4.77,side<0?.7:-.2];
+    const hand=holding?hangingPoint(grip,true):[side*(.75+raised*.3),2.5+raised*1.3,1.15-raised*.4];
     strut(m,[side*.6,2.8,.3],hand,.2,gold);m.ball(...hand,.27,.26,.24,gold,9,5);
-    if(holding)for(let finger=0;finger<3;finger++)m.ball(hand[0]+(finger-1)*.1,4.88,hand[2]+.07,.06,.1,.09,'#f4c46b',6,4);
+    if(holding)for(let finger=0;finger<3;finger++)m.ball(...hangingPoint([grip[0]+(finger-1)*.1,4.88,grip[2]+.07],true),.06,.1,.09,'#f4c46b',6,4);
   }
   // Oversized mane and head sit above the cabin, visible from the chase camera.
   m.ball(0,4.05,.65,.79,.79,.65,gold,14,8);
