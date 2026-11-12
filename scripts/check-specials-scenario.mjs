@@ -48,7 +48,10 @@ export async function checkSpecials(evaluate,app,room,id,sleep,capture){
   Object.assign(own,{driver:13,ammo:1,missiles:0,turbos:0,chaff:0,specialCooldown:0,boost:0});Object.assign(other,{ammo:12,missiles:0,turbos:0,chaff:0,health:6,destroyed:0,hedgeShield:25});app.broadcast(room);
   await wait(()=>evaluate('__game.race.driver===13&&__game.race.specialCooldown===0'));await evaluate("__game.network.action('special')");
   const audit=await wait(()=>evaluate("__game.race.effects.some(e=>e.type==='taxAudit')"))&&app.snapshot(room,peer).world.destroyed>0;await capture('tax-audit');
+  Object.assign(own,{ammo:20,specialCooldown:0,specialActive:0});Object.assign(other,{ammo:1,health:3,destroyed:0});app.broadcast(room);
+  await wait(()=>evaluate('__game.race.specialCooldown===0'));await evaluate("__game.network.action('special')");
+  const xylophone=await wait(()=>evaluate("[__game.race,...__game.race.bots].some(a=>a.driver===13&&a.specialActive>0)&&__game.audio.xylophoneBeat!==null&&[...__game.renderer.models.keys()].some(k=>k.startsWith('xylophone:'))"));await capture('xylophone-attack');
   member.driver=13;room.specialAbilities=false;app.syncRoom(room);app.broadcast(room);
   const disabled=await wait(()=>evaluate("__game.race.specialAbilities===false&&__game.network.abilities.textContent.includes('OFF')&&document.querySelector('.special-status').classList.contains('hidden')"));
-  return {audit,previewHelp,available,activate,warpAudio,audioResolved,moves,frozen,notice,resumed,movesAgain,cooldown,frozenClient,clientStaysStill,holy,angels,angelsGone,heal,gravity,gravityPickup,fashion,smoke,disabled,pass:audit&&previewHelp&&available&&activate&&warpAudio&&audioResolved&&moves&&frozen&&notice&&resumed&&movesAgain&&cooldown&&frozenClient&&clientStaysStill&&holy&&angels&&angelsGone&&heal&&gravity&&gravityPickup&&fashion&&smoke&&disabled};
+  return {xylophone,audit,previewHelp,available,activate,warpAudio,audioResolved,moves,frozen,notice,resumed,movesAgain,cooldown,frozenClient,clientStaysStill,holy,angels,angelsGone,heal,gravity,gravityPickup,fashion,smoke,disabled,pass:xylophone&&audit&&previewHelp&&available&&activate&&warpAudio&&audioResolved&&moves&&frozen&&notice&&resumed&&movesAgain&&cooldown&&frozenClient&&clientStaysStill&&holy&&angels&&angelsGone&&heal&&gravity&&gravityPickup&&fashion&&smoke&&disabled};
 }

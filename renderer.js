@@ -1,4 +1,4 @@
-import {drawCalculator,drawAnt,drawTaxAudit,drawMathDust} from './fourmidable.js';
+import {drawCalculator,drawAnt,drawTaxAudit,drawMathDust,drawXylophone} from './fourmidable.js';
 import { sampleTrack, branches } from './track.js';
 import { LENGTH, drivers, pickupType } from './engine.js';
 import { arenas, combatPose, somersaultPose, BOMB_FALL_TIME, BOMB_RADIUS, BOMB_OUTER_RADIUS, STINK_RADIUS, DIZZY_DURATION, VULCAN_DURATION } from './combat.js';
@@ -611,6 +611,10 @@ export class Renderer {
       const bodyStart=this.instances.length,dataStart=m.data.length;
       this.kart(m,pose,actor.color??drivers[actor.driver].color,actor.driver,0,0,actor.boost>0,time,actor.celebrate,jump,actor.driver!==7||actor.vulcan<=0);
       const parts=this.instances.slice(bodyStart);this.rememberBody(actor,parts,parts.length?[]:m.data.slice(dataStart));
+      if(r.specialAbilities!==false&&[r,...r.bots].some(a=>a.driver===13&&a.specialActive>0)){
+        const facing=actor.cameraHeading??actor.heading,phase=Math.floor(time*8)%8;
+        this.model('xylophone:'+phase,pose.x+Math.sin(facing)*5,0,pose.z+Math.cos(facing)*5,facing,mesh=>drawXylophone(mesh,phase));
+      }
       if(actor.driver===7)this.houstonHelmet(pose,actor,time,jump);
       if(actor.hedgeShield>0)this.hedgeguard(m,pose,actor,time,jump);
       if(r.specialAbilities!==false&&actor.driver===7&&actor.specialActive>0){

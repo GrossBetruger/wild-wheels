@@ -52,3 +52,13 @@ export function drawMathDust(m,p,angle,clock,jump){
     for(let row=0;row<5;row++)for(let col=0;col<3;col++)if(pattern[row*3+col]==='1')m.box(x+(col-1)*size,y+(4-row)*size,z,size*.82,size*.82,.025,color);
   }
 }
+export function drawXylophone(m,phase){
+  const colors=['#ee6b72','#f59b65','#f1d66c','#b6dc72','#6dd4aa','#64bcd9','#8f9de2','#c993de'];
+  m.box(0,1.5,0,15,.4,.8,'#5c3d48');m.box(0,7.5,0,15,.4,.8,'#5c3d48');
+  for(let i=0;i<8;i++){
+    const x=(i-3.5)*1.8,hit=phase===i?.35:0,h=6-i*.3;
+    m.box(x,2+hit,-.55,1.65,h,.5,colors[i]);
+    for(const y of [2.45+hit,1.55+h+hit])m.ball(x,y,-.85,.11,.11,.055,'#fff4db',8,4);
+    const malletY=8.5+(phase===i?-1:.2);if(i===phase||i===(phase+3)%8){link(m,[x,malletY+1,-2],[x,malletY,-.9],.1,'#e6c593');m.ball(x,malletY,-.9,.4,.4,.4,'#fff0c7',10,6);}
+  }
+}
