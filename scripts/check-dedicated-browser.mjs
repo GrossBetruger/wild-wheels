@@ -32,7 +32,8 @@ try{
   await wait(()=>evaluate(guest,'__game.network.state.world.bots.length===7'),'Eight-actor roster did not arrive');
   await evaluate(guest,'__game.network.requestPlay()');await wait(()=>evaluate(host,'__game.network.readyDialog.open'),'Host did not see guest play request');
   await wait(()=>evaluate(guest,"__game.race.phase==='racing'"),'Native auto-start did not reach browser',8000);
-  const before=await evaluate(guest,'({x:__game.race.wx,z:__game.race.wz})');await evaluate(guest,"__game.keys.add('w')");await sleep(350);const after=await evaluate(guest,'({x:__game.race.wx,z:__game.race.wz})');assert.ok(Math.hypot(after.x-before.x,after.z-before.z)>.1,'Keyboard movement did not reach the native game');await evaluate(guest,"__game.keys.clear();__game.network.action('fire')");
+  const before=await evaluate(guest,'({x:__game.race.wx,z:__game.race.wz})');await evaluate(guest,"__game.keys.add('w')");await sleep(350);const after=await evaluate(guest,'({x:__game.race.wx,z:__game.race.wz})');assert.ok(Math.hypot(after.x-before.x,after.z-before.z)>.1,'Keyboard movement did not reach the native game');await evaluate(guest,"__game.keys.clear()");
+  await wait(()=>evaluate(guest,"Boolean(__game.network.action('fire'))"),'Shot never became ready');
   await wait(()=>evaluate(guest,'__game.network.state.actionSequence>=0'),'Shot action was not acknowledged');
   for(const session of sessions)assert.equal(await evaluate(session,'__game.renderer.gl.getError()'),0);
   const beforeRefresh=await evaluate(host,'({id:__game.network.state.you,epoch:__game.race.soundEpoch,name:__game.race.name})');await call('Page.reload',{},host);await wait(()=>evaluate(host,'Boolean(globalThis.__game?.network.active&&__game.network.state)'), 'Refresh failed to rejoin');const refreshed=await evaluate(host,'({id:__game.network.state.you,epoch:__game.race.soundEpoch,name:__game.race.name})');assert.deepEqual(refreshed,beforeRefresh);

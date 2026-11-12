@@ -1,0 +1,159 @@
+{
+  "date": "2026-11-13",
+  "environment": {
+    "platform": "darwin",
+    "architecture": "arm64",
+    "cpu": "Apple M4 Pro",
+    "node": "v22.19.0"
+  },
+  "scope": "Local CPU comparison and loopback eight-client service test; not a GPU/FPS or internet latency benchmark.",
+  "benchmark": {
+    "pass": true,
+    "criteria": "Eight players: tick plus all eight 30Hz packet encodes p99 < 2ms within a 16.67ms tick budget; matching movement/gameplay and equivalent packet volume.",
+    "trials": [
+      {
+        "native": {
+          "bytes": 183357688,
+          "maxMs": 0.277083,
+          "medianMs": 0.075958,
+          "p95Ms": 0.103834,
+          "p99Ms": 0.111959,
+          "players": 8,
+          "runtime": "native",
+          "ticks": 3600
+        },
+        "wasm": {
+          "runtime": "node-wasm",
+          "medianMs": 0.15120899999999438,
+          "p95Ms": 0.2080829999999878,
+          "p99Ms": 0.22554199999996172,
+          "maxMs": 0.33216700000002675,
+          "bytes": 183354480
+        },
+        "p95Speedup": 2.003996764065603
+      },
+      {
+        "native": {
+          "bytes": 183357688,
+          "maxMs": 0.26449999999999996,
+          "medianMs": 0.076208,
+          "p95Ms": 0.103167,
+          "p99Ms": 0.111542,
+          "players": 8,
+          "runtime": "native",
+          "ticks": 3600
+        },
+        "wasm": {
+          "runtime": "node-wasm",
+          "medianMs": 0.15004099999998743,
+          "p95Ms": 0.2057079999999587,
+          "p99Ms": 0.22616600000014841,
+          "maxMs": 0.29804200000000947,
+          "bytes": 183354480
+        },
+        "p95Speedup": 1.9939321682316895
+      },
+      {
+        "native": {
+          "bytes": 183357688,
+          "maxMs": 0.313042,
+          "medianMs": 0.076167,
+          "p95Ms": 0.10241700000000001,
+          "p99Ms": 0.11220799999999999,
+          "players": 8,
+          "runtime": "native",
+          "ticks": 3600
+        },
+        "wasm": {
+          "runtime": "node-wasm",
+          "medianMs": 0.15000000000009095,
+          "p95Ms": 0.20383399999991525,
+          "p99Ms": 0.21812499999987267,
+          "maxMs": 0.2802080000001297,
+          "bytes": 183354480
+        },
+        "p95Speedup": 1.9902359959764027
+      }
+    ]
+  },
+  "integration": {
+    "pass": true,
+    "durationSeconds": 20,
+    "health": {
+      "build": "747C6D0447",
+      "maxPlayers": 8,
+      "overruns": 0,
+      "players": 8,
+      "status": "ok",
+      "tickP99Us": 191,
+      "ticks": 1580
+    },
+    "peers": [
+      {
+        "id": 0,
+        "packetsPerSecond": 30.1,
+        "p99SnapshotGapMs": 35.76908299999923,
+        "p95RttMs": 2.5095000000001164,
+        "bytesPerSecond": 337666.4,
+        "movementAck": 1196
+      },
+      {
+        "id": 1,
+        "packetsPerSecond": 30.2,
+        "p99SnapshotGapMs": 36.07129200000054,
+        "p95RttMs": 2.605833999999959,
+        "bytesPerSecond": 338674,
+        "movementAck": 1196
+      },
+      {
+        "id": 2,
+        "packetsPerSecond": 30.2,
+        "p99SnapshotGapMs": 36.46362499999941,
+        "p95RttMs": 2.6447500000003856,
+        "bytesPerSecond": 338778,
+        "movementAck": 1196
+      },
+      {
+        "id": 3,
+        "packetsPerSecond": 30.2,
+        "p99SnapshotGapMs": 36.47483300000022,
+        "p95RttMs": 2.6803749999999127,
+        "bytesPerSecond": 338673.8,
+        "movementAck": 1196
+      },
+      {
+        "id": 4,
+        "packetsPerSecond": 30.2,
+        "p99SnapshotGapMs": 36.73741599999994,
+        "p95RttMs": 2.716625000000022,
+        "bytesPerSecond": 338772.8,
+        "movementAck": 1196
+      },
+      {
+        "id": 5,
+        "packetsPerSecond": 30.2,
+        "p99SnapshotGapMs": 36.94904200000019,
+        "p95RttMs": 2.75012500000048,
+        "bytesPerSecond": 338676.2,
+        "movementAck": 1196
+      },
+      {
+        "id": 6,
+        "packetsPerSecond": 30.2,
+        "p99SnapshotGapMs": 37.35516700000153,
+        "p95RttMs": 2.7794590000003154,
+        "bytesPerSecond": 338778.4,
+        "movementAck": 1196
+      },
+      {
+        "id": 7,
+        "packetsPerSecond": 30.2,
+        "p99SnapshotGapMs": 37.458332999998674,
+        "p95RttMs": 3.014291999999841,
+        "bytesPerSecond": 338674.8,
+        "movementAck": 1196
+      }
+    ],
+    "errors": []
+  }
+}
