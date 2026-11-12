@@ -257,7 +257,7 @@ function moveActor(r,actor,steer,gas,brake,dt,handbrake=false){
   if(!blocked(arena,nx,nz)){actor.wx=nx;actor.wz=nz;if(drifting)emitDriftTrail(r,actor,dt);return;}
   if(!blocked(arena,nx,actor.wz))actor.wx=nx;
   if(!blocked(arena,actor.wx,nz))actor.wz=nz;
-  if(actor.boost>0){
+  if(actor.boost>0&&drifting){
     if(!r.prediction){damageBattle(r,actor,-1,MAX_HEALTH,'wall');return;}
     actor.predictedCrash=true;actor.speed=0;actor.boost=0;actor.drift=0;actor.wasDrifting=false;actor.somersault=0;actor.dizzy=0;return;
   }

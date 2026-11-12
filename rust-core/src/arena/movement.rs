@@ -47,7 +47,7 @@ impl Game{
         if advance{a.human=true;}
         if events&2!=0{sound(g,"driftCharge",id,wx,wz,None);}if events&4!=0{sound(g,"driftChargeMax",id,wx,wz,None);}if events&8!=0{effect(g,"boost",id,wx,wz,None);}if events&1!=0{a.drift_trail=None;}if events&16!=0{emit(g,a,dt);}
         if events&32!=0{effect(g,"crash",id,a.wx,a.wz,None);a.wall_cooldown=0.7;g.shake=0.3;voice(g,a,"hurt",a.wx);}
-        if events&64!=0&&a.boost>0.0{
+        if events&crate::DRIFT_WALL!=0&&a.boost>0.0{
             if lethal{self.damage(id,usize::MAX,6.0,"wall");return;}
             a.prediction_crash=true;a.speed=0.0;a.boost=0.0;a.drift=0.0;a.was_drifting=false;a.somersault=0.0;a.dizzy=0.0;
         }

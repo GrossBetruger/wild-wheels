@@ -81,7 +81,7 @@ export function drawBikerBadge(m){
   }
 }
 export function drawMotorcycleBoost(glow,smoke,p,angle,clock,jump=null){
-  for(const mesh of [glow,smoke]){mesh.at(p.x,jump?.height??0,p.z,angle);mesh.pitch=jump?.pitch??0;mesh.pivot=2;}
+  for(const mesh of [glow,smoke]){mesh.at(p.x,jump?.height??0,p.z,angle);mesh.pitch=jump?.pitch??0;mesh.pivot=2;mesh.roll=p.bikeRoll??0;}
   for(const side of [-1,1]){
     const x=side*.65,flicker=1+.1*Math.sin(clock*63+side);
     glow.flame(x,.67,-2.3,.23,6*flicker,[.015,.26,.4],clock);

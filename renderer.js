@@ -7,18 +7,20 @@ import {drawNewDriver,drawRoadster,drawRoadsterJets,drawCricketHaze,drawCricketP
 import {previewPose} from './preview-pose.js';
 import {drawRococoChariot,drawPearococo,drawPeacockFeather,drawRoyalWing,drawBalletPump,drawFairyStar,drawFairyBoost} from './pearococo.js';
 import {drawMotorcycle,drawYuda,drawBikerBadge,drawMotorcycleBoost} from './master-yuda.js';
+import {YudaDrift} from './yuda-drift.js';
 const rgb=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255);
 const sub=(a,b)=>a.map((v,i)=>v-b[i]);
 const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
 const norm=a=>{const l=Math.hypot(...a)||1;return a.map(v=>v/l);};
 const dot=(a,b)=>a.reduce((sum,v,i)=>sum+v*b[i],0);
 class Mesh {
-  data=[];sprites=[];origin=[0,0,0];angle=0;pitch=0;pivot=0;
-  at(x,y,z,angle=0){this.origin=[x,y,z];this.angle=angle;this.pitch=0;this.pivot=0;return this;}
+  data=[];sprites=[];origin=[0,0,0];angle=0;pitch=0;pivot=0;roll=0;
+  at(x,y,z,angle=0){this.origin=[x,y,z];this.angle=angle;this.pitch=0;this.pivot=0;this.roll=0;return this;}
   point(p){
-    let y=p[1],z=p[2];
+    let x=p[0],y=p[1],z=p[2];
+    if(this.roll){const c=Math.cos(this.roll),s=Math.sin(this.roll),xx=x*c-(y-.9)*s;y=x*s+(y-.9)*c+.9;x=xx;}
     if(this.pitch){const c=Math.cos(this.pitch),s=Math.sin(this.pitch),dy=y-this.pivot;y=dy*c-z*s+this.pivot;z=dy*s+z*c;}
-    const c=Math.cos(this.angle),s=Math.sin(this.angle);return [this.origin[0]+p[0]*c+z*s,this.origin[1]+y,this.origin[2]-p[0]*s+z*c];
+    const c=Math.cos(this.angle),s=Math.sin(this.angle);return [this.origin[0]+x*c+z*s,this.origin[1]+y,this.origin[2]-x*s+z*c];
   }
   particle(x,y,z,size,color){this.sprites.push(...this.point([x,y,z]),size,...color);}
   tri(a,b,c,color){const points=[a,b,c].map(p=>this.point(p)),n=norm(cross(sub(points[1],points[0]),sub(points[2],points[0])));const col=typeof color==='string'?rgb(color):color;for(const p of points)this.data.push(...p,...n,...col);}
@@ -40,13 +42,14 @@ export class Renderer {
     this.canvas=canvas;const gl=this.gl=canvas.getContext('webgl',{antialias:true,alpha:false});if(!gl)throw new Error('This game requires WebGL. Enable hardware acceleration in your browser.');
     this.models=new Map();this.instances=[];this.quality='auto';this.resolution=1.25;this.fps=0;this.fpsStart=0;this.frameCount=0;this.slowWindows=0;this.fastWindows=0;
     this.tailFolds=new Map();
+    this.yudaDrift=new YudaDrift();
     this.lastBodies=new Map();this.ashBodies=new Map();
     const debug=gl.getExtension('WEBGL_debug_renderer_info');this.gpuName=debug?gl.getParameter(debug.UNMASKED_RENDERER_WEBGL):'WebGL';this.softwareGPU=/swiftshader|llvmpipe|software/i.test(this.gpuName);if(this.softwareGPU)this.resolution=.75;
     this.program=gl.createProgram();
     gl.attachShader(this.program,shader(gl,gl.VERTEX_SHADER,`
       attribute vec3 position;attribute vec3 normal;attribute vec3 color;
       uniform mat4 matrix;uniform vec3 eye;uniform vec3 origin;
-      uniform vec2 rotation;uniform vec2 pitch;uniform vec4 plumage;
+      uniform vec2 rotation;uniform vec2 pitch;uniform vec2 roll;uniform vec4 plumage;
       uniform float emission;uniform float fogScale;
       varying vec3 shade;varying float distanceToEye;
       vec3 tilt(vec3 v){return vec3(v.x,v.y*pitch.x-v.z*pitch.y,v.y*pitch.y+v.z*pitch.x);}
@@ -73,6 +76,8 @@ export class Renderer {
           localNormal.yz=vec2(localNormal.y*c-localNormal.z*s,localNormal.y*s+localNormal.z*c);
           local=root+offset;
         }
+        local.xy=vec2(local.x*roll.x-(local.y-.9)*roll.y,local.x*roll.y+(local.y-.9)*roll.x+.9);
+        localNormal.xy=vec2(localNormal.x*roll.x-localNormal.y*roll.y,localNormal.x*roll.y+localNormal.y*roll.x);
         vec3 a=tilt(local-vec3(0.,2.,0.))+vec3(0.,2.,0.),b=tilt(localNormal);
         vec3 p=vec3(a.x*rotation.x+a.z*rotation.y,a.y,-a.x*rotation.y+a.z*rotation.x)+origin;
         vec3 n=normalize(vec3(b.x*rotation.x+b.z*rotation.y,b.y,-b.x*rotation.y+b.z*rotation.x));
@@ -97,6 +102,7 @@ export class Renderer {
     this.attributes=['position','normal','color'].map(n=>gl.getAttribLocation(this.program,n));this.matrix=gl.getUniformLocation(this.program,'matrix');this.eyeUniform=gl.getUniformLocation(this.program,'eye');this.fog=gl.getUniformLocation(this.program,'fog');this.emission=gl.getUniformLocation(this.program,'emission');this.staticBuffer=gl.createBuffer();this.dynamicBuffer=gl.createBuffer();this.glowBuffer=gl.createBuffer();gl.enable(gl.DEPTH_TEST);this.track=-1;this.eye=null;
     this.originUniform=gl.getUniformLocation(this.program,'origin');this.rotationUniform=gl.getUniformLocation(this.program,'rotation');gl.uniform3f(this.originUniform,0,0,0);gl.uniform2f(this.rotationUniform,1,0);
     this.pitchUniform=gl.getUniformLocation(this.program,'pitch');gl.uniform2f(this.pitchUniform,1,0);
+    this.rollUniform=gl.getUniformLocation(this.program,'roll');gl.uniform2f(this.rollUniform,1,0);
     this.fogScale=gl.getUniformLocation(this.program,'fogScale');
     this.plumageUniform=gl.getUniformLocation(this.program,'plumage');gl.uniform4f(this.plumageUniform,0,0,0,0);
     this.particleProgram=gl.createProgram();
@@ -115,10 +121,10 @@ export class Renderer {
   }
   setQuality(quality){this.quality=quality;this.resolution=({high:2,balanced:1,low:.65,auto:this.softwareGPU?.75:1.25})[quality];this.slowWindows=0;this.fastWindows=0;}
   pixelRatio(){return Math.min(devicePixelRatio,this.resolution);}
-  model(key,x,y,z,angle,build,pitch=0,plumage=null){
+  model(key,x,y,z,angle,build,pitch=0,plumage=null,roll=0){
     let model=this.models.get(key);
     if(!model){const mesh=new Mesh();this.buildingModel=true;try{build(mesh);}finally{this.buildingModel=false;}const buffer=this.gl.createBuffer();this.gl.bindBuffer(this.gl.ARRAY_BUFFER,buffer);this.gl.bufferData(this.gl.ARRAY_BUFFER,new Float32Array(mesh.data),this.gl.STATIC_DRAW);model={buffer,count:mesh.data.length/9,rubble:this.rubbleSamples(mesh.data)};this.models.set(key,model);}
-    this.instances.push({...model,x,y,z,angle,pitch,plumage});
+    this.instances.push({...model,x,y,z,angle,pitch,plumage,roll});
   }
   scenery(track){
     const m=new Mesh(),sunset=track===1;const grass=sunset?'#91a856':'#6da94d';
@@ -209,18 +215,18 @@ export class Renderer {
     if(boost)this.afterburner(p,angle,clock,null,driver);
   }
   yudaMotorcycle(m,p,color,yaw,spin,boost,clock,celebrate,jump,gesture=null){
-    const angle=Math.atan2(p.tx,p.tz)-yaw+spin,height=jump?.height??0,pitch=jump?.pitch??0;
+    const angle=Math.atan2(p.tx,p.tz)-yaw+spin,height=jump?.height??0,pitch=jump?.pitch??0,roll=p.bikeRoll??0;
     m.at(p.x,.08,p.z,angle);m.disc(0,0,0,1.1,2.8,'#343b43');
-    this.model(`kart:10:${color}`,p.x,height,p.z,angle,mesh=>drawMotorcycle(mesh,color),pitch);
-    const saluting=!jump&&(celebrate>0||(gesture?.right??0)>0),phase=saluting?Math.floor(clock*5)%8:0;
-    const tuck=Boolean(jump)||boost;
-    this.model(`yuda:rider:${phase}:${tuck}`,p.x,height,p.z,angle+(gesture?.yaw??0)*.35,mesh=>drawYuda(mesh,phase,tuck),pitch+(tuck?.18:0));
+    this.model(`kart:10:${color}`,p.x,height,p.z,angle,mesh=>drawMotorcycle(mesh,color),pitch,null,roll);
+    const saluting=!jump&&Math.abs(roll)<.2&&(celebrate>0||(gesture?.right??0)>0),phase=saluting?Math.floor(clock*5)%8:0;
+    const tuck=Boolean(jump)||boost||Math.abs(roll)>.2;
+    this.model(`yuda:rider:${phase}:${tuck}`,p.x,height,p.z,angle+(gesture?.yaw??0)*.35,mesh=>drawYuda(mesh,phase,tuck),pitch+(tuck?.18:0),null,roll);
     // Restrained neon underglow is always present; protection adds winged badges.
     this.bikerAura(m,p,angle,clock,jump);
     if(boost||jump)this.afterburner(p,angle,clock,jump,10);
   }
   bikerAura(m,p,angle,time,jump=null,strength=0){
-    const height=jump?.height??0,g=this.glow;g.at(p.x,height,p.z,angle);g.pitch=jump?.pitch??0;g.pivot=2;
+    const height=jump?.height??0,g=this.glow;g.at(p.x,height,p.z,angle);g.pitch=jump?.pitch??0;g.pivot=2;g.roll=p.bikeRoll??0;
     for(const side of [-1,1])for(let i=0;i<8;i++)g.particle(side*.5,.35,-1.4+i*.4,.32,[.015,.12,.16]);
     if(strength<=0)return;
     g.at(p.x,height+.1,p.z);
@@ -239,6 +245,7 @@ export class Renderer {
     const height=jump?.height??0;
     m.at(pose.x,height,pose.z,actor.heading);m.pitch=jump?.pitch??0;m.pivot=2;
     this.glow.at(pose.x,height,pose.z,actor.heading);this.glow.pitch=jump?.pitch??0;this.glow.pivot=2;
+    m.roll=pose.bikeRoll??0;this.glow.roll=pose.bikeRoll??0;
     for(const side of [-1,1]){m.box(side*.57,1.65,1.45,.25,.23,1.5,'#273a43');m.ball(side*.57,1.77,2.22,.12,.12,.04,'#8dfff0',8,4);if(actor.item==='hedgehog'&&actor.fireCooldown>.035)this.glow.particle(side*.57,1.77,2.4,.9,[.15,.8,.65]);}
   }
   starshipEngines(p,angle,clock,jump=null,boost=false){
@@ -437,6 +444,7 @@ export class Renderer {
     m.at(0,0,0);this.gl.bindBuffer(this.gl.ARRAY_BUFFER,this.staticBuffer);this.gl.bufferData(this.gl.ARRAY_BUFFER,new Float32Array(m.data),this.gl.STATIC_DRAW);this.staticCount=m.data.length/9;this.track=`arena-${index}`;
   }
   drawBattle(r,time){
+    this.yudaDrift.update(r,time);
     const helmetScene=`${r.arena}:${r.soundEpoch}:${r.id}`;
     if(this.helmetScene!==helmetScene||time<(this.helmetTime??0)){this.helmetScene=helmetScene;this.helmetFlights=new Map();this.tailFolds.clear();this.lastBodies.clear();this.ashBodies.clear();}this.helmetTime=time;
     if(this.track!==`arena-${r.arena}`)this.arenaScenery(r.arena);
@@ -463,7 +471,7 @@ export class Renderer {
     const ashKeys=new Set(r.effects.filter(f=>f.type==='ash').map(f=>`${f.wx}:${f.wz}`));for(const key of this.ashBodies.keys())if(!ashKeys.has(key))this.ashBodies.delete(key);
     for(const actor of [r,...r.bots]){
       if(actor.bomber||actor.inactive||actor.afk)continue;
-      const pose={...combatPose(actor),id:actor.id};if(actor.destroyed){
+      const pose={...combatPose(actor),id:actor.id,bikeRoll:this.yudaDrift.roll(actor.id)};if(actor.destroyed){
         const ash=r.effects.find(f=>f.type==='ash'&&Math.hypot(f.wx-pose.x,f.wz-pose.z)<.1),key=`${pose.x}:${pose.z}`;
         if(ash&&(!this.ashBodies.has(key)||ash.age<this.ashBodies.get(key).age)){
           if(!this.lastBodies.has(actor.id)){
@@ -538,14 +546,25 @@ export class Renderer {
       this.smoke.at(cloud.wx,3+Math.sin(t)*.3,cloud.wz);this.smoke.particle(0,0,0,(fairy?5:10+expansion*8)*Math.sqrt(fade),fairy?[.98,.65,.81]:smoke);
       if(t<.45){this.glow.at(cloud.wx,2.5,cloud.wz);this.glow.particle(0,0,0,9*(1-t/.45),flake);for(let i=0;i<16;i++){const f=i/15;this.glow.at(cloud.originX+(cloud.wx-cloud.originX)*f,1.5+Math.sin(f*Math.PI)*2,cloud.originZ+(cloud.wz-cloud.originZ)*f);this.glow.particle(0,0,0,1.2*(1-t/.45),flake);}}
     }
+    const bikers=new Set([r,...r.bots].filter(actor=>actor.driver===10).map(actor=>actor.id));
     for(const particle of r.driftParticles){
+      if(bikers.has(particle.owner))continue;
       const fade=1-particle.age/particle.life;
       if(particle.kind==='smoke'){const size=(1.5+particle.age*6)*Math.sqrt(fade);this.smoke.at(particle.wx,particle.height,particle.wz);this.smoke.particle(0,0,0,size,[.74,.77,.8]);continue;}
       const tint=[[.9,.35,.04],[.05,.55,1],[.65,.15,1]][particle.level].map(c=>c*fade);
       this.glow.at(particle.wx,particle.height,particle.wz);this.glow.particle(0,0,0,.42*fade,tint);this.glow.particle(-particle.vx*.025,-particle.vy*.025,-particle.vz*.025,.2*fade,tint);
     }
-    if(r.wasDrifting){this.glow.at(p.x,.25,p.z,r.heading);const color=r.drift>=.85?[.5,.08,.9]:r.drift>=.45?[0,.4,.9]:[.6,.2,.02];for(const side of [-1,1])this.glow.particle(side*1.65,0,-1.4,1,color);}
+    this.bikerSparks();
+    if(r.wasDrifting&&r.driver!==10){this.glow.at(p.x,.25,p.z,r.heading);const color=r.drift>=.85?[.5,.08,.9]:r.drift>=.45?[0,.4,.9]:[.6,.2,.02];for(const side of [-1,1])this.glow.particle(side*1.65,0,-1.4,1,color);}
     this.flush(m,view,overview?.halfHeight?height/(2*overview.halfHeight):height);
+  }
+  bikerSparks(){
+    for(const rider of this.yudaDrift.riders.values())if(rider.contact){this.glow.at(rider.contact.x,.18,rider.contact.z);this.glow.particle(0,0,0,1,[[.7,.22,.02],[.02,.4,.85],[.6,.08,.9]][rider.level]);}
+    for(const spark of this.yudaDrift.sparks){
+      const fade=1-spark.age/spark.life,color=spark.hot?[fade,.8*fade,.32*fade]:[fade,.28*fade,.025*fade];
+      this.glow.at(spark.x,spark.y,spark.z);this.glow.particle(0,0,0,.24*fade,color);
+      this.glow.particle(-spark.vx*.035,Math.max(.04-spark.y,-spark.vy*.035),-spark.vz*.035,.14*fade,color);
+    }
   }
   atomicExplosion(m,effect){
     const t=effect.age,fade=Math.max(0,1-t/3),radius=Math.min(BOMB_OUTER_RADIUS,t*48);
@@ -626,6 +645,7 @@ export class Renderer {
           const c=Math.cos(angle*fold*.86),s=Math.sin(angle*fold*.86),xx=x*c-(y-1.75)*s,yy=x*s+(y-1.75)*c;
           z+=1.05-Math.abs(angle)*fold*.12;x=xx;y=1.75+yy*Math.cos(-fold*.95)-z*Math.sin(-fold*.95);z=yy*Math.sin(-fold*.95)+z*Math.cos(-fold*.95)-1.05;
         }
+        const roll=part.roll??0,xx=x*Math.cos(roll)-(y-.9)*Math.sin(roll);y=x*Math.sin(roll)+(y-.9)*Math.cos(roll)+.9;x=xx;
         const yy=(y-2)*Math.cos(part.pitch)-z*Math.sin(part.pitch)+2,zz=(y-2)*Math.sin(part.pitch)+z*Math.cos(part.pitch);
         points.push([part.x+x*Math.cos(part.angle)+zz*Math.sin(part.angle)-actor.wx,part.y+yy,part.z-x*Math.sin(part.angle)+zz*Math.cos(part.angle)-actor.wz]);
       }
@@ -635,8 +655,8 @@ export class Renderer {
   }
   flush(m,view,height){
     const gl=this.gl;
-    for(const instance of this.instances){gl.uniform3f(this.originUniform,instance.x,instance.y,instance.z);gl.uniform2f(this.rotationUniform,Math.cos(instance.angle),Math.sin(instance.angle));gl.uniform2f(this.pitchUniform,Math.cos(instance.pitch),Math.sin(instance.pitch));gl.uniform4f(this.plumageUniform,instance.plumage===null?0:1,instance.plumage?.clock??0,instance.plumage?.fold??0,instance.plumage?.angle??0);this.drawBuffer(instance.buffer,instance.count);}
-    gl.uniform3f(this.originUniform,0,0,0);gl.uniform2f(this.rotationUniform,1,0);gl.uniform2f(this.pitchUniform,1,0);gl.uniform4f(this.plumageUniform,0,0,0,0);
+    for(const instance of this.instances){gl.uniform3f(this.originUniform,instance.x,instance.y,instance.z);gl.uniform2f(this.rotationUniform,Math.cos(instance.angle),Math.sin(instance.angle));gl.uniform2f(this.pitchUniform,Math.cos(instance.pitch),Math.sin(instance.pitch));gl.uniform2f(this.rollUniform,Math.cos(instance.roll),Math.sin(instance.roll));gl.uniform4f(this.plumageUniform,instance.plumage===null?0:1,instance.plumage?.clock??0,instance.plumage?.fold??0,instance.plumage?.angle??0);this.drawBuffer(instance.buffer,instance.count);}
+    gl.uniform3f(this.originUniform,0,0,0);gl.uniform2f(this.rotationUniform,1,0);gl.uniform2f(this.pitchUniform,1,0);gl.uniform2f(this.rollUniform,1,0);gl.uniform4f(this.plumageUniform,0,0,0,0);
     gl.bindBuffer(gl.ARRAY_BUFFER,this.dynamicBuffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(m.data),gl.DYNAMIC_DRAW);this.drawBuffer(this.dynamicBuffer,m.data.length/9);
     gl.enable(gl.BLEND);gl.depthMask(false);
     if(this.smoke.sprites.length){gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);this.drawParticles(this.smoke.sprites,view,height,true);}

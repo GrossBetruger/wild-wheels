@@ -8,6 +8,7 @@ const BOOST: u32 = 8;
 const TRAIL: u32 = 16;
 const CRASH: u32 = 32;
 const WALL: u32 = 64;
+const DRIFT_WALL: u32 = 128;
 #[derive(Clone, Copy)]
 #[repr(C)]
 struct Kart { data: [f64; FIELDS] }
@@ -94,6 +95,7 @@ pub extern "C" fn step(slot: usize, arena_index: usize, steer: f64, dt: f64, fla
     }
     if collided {
         events|=WALL;
+        if drifting { events|=DRIFT_WALL; }
         if !blocked(arena,nx,z) { x=nx; }
         if !blocked(arena,x,nz) { z=nz; }
         speed*=0.3;drift=0.0;was_drifting=0.0;motion=heading;events|=CLEAR;
