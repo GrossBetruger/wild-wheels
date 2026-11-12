@@ -30,7 +30,7 @@ export async function checkSpecials(evaluate,app,room,id,sleep,capture){
   // Keep the room's canonical actors; reset just the scenario, not the connection.
   Object.assign(own,{driver:11,wx:65,wz:40,speed:0,tehilim:0,specialCooldown:0});other.speed=0;app.broadcast(room);
   await wait(()=>evaluate('__game.race.driver===11&&__game.race.specialCooldown===0'));await evaluate("__game.network.action('special')");
-  const holy=await wait(()=>evaluate("__game.race.driver===11&&document.querySelector('.special-status').textContent.includes('HOLY AURA')&&__game.race.specialActive>0"));await capture('holy-arrival');await sleep(750);
+  const holy=await wait(()=>evaluate("__game.race.driver===11&&document.querySelector('.special-status').textContent.includes('PROVIDENCE')&&__game.race.specialActive>0"));await capture('holy-arrival');await sleep(750);
   const angelCount=()=>evaluate("(()=>{const r=__game.renderer,buffers=new Set([...r.models].filter(([key])=>key.startsWith('r-yeah:archangel:')).map(([,m])=>m.buffer));return r.instances.filter(p=>buffers.has(p.buffer)).length;})()");
   const angels=await angelCount()===2&&await evaluate("['michael','gabriel'].every(role=>[...__game.renderer.models.keys()].some(key=>key.startsWith('r-yeah:archangel:'+role+':')))");await capture('providence-archangels');own.specialActive=.55;app.broadcast(room);await sleep(150);await capture('holy-departure');const angelsGone=await wait(async()=>await angelCount()===0);
   Object.assign(own,{driver:12,health:3,healTimer:0,specialActive:0,specialCooldown:0});app.broadcast(room);await wait(()=>evaluate("__game.race.driver===12&&__game.race.specialCooldown===0"));await evaluate("__game.network.action('special')");
