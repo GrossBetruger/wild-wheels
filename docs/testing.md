@@ -18,6 +18,8 @@ Master-Yuda coverage includes his sunglasses salute, motorcycle silhouette, loca
 
 Master-Yuda's jacket flies off on boost or Vulcan activation, remains off while either effect is active, then returns through a 0.85-second dressing animation. The character browser group checks flight, bare boost/Vulcan, remote clothing and restoration; unit tests cover overlapping effects, interrupted dressing, independent riders and preview resets.
 
+Boost also raises Yuda into a one-handed wheelie with his rear axle planted. His whack celebration reclines him with feet on the handlebars and hands behind his head. Both ease in/out and yield to drifting, flips and dressing as appropriate. Character browser checks cover both poses locally and remotely; unit checks cover wheel contact, transitions and animation priority.
+
 Pearococo coverage includes local and remote royal waves, fairy-dust boost/flip/chaff and protection, and pink ballet-pump Vulcan shots. The preview checks framebuffer changes in her rippling fan and folded silhouette with the camera held still, and reproducible pixels when its animation clock is restored. Boosting must smoothly fold only that player's tail, with both local and remote tails reopening afterward. Combat tests preserve normal damage, inventory and kill credit; recovery and capacity tables include her Cuteness 5 and Intelligence 4.
 
 Avita-Jas is included in the character browser group: character selection, local/remote Cessna rendering, animated propeller, boost/loop vapor trails, and local/remote electron Vulcan shots. `avita.test.js` verifies ordinary Vulcan damage and ammunition rules in solo and Rust combat; room, recovery, inventory, and Hedgeguard tests include the worm pilot.

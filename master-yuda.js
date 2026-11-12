@@ -38,19 +38,24 @@ export function drawMotorcycle(m,color){
   m.ball(0,1.9,2.08,.26,.25,.045,'#fff1c5',10,6);
   m.box(0,1.57,-2.19,.43,.13,.08,'#ff6551');
 }
-export function drawYuda(m,phase=0,tuck=false,clothed=true,dressing=-1){
+export function drawYuda(m,phase=0,tuck=false,clothed=true,dressing=-1,lounge=0){
+  const originalPoint=m.point;let upper=true;
+  m.point=function(p){if(!upper||!lounge)return originalPoint.call(this,p);const a=-lounge*1.05,c=Math.cos(a),s=Math.sin(a),y=p[1]-1.9,z=p[2]+.55;return originalPoint.call(this,[p[0],1.9+y*c-z*s,-.55+y*s+z*c]);};
   const salute=Math.sin(phase*Math.PI/8),reach=tuck?.2:0;
   const body=clothed?leather:brown;
   m.ball(0,2.32,-.52,.62,.7,.46,body,12,7);
   if(!clothed){m.ball(0,2.08,-.13,.38,.32,.1,lightBrown,10,5);m.ball(0,2.28,-.035,.045,.05,.025,'#684831',6,4);}
   for(const side of [-1,1]){
     // Folded riding legs and chunky boots, one hand stays on the bars.
-    tube(m,[side*.4,1.9,-.55],[side*.76,1.43,.05],.23,body);
-    tube(m,[side*.76,1.43,.05],[side*.69,1.03,-.28],.19,body);
-    m.ball(side*.7,.96,-.05,.26,.2,.48,clothed?'#161d29':brown,9,5);
+    upper=false;
+    const knee=[side*(.76-.4*lounge),1.43+.9*lounge,.05+.7*lounge],ankle=[side*(.69-.45*lounge),1.03+1.4*lounge,-.28+1.6*lounge];
+    tube(m,[side*.4,1.9,-.55],knee,.23,body);tube(m,knee,ankle,.19,body);
+    m.ball(ankle[0],ankle[1]-.07,ankle[2]+.23,.26,.2,.48,clothed?'#161d29':brown,9,5);
+    upper=true;
     if(clothed)m.tri([side*.08,2.95,-.11],[side*.42,2.74,-.14],[side*.12,2.38,.01],chrome);
     const pull=dressing>=0?Math.sin(dressing/7*Math.PI):0;
     const hand=dressing>=0?[side*(.65+pull*.45),2.4+pull*1.35,.5-pull*.6]:side===1?[.91-salute*.25,2.4+salute*1.15,1.28-salute*.78]:[-.91,2.4,1.28];
+    if(lounge){hand[0]+=(side*.75-hand[0])*lounge;hand[1]+=(3.35-hand[1])*lounge;hand[2]+=(-.7-hand[2])*lounge;}
     tube(m,[side*.52,2.65,-.25],hand,.19,body);m.ball(...hand,.22,.19,.21,brown,9,5);
     if(clothed)for(let i=0;i<3;i++)m.ball(side*.5,2.73-i*.12,-.05,.04,.04,.035,chrome,5,3);
   }
@@ -73,6 +78,22 @@ export function drawYuda(m,phase=0,tuck=false,clothed=true,dressing=-1){
   // Tiny silver hoop and a winged patch on the back of the jacket.
   m.ball(-1.06,3.35,-.09,.1,.14,.04,'#f2d6a5',8,5);
   if(clothed){for(const side of [-1,1])for(let i=0;i<4;i++)m.box(side*(.13+i*.09),2.49+i*.045,-.97,.14,.06,.03,chrome);m.ball(0,2.5,-.98,.12,.16,.025,cyan,7,4);}
+  m.point=originalPoint;
+}
+export class YudaStunts {
+  riders=new Map();
+  update(id,time,boost,celebrate,blocked=false,dressing=false){
+    let state=this.riders.get(id);
+    if(!state||time<state.time){state={time,wheelie:0,lounge:0};this.riders.set(id,state);}
+    const dt=Math.min(.05,Math.max(0,time-state.time));state.time=time;
+    const relaxing=!blocked&&!boost&&!dressing&&celebrate>0;
+    state.wheelie+=(Number(boost&&!blocked)-state.wheelie)*(1-Math.exp(-dt*12));
+    state.lounge+=(Number(relaxing)-state.lounge)*(1-Math.exp(-dt*16));
+    if(blocked){state.wheelie=0;state.lounge=0;}
+    const pitch=-.62*state.wheelie;
+    // Rotate around the rear axle even though cached models pivot at y=2.
+    return {...state,pitch,y:1.08*(Math.cos(pitch)-1)-1.65*Math.sin(pitch),z:-1.65+1.08*Math.sin(pitch)+1.65*Math.cos(pitch)};
+  }
 }
 export function drawYudaJacket(m,flutter=0){
   // Open leather shell with loose sleeves, lapels and the winged back patch.

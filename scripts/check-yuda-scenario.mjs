@@ -8,16 +8,20 @@ export async function checkYuda(evaluate,app,room,id,observer,wait,sleep,capture
     renderer.laserBolt=(...args)=>{__game.laserDraws++;return laser(...args);};
   }`);
   Object.assign(own,{celebrate:1.6});app.broadcast(room);
-  const salute=await wait(()=>evaluate('__game.yudaSalutes.size>=3'));await capture('yuda-shades-salute');
+  const salute=await wait(()=>evaluate(`__game.renderer.yudaStunts.riders.get(${id})?.lounge>.9`));await capture('yuda-la-vie');
   await evaluate('__game.characterAngle=Math.PI/2');await capture('yuda-motorcycle-side');
   await evaluate('__game.characterAngle=0');
   const boost=await evaluate("__game.network.action('turbo')===true")&&await wait(()=>evaluate(`__game.yudaBoosts.some(p=>p.id===${id}&&p.blue&&p.orange)`));await capture('yuda-afterburners');
   const jacketFlight=await wait(()=>evaluate(`__game.renderer.yudaJackets.riders.get(${id})?.bare&&__game.renderer.yudaJackets.riders.get(${id})?.flight&&__game.renderer.instances.some(part=>part.detached)`));await capture('yuda-jacket-flight');
+  const wheelie=await wait(()=>evaluate(`__game.renderer.yudaStunts.riders.get(${id})?.wheelie>.9`));await capture('yuda-wheelie');
   const flip=await evaluate("__game.network.action('somersault')===true")&&await wait(()=>evaluate(`__game.yudaFlips.some(p=>p.id===${id}&&p.height>3&&p.pitch < -1)`));await capture('yuda-motorcycle-flip');
   own.boost=0;own.somersault=0;
   Object.assign(peer,{driver:10,human:true,destroyed:0,shield:0,wx:own.wx+7,wz:own.wz+5,boost:1.5,somersault:.55});app.broadcast(room);
   const remoteFlip=await wait(()=>evaluate(`__game.yudaFlips.some(p=>p.id===${observer.id}&&p.height>3)&&__game.yudaBoosts.some(p=>p.id===${observer.id}&&p.blue&&p.orange)`));await capture('yuda-remote-flip');
   const remoteJacket=await wait(()=>evaluate(`__game.renderer.yudaJackets.riders.get(${observer.id})?.bare===true`));
+  const remoteWheelie=await wait(()=>evaluate(`__game.renderer.yudaStunts.riders.get(${observer.id})?.wheelie>.9`));await capture('yuda-remote-wheelie');
+  peer.boost=0;peer.celebrate=1.6;app.broadcast(room);
+  const remoteLounge=await wait(()=>evaluate(`__game.renderer.yudaStunts.riders.get(${observer.id})?.lounge>.9`));await capture('yuda-remote-la-vie');
   peer.destroyed=999;
   Object.assign(own,{wx:-65,wz:0,heading:0,motionHeading:0,cameraHeading:0,speed:0,boost:0,somersault:0,celebrate:0,vulcan:8,item:'hedgehog',fireCooldown:0});app.broadcast(room);
   await wait(()=>evaluate('__game.race.vulcan>0&&__game.race.somersault===0&&__game.race.fireCooldown===0'));
@@ -30,5 +34,5 @@ export async function checkYuda(evaluate,app,room,id,observer,wait,sleep,capture
   await wait(()=>evaluate(`__game.race.vulcan===0&&__game.race.bots.some(actor=>actor.id===${observer.id}&&actor.driver===10&&actor.destroyed===0)`));await evaluate('__game.laserDraws=0');
   app.controls(observer,{sequence:0,keys:[],actions:[{type:'fire',id:0,afterMove:-1}],epoch:room.world.soundEpoch});
   const remoteLaser=await wait(()=>evaluate(`__game.laserDraws>0&&__game.race.projectiles.some(shot=>shot.owner===${observer.id}&&shot.vulcan)`));await capture('yuda-remote-laser');
-  return {jacketFlight,remoteJacket,vulcanBare,redressed,salute,boost,flip,remoteFlip,laser,replicated,remoteLaser,pass:jacketFlight&&remoteJacket&&vulcanBare&&redressed&&salute&&boost&&flip&&remoteFlip&&laser&&replicated&&remoteLaser};
+  return {wheelie,remoteWheelie,remoteLounge,jacketFlight,remoteJacket,vulcanBare,redressed,salute,boost,flip,remoteFlip,laser,replicated,remoteLaser,pass:wheelie&&remoteWheelie&&remoteLounge&&jacketFlight&&remoteJacket&&vulcanBare&&redressed&&salute&&boost&&flip&&remoteFlip&&laser&&replicated&&remoteLaser};
 }

@@ -6,7 +6,7 @@ import { bomberCamera } from './mobile.js';
 import {drawNewDriver,drawRoadster,drawRoadsterJets,drawCricketHaze,drawCricketProjectile,drawHoustonHelmet,drawDollarBundle,drawCessna,drawCessnaPropeller,drawCessnaBoost,drawElectron,drawPilotWorm,drawStarship,drawStarshipThrust} from './characters.js';
 import {previewPose} from './preview-pose.js';
 import {drawRococoChariot,drawPearococo,drawPeacockFeather,drawRoyalWing,drawBalletPump,drawFairyStar,drawFairyBoost} from './pearococo.js';
-import {drawMotorcycle,drawYuda,drawYudaJacket,YudaJackets,drawBikerBadge,drawMotorcycleBoost} from './master-yuda.js';
+import {drawMotorcycle,drawYuda,drawYudaJacket,YudaJackets,YudaStunts,drawBikerBadge,drawMotorcycleBoost} from './master-yuda.js';
 import {YudaDrift} from './yuda-drift.js';
 const rgb=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255);
 const sub=(a,b)=>a.map((v,i)=>v-b[i]);
@@ -43,7 +43,7 @@ export class Renderer {
     this.models=new Map();this.instances=[];this.quality='auto';this.resolution=1.25;this.fps=0;this.fpsStart=0;this.frameCount=0;this.slowWindows=0;this.fastWindows=0;
     this.tailFolds=new Map();
     this.yudaDrift=new YudaDrift();
-    this.yudaJackets=new YudaJackets();
+    this.yudaJackets=new YudaJackets();this.yudaStunts=new YudaStunts();
     this.lastBodies=new Map();this.ashBodies=new Map();
     const debug=gl.getExtension('WEBGL_debug_renderer_info');this.gpuName=debug?gl.getParameter(debug.UNMASKED_RENDERER_WEBGL):'WebGL';this.softwareGPU=/swiftshader|llvmpipe|software/i.test(this.gpuName);if(this.softwareGPU)this.resolution=.75;
     this.program=gl.createProgram();
@@ -216,14 +216,19 @@ export class Renderer {
     if(boost)this.afterburner(p,angle,clock,null,driver);
   }
   yudaMotorcycle(m,p,color,yaw,spin,boost,clock,celebrate,jump,gesture=null){
-    const angle=Math.atan2(p.tx,p.tz)-yaw+spin,height=jump?.height??0,pitch=jump?.pitch??0,roll=p.bikeRoll??0;
+    const angle=Math.atan2(p.tx,p.tz)-yaw+spin,roll=p.bikeRoll??0;
+    const outfit=this.yudaJackets.update(p.id??'preview',clock,boost||p.vulcan>0,{x:p.x,z:p.z,height:jump?.height??0,angle});
+    const stunt=this.yudaStunts.update(p.id??'preview',clock,boost,gesture?.id==='cheer'?1:celebrate,Boolean(jump)||Math.abs(roll)>.2,outfit.dressing!==null);
+    const height=(jump?.height??0)+stunt.y,pitch=(jump?.pitch??0)+stunt.pitch;
+    p={...p,x:p.x+Math.sin(angle)*stunt.z,z:p.z+Math.cos(angle)*stunt.z};
+    const visualJump={height,pitch};
     m.at(p.x,.08,p.z,angle);m.disc(0,0,0,1.1,2.8,'#343b43');
     this.model(`kart:10:${color}`,p.x,height,p.z,angle,mesh=>drawMotorcycle(mesh,color),pitch,null,roll);
-    const saluting=!jump&&Math.abs(roll)<.2&&(celebrate>0||(gesture?.right??0)>0),phase=saluting?Math.floor(clock*5)%8:0;
-    const tuck=Boolean(jump)||boost||Math.abs(roll)>.2;
-    const outfit=this.yudaJackets.update(p.id??'preview',clock,boost||p.vulcan>0,{x:p.x,z:p.z,height,angle});
+    const saluting=!jump&&Math.abs(roll)<.2&&(boost||(gesture?.right??0)>0),phase=saluting?Math.floor(clock*5)%8:0;
+    const tuck=Boolean(jump)||Math.abs(roll)>.2;
     const dressing=outfit.dressing===null?-1:Math.min(7,Math.floor(outfit.dressing*8));
-    this.model(`yuda:rider:${phase}:${tuck}:${!outfit.bare}:${dressing}`,p.x,height,p.z,angle+(gesture?.yaw??0)*.35,mesh=>drawYuda(mesh,phase,tuck,!outfit.bare,dressing),pitch+(tuck?.18:0),null,roll);
+    const lounge=Math.round(stunt.lounge*8)/8;
+    this.model(`yuda:rider:${phase}:${tuck}:${!outfit.bare}:${dressing}:${lounge}`,p.x,height,p.z,angle+(gesture?.yaw??0)*.35,mesh=>drawYuda(mesh,phase,tuck,!outfit.bare,dressing,lounge),pitch+(tuck?.18:0),null,roll);
     // Detached clothing is cosmetic and does not become part of his ashes.
     if(outfit.flight){const f=outfit.flight,t=(clock-f.start)/1.2,distance=t*9;
       this.model(`yuda:jacket:${Math.floor(t*8)%4}`,f.x-Math.sin(f.angle)*distance,f.height+2.5+Math.sin(t*Math.PI)*4+t*2,f.z-Math.cos(f.angle)*distance,f.angle+t*7,mesh=>drawYudaJacket(mesh,Math.sin(Math.floor(t*8)%4*Math.PI/2)),t*5);this.instances.at(-1).detached=true;
@@ -232,8 +237,8 @@ export class Renderer {
       this.model(`yuda:dressing:${dressing}`,p.x,height+2.35+lift*1.5,p.z,angle,mesh=>{mesh.at(0,0,-.52);drawYudaJacket(mesh,Math.sin(dressing*Math.PI/7));},pitch+lift*.4,null,roll);
     }
     // Restrained neon underglow is always present; protection adds winged badges.
-    this.bikerAura(m,p,angle,clock,jump);
-    if(boost||jump)this.afterburner(p,angle,clock,jump,10);
+    this.bikerAura(m,p,angle,clock,visualJump);
+    if(boost||jump)this.afterburner(p,angle,clock,visualJump,10);
   }
   bikerAura(m,p,angle,time,jump=null,strength=0){
     const height=jump?.height??0,g=this.glow;g.at(p.x,height,p.z,angle);g.pitch=jump?.pitch??0;g.pivot=2;g.roll=p.bikeRoll??0;
@@ -252,7 +257,10 @@ export class Renderer {
     for(let i=0;i<5;i++)this.glow.particle(0,0,-.9+i*.45,.42,[.025,.38,.32]);
   }
   laserMount(m,pose,actor,time,jump){
-    const height=jump?.height??0;
+    const wheelie=this.yudaStunts.riders.get(actor.id)?.wheelie??0,pitch=-.62*wheelie;
+    const height=(jump?.height??0)+1.08*(Math.cos(pitch)-1)-1.65*Math.sin(pitch),behind=-1.65+1.08*Math.sin(pitch)+1.65*Math.cos(pitch);
+    pose={...pose,x:pose.x+Math.sin(actor.heading)*behind,z:pose.z+Math.cos(actor.heading)*behind};
+    jump={height,pitch:(jump?.pitch??0)+pitch};
     m.at(pose.x,height,pose.z,actor.heading);m.pitch=jump?.pitch??0;m.pivot=2;
     this.glow.at(pose.x,height,pose.z,actor.heading);this.glow.pitch=jump?.pitch??0;this.glow.pivot=2;
     m.roll=pose.bikeRoll??0;this.glow.roll=pose.bikeRoll??0;
@@ -456,7 +464,7 @@ export class Renderer {
   drawBattle(r,time){
     this.yudaDrift.update(r,time);
     const helmetScene=`${r.arena}:${r.soundEpoch}:${r.id}`;
-    if(this.helmetScene!==helmetScene||time<(this.helmetTime??0)){this.helmetScene=helmetScene;this.helmetFlights=new Map();this.tailFolds.clear();this.yudaJackets.riders.clear();this.lastBodies.clear();this.ashBodies.clear();}this.helmetTime=time;
+    if(this.helmetScene!==helmetScene||time<(this.helmetTime??0)){this.helmetScene=helmetScene;this.helmetFlights=new Map();this.tailFolds.clear();this.yudaJackets.riders.clear();this.yudaStunts.riders.clear();this.lastBodies.clear();this.ashBodies.clear();}this.helmetTime=time;
     if(this.track!==`arena-${r.arena}`)this.arenaScenery(r.arena);
     const gl=this.gl,canvas=this.canvas,width=Math.round(canvas.clientWidth*this.pixelRatio()),height=Math.round(canvas.clientHeight*this.pixelRatio());if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;}gl.viewport(0,0,width,height);
     const sky=rgb(arenas[r.arena].sky);gl.clearColor(...sky,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(this.program);
