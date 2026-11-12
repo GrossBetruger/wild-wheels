@@ -586,7 +586,7 @@ export class Renderer {
       const parts=this.instances.slice(bodyStart);this.rememberBody(actor,parts,parts.length?[]:m.data.slice(dataStart));
       if(actor.driver===7)this.houstonHelmet(pose,actor,time,jump);
       if(actor.hedgeShield>0)this.hedgeguard(m,pose,actor,time,jump);
-      if(r.specialAbilities!==false&&actor.driver===11){const angle=time*.5;this.glow.at(pose.x,(jump?.height??0)+3.3,pose.z);for(let i=0;i<28;i++){const a=angle+i*Math.PI/14;this.glow.particle(Math.cos(a)*2.1,Math.sin(a*3)*.2,Math.sin(a)*2.1,.4,[.7,.5,.12]);}this.glow.at(pose.x,(jump?.height??0)+6.3,pose.z);this.glow.disc(0,0,0,1.2,1.2,[.65,.45,.06]);}
+      if(r.specialAbilities!==false&&actor.driver===11&&actor.specialActive>0){const angle=time*.5;this.glow.at(pose.x,(jump?.height??0)+3.3,pose.z);for(let i=0;i<28;i++){const a=angle+i*Math.PI/14;this.glow.particle(Math.cos(a)*2.1,Math.sin(a*3)*.2,Math.sin(a)*2.1,.4,[.7,.5,.12]);}this.glow.at(pose.x,(jump?.height??0)+6.3,pose.z);this.glow.disc(0,0,0,1.2,1.2,[.65,.45,.06]);}
       if(actor.tehilim>0)this.tehilimAura(pose,time,actor.tehilim,jump);
       if(actor.dizzy>0)for(let i=0;i<6;i++){const angle=time*(actor.boost>0?9:5)+i*Math.PI/3;m.at(pose.x+Math.sin(angle)*3.2,6.8+Math.sin(angle*2)*.5,pose.z+Math.cos(angle)*3.2,angle);m.box(0,0,0,1.2,.22,.3,'#fff08b');m.box(0,0,0,.3,.22,1.2,'#fff08b');this.glow.at(m.origin[0],m.origin[1],m.origin[2]);this.glow.particle(0,0,0,.8,[.7,.6,.05]);}
       if(actor.vulcan>0&&actor.driver===10)this.laserMount(m,pose,actor,time,jump);

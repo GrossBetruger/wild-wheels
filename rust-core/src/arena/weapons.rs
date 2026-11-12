@@ -71,7 +71,7 @@ impl Game{
         let mut credit=Vec::new();if owner<self.actors.len(){credit.push(owner);}
         let a=&self.actors[victim];
         if a.dizzy>0.0{for(&id,&expires)in &a.credits{if expires>g.elapsed+1e-8&&self.actors.get(id).is_some_and(|b|b.bomber&&!b.inactive)&&id!=victim&&!credit.contains(&id){credit.push(id);}}}
-        let a=&mut self.actors[victim];a.credits.clear();a.destroyed=3.0;a.speed=0.0;a.boost=0.0;if !unscored{a.deaths+=1;}effect(g,match kind{"abomb"|"radiation"=>"ash",_=>"explosion"},victim,a.wx,a.wz,None);a.drift=0.0;a.was_drifting=false;a.drift_trail=None;a.kill_streak=0;a.vulcan=0.0;a.hedge_shield=0.0;a.tehilim=0.0;a.somersault=0.0;a.dizzy=0.0;
+        let a=&mut self.actors[victim];a.credits.clear();a.destroyed=3.0;a.speed=0.0;a.boost=0.0;if !unscored{a.deaths+=1;}effect(g,match kind{"abomb"|"radiation"=>"ash",_=>"explosion"},victim,a.wx,a.wz,None);a.drift=0.0;a.was_drifting=false;a.drift_trail=None;a.kill_streak=0;a.vulcan=0.0;a.hedge_shield=0.0;a.tehilim=0.0;a.special_active=0.0;a.somersault=0.0;a.dizzy=0.0;
         if unscored{return true;}
         let victim_name=a.name.clone().unwrap_or_else(||driver_name(a.driver).into());let victim_color=a.color.clone();
         for scorer in credit{
@@ -85,7 +85,7 @@ impl Game{
         let dt=dt*match self.frozen(shot.owner){true=>0.025,false=>1.0};
         shot.age+=dt;shot.life-=dt;shot.trail.push(Sample{wx:shot.wx,wz:shot.wz,height:shot.height});if shot.trail.len()>24{shot.trail.remove(0);}
         if shot.kind=="missile"&&!shot.reflected&&shot.decoy.is_none(){
-            let defender=shot.target.and_then(|id|self.actors.get(id)).filter(|a|a.destroyed<=0.0&&!a.inactive&&!a.afk&&(a.tehilim>0.0||self.global.special_abilities&&a.driver==11));
+            let defender=shot.target.and_then(|id|self.actors.get(id)).filter(|a|a.destroyed<=0.0&&!a.inactive&&!a.afk&&(a.tehilim>0.0||self.global.special_abilities&&a.driver==11&&a.special_active>0.0));
             let shooter=self.actors.get(shot.owner).filter(|a|a.destroyed<=0.0&&!a.inactive&&!a.afk&&!a.bomber);
             if let (Some(defender),Some(shooter))=(defender,shooter){if distance(shot.wx,shot.wz,defender.wx,defender.wz)<=distance(shot.wx,shot.wz,shooter.wx,shooter.wz){shot.owner=defender.id;shot.target=Some(shooter.id);shot.reflected=true;shot.action_id=None;shot.speed=100.0;shot.life=shot.life.max(6.0);}}
         }

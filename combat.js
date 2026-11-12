@@ -168,7 +168,7 @@ export function advanceProjectile(r,shot,dt){
   const actors=[r,...r.bots],arena=arenas[r.arena];
   shot.age=(shot.age??0)+dt;shot.life-=dt;shot.trail.push({wx:shot.wx,wz:shot.wz,height:shot.height});if(shot.trail.length>24)shot.trail.shift();
   if(shot.kind==='missile'&&!shot.reflected&&shot.decoy==null){
-    const defender=actors.find(a=>a.id===shot.target&&!a.destroyed&&!a.inactive&&!a.afk&&(a.tehilim>0||r.specialAbilities!==false&&a.driver===11)),shooter=actors.find(a=>a.id===shot.owner&&!a.destroyed&&!a.inactive&&!a.afk&&!a.bomber);
+    const defender=actors.find(a=>a.id===shot.target&&!a.destroyed&&!a.inactive&&!a.afk&&(a.tehilim>0||r.specialAbilities!==false&&a.driver===11&&a.specialActive>0)),shooter=actors.find(a=>a.id===shot.owner&&!a.destroyed&&!a.inactive&&!a.afk&&!a.bomber);
     if(defender&&shooter&&distance(shot,defender)<=distance(shot,shooter)){
       shot.owner=defender.id;shot.target=shooter.id;shot.reflected=true;delete shot.actionId;shot.speed=100;shot.life=Math.max(shot.life,6);
     }
@@ -206,7 +206,7 @@ export function damageBattle(r,victim,owner,amount,kind='hedgehog'){
   }
   victim.stinkContributors=new Map();
   victim.destroyed=3;victim.speed=0;victim.boost=0;if(r.finishCountdown===null)victim.deaths++;fx(r,kind==='abomb'||kind==='radiation'?'ash':'explosion',victim);
-  victim.drift=0;victim.wasDrifting=false;victim.driftTrail=null;victim.killStreak=0;victim.vulcan=0;victim.hedgeShield=0;victim.tehilim=0;victim.somersault=0;victim.dizzy=0;
+  victim.drift=0;victim.wasDrifting=false;victim.driftTrail=null;victim.killStreak=0;victim.vulcan=0;victim.hedgeShield=0;victim.tehilim=0;victim.specialActive=0;victim.somersault=0;victim.dizzy=0;
   if(r.finishCountdown!==null)return true;
   for(const scorer of credited){const full=kind==='wall'||scorer===attacker;scorer.kills+=full?1:.5;scorer.celebrate=1.6;voice(r,scorer,'cheer');r.killFeed.unshift({id:r.killSequence=(r.killSequence??0)+1,attacker:scorer.id,assist:!full,radiation:kind==='radiation'&&scorer===attacker,victim:victim.id,victimName:victim.name??drivers[victim.driver].name,victimColor:victim.color??drivers[victim.driver].color,text:`${scorer===r?'YOU':scorer.name??drivers[scorer.driver].name.split(' ')[0]} → ${victim===r?'YOU':victim.name??drivers[victim.driver].name.split(' ')[0]}`,time:r.elapsed});r.killFeed=r.killFeed.slice(0,16);}
   if(attacker&&!attacker.bomber&&!attacker.destroyed){
@@ -309,7 +309,7 @@ export function tickBattle(r,keys,dt,inputs=null){
   const actors=[r,...r.bots],arena=arenas[r.arena];
   for(const actor of actors){
     if(frozen(r,actor.id)){const control=inputs?.get(actor.id)??(actor===r?keys:new Set());advanceKartMovement(r,actor,control.keys instanceof Set?control.keys:control,dt*.025);continue;}
-    const recoveryHealth=r.specialAbilities!==false&&actor.driver===12?6:RECOVERY_HEALTH;
+    const recoveryHealth=RECOVERY_HEALTH;
     if(actor!==r)actor.noticeTime=Math.max(0,(actor.noticeTime??0)-dt);
     for(const key of ['fireCooldown','shield','hedgeShield','tehilim','celebrate','voiceCooldown','wallCooldown','vulcan','chaffCooldown']){if(inputs?.get(actor.id)?.actionClock&&['fireCooldown','chaffCooldown'].includes(key))continue;actor[key]=Math.max(0,(actor[key]??0)-dt);}
     if(actor.bomber){

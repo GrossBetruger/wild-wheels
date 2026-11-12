@@ -3,15 +3,16 @@ export const TIME_STOP_DURATION=2.5;
 export const abilityNames={5:'CRICKET’S JUMP',8:'SPECIAL RELATIVITY',10:'DIZZY SMOKE',11:'HOLY AURA',12:'SIX-HEART RECOVERY'};
 export function frozen(world,id){return world.specialAbilities!==false&&world.timeStop>0&&world.timeOwner!==id;}
 export function useSpecial(world,actor=world){
-  if(world.specialAbilities===false||world.phase!=='racing'||world.finishCountdown!==null||actor.driver!==8||actor.specialCooldown>0||actor.destroyed>0||actor.inactive||actor.afk||actor.bomber||world.timeStop>0)return false;
-  world.timeStop=TIME_STOP_DURATION;world.timeOwner=actor.id;actor.specialCooldown=SPECIAL_COOLDOWN;return true;
+  if(world.specialAbilities===false||world.phase!=='racing'||world.finishCountdown!==null||![8,11,12].includes(actor.driver)||actor.specialCooldown>0||actor.destroyed>0||actor.inactive||actor.afk||actor.bomber||world.timeStop>0)return false;
+  switch(actor.driver){case 8:world.timeStop=TIME_STOP_DURATION;world.timeOwner=actor.id;break;case 11:actor.specialActive=8;break;case 12:if(actor.health>=6)return false;actor.health=6;actor.healTimer=0;actor.specialActive=1.5;break;}actor.specialCooldown=SPECIAL_COOLDOWN;return true;
 }
 export function tickSpecials(world,dt){
   if(world.specialAbilities===false)return;
   world.timeStop=Math.max(0,(world.timeStop??0)-dt);if(!world.timeStop)world.timeOwner=null;
   const actors=[world,...world.bots];
   for(const a of actors){
-    a.specialActive=a.driver===11?1:0;if(frozen(world,a.id))continue;
+    if(frozen(world,a.id))continue;
+    a.specialActive=Math.max(0,(a.specialActive??0)-dt);
     a.specialCooldown=Math.max(0,(a.specialCooldown??0)-dt);
     if(a.driver!==10||a.boost<=0||a.destroyed||a.inactive||a.afk||a.bomber)continue;
     const last=world.effects.findLast(f=>f.type==='yudaSmoke'&&f.owner===a.id);

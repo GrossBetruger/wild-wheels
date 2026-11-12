@@ -24,9 +24,10 @@ export async function checkSpecials(evaluate,app,room,id,sleep,capture){
   const clientStaysStill=await evaluate(`Math.abs(__game.race.wz-${heldAt})<1&&__game.network.action('fire')!==true`);await capture('frozen-opponent');
   await evaluate('__game.keys.clear()');Object.assign(room.world,{timeStop:0,timeOwner:null});app.broadcast(room);
   // Keep the room's canonical actors; reset just the scenario, not the connection.
-  Object.assign(own,{driver:11,wx:65,wz:40,speed:0,tehilim:0});other.speed=0;app.broadcast(room);
-  const holy=await wait(()=>evaluate("__game.race.driver===11&&document.querySelector('.special-status').textContent==='HOLY AURA'"));await capture('holy-aura');
-  Object.assign(own,{driver:12,health:5,healTimer:3.9});app.broadcast(room);
+  Object.assign(own,{driver:11,wx:65,wz:40,speed:0,tehilim:0,specialCooldown:0});other.speed=0;app.broadcast(room);
+  await wait(()=>evaluate('__game.race.driver===11&&__game.race.specialCooldown===0'));await evaluate("__game.network.action('special')");
+  const holy=await wait(()=>evaluate("__game.race.driver===11&&document.querySelector('.special-status').textContent.includes('HOLY AURA')&&__game.race.specialActive>0"));await capture('holy-aura');
+  Object.assign(own,{driver:12,health:3,healTimer:0,specialActive:0,specialCooldown:0});app.broadcast(room);await wait(()=>evaluate("__game.race.driver===12&&__game.race.specialCooldown===0"));await evaluate("__game.network.action('special')");
   const heal=await wait(()=>evaluate('__game.race.driver===12&&__game.race.health===6'));
   Object.assign(own,{driver:10,wx:65,wz:40,heading:0,boost:1});Object.assign(other,{wx:65,wz:35,boost:0,dizzy:0});app.broadcast(room);
   const smoke=await wait(()=>app.snapshot(room,peer).world.dizzy>7);

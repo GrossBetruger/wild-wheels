@@ -5,12 +5,24 @@ import {ArenaCore,ArenaClient} from './arena-core.js';
 import {useSpecial} from './special-abilities.js';
 import {decodeBinarySnapshot} from './binary-wire.js';
 
+for(const engine of ['JavaScript','Rust'])for(const driver of [11,12])test(`${engine}: driver ${driver} starts inactive and must recharge for twenty seconds`,()=>{
+  const world=createBattle(driver);Object.assign(world,{phase:'racing',human:true,wx:-65,wz:0,health:3,supplies:[]});for(const a of world.bots)Object.assign(a,{inactive:true,destroyed:999});
+  const core=engine==='Rust'?new ArenaCore(world):null,read=()=>core?core.snapshot():world;
+  const step=dt=>core?core.step(dt):tickBattle(world,new Set(),dt),activate=()=>core?core.step(0,[{actor:0,actions:[{type:'special'}]}]):useSpecial(world);
+  step(.05);assert.equal(read().specialActive??0,0);assert.equal(read().health,3);
+  activate();assert.equal(read().specialCooldown,20);assert.equal(read().specialActive,driver===11?8:1.5);assert.equal(read().health,driver===12?6:3);
+  for(let i=0;i<200;i++)step(.05);assert.equal(read().specialActive,0);assert.ok(read().specialCooldown>9.9);activate();assert.equal(read().specialActive,0);
+  for(let i=0;i<201;i++)step(.05);assert.equal(read().specialCooldown,0);
+  if(driver===11){activate();assert.equal(read().specialActive,8);}
+});
+
 for(const engine of ['JavaScript','Rust']){
-  test(`${engine}: Catheterpillar naturally heals to six hearts only with abilities enabled`,()=>{
+  test(`${engine}: Catheterpillar heals to six hearts on activation only with abilities enabled`,()=>{
     for(const enabled of [true,false]){
       const world=createBattle(12);Object.assign(world,{phase:'racing',human:true,wx:-65,wz:0,health:3,specialAbilities:enabled,supplies:[]});
       for(const a of world.bots)Object.assign(a,{inactive:true,destroyed:999});
       const core=engine==='Rust'?new ArenaCore(world):null;
+      assert.equal((core?core.snapshot():world).health,3);if(core)core.step(0,[{actor:0,actions:[{type:"special"}]}]);if(!core)useSpecial(world);
       for(let i=0;i<721;i++){if(core)core.step(1/60);if(!core)tickBattle(world,new Set(),1/60);}
       assert.equal((core?core.snapshot():world).health,enabled?6:3);
     }
@@ -32,7 +44,7 @@ for(const engine of ['JavaScript','Rust']){
       for(const a of world.bots)Object.assign(a,{inactive:true,destroyed:999});Object.assign(world.bots[0],{inactive:false,destroyed:0,human:true,wx:65,wz:40});
       world.projectiles=[{id:1,owner:1,target:0,kind:'missile',wx:65,wz:60,heading:0,speed:70,height:1.3,vy:0,life:3,age:0,trail:[]}];
       const core=engine==='Rust'?new ArenaCore(world):null;
-      if(core)core.step(0);if(!core)tickBattle(world,new Set(),0);
+      assert.equal((core?core.snapshot():world).specialActive??0,0);if(core)core.step(0,[{actor:0,actions:[{type:"special"}]}]);if(!core){useSpecial(world);tickBattle(world,new Set(),0);}
       const after=core?core.snapshot():world;assert.equal(after.tehilim,0);assert.equal(after.projectiles[0].target,enabled?1:0);assert.equal(after.projectiles[0].owner,enabled?0:1);
     }
   });
