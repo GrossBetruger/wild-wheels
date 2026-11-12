@@ -3,7 +3,7 @@ import { LENGTH, drivers, pickupType } from './engine.js';
 import { arenas, combatPose, somersaultPose, BOMB_FALL_TIME, BOMB_RADIUS, BOMB_OUTER_RADIUS, STINK_RADIUS, DIZZY_DURATION, VULCAN_DURATION } from './combat.js';
 import { kartNameplates } from './nameplates.js';
 import { bomberCamera } from './mobile.js';
-import {drawAmbulance,drawNurseButterfly} from './catheterpillar.js';
+import {drawAmbulance,drawNurseButterfly,drawButterflyWings} from './catheterpillar.js';
 import {drawNewDriver,drawRoadster,drawRoadsterJets,drawCricketHaze,drawCricketProjectile,drawHoustonHelmet,drawDollarBundle,drawCessna,drawCessnaPropeller,drawCessnaBoost,drawElectron,drawPilotWorm,drawStarship,drawStarshipThrust} from './characters.js';
 import {previewPose} from './preview-pose.js';
 import {drawRococoChariot,drawPearococo,drawPeacockFeather,drawRoyalWing,drawBalletPump,drawFairyStar,drawFairyBoost} from './pearococo.js';
@@ -224,8 +224,11 @@ export class Renderer {
     const angle=Math.atan2(p.tx,p.tz)-yaw+spin,height=.13+(jump?.height??0),pitch=jump?.pitch??0;
     m.at(p.x,.05,p.z,angle);m.disc(0,0,0,2.1,2.8,'#3a4147');
     this.model(`kart:12:${color}`,p.x,height,p.z,angle,mesh=>drawAmbulance(mesh,color),pitch);
-    const phase=Math.floor(clock*(boost?12:6))%8,waving=celebrate>0||(gesture?.right??0)>0;
-    this.model(`catheterpillar:nurse:${phase}:${waving}`,p.x,height+(gesture?.bounce??0),p.z,angle+(gesture?.yaw??0),mesh=>drawNurseButterfly(mesh,phase,waving),pitch+(gesture?.lean??0));
+    const phase=Math.floor(clock*6)%8,waving=celebrate>0||(gesture?.right??0)>0;
+    const hover=height+1.65+Math.sin(clock*3)*.09+(gesture?.bounce??0),facing=angle+(gesture?.yaw??0),lean=pitch+(gesture?.lean??0);
+    this.model(`catheterpillar:nurse:${phase}:${waving}`,p.x,hover,p.z,facing,mesh=>drawNurseButterfly(mesh,phase,waving),lean);
+    const wingPhase=Math.floor(clock*(boost?96:72))%24;
+    this.model(`catheterpillar:wings:${wingPhase}`,p.x,hover,p.z,facing,mesh=>drawButterflyWings(mesh,wingPhase),lean);
     if(boost||jump)this.afterburner(p,angle,clock,jump,12);
   }
   lionChopper(m,p,color,yaw,spin,boost,clock,celebrate,jump,gesture=null){
@@ -472,7 +475,8 @@ export class Renderer {
     const gl=this.gl,canvas=this.canvas,width=Math.max(1,Math.round(canvas.clientWidth*this.pixelRatio())),height=Math.max(1,Math.round(canvas.clientHeight*this.pixelRatio()));
     if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;}gl.viewport(0,0,width,height);
     this.instances=[];this.glow=new Mesh();this.smoke=new Mesh();
-    const pose=previewPose(driver,time),orbit=time*.28+.35,radius=driver===11?15:12,eye=[Math.sin(orbit)*radius,driver===11?9.5:7.4,Math.cos(orbit)*radius],view=cameraMatrix(eye,[0,driver===11?4:2.55,0],width/height,.8),sky=rgb('#e5deef');
+    const tall=driver===11||driver===12;
+    const pose=previewPose(driver,time),orbit=time*.28+.35,radius=tall?15:12,eye=[Math.sin(orbit)*radius,tall?9.5:7.4,Math.cos(orbit)*radius],view=cameraMatrix(eye,[0,tall?4:2.55,0],width/height,.8),sky=rgb('#e5deef');
     gl.clearColor(...sky,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(this.program);
     gl.uniformMatrix4fv(this.matrix,false,view);gl.uniform3fv(this.eyeUniform,eye);gl.uniform3fv(this.fog,sky);gl.uniform1f(this.fogScale,1);gl.uniform1f(this.emission,0);
     const m=new Mesh();m.disc(0,-.22,0,40,40,'#e5deef',48);m.disc(0,-.12,0,4.7,4.7,'#c6bad6',48);m.disc(0,-.08,0,4.5,4.5,'#f8f3e5',48);

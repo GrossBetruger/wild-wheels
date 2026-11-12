@@ -38,21 +38,28 @@ export function drawAmbulance(m,color){
   for(const side of [-1,1])m.ball(side*.62,2.28,-1.43,.35,.23,.23,side<0?'#f49fbd':'#8adce2',10,5);
 }
 
-export function drawNurseButterfly(m,phase,waving){
-  const skin='#f4c4d8',ink='#514568',mint='#b5e9db';
-  const flap=Math.sin(phase*Math.PI/4),spread=.8+flap*.13;
+export function drawButterflyWings(m,phase){
+  const ink="#514568",mint="#b5e9db",flap=.2+Math.sin(phase*Math.PI/12)*.95;
   for(const side of [-1,1]){
-    // Four scalloped wing lobes, with jewel-like insets visible from both sides.
-    for(const [y,size,shade]of [[3.45,1.12,'#c7afea'],[2.45,.78,'#f3b5d2']]){
-      const x=side*(.55+size*.65)*spread,z=-.65+flap*.24;
-      m.ball(x,y,z,size*spread,size,.15,ink,12,8);
-      m.ball(x,y,z,size*spread*.92,size*.92,.18,shade,12,8);
+    // Each wing pivots at the shoulder, preserving its shape through the stroke.
+    m.at(side*.28,0,-.45,side*flap);
+    for(const [y,size,shade]of [[3.45,1.12,"#c7afea"],[2.45,.78,"#f3b5d2"]]){
+      const x=side*(.12+size*.75);
+      m.ball(x,y,0,size,size,.15,ink,12,8);
+      m.ball(x,y,0,size*.92,size*.92,.18,shade,12,8);
       for(const face of [-1,1]){
-        m.ball(x,y+.12,z+face*.18,size*.55,size*.65,.03,mint,10,6);
-        for(let i=0;i<5;i++){const a=-1.2+i*.6;m.ball(x+side*Math.cos(a)*size*.76*spread,y+Math.sin(a)*size*.76,z+face*.17,.065,.065,.035,'#fff5cf',6,4);}
+        m.ball(x,y+.12,face*.18,size*.55,size*.65,.03,mint,10,6);
+        for(let i=0;i<5;i++){const a=-1.2+i*.6;m.ball(x+side*Math.cos(a)*size*.76,y+Math.sin(a)*size*.76,face*.17,.065,.065,.035,"#fff5cf",6,4);}
       }
     }
   }
+  m.at(0,0,0);
+}
+
+export function drawNurseButterfly(m,phase,waving){
+  const skin="#f4c4d8",ink="#514568",mint="#b5e9db";
+  // Little dangling shoes make the whole airborne silhouette readable.
+  for(const side of [-1,1])m.ball(side*.24,1.7,.12,.17,.15,.3,mint,10,5);
   m.ball(0,2.47,0,.58,.78,.46,'#fff7eb',12,7);
   m.box(0,2.12,.42,.73,.35,.08,mint);
   m.ball(0,3.6,.17,.73,.72,.61,skin,14,8);
