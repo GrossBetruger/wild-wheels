@@ -82,7 +82,7 @@ export class ReceiptRolls{
 }
 function drawReceipt(m,p,angle,clock,jump,amount,feed){
   m.at(p.x,jump?.height??0,p.z,angle);m.pitch=jump?.pitch??0;
-  const length=7.5*amount,radius=.85*amount,turns=Math.PI*2.15,coilLength=radius*turns,total=length+coilLength,width=1.5;
+  const length=2.5*amount,radius=1.05*amount,turns=Math.PI*3.25,coilLength=radius*turns,total=length+coilLength,width=1.5;
   const center=d=>{
     const free=Math.min(d,length),f=free/Math.max(.001,length),wave=f*f;
     const x=Math.sin(clock*2.8-free*.65)*.22*wave,y=1.34+f*.75+Math.sin(f*Math.PI)*.55+Math.sin(clock*7-free*1.5)*.15*wave,z=-2.5-free;
