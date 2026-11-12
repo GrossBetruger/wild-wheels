@@ -19,9 +19,9 @@ export function drawOwl(m,phase,flight=0,gesture=0){
   for(let row=0;row<4;row++)for(let i=0;i<7;i++){const a=(i-3)*.32;m.ball(Math.sin(a)*(.9-row*.08),3.8-row*.32,.35+Math.cos(a)*.2,.17,.27,.085,row%2?white:ivory,7,5);}
   for(let row=0;row<4;row++)for(let i=0;i<7;i++){const a=(i-3)*.32;m.ball(Math.sin(a)*(.9-row*.08),3.8-row*.32,-.45-Math.cos(a)*.5,.18,.26,.09,row%2?white:ivory,7,5);}
   for(const side of [-1,1]){
-    const point=m.point,wingAngle=flight*(.8+flap*.43)+(gesture===1&&side===1?.7:gesture===2?.8:gesture===4?1.4:0);
+    const point=m.point,wingAngle=flight*(.8+flap*.43)+(1-flight)*(.07+flap*.16)+(gesture===1&&side===1?.7:gesture===2?.8:gesture===4?1.4:0);
     m.point=function([x,y,z]){const xx=x* Math.cos(wingAngle)-y*Math.sin(wingAngle),yy=x*Math.sin(wingAngle)+y*Math.cos(wingAngle);return point.call(this,[side*(.75+xx),3.55+yy,-.35+z]);};
-    try{m.ball(.4,-.3,0,.6,.8,.26,ivory,10,6);for(let i=0;i<9;i++){const x=.15+i*.19,y=-.2-i*.1,len=.9+i*.11;m.ball(x,y-len*.45,-.05,.15,len*.58,.14,i%2?white:ivory,8,6);m.box(x,y-len*.55,.095,.018,len*.65,.015,edge);}}finally{m.point=point;}
+    try{m.ball(.4,-.3,0,.6,.8,.26,ivory,10,6);for(let i=0;i<9;i++){const x=.15+i*.19,y=-.2-i*.1+Math.sin(phase*Math.PI/8+i*.35)*(1-flight)*.045*i/8,len=.9+i*.11;m.ball(x,y-len*.45,-.05,.15,len*.58,.14,i%2?white:ivory,8,6);m.box(x,y-len*.55,.095,.018,len*.65,.015,edge);}}finally{m.point=point;}
     const pedal=Math.sin(phase*Math.PI/8)*.22*(1-flight);rod(m,[side*.34,2.75,-.35],[side*.5,2.05+pedal,.1],.13,ivory);m.ball(side*.5,1.98+pedal,.2,.28,.12,.4,gold,8,5);
     for(let i=0;i<4;i++)m.ball(side*(.15+i*.16),2.85,-.98,.15,.4,.13,ivory,8,5);
   }
