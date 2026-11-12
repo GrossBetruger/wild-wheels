@@ -31,7 +31,7 @@ impl Room {
 fn initial_actor(id:usize,skill:f64)->Actor {
     let angle=(id*8/6)as f64*std::f64::consts::FRAC_PI_4;let x=angle.sin()*78.0;let z=angle.cos()*78.0;let heading=(-x).atan2(-z);
     Actor{id,driver:id%DRIVER_NAMES.len(),color:COLORS[id].into(),wx:x,wz:z,heading,motion_heading:heading,camera_heading:heading,somersault_camera_start:heading,
-        health:3.0,shield:2.0,ammo:START_HEDGEHOGS,missiles:1,turbos:1,item:"hedgehog".into(),fire_cooldown:0.5,chaff:4,skill,..Actor::default()}
+        health:3.0,shield:0.0,ammo:START_HEDGEHOGS,missiles:1,turbos:1,item:"hedgehog".into(),fire_cooldown:0.5,chaff:4,skill,..Actor::default()}
 }
 impl Game {
     fn create_room(room:&Room)->Result<Self,()> {
@@ -54,7 +54,7 @@ impl Game {
             }
             let active=person.is_some()||bots>0;
             if person.is_none()&&active{bots-=1;}
-            if active&&actor.inactive{actor.destroyed=0.0;actor.health=3.0;actor.shield=2.0;actor.speed=0.0;}
+            if active&&actor.inactive{actor.destroyed=0.0;actor.health=3.0;actor.shield=0.0;actor.speed=0.0;}
             actor.human=person.is_some();actor.inactive=!active;actor.afk=person.is_some_and(|p|p.afk);if actor.afk{actor.speed=0.0;actor.boost=0.0;actor.was_drifting=false;actor.drift=0.0;actor.somersault=0.0;}actor.color=match person.map_or(actor.driver,|p|p.driver){6=>"#e8edf2",_=>COLORS[id]}.into();
             if !active{actor.destroyed=1e9;actor.speed=0.0;}
             match person {

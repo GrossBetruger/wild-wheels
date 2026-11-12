@@ -41,15 +41,15 @@ test('rivals can kill each other and kill credit goes to the firing rival',()=>{
   const r=createBattle(0,0,()=>.5);r.phase='racing';const attacker=r.bots[0],victim=r.bots[1];victim.shield=0;
   damageBattle(r,victim,attacker.id,3);assert.equal(attacker.kills,1);assert.equal(r.kills,0);assert.equal(victim.deaths,1);
 });
-test('spawn protection prevents damage and self-hits never award kills',()=>{
+test('self-hits never award kills but opponents can kill a newly spawned player',()=>{
   const r=createBattle(0,0,()=>.5);r.phase='racing';
-  damageBattle(r,r,1,3);assert.equal(r.health,3);r.shield=0;
   damageBattle(r,r,0,3);assert.equal(r.health,3);assert.equal(r.kills,0);
+  damageBattle(r,r,1,3);assert.equal(r.health,0);assert.equal(r.deaths,1);
 });
-test('a killed player respawns with health, weapons, and temporary protection',()=>{
+test('a killed player respawns with health and weapons but no immunity',()=>{
   const r=createBattle(0,0,()=>.5);r.phase='racing';r.shield=0;r.bots=[];
   damageBattle(r,r,99,3);for(let i=0;i<61;i++)tickBattle(r,new Set(),.05);
-  assert.equal(r.destroyed,0);assert.equal(r.health,3);assert.equal(r.ammo,10);assert.equal(r.missiles,1);assert.ok(r.shield>1);assert.equal(blocked(arenas[0],r.wx,r.wz),false);
+  assert.equal(r.destroyed,0);assert.equal(r.health,3);assert.equal(r.ammo,10);assert.equal(r.missiles,1);assert.equal(r.shield,0);assert.equal(blocked(arenas[0],r.wx,r.wz),false);
 });
 test('hedgehogs fired in an arena can hit an opponent and consume ammo',()=>{
   const r=createBattle(0,0,()=>.5);r.phase='racing';r.wx=-70;r.wz=-70;r.heading=0;r.fireCooldown=0;r.shield=0;

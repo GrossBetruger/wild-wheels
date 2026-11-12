@@ -33,11 +33,11 @@ test('starting a Rust room runs the three second countdown and a reset creates a
   const reset=ArenaCore.room({...config,epoch:2});assert.equal(reset.status.phase,'ready');assert.equal(reset.status.soundEpoch,2);assert.equal(reset.snapshot().speed,0);assert.equal(reset.snapshot().kills,0);
 });
 
-test('a player joining a running Rust room gets a live protected kart and departing host transfers without ending play',()=>{
+test('a player joining a running Rust room gets a live vulnerable kart and departing host transfers without ending play',()=>{
   const config={code:'33',host:0,arena:0,bots:0,epoch:1,players:[{id:0,name:'Host',driver:0,role:'driver'}]};
   const core=ArenaCore.room(config);core.start();for(let i=0;i<181;i++)core.step(1/60);
   config.players.push({id:1,name:'Friend',driver:1,role:'driver'});core.configure(config);
-  const guest=decodeBinarySnapshot(core.packet(1));assert.equal(guest.world.phase,'racing');assert.equal(guest.world.destroyed,0);assert.equal(guest.world.shield,2);assert.equal(guest.world.ammo,10);assert.equal(guest.world.bots.length,1);
+  const guest=decodeBinarySnapshot(core.packet(1));assert.equal(guest.world.phase,'racing');assert.equal(guest.world.destroyed,0);assert.equal(guest.world.shield,0);assert.equal(guest.world.ammo,10);assert.equal(guest.world.bots.length,1);
   config.players.shift();config.host=1;core.configure(config);
   const transferred=decodeBinarySnapshot(core.packet(1));assert.equal(transferred.host,1);assert.equal(transferred.world.phase,'racing');assert.equal(transferred.world.bots.length,0);assert.equal(transferred.world.name,'Friend');
 });

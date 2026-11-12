@@ -31,7 +31,7 @@ function clearShot(arena,a,b){const d=distance(a,b);for(let t=3;t<d;t+=3)if(bloc
 function spawn(r,actor,initial=false){
   const actors=[r,...r.bots],candidates=Array.from({length:8},(_,i)=>{const angle=i*Math.PI/4;return {wx:Math.sin(angle)*78,wz:Math.cos(angle)*78};});
   const choice=initial?candidates[Math.floor(actor.id*8/6)]:candidates.sort((a,b)=>Math.min(...actors.filter(k=>k!==actor&&!k.destroyed).map(k=>distance(b,k)),999)-Math.min(...actors.filter(k=>k!==actor&&!k.destroyed).map(k=>distance(a,k)),999))[0];
-  actor.wx=choice.wx;actor.wz=choice.wz;actor.heading=Math.atan2(-choice.wx,-choice.wz);actor.speed=0;actor.health=3;actor.destroyed=0;actor.shield=2;actor.ammo=START_HEDGEHOGS;actor.missiles=1;actor.turbos=1;actor.item='hedgehog';actor.fireCooldown=.5;actor.vx=0;actor.boost=0;actor.path=[];
+  actor.wx=choice.wx;actor.wz=choice.wz;actor.heading=Math.atan2(-choice.wx,-choice.wz);actor.speed=0;actor.health=3;actor.destroyed=0;actor.shield=0;actor.ammo=START_HEDGEHOGS;actor.missiles=1;actor.turbos=1;actor.item='hedgehog';actor.fireCooldown=.5;actor.vx=0;actor.boost=0;actor.path=[];
   actor.motionHeading=actor.heading;actor.cameraHeading=actor.heading;actor.drift=0;actor.wasDrifting=false;actor.driftTrail=null;actor.driftEmit=0;
   actor.killStreak=0;actor.vulcan=0;actor.healTimer=0;actor.hedgeShield=0;
   actor.chaff=4;actor.chaffCooldown=0;
