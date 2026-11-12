@@ -1,4 +1,4 @@
-import {drawCalculator,drawAnt,drawTaxAudit,drawMathDust,drawXylophone} from './fourmidable.js';
+import {drawCalculator,drawAnt,drawTaxAudit,ReceiptRolls,drawXylophone} from './fourmidable.js';
 import { sampleTrack, branches } from './track.js';
 import { LENGTH, drivers, pickupType } from './engine.js';
 import { arenas, combatPose, somersaultPose, BOMB_FALL_TIME, BOMB_RADIUS, BOMB_OUTER_RADIUS, STINK_RADIUS, DIZZY_DURATION, VULCAN_DURATION } from './combat.js';
@@ -46,7 +46,7 @@ export class Renderer {
     this.models=new Map();this.instances=[];this.quality='auto';this.resolution=1.25;this.fps=0;this.fpsStart=0;this.frameCount=0;this.slowWindows=0;this.fastWindows=0;
     this.tailFolds=new Map();
     this.yudaDrift=new YudaDrift();
-    this.chopperTilts=new Map();
+    this.chopperTilts=new Map();this.receiptRolls=new ReceiptRolls();
     this.yudaJackets=new YudaJackets();this.yudaStunts=new YudaStunts();this.yudaExhaust=new YudaExhaust();
     this.lastBodies=new Map();this.ashBodies=new Map();
     const debug=gl.getExtension('WEBGL_debug_renderer_info');this.gpuName=debug?gl.getParameter(debug.UNMASKED_RENDERER_WEBGL):'WebGL';this.softwareGPU=/swiftshader|llvmpipe|software/i.test(this.gpuName);if(this.softwareGPU)this.resolution=.75;
@@ -173,7 +173,7 @@ export class Renderer {
     m.at(0,0,0);this.gl.bindBuffer(this.gl.ARRAY_BUFFER,this.staticBuffer);this.gl.bufferData(this.gl.ARRAY_BUFFER,new Float32Array(m.data),this.gl.STATIC_DRAW);this.staticCount=m.data.length/9;this.track=track;
   }
   kart(m,p,color,driver,yaw=0,spin=0,boost=false,clock=0,celebrate=0,jump=null,helmet=true,gesture=null){
-    if(driver===13){const angle=Math.atan2(p.tx,p.tz)-yaw+spin,height=jump?.height??0,pitch=jump?.pitch??0,phase=Math.floor(clock*8)%8,wave=celebrate>0||(gesture?.right??0)>0;this.model('kart:13:'+color,p.x,height,p.z,angle,mesh=>drawCalculator(mesh,color),pitch);this.model('fourmidable:'+phase+':'+wave,p.x,height+(gesture?.bounce??0),p.z,angle+(gesture?.yaw??0),mesh=>drawAnt(mesh,phase,wave),pitch);if(boost||jump)drawMathDust(m,p,angle,clock,jump);return;}
+    if(driver===13){const angle=Math.atan2(p.tx,p.tz)-yaw+spin,height=jump?.height??0,pitch=jump?.pitch??0,phase=Math.floor(clock*8)%8,wave=celebrate>0||(gesture?.right??0)>0;this.model('kart:13:'+color,p.x,height,p.z,angle,mesh=>drawCalculator(mesh,color),pitch);this.model('fourmidable:'+phase+':'+wave,p.x,height+(gesture?.bounce??0),p.z,angle+(gesture?.yaw??0),mesh=>drawAnt(mesh,phase,wave),pitch);this.receiptRolls.draw(m,p,angle,clock,jump,boost||Boolean(jump));return;}
     if(driver===12){this.nurseAmbulance(m,p,color,yaw,spin,boost,clock,celebrate,jump,gesture);return;}
     if(driver===11){this.lionChopper(m,p,color,yaw,spin,boost,clock,celebrate,jump,gesture);return;}
     if(driver===10){this.yudaMotorcycle(m,p,color,yaw,spin,boost,clock,celebrate,jump,gesture);return;}
@@ -563,7 +563,7 @@ export class Renderer {
     this.arenaExhaust=true;this.yudaExhaust.update(`${r.arena}:${r.soundEpoch}:${r.id}`,time);
     this.yudaDrift.update(r,time);
     const helmetScene=`${r.arena}:${r.soundEpoch}:${r.id}`;
-    if(this.helmetScene!==helmetScene||time<(this.helmetTime??0)){this.helmetScene=helmetScene;this.helmetFlights=new Map();this.tailFolds.clear();this.yudaJackets.riders.clear();this.yudaStunts.riders.clear();this.lastBodies.clear();this.ashBodies.clear();}this.helmetTime=time;
+    if(this.helmetScene!==helmetScene||time<(this.helmetTime??0)){this.helmetScene=helmetScene;this.helmetFlights=new Map();this.tailFolds.clear();this.receiptRolls.rolls.clear();this.yudaJackets.riders.clear();this.yudaStunts.riders.clear();this.lastBodies.clear();this.ashBodies.clear();}this.helmetTime=time;
     if(this.track!==`arena-${r.arena}`)this.arenaScenery(r.arena);
     const gl=this.gl,canvas=this.canvas,width=Math.round(canvas.clientWidth*this.pixelRatio()),height=Math.round(canvas.clientHeight*this.pixelRatio());if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;}gl.viewport(0,0,width,height);
     const sky=rgb(arenas[r.arena].sky);gl.clearColor(...sky,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(this.program);

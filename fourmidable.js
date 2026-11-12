@@ -11,6 +11,7 @@ export function drawCalculator(m,color){
   for(let i=0;i<5;i++)digit(m,[3,1,4,1,5][i],-.82+i*.4,1.4,-1.97,.33,'#315947');
   for(let row=0;row<3;row++)for(let col=0;col<3;col++){const x=(col-1)*.82,z=.4+row*.63;m.box(x,1.28,z,.65,.16,.5,ink);digit(m,9-row*3-col,x,1.46,z-.15,.3,'#fff1ce');}
   m.box(1.25,1.3,1.1,.25,.15,1.7,'#ef9c64');
+  m.box(0,1.2,-2.43,1.85,.22,.22,ink);m.box(0,1.31,-2.52,1.58,.045,.07,'#aaa98b');
   for(const x of [-1.12,1.12]){m.ball(x,.95,2.48,.24,.15,.06,'#fff6b8',8,4);m.ball(x,.8,-2.48,.18,.1,.06,'#f86b67',8,4);}
 }
 export function drawAnt(m,phase,wave){
@@ -65,12 +66,51 @@ export function drawTaxAudit(m,e,angle){
     m.box(-.65,-1.35,0,.48,2.7,.07,red);m.box(.13,.87,0,1.65,.48,.07,red);m.box(-.03,-.08,0,1.33,.43,.07,red);
   }finally{m.point=point;}
 }
-const glyphs=['111101101101111','010110010010111','111001111100111','111001111001111','101101111001001','111100111001111','111100111101111','111001010010010','111101111101111','111101111001111','000010111010000','000000111000000','000111000111000','010000111000010','111101101101101','111100010100111'];
-export function drawMathDust(m,p,angle,clock,jump){
-  m.at(p.x,(jump?.height??0)+.8,p.z,angle);m.pitch=jump?.pitch??0;
-  for(let i=0;i<36;i++){
-    const t=(clock*1.2+i/36)%1,spread=.25+t*2.6,x=Math.sin(i*12.9)*spread,y=t*2.4+Math.cos(i*3.7)*t*.5,z=-2.6-t*9,size=.1+(1-t)*.08,pattern=glyphs[i%glyphs.length],color=i%3?'#b6efb5':'#ffe18c';
-    for(let row=0;row<5;row++)for(let col=0;col<3;col++)if(pattern[row*3+col]==='1')m.box(x+(col-1)*size,y+(4-row)*size,z,size*.82,size*.82,.025,color);
+export class ReceiptRolls{
+  rolls=new Map();
+  draw(m,p,angle,clock,jump,boost){
+    const key=p.id??'preview';let state=this.rolls.get(key);
+    if(!state||clock<state.time||clock-state.time>1){state={time:clock,amount:boost?1:0,velocity:0,feed:clock*3};this.rolls.set(key,state);}
+    const dt=Math.min(.05,Math.max(0,clock-state.time));state.time=clock;
+    // Critically damped feed mechanism: the paper accelerates out and settles back.
+    const target=boost?1:0,decay=Math.exp(-12*dt),displacement=state.amount-target,c=state.velocity+12*displacement;
+    state.amount=target+(displacement+c*dt)*decay;state.velocity=(state.velocity-12*c*dt)*decay;
+    state.feed+=dt*5*state.amount;
+    if(state.amount<.005)return;
+    drawReceipt(m,p,angle,clock,jump,state.amount,state.feed);
+  }
+}
+function drawReceipt(m,p,angle,clock,jump,amount,feed){
+  m.at(p.x,jump?.height??0,p.z,angle);m.pitch=jump?.pitch??0;
+  const length=7.5*amount,radius=.85*amount,turns=Math.PI*2.15,coilLength=radius*turns,total=length+coilLength,width=1.5;
+  const center=d=>{
+    const free=Math.min(d,length),f=free/Math.max(.001,length),wave=f*f;
+    const x=Math.sin(clock*2.8-free*.65)*.22*wave,y=1.34+f*.75+Math.sin(f*Math.PI)*.55+Math.sin(clock*7-free*1.5)*.15*wave,z=-2.5-free;
+    if(d<=length)return [x,y,z];
+    // A continuous spiral joins the trailing sheet tangentially, like a real thermal roll.
+    const a=(d-length)/Math.max(.001,radius),r=radius*(1-.065*a);
+    return [x,y+radius-r*Math.cos(a),z-r*Math.sin(a)];
+  };
+  const surface=(d,u,offset=0)=>{
+    const c=center(d),a=center(Math.max(0,d-.005)),b=center(Math.min(total,d+.005)),dy=b[1]-a[1],dz=b[2]-a[2],n=Math.hypot(dy,dz)||1;
+    const bank=Math.sin(clock*4-d*.9)*.13*Math.min(1,d/3);
+    return [c[0]+u*Math.cos(bank),c[1]+u*Math.sin(bank)-dz/n*offset,c[2]+dy/n*offset];
+  };
+  const strip=(a,b,left,right,color,offset=0)=>m.quad(surface(a,left,offset),surface(a,right,offset),surface(b,right,offset),surface(b,left,offset),color);
+  for(let i=0;i<150;i++){
+    const a=i/150*total,b=(i+1)/150*total;
+    strip(a,b,-width/2,width/2,i%17===0?'#e8dfc4':'#fff5d8');
+    // Subtle side margins make the paper edges readable as the roll twists.
+    strip(a,b,-width/2,-width/2+.035,'#d1c7aa',.008);strip(a,b,width/2-.035,width/2,'#d1c7aa',.008);
+  }
+  // Itemized receipt printing travels with the paper being fed through the slot.
+  const spacing=.32,phase=feed%spacing;
+  for(let d=phase;d<total-.05;d+=spacing){
+    const row=Math.floor((d-feed)/spacing),subtotal=Math.abs(row)%7===0,b=Math.min(total,d+(subtotal?.055:.025));
+    for(const face of [-.012,.012]){
+      strip(d,b,-.57,subtotal?.55:-.08-(Math.abs(row)%4)*.075,'#526052',face);
+      if(!subtotal)strip(d,b,.27,.56,'#526052',face);
+    }
   }
 }
 export function drawXylophone(m,phase){
