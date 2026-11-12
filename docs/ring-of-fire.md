@@ -2,7 +2,7 @@
 
 An additional passive ability alongside Reefer Madness. With abilities enabled, reach drift charge 0.85 while turning (the existing maximum-charge threshold). No additional full-circle counter is required. A 150 ms steering grace bridges network command gaps.
 
-An ignited ring follows Yuda at a radius of 10 units. Its flames absorb projectiles crossing in either direction, including missiles, Vulcan shots and chaff-diverted missiles. Absorbed missiles do not cause splash damage. Yuda is immune to his own ring; enemies touching the perimeter receive 2 damage immediately and then every 0.3 seconds. Normal damage shields apply. The interior is safe from the fire itself.
+An ignited ring follows Yuda with radius 40 units at ignition, growing linearly to 50 units over the first 10 seconds and holding at 50 afterward. Its flames absorb projectiles crossing in either direction, including missiles, Vulcan shots and chaff-diverted missiles. Absorbed missiles do not cause splash damage. Yuda is immune to his own ring; enemies touching the perimeter receive 2 damage immediately and then every 0.3 seconds. Normal damage shields apply. The interior is safe from the fire itself.
 
 Keep steering to sustain the ring; continuing to hold drift is optional after ignition. Stopping, death, AFK or disabling abilities extinguishes it. It expires after 20 seconds even if Yuda keeps turning, and another charged circle requires first stopping the turn. Avita’s time warp pauses its lifetime with Yuda.
 

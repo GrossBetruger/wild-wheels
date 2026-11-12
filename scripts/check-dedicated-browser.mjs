@@ -47,6 +47,9 @@ try{
     assert.equal(await evaluate(guest,"__game.race.effects.find(f=>f.type==='fireRing').color"),'#4abaff');
     await evaluate(host,"document.getElementById('game').scrollIntoView({block:'center'})");
     const shot=await call('Page.captureScreenshot',{format:'png'},host);await writeFile(output+'.png',Buffer.from(shot.data,'base64'));
+    assert.ok(await evaluate(guest,"__game.race.effects.find(f=>f.type==='fireRing').radius>=40"));
+    await wait(()=>evaluate(guest,"(__game.race.effects.find(f=>f.type==='fireRing')?.radius??0)>=49.9"),'Remote fire ring did not grow to radius 50',12000);
+    assert.ok(await evaluate(guest,"__game.race.effects.find(f=>f.type==='fireRing').radius<=50"));
     await evaluate(host,'__game.keys.clear()');await wait(()=>evaluate(guest,"!__game.race.effects.some(f=>f.type==='fireRing')"),'Fire ring persisted after stopping');
   }
   for(const session of sessions)assert.equal(await evaluate(session,'__game.renderer.gl.getError()'),0);
