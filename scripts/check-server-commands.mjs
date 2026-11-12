@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict';
+import {mkdtemp,mkdir,copyFile,writeFile,readFile,chmod} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join,resolve} from 'node:path';
+import {execFileSync,spawn} from 'node:child_process';
+import {createServer} from 'node:net';
+const i=process.argv.indexOf('--binary'),binary=resolve(i<0?'dedicated-server/target/release/wild-wheels-server':process.argv[i+1]);
+const root=await mkdtemp(join(tmpdir(),'wild-wheels-commands-')),repo=join(root,'repo'),target=join(root,'target'),tools=join(root,'tools'),state=join(root,'state');
+await Promise.all([mkdir(join(repo,'scripts'),{recursive:true}),mkdir(join(target,'release'),{recursive:true}),mkdir(tools)]);
+for(const name of ['run_server.sh','kill_server.sh','update_server.sh','scripts/server-process.sh'])await copyFile(new URL('../'+name,import.meta.url),join(repo,name));
+await copyFile(binary,join(target,'release/wild-wheels-server'));
+// Exercise lifecycle with the real native executable; compilation is tested separately.
+await writeFile(join(tools,'cargo'),'#!/usr/bin/env bash\nexit 0\n');await chmod(join(tools,'cargo'),0o755);
+const probe=createServer();await new Promise(r=>probe.listen(0,'127.0.0.1',r));const port=probe.address().port;await new Promise(r=>probe.close(r));
+const env={...process.env,PATH:tools+':'+process.env.PATH,CARGO_TARGET_DIR:target,WILD_WHEELS_RUN_DIR:state,PORT:String(port),BIND:'127.0.0.1',BOTS:'0',GIT_AUTHOR_NAME:'Test',GIT_AUTHOR_EMAIL:'test@example.invalid',GIT_COMMITTER_NAME:'Test',GIT_COMMITTER_EMAIL:'test@example.invalid'};
+const command=(name,args=[])=>execFileSync(name,args,{cwd:repo,env,encoding:'utf8',timeout:15000});
+const shell=name=>command('bash',[join(repo,name)]),git=(...args)=>command('git',args);
+const health=async()=>{for(let tries=0;tries<40;tries++){try{if((await fetch(`http://127.0.0.1:${port}/healthz`)).ok)return true;}catch{}await new Promise(r=>setTimeout(r,50));}return false;};
+let unrelated;
+try{
+  shell('run_server.sh');assert.equal(await health(),true,'Server must survive launcher exit');const first=await readFile(join(state,'server.pid'),'utf8');
+  const pid=Number(first.split('\n')[0]);process.kill(pid,'SIGHUP');assert.equal(await health(),true,'Server must survive SSH-style hangup');
+  assert.match(shell('run_server.sh'),/already running/);assert.equal(await readFile(join(state,'server.pid'),'utf8'),first);
+  git('init','--initial-branch=main');git('add','.');git('commit','-m','Initial launcher');git('init','--bare',join(root,'remote.git'));git('remote','add','origin',join(root,'remote.git'));git('push','origin','main');
+  git('clone','--branch','main',join(root,'remote.git'),join(root,'publisher'));await writeFile(join(root,'publisher','release-marker'),'updated\n');
+  execFileSync('git',['-C',join(root,'publisher'),'add','release-marker'],{env});execFileSync('git',['-C',join(root,'publisher'),'commit','-m','New release'],{env});execFileSync('git',['-C',join(root,'publisher'),'push','origin','main'],{env});
+  shell('update_server.sh');assert.equal(await readFile(join(repo,'release-marker'),'utf8'),'updated\n');assert.equal(await health(),true,'Update must restart native service');
+  shell('kill_server.sh');assert.equal(await health(),false);assert.match(shell('kill_server.sh'),/No managed server/);
+  unrelated=spawn('sleep',['30']);await new Promise(r=>unrelated.once('spawn',r));await writeFile(join(state,'server.pid'),`${unrelated.pid}\n${join(target,'release/wild-wheels-server')}\n`);
+  shell('kill_server.sh');assert.equal(unrelated.exitCode,null,'A stale PID must not kill an unrelated process');
+  console.log(JSON.stringify({pass:true,detached:true,survivesHangup:true,duplicatePrevented:true,updatePulledAndRestarted:true,cleanStop:true,stalePidSafe:true}));
+}finally{try{shell('kill_server.sh');}catch{}unrelated?.kill();}

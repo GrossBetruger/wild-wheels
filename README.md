@@ -21,6 +21,8 @@ On an Ubuntu/Debian VM, install build dependencies with `./install_ubuntu.sh`. W
 PORT=5174 ./run_server.sh
 ```
 
+The command builds and starts the server detached; you can close SSH. Stop it with `./kill_server.sh`, or pull updates and restart with `./update_server.sh`. Logs are in `.wild-wheels/server.log`.
+
 Open [localhost:5174](http://localhost:5174). Everyone joins one shared arena automatically, with up to eight players. The server keeps the game running when the lobby host disconnects. After building, the executable runs independently with no Node.js dependency. See [dedicated server setup](docs/dedicated-server.md) for public hosting.
 
 ## Play with friends

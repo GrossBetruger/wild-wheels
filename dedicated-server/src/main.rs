@@ -404,7 +404,10 @@ async fn main() {
         router.into_make_service_with_connect_info::<SocketAddr>(),
     )
     .with_graceful_shutdown(async {
-        let _ = tokio::signal::ctrl_c().await;
+        #[cfg(unix)]
+        {let mut term=tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()).expect("Unable to listen for SIGTERM");tokio::select!{_=tokio::signal::ctrl_c()=>{},_=term.recv()=>{}}}
+        #[cfg(not(unix))]
+        {let _=tokio::signal::ctrl_c().await;}
     })
     .await
     .unwrap();

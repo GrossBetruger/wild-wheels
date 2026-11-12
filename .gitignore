@@ -6,3 +6,5 @@ regression-results/
 rust-core/target/
 
 dedicated-server/target/
+
+.wild-wheels/

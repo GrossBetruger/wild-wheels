@@ -18,7 +18,14 @@ Build and run from the repository root (the launcher finds Rust even before you 
 ./run_server.sh
 ```
 
-Use `PORT=5174 ./run_server.sh` to choose another port. It rebuilds changed code/assets before starting and uses one compiler job by default for small VMs.
+Use `PORT=5174 ./run_server.sh` to choose another port. It rebuilds changed code/assets before starting and uses one compiler job by default for small VMs. It returns after starting the server detached, so closing SSH keeps the game running. Logs append to `.wild-wheels/server.log`. It prevents duplicate managed starts.
+
+```sh
+./kill_server.sh
+./update_server.sh
+```
+
+The update command stops the managed server, pulls `main` with fast-forward only, then builds and starts it again. If the pull fails, it tries to restart the existing version. Custom environment settings such as `PORT=5174` should also be passed to the update command. These commands manage servers started by the launcher; stop a previously foreground server with Ctrl+C once before switching.
 
 To build manually with Rust 1.90 or newer, first run `source "$HOME/.cargo/env"`, then:
 
