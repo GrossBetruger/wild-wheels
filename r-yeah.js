@@ -1,3 +1,4 @@
+import {logoRuns} from './r-yeah-logo.js';
 const gold='#e2af50',mane='#8f5029',cream='#fff0c9',navy='#243d62';
 export function drawArchangel(m,phase,manifest){
   const point=m.point,scale=.12+.88*manifest;
@@ -33,25 +34,11 @@ export function drawArchangel(m,phase,manifest){
   }finally{m.point=point;}
 }
 function strut(m,a,b,r,color){const n=Math.max(2,Math.ceil(Math.hypot(...a.map((v,i)=>v-b[i]))/.2));for(let i=0;i<=n;i++)m.ball(...a.map((v,j)=>v+(b[j]-v)*i/n),r,r,r,color,6,4);}
-function iaiLogo(m,side){
-  // Procedural decal based on the IAI mark shown at space.gov.il/node/134091.
-  const blue='#3c96d6',point=(u,v)=>[side*1.245,2.28+v*.92,-1.2-side*(u-.5)*2.05];
-  const quad=(a,b,c,d,color=blue)=>m.quad(point(...a),point(...b),point(...c),point(...d),color);
-  const line=(a,b,width=.012)=>{const dx=b[0]-a[0],dy=b[1]-a[1],length=Math.hypot(dx,dy),x=-dy/length*width,y=dx/length*width;quad([a[0]+x,a[1]+y],[b[0]+x,b[1]+y],[b[0]-x,b[1]-y],[a[0]-x,a[1]-y]);};
-  // Slightly raised cream mounting plate, with the mark readable on each side.
-  m.quad([side*1.24,2.2,-2.38],[side*1.24,3.28,-2.38],[side*1.24,3.28,-.02],[side*1.24,2.2,-.02],cream);
-  for(let i=0;i<40;i++){
-    const a=i*Math.PI/20,b=(i+1)*Math.PI/20;
-    quad([.235+Math.cos(a)*.19,.35+Math.sin(a)*.23],[.235+Math.cos(b)*.19,.35+Math.sin(b)*.23],[.235+Math.cos(b)*.168,.35+Math.sin(b)*.203],[.235+Math.cos(a)*.168,.35+Math.sin(a)*.203]);
-    if(i<33){const c=1.55+i*.15,d=c+.15;line([.235+Math.cos(c)*.23,.35+Math.sin(c)*.3],[.235+Math.cos(d)*.23,.35+Math.sin(d)*.3],.015);}
-  }
-  for(const stretch of [.07,.135])for(let i=0;i<24;i++){const a=i*Math.PI/12,b=(i+1)*Math.PI/12;line([.235+Math.cos(a)*stretch,.35+Math.sin(a)*.2],[.235+Math.cos(b)*stretch,.35+Math.sin(b)*.2],.003);}
-  for(const v of [.25,.35,.45])line([.075,v],[.395,v],.003);
-  for(let i=0;i<12;i++){const a=i*Math.PI/6,b=(i+1)*Math.PI/6,r=i%2?.07:.135,s=(i+1)%2?.07:.135;m.tri(point(.235,.35),point(.235+Math.sin(a)*r,.35+Math.cos(a)*r),point(.235+Math.sin(b)*s,.35+Math.cos(b)*s),blue);}
-  m.tri(point(.055,.71),point(.32,1),point(.13,.66),blue);
-  quad([.17,.025],[.35,.025],[.36,.085],[.13,.085]);
-  for(const u of [.43,.82])quad([u,0],[u+.09,0],[u+.205,.66],[u+.115,.66]);
-  quad([.55,0],[.63,0],[.775,.66],[.68,.66]);quad([.71,0],[.8,0],[.84,.66],[.765,.66]);quad([.63,.18],[.77,.18],[.78,.27],[.65,.27]);
+function ryeahLogo(m,side){
+  const palette=['#d00019','#050505','#b2b2b2','#ffffff'];
+  // Same circular crest on both sides; reverse the local horizontal axis for readability.
+  const point=(u,v)=>[side*1.245,3.28-v/128*1.08,-1.2-side*(u/128-.5)*1.08];
+  for(const [y,left,right,color] of logoRuns)m.quad(point(left,y),point(right,y),point(right,y+1),point(left,y+1),palette[color]);
 }
 export function drawJetRanger(m,color){
   // JetRanger silhouette: paired skids, rounded cabin, slim boom and two rotors.
@@ -79,7 +66,7 @@ export function drawJetRanger(m,color){
   m.box(0,3.05,-5.3,2.6,.1,.6,cream);
   m.ball(0,3.8,-6.1,.15,.15,.13,gold,8,5);
   m.box(0,4,-.2,.13,2.2,.13,'#b9cbd1');
-  for(const side of [-1,1])iaiLogo(m,side);
+  for(const side of [-1,1])ryeahLogo(m,side);
 }
 export function miniJetRanger(m,build){
   const point=m.point;m.point=function(p){return point.call(this,[1.3+p[0]*.6,4.5+p[1]*.6,-.4+p[2]*.6]);};build(m);m.point=point;
