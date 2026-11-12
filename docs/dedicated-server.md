@@ -4,6 +4,14 @@ The service uses Tokio’s current-thread async runtime and Axum for HTTP/WebSoc
 
 ## Build and run
 
+On a GCP VM, choose **Ubuntu 24.04 LTS** explicitly (the boot image is selectable), clone this repository, and install dependencies as your normal SSH user:
+
+```sh
+./install_ubuntu.sh
+```
+
+The installer also supports Debian. It installs build tools and a pinned Rust toolchain for x86_64 or arm64. Run it without `sudo`; it uses sudo only for system packages and installs Rust for your user. It verifies the official Rust installer’s SHA-256 before execution.
+
 Build from the repository root with Rust 1.90 or newer:
 
 ```sh
@@ -16,7 +24,7 @@ Run alongside the development server:
 PORT=5174 ./dedicated-server/target/release/wild-wheels-server
 ```
 
-Visit `http://localhost:5174`. For internet play, run the binary on a reachable machine and put an HTTPS reverse proxy in front of its port, or run `ngrok http 5174` locally. Forward WebSocket upgrades. Set `PUBLIC_ORIGIN=https://your-game.example` to put the public address in invitations and issue Secure session cookies. The built-in Node ngrok control is not part of this service.
+Visit `http://localhost:5174`. On GCP, allow inbound TCP to the chosen game port in the VM’s VPC firewall (the console’s “Allow HTTP traffic” checkbox only opens port 80). Use the VM’s external IP to connect directly, or an HTTPS proxy for a domain. For internet play, run the binary on a reachable machine and put an HTTPS reverse proxy in front of its port, or run `ngrok http 5174` locally. Forward WebSocket upgrades. Set `PUBLIC_ORIGIN=https://your-game.example` to put the public address in invitations and issue Secure session cookies. The built-in Node ngrok control is not part of this service.
 
 Configuration is through environment variables:
 

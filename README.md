@@ -15,7 +15,7 @@ Open [localhost:5173](http://localhost:5173). Keep the terminal open while playi
 
 ## Dedicated Rust server
 
-With Rust installed, run this alongside the Node server:
+On an Ubuntu/Debian VM, install build dependencies with `./install_ubuntu.sh`. With Rust installed, run this alongside the Node server:
 
 ```sh
 PORT=5174 cargo run --release --locked --manifest-path dedicated-server/Cargo.toml
