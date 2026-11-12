@@ -14,6 +14,7 @@ export const drivers = [
   { name: 'Pearococo', emoji: '🦚', color: '#ed9fc5', desc: "If there's no bread let them eat my hedgehogs", speed: 3, handling: 5, accel: 4, cuteness: 5, intelligence: 4, fuel: 3 },
   { name: 'Master-Yuda', emoji: '😎', color: '#a87345', desc: "la vie c'est la vie", speed: 5, handling: 4, accel: 5, cuteness: 3, intelligence: 5, fuel: 3 },
   { name: 'R-yeah', emoji: '🦁', color: '#bc8e38', desc: 'Majestic mane. Black kippah. King of the JetRanger.', speed: 4, handling: 4, accel: 4, cuteness: 5, intelligence: 4, fuel: 3 },
+  { name: 'Catheterpillar', emoji: '🦋', color: '#e9a1c3', desc: 'Beautiful wings. Boundless empathy. Your nurse in a tiny ambulance.', speed: 3, handling: 5, accel: 4, cuteness: 5, intelligence: 5, fuel: 3 },
 ];
 export function boostDuration(driver){return 2+.8*(drivers[driver].fuel-1);}
 export function itemCapacity(driver,kind){

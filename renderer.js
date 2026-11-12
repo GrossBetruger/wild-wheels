@@ -3,6 +3,7 @@ import { LENGTH, drivers, pickupType } from './engine.js';
 import { arenas, combatPose, somersaultPose, BOMB_FALL_TIME, BOMB_RADIUS, BOMB_OUTER_RADIUS, STINK_RADIUS, DIZZY_DURATION, VULCAN_DURATION } from './combat.js';
 import { kartNameplates } from './nameplates.js';
 import { bomberCamera } from './mobile.js';
+import {drawAmbulance,drawNurseButterfly} from './catheterpillar.js';
 import {drawNewDriver,drawRoadster,drawRoadsterJets,drawCricketHaze,drawCricketProjectile,drawHoustonHelmet,drawDollarBundle,drawCessna,drawCessnaPropeller,drawCessnaBoost,drawElectron,drawPilotWorm,drawStarship,drawStarshipThrust} from './characters.js';
 import {previewPose} from './preview-pose.js';
 import {drawRococoChariot,drawPearococo,drawPeacockFeather,drawRoyalWing,drawBalletPump,drawFairyStar,drawFairyBoost} from './pearococo.js';
@@ -171,6 +172,7 @@ export class Renderer {
     m.at(0,0,0);this.gl.bindBuffer(this.gl.ARRAY_BUFFER,this.staticBuffer);this.gl.bufferData(this.gl.ARRAY_BUFFER,new Float32Array(m.data),this.gl.STATIC_DRAW);this.staticCount=m.data.length/9;this.track=track;
   }
   kart(m,p,color,driver,yaw=0,spin=0,boost=false,clock=0,celebrate=0,jump=null,helmet=true,gesture=null){
+    if(driver===12){this.nurseAmbulance(m,p,color,yaw,spin,boost,clock,celebrate,jump,gesture);return;}
     if(driver===11){this.lionChopper(m,p,color,yaw,spin,boost,clock,celebrate,jump,gesture);return;}
     if(driver===10){this.yudaMotorcycle(m,p,color,yaw,spin,boost,clock,celebrate,jump,gesture);return;}
     if(driver===9){this.royalChariot(m,p,color,yaw,spin,boost,clock,celebrate,jump,gesture);return;}
@@ -217,6 +219,14 @@ export class Renderer {
     m.box(0,1.2,-2.25,.8,.35,.12,'#f7edce');m.box(0,1.26,-2.33,.12,.25,.03,'#33364b');
     for(const side of [-1,1]){m.ball(side*1.2,.75,-2.45,.31,.31,.5,'#69788b',10,5);m.ball(side*1.2,.75,-2.85,.24,.24,.08,'#161d2a',10,4);}
     if(boost)this.afterburner(p,angle,clock,null,driver);
+  }
+  nurseAmbulance(m,p,color,yaw,spin,boost,clock,celebrate,jump,gesture=null){
+    const angle=Math.atan2(p.tx,p.tz)-yaw+spin,height=.13+(jump?.height??0),pitch=jump?.pitch??0;
+    m.at(p.x,.05,p.z,angle);m.disc(0,0,0,2.1,2.8,'#3a4147');
+    this.model(`kart:12:${color}`,p.x,height,p.z,angle,mesh=>drawAmbulance(mesh,color),pitch);
+    const phase=Math.floor(clock*(boost?12:6))%8,waving=celebrate>0||(gesture?.right??0)>0;
+    this.model(`catheterpillar:nurse:${phase}:${waving}`,p.x,height+(gesture?.bounce??0),p.z,angle+(gesture?.yaw??0),mesh=>drawNurseButterfly(mesh,phase,waving),pitch+(gesture?.lean??0));
+    if(boost||jump)this.afterburner(p,angle,clock,jump,12);
   }
   lionChopper(m,p,color,yaw,spin,boost,clock,celebrate,jump,gesture=null){
     const angle=Math.atan2(p.tx,p.tz)-yaw+spin,height=(jump?.height??0)+.18+Math.sin(clock*3)*.08,pitch=jump?.pitch??0;
