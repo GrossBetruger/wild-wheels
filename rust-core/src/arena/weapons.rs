@@ -61,7 +61,7 @@ impl Game{
     }
     pub(super) fn damage(&mut self,victim:usize,owner:usize,amount:f64,kind:&str)->bool{
         let a=&self.actors[victim];
-        if a.bomber||a.inactive||a.afk||self.global.phase!="racing"||a.destroyed>0.0||a.shield>0.0&&kind!="wall"||a.hedge_shield>0.0&&kind!="missile"&&kind!="wall"||victim==owner{return false;}
+        if a.bomber||a.inactive||a.afk||self.global.phase!="racing"||a.destroyed>0.0||a.shield>0.0&&kind!="wall"&&kind!="tax"||a.hedge_shield>0.0&&kind!="missile"&&kind!="wall"&&kind!="tax"||victim==owner{return false;}
         let unscored=self.global.finish_countdown.is_some();
         let root_x=self.actors[0].wx;let g=&mut self.global;let a=&mut self.actors[victim];a.health=(a.health-amount).max(0.0);a.heal_timer=0.0;voice(g,a,"hurt",root_x);if victim==0{g.shake=0.5;}
         if a.health>0.0{

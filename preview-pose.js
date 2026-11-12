@@ -11,5 +11,6 @@ export function previewPose(driver,time){
   if(driver===10){pose.left=0;pose.bounce=0;pose.right=(stage===0||stage===1)?ease:0;pose.label=['SHADES SALUTE','LA VIE','CHECKING THE HORIZON','ONE-HANDED WHEELIE'][stage];}
   if(driver===11)pose.label=['REGAL WAVE','ROYAL ROAR','LOOKING AROUND','ROTOR WASH'][stage];
   if(driver===12)pose.label=['A CARING WAVE','BUTTERFLY JOY','CHECKING ON EVERYONE','CARE ON THE WAY'][stage];
+  if(driver===13)pose.label=['NERVOUS HELLO','BOOKS BALANCED!','CHECKING THE TOTALS','CRUNCHING NUMBERS'][stage];
   return pose;
 }

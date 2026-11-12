@@ -5,7 +5,7 @@ import {checkPreview} from './check-preview-scenario.mjs';
 export async function checkCharacters(evaluate,app,room,id,sleep,capture){
   const wait=async predicate=>{for(let i=0;i<120;i++){if(await predicate())return true;await sleep(25);}return false;};
   const menu=await evaluate("[...document.querySelectorAll('#drivers button')].map(button=>button.getAttribute('aria-label'))");
-  const menuPass=['Ellie the Elephant','Tamar the Cricket','Elon Musk','Houston the RTPL','Avita-Jas','Pearococo','Master-Yuda','R-yeah','Catheterpillar'].every(name=>menu.includes(name))&&menu.length===13;
+  const menuPass=['Ellie the Elephant','Tamar the Cricket','Elon Musk','Houston the RTPL','Avita-Jas','Pearococo','Master-Yuda','R-yeah','Catheterpillar','Fourmidable'].every(name=>menu.includes(name))&&menu.length===14;
   if(room.members.size<2)app.join(room,{name:'Observer',driver:1});
   const observer=[...room.members.values()].find(member=>member.id!==id),characters=[];
   const preview=await checkPreview(evaluate,app,room,id,sleep,capture);
@@ -42,7 +42,7 @@ export async function checkCharacters(evaluate,app,room,id,sleep,capture){
     renderer.draw=(...args)=>{const result=draw(...args);if(__game.characterCapture===__game.race.driver){const gl=renderer.gl,w=gl.drawingBufferWidth,h=gl.drawingBufferHeight,width=50,height=Math.floor(h*.3),pixels=new Uint8Array(width*height*4);gl.readPixels(Math.floor(w/2)-25,Math.floor(h*.16),width,height,gl.RGBA,gl.UNSIGNED_BYTE,pixels);const colors=new Set();let white=0;for(let i=0;i<pixels.length;i+=4){colors.add(pixels[i]*65536+pixels[i+1]*256+pixels[i+2]);const low=Math.min(pixels[i],pixels[i+1],pixels[i+2]),high=Math.max(pixels[i],pixels[i+1],pixels[i+2]);if(low>150&&high-low<20)white++;}__game.characterPixels={driver:__game.race.driver,colors:colors.size,white,glError:gl.getError()};__game.characterCapture=null;}return result;};
     __game.keys.clear();
   }`);
-  for(const [driver,name,cuteness,recoverySeconds,ammoSeconds]of[[4,'Ellie the Elephant',5,4,1],[5,'Tamar the Cricket',5,4,1],[7,'Houston the RTPL',5,4,1],[8,'Avita-Jas',5,4,1],[9,'Pearococo',5,4,1],[10,'Master-Yuda',3,8,1.5],[11,'R-yeah',5,4,1],[12,'Catheterpillar',5,4,1],[6,'Elon Musk',1,12,2]]){
+  for(const [driver,name,cuteness,recoverySeconds,ammoSeconds]of[[4,'Ellie the Elephant',5,4,1],[5,'Tamar the Cricket',5,4,1],[7,'Houston the RTPL',5,4,1],[8,'Avita-Jas',5,4,1],[9,'Pearococo',5,4,1],[10,'Master-Yuda',3,8,1.5],[11,'R-yeah',5,4,1],[12,'Catheterpillar',5,4,1],[13,'Fourmidable',5,4,1],[6,'Elon Musk',1,12,2]]){
     await evaluate('__game.characterAngle=Math.PI');
     app.makeWorld(room);app.broadcast(room);
     await wait(()=>evaluate("__game.network.state.world.phase==='ready'"));
@@ -160,7 +160,7 @@ export async function checkCharacters(evaluate,app,room,id,sleep,capture){
   const flipVapor=await wait(async()=>await evaluate('__game.race.somersault>0')&&await vapor());
   const remoteFlip=await wait(()=>{const actor=app.snapshot(room,observer).world.bots.find(actor=>actor.id===id);return actor?.driver===6&&actor.somersault>0;});
   await capture('roadster-flip');
-  const voicePass=await evaluate("[4,5,6,7,8,9,10,11,12].every(driver=>__game.audio.voice({driver,cue:'win'}))");
+  const voicePass=await evaluate("[4,5,6,7,8,9,10,11,12,13].every(driver=>__game.audio.voice({driver,cue:'win'}))");
   // Restore the simulated observer's actual selection before room teardown.
   // Mid-match roster updates correctly reject the test's temporary character swap.
   Object.assign([room.world,...room.world.bots].find(actor=>actor.id===observer.id),{driver:observer.driver,bomber:observer.role==='bomber'});

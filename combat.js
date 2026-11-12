@@ -193,7 +193,7 @@ export function advanceProjectile(r,shot,dt){
   return {impact,victim,decoy};
 }
 export function damageBattle(r,victim,owner,amount,kind='hedgehog'){
-  if(victim.bomber||victim.inactive||!battleActive(r)||victim.destroyed>0||victim.shield>0&&kind!=='wall'||victim.hedgeShield>0&&kind!=='missile'&&kind!=='wall'||victim.id===owner)return false;
+  if(victim.bomber||victim.inactive||!battleActive(r)||victim.destroyed>0||victim.shield>0&&kind!=='wall'&&kind!=='tax'||victim.hedgeShield>0&&kind!=='missile'&&kind!=='wall'&&kind!=='tax'||victim.id===owner)return false;
   victim.health=Math.max(0,victim.health-amount);victim.healTimer=0;voice(r,victim,'hurt');
   if(victim===r)r.shake=.5;
   const attacker=[r,...r.bots].find(k=>k.id===owner);
