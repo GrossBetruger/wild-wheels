@@ -1,4 +1,4 @@
-import {botVisibilityPenalty} from './dark-humor.js';
+import {botSightRadius} from './dark-humor.js';
 import {boostDuration, createRace, drivers, START_HEDGEHOGS, itemCapacity } from './engine.js';
 import {frozen,tickSpecials,useSpecial,restoreSupply} from './special-abilities.js';
 export const VULCAN_DURATION=15;
@@ -344,18 +344,18 @@ export function tickBattle(r,keys,dt,inputs=null){
     if(ending){actor.speed=0;actor.boost=0;continue;}
     actor.dizzy=Math.max(0,(actor.dizzy??0)-dt);actor.somersault=Math.max(0,(actor.somersault??0)-dt);actor.somersaultCooldown=Math.max(0,(actor.somersaultCooldown??0)-dt);
     actor.boost=Math.max(0,actor.boost-dt);
-    const target=actors.filter(k=>k!==actor&&!k.bomber&&!k.inactive&&!k.destroyed).sort((a,b)=>distance(actor,a)-distance(actor,b))[0];if(!target)continue;
+    const sight=botSightRadius(r,actor),target=actors.filter(k=>k!==actor&&!k.bomber&&!k.inactive&&!k.afk&&!k.destroyed&&distance(actor,k)<=sight).sort((a,b)=>distance(actor,a)-distance(actor,b))[0];
+    if(!target){actor.path=[];const ahead={wx:actor.wx+Math.sin(actor.heading)*9,wz:actor.wz+Math.cos(actor.heading)*9};moveActor(r,actor,blocked(arena,ahead.wx,ahead.wz,3)?1:0,true,false,dt);continue;}
     actor.brain-=dt;const visible=clearShot(arena,actor,target);
     if(visible&&distance(actor,target)<50)useSpecial(r,actor);
-    const obscured=botVisibilityPenalty(r,actor,target),orientationError=obscured*(Math.sin(r.elapsed*.9+actor.id*2.3)*.55+Math.sin(r.elapsed*2.2+actor.id)*.18),aimError=obscured*(Math.sin(r.elapsed*3.1+actor.id*1.7)*.42+Math.sin(r.elapsed*5.7+actor.id*.8)*.2);
-    if(actor.brain<=0){actor.path=visible?[]:navigate(arena,actor,target);actor.brain=.4+(1-actor.skill)*.4+obscured*.8;}
+    if(actor.brain<=0){actor.path=visible?[]:navigate(arena,actor,target);actor.brain=.4+(1-actor.skill)*.4;}
     while(actor.path.length&&distance(actor,actor.path[0])<7)actor.path.shift();
-    const waypoint=visible?target:actor.path[0]??target,desired=Math.atan2(waypoint.wx-actor.wx,waypoint.wz-actor.wz),turn=angleDelta(desired+orientationError,actor.heading);
-    const ahead={wx:actor.wx+Math.sin(actor.heading)*(9-obscured*4),wz:actor.wz+Math.cos(actor.heading)*(9-obscured*4)};
+    const waypoint=visible?target:actor.path[0]??target,desired=Math.atan2(waypoint.wx-actor.wx,waypoint.wz-actor.wz),turn=angleDelta(desired,actor.heading);
+    const ahead={wx:actor.wx+Math.sin(actor.heading)*9,wz:actor.wz+Math.cos(actor.heading)*9};
     let steer=-clamp(turn*1.8,-1,1);if(blocked(arena,ahead.wx,ahead.wz,3)&&Math.abs(steer)<.4)steer=1;
-    moveActor(r,actor,steer,(Math.abs(turn)<1.3||actor.speed<100)&&(obscured===0||Math.sin(r.elapsed*1.7+actor.id*2.1)>-.2||actor.speed<40),false,dt);
-    const aim=angleDelta(Math.atan2(target.wx-actor.wx,target.wz-actor.wz)+aimError,actor.heading);
-    if(visible&&Math.abs(aim)<.18+(1-actor.skill)*.12&&distance(actor,target)<85-obscured*35){actor.item=actor.vulcan>0?'hedgehog':actor.missiles>0?'missile':'hedgehog';fireBattle(r,actor);}
+    moveActor(r,actor,steer,Math.abs(turn)<1.3||actor.speed<100,false,dt);
+    const aim=angleDelta(Math.atan2(target.wx-actor.wx,target.wz-actor.wz),actor.heading);
+    if(visible&&Math.abs(aim)<.18+(1-actor.skill)*.12&&distance(actor,target)<85){actor.item=actor.vulcan>0?'hedgehog':actor.missiles>0?'missile':'hedgehog';fireBattle(r,actor);}
   }
   for(let i=0;i<actors.length;i++)for(let j=i+1;j<actors.length;j++){
     const a=actors[i],b=actors[j],d=distance(a,b);if(frozen(r,a.id)||frozen(r,b.id)||a.bomber||b.bomber||a.destroyed||b.destroyed||d>=3.8)continue;

@@ -1,13 +1,13 @@
 use super::*;
 impl Game{
     pub(super) fn frozen(&self,id:usize)->bool{self.global.special_abilities&&self.global.time_stop>0.0&&self.global.time_owner!=Some(id)}
-    pub(super) fn bot_visibility(&self,id:usize,d:f64)->f64{
-        if !self.global.special_abilities{return 0.0;}
+    pub(super) fn bot_sight_radius(&self,id:usize)->f64{
+        if !self.global.special_abilities{return f64::INFINITY;}
         let active=|a:&&Actor|a.special_active>0.0&&a.destroyed<=0.0&&!a.inactive&&!a.afk&&!a.bomber;
-        if self.actors.iter().filter(active).any(|a|a.driver==13&&a.id!=id){return 1.0;}
-        if self.actors[id].driver==14&&self.actors[id].special_active>0.0{return 0.0;}
-        let fog=self.actors.iter().filter(active).filter(|a|a.driver==14).map(|a|1.0_f64.min((7.0-a.special_active)/0.4).min(a.special_active/0.6)).fold(0.0_f64,f64::max);
-        fog*(0.35+0.65*(d/60.0).min(1.0))
+        let xy=match self.actors.iter().filter(active).any(|a|a.driver==13&&a.id!=id){true=>90.0_f64,false=>f64::INFINITY};
+        let own_xray=self.actors[id].driver==14&&self.actors[id].special_active>0.0;
+        let fog=match !own_xray&&self.actors.iter().filter(active).any(|a|a.driver==14){true=>50.0_f64,false=>f64::INFINITY};
+        xy.min(fog)
     }
     pub(super) fn special(&mut self,id:usize){
         let a=&self.actors[id];

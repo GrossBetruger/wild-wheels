@@ -51,11 +51,10 @@ export function drawXrayArena(m,arena){
   // A faint ground reference shows distances and open lanes without revealing the scene.
   for(let n=-arena.size;n<=arena.size;n+=16){m.box(n,.025,0,.035,.025,arena.size*2,floor);m.box(0,.025,n,arena.size*2,.025,.035,floor);}
 }
-export function botVisibilityPenalty(world,actor,target){
-  if(world.specialAbilities===false)return 0;
+export function botSightRadius(world,actor){
+  if(world.specialAbilities===false)return Infinity;
   const active=[world,...world.bots].filter(a=>a.specialActive>0&&!a.destroyed&&!a.inactive&&!a.afk&&!a.bomber);
-  if(active.some(a=>a.driver===13&&a.id!==actor.id))return 1;
-  if(actor.driver===14&&actor.specialActive>0)return 0;
-  const fog=active.filter(a=>a.driver===14).reduce((v,a)=>Math.max(v,Math.min(1,(7-a.specialActive)/.4,a.specialActive/.6)),0);
-  return fog*(.35+.65*Math.min(1,Math.hypot(target.wx-actor.wx,target.wz-actor.wz)/60));
+  const xylophone=active.some(a=>a.driver===13&&a.id!==actor.id)?90:Infinity;
+  const fog=active.some(a=>a.driver===14)&&!(actor.driver===14&&actor.specialActive>0)?50:Infinity;
+  return Math.min(xylophone,fog);
 }

@@ -64,21 +64,20 @@ impl Game{
             }
             if ending{a.speed=0.0;a.boost=0.0;continue;}
             a.dizzy=(a.dizzy-dt).max(0.0);a.somersault=(a.somersault-dt).max(0.0);a.somersault_cooldown=(a.somersault_cooldown-dt).max(0.0);a.boost=(a.boost-dt).max(0.0);
-            let target=self.actors.iter().filter(|b|b.id!=id&&!b.bomber&&!b.inactive&&!b.afk&&b.destroyed<=0.0).map(|b|b.id).min_by(|&x,&y|distance(self.actors[id].wx,self.actors[id].wz,self.actors[x].wx,self.actors[x].wz).total_cmp(&distance(self.actors[id].wx,self.actors[id].wz,self.actors[y].wx,self.actors[y].wz)).then(x.cmp(&y)));
-            let Some(target)=target else{continue;};let arena=self.global.arena;let visible=clear(arena,self.actors[id].wx,self.actors[id].wz,self.actors[target].wx,self.actors[target].wz);
+            let sight=self.bot_sight_radius(id);
+            let target=self.actors.iter().filter(|b|distance(self.actors[id].wx,self.actors[id].wz,b.wx,b.wz)<=sight&&b.id!=id&&!b.bomber&&!b.inactive&&!b.afk&&b.destroyed<=0.0).map(|b|b.id).min_by(|&x,&y|distance(self.actors[id].wx,self.actors[id].wz,self.actors[x].wx,self.actors[x].wz).total_cmp(&distance(self.actors[id].wx,self.actors[id].wz,self.actors[y].wx,self.actors[y].wz)).then(x.cmp(&y)));
+            let Some(target)=target else{let a=&self.actors[id];let steer=match blocked(self.global.arena,a.wx+a.heading.sin()*9.0,a.wz+a.heading.cos()*9.0,3.0){true=>1.0,false=>0.0};self.actors[id].path.clear();self.move_cart(id,steer,1,dt,false,true);continue;};let arena=self.global.arena;let visible=clear(arena,self.actors[id].wx,self.actors[id].wz,self.actors[target].wx,self.actors[target].wz);
             if visible&&distance(self.actors[id].wx,self.actors[id].wz,self.actors[target].wx,self.actors[target].wz)<50.0{self.special(id);}
-            let obscured=self.bot_visibility(id,distance(self.actors[id].wx,self.actors[id].wz,self.actors[target].wx,self.actors[target].wz));
-            let elapsed=self.global.elapsed;let orientation_error=obscured*((elapsed*0.9+id as f64*2.3).sin()*0.55+(elapsed*2.2+id as f64).sin()*0.18);let aim_error=obscured*((elapsed*3.1+id as f64*1.7).sin()*0.42+(elapsed*5.7+id as f64*0.8).sin()*0.2);
             self.actors[id].brain-=dt;
-            if self.actors[id].brain<=0.0{self.actors[id].path=match visible{true=>Vec::new(),false=>super::movement::navigate(arena,&self.actors[id],&self.actors[target])};self.actors[id].brain=0.4+(1.0-self.actors[id].skill)*0.4+obscured*0.8;}
+            if self.actors[id].brain<=0.0{self.actors[id].path=match visible{true=>Vec::new(),false=>super::movement::navigate(arena,&self.actors[id],&self.actors[target])};self.actors[id].brain=0.4+(1.0-self.actors[id].skill)*0.4;}
             let target_x=self.actors[target].wx;let target_z=self.actors[target].wz;let a=&mut self.actors[id];
             while a.path.first().is_some_and(|p|distance(a.wx,a.wz,p.wx,p.wz)<7.0){a.path.remove(0);}
             let (x,z)=match (visible,a.path.first()){(false,Some(p))=>(p.wx,p.wz),_=>(target_x,target_z)};
-            let turn=angle((x-a.wx).atan2(z-a.wz)+orientation_error,a.heading);let mut steer=-(turn*1.8).clamp(-1.0,1.0);
-            if blocked(arena,a.wx+a.heading.sin()*(9.0-obscured*4.0),a.wz+a.heading.cos()*(9.0-obscured*4.0),3.0)&&steer.abs()<0.4{steer=1.0;}
-            let gas=(turn.abs()<1.3||a.speed<100.0)&&(obscured==0.0||(elapsed*1.7+id as f64*2.1).sin()> -0.2||a.speed<40.0);self.move_cart(id,steer,u32::from(gas),dt,false,true);
-            let a=&self.actors[id];let aim=angle((target_x-a.wx).atan2(target_z-a.wz)+aim_error,a.heading);
-            if visible&&aim.abs()<0.18+(1.0-a.skill)*0.12&&distance(a.wx,a.wz,target_x,target_z)<85.0-obscured*35.0{self.actors[id].item=match(self.actors[id].vulcan>0.0,self.actors[id].missiles>0){(true,_)=>"hedgehog",(_,true)=>"missile",_=>"hedgehog"}.into();self.fire(id,None);}
+            let turn=angle((x-a.wx).atan2(z-a.wz),a.heading);let mut steer=-(turn*1.8).clamp(-1.0,1.0);
+            if blocked(arena,a.wx+a.heading.sin()*9.0,a.wz+a.heading.cos()*9.0,3.0)&&steer.abs()<0.4{steer=1.0;}
+            let gas=turn.abs()<1.3||a.speed<100.0;self.move_cart(id,steer,u32::from(gas),dt,false,true);
+            let a=&self.actors[id];let aim=angle((target_x-a.wx).atan2(target_z-a.wz),a.heading);
+            if visible&&aim.abs()<0.18+(1.0-a.skill)*0.12&&distance(a.wx,a.wz,target_x,target_z)<85.0{self.actors[id].item=match(self.actors[id].vulcan>0.0,self.actors[id].missiles>0){(true,_)=>"hedgehog",(_,true)=>"missile",_=>"hedgehog"}.into();self.fire(id,None);}
         }
         for input in &frame.inputs{if let Some(last)=input.moves.as_ref().and_then(|moves|moves.last()){self.movement_ack[input.actor]=last.sequence;}}
         for i in 0..self.actors.len(){for j in i+1..self.actors.len(){
