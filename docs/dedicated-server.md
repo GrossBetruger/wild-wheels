@@ -12,7 +12,15 @@ On a GCP VM, choose **Ubuntu 24.04 LTS** explicitly (the boot image is selectabl
 
 The installer also supports Debian. It installs build tools and a pinned Rust toolchain for x86_64 or arm64. Run it without `sudo`; it uses sudo only for system packages and installs Rust for your user. It verifies the official Rust installer’s SHA-256 before execution.
 
-Build from the repository root with Rust 1.90 or newer:
+Build and run from the repository root (the launcher finds Rust even before you open a new SSH shell):
+
+```sh
+./run_server.sh
+```
+
+Use `PORT=5174 ./run_server.sh` to choose another port. It rebuilds changed code/assets before starting and uses one compiler job by default for small VMs.
+
+To build manually with Rust 1.90 or newer, first run `source "$HOME/.cargo/env"`, then:
 
 ```sh
 cargo build --release --locked --manifest-path dedicated-server/Cargo.toml
