@@ -70,7 +70,7 @@ let id=0;const pending=new Map(),errors=[];
 ws.on('message',data=>{const msg=JSON.parse(data);if(msg.id){const task=pending.get(msg.id);if(!task)return;pending.delete(msg.id);clearTimeout(task.timeout);if(msg.error)task.reject(new Error(JSON.stringify(msg.error)));else task.resolve(msg.result);return;}if(msg.method==='Runtime.exceptionThrown')errors.push(msg.params.exceptionDetails.text+': '+msg.params.exceptionDetails.exception?.description);});
 function call(method,params={},sessionId){return new Promise((resolve,reject)=>{const number=++id,timeout=setTimeout(()=>{pending.delete(number);reject(new Error('Browser command timed out: '+method));},15000);pending.set(number,{resolve,reject,timeout});ws.send(JSON.stringify({id:number,method,params,...(sessionId?{sessionId}:{})}));});}
 let session;
-async function evaluate(expression){const result=await call('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true},session);if(result.exceptionDetails)throw new Error(result.exceptionDetails.exception?.description??result.exceptionDetails.text);return result.result.value;}
+async function evaluate(expression,userGesture=false){const result=await call('Runtime.evaluate',{expression,userGesture,awaitPromise:true,returnByValue:true},session);if(result.exceptionDetails)throw new Error(result.exceptionDetails.exception?.description??result.exceptionDetails.text);return result.result.value;}
 const results=[];
 try{
   const profiles=process.argv.includes('--profile')||encodingLab?[{name:'cpu-profile',delay:0,jitter:0}]:[{name:'local-host',delay:0,jitter:0},{name:'local-guest',delay:0,jitter:0,guest:true},{name:'160ms-guest',delay:80,jitter:0,guest:true},{name:'160ms-jitter-guest',delay:80,jitter:30,guest:true}];

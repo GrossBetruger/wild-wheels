@@ -250,6 +250,18 @@ export class Renderer {
     this.glow.at(p.x,height,p.z,angle);this.glow.pitch=pitch;this.glow.pivot=2;
     this.glow.particle(1.3,4.56,3.2,1,[1,.55,.08]);this.glow.particle(1.3,4.56,3.6,.5,[1,.85,.4]);
   }
+  fashionSnap(m,effect,time){
+    const t=effect.age,fade=Math.max(0,1-t/effect.life),snap=Math.min(1,t/.18),x=effect.wx,z=effect.wz;
+    m.at(x,7.4+t*.8,z,time*.25);
+    // A pink opera glove: poised thumb and middle finger flick apart on the snap.
+    m.ball(0,0,0,.45,.58,.23,'#efb4d2',10,6);m.box(0,-.95,0,.65,.55,.36,'#f8d1e3');m.box(0,-.5,0,.69,.12,.4,'#ecc16e');
+    for(let i=0;i<3;i++)m.ball(-.26+i*.24,.64+i*.06,0,.12,.42,.13,'#f4c5dc',8,5);
+    m.ball(.4+snap*.35,.28-snap*.32,.18,.16,.35,.13,'#efb4d2',8,5);
+    m.ball(.18-snap*.2,.4+snap*.5,.25,.13,.36,.13,'#f8d1e3',8,5);
+    this.glow.at(x,8,z);
+    for(let i=0;i<44;i++){const a=i*2.399,r=.3+t*(3+i%5),y=Math.sin(i*3.1)*t*3;this.glow.particle(Math.cos(a)*r,y,Math.sin(a)*r,(.25+(i%3)*.08)*fade,i%3?[.85*fade,.12*fade,.4*fade]:[.8*fade,.55*fade,.1*fade]);}
+    this.glow.particle(0,0,0,Math.max(0,1-t/.25)*3,[.9,.65,.35]);
+  }
   holyArchangels(p,actor,time,jump){
     const age=Math.max(0,8-actor.specialActive),presence=Math.min(1,age/.65,actor.specialActive/.7),smooth=presence*presence*(3-2*presence),stage=Math.round(smooth*12)/12,angle=Math.atan2(p.tx,p.tz),phase=Math.floor(time*8)%8;
     for(const side of [-1,1]){
@@ -600,6 +612,7 @@ export class Renderer {
       if(actor.driver===7)this.houstonHelmet(pose,actor,time,jump);
       if(actor.hedgeShield>0)this.hedgeguard(m,pose,actor,time,jump);
       if(r.specialAbilities!==false&&actor.driver===11&&actor.specialActive>0)this.holyArchangels(pose,actor,time,jump);
+
       if(actor.tehilim>0)this.tehilimAura(pose,time,actor.tehilim,jump);
       if(actor.dizzy>0)for(let i=0;i<6;i++){const angle=time*(actor.boost>0?9:5)+i*Math.PI/3;m.at(pose.x+Math.sin(angle)*3.2,6.8+Math.sin(angle*2)*.5,pose.z+Math.cos(angle)*3.2,angle);m.box(0,0,0,1.2,.22,.3,'#fff08b');m.box(0,0,0,.3,.22,1.2,'#fff08b');this.glow.at(m.origin[0],m.origin[1],m.origin[2]);this.glow.particle(0,0,0,.8,[.7,.6,.05]);}
       if(actor.vulcan>0&&actor.driver===10)this.laserMount(m,pose,actor,time,jump);
@@ -644,7 +657,7 @@ export class Renderer {
       m.at(bomb.wx,height,bomb.wz,bomb.age*3);m.ball(0,0,0,2.2*scale,3.4*scale,2.2*scale,'#39334e',10,6);m.box(0,2.3*scale,0,5*scale,.5,.7*scale,'#ffdb69');m.box(0,2.3*scale,0,.7*scale,.5,5*scale,'#ffdb69');
       this.glow.at(bomb.wx,height+3,bomb.wz);this.glow.particle(0,0,0,3,[.8,.35,.03]);
     }
-    for(const effect of r.effects){if(effect.type==='yudaSmoke')continue;if(effect.type==='radiation'){this.radiationZone(m,effect,time);continue;}if(effect.type==='ash'){this.ashRemains(m,effect);continue;}if(effect.type==='abomb'){this.atomicExplosion(m,effect);continue;}if(effect.type==='explosion'){this.explosion(m,effect);continue;}for(let i=0;i<10;i++){const a=i*2.4,t=effect.age;m.at(effect.wx+Math.cos(a)*t*8,1+t*4,effect.wz+Math.sin(a)*t*8);m.ball(0,0,0,.12,.12,.12,'#f4dc8b',5,3);}}
+    for(const effect of r.effects){if(effect.type==='fashionSnap'){this.fashionSnap(m,effect,time);continue;}if(effect.type==='yudaSmoke')continue;if(effect.type==='radiation'){this.radiationZone(m,effect,time);continue;}if(effect.type==='ash'){this.ashRemains(m,effect);continue;}if(effect.type==='abomb'){this.atomicExplosion(m,effect);continue;}if(effect.type==='explosion'){this.explosion(m,effect);continue;}for(let i=0;i<10;i++){const a=i*2.4,t=effect.age;m.at(effect.wx+Math.cos(a)*t*8,1+t*4,effect.wz+Math.sin(a)*t*8);m.ball(0,0,0,.12,.12,.12,'#f4dc8b',5,3);}}
     for(const cloud of r.stinkClouds??[]){const fade=Math.min(1,(cloud.life-cloud.age)/.7);for(let i=0;i<15;i++){const angle=i*2.399+cloud.age*.2,radius=2+(i%5)*2.6,x=cloud.wx+Math.sin(angle)*radius,z=cloud.wz+Math.cos(angle)*radius,y=1+(i%3)+Math.sin(cloud.age*2+i)*.7;this.smoke.at(x,y,z);this.smoke.particle(0,0,0,(7+cloud.age*2)*Math.sqrt(fade),[.5,.7,.23]);this.glow.at(x,y+.4,z);this.glow.particle(0,0,0,.25*fade,[.15,.3,.04]);}}
     for(const cloud of r.chaffClouds){
       const t=cloud.age,fade=Math.min(1,(cloud.life-t)/1.4),expansion=1-Math.exp(-t*2.5);

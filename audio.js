@@ -126,6 +126,7 @@ export class RaceAudio {
   }
   update(r){
     if(!this.context)return;
+    const fashion=new Map();for(const a of [r,...(r.bots??[])]){if(a.driver!==9||!(a.specialActive>0)||r.specialAbilities===false)continue;fashion.set(a.id,a.specialActive);if((this.fashionSeen?.get(a.id)??0)>=a.specialActive)continue;this.burst(.07,4200,.2,0,1600);for(const [i,n]of [880,1108.73,1318.51,1760].entries())this.note(n,.35,{type:'sine',delay:.06+i*.055,volume:.045});}this.fashionSeen=fashion;
     const warp=this.enabled&&r.phase==='racing'?(r.timeStop??0):0;
     if(warp>0&&(!(this.previousWarp>0)||warp>this.previousWarp+.3))this.timeWarp(warp);
     if(warp<=0&&this.previousWarp>0){this.stopTimeWarp();if(this.enabled&&r.phase==='racing'){this.note(440,.45,{type:'sine',end:880,volume:.12});this.note(660,.6,{type:'sine',volume:.08});}}

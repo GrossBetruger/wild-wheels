@@ -1,10 +1,13 @@
+import {drivers} from './engine.js';
+import {damageBattle} from './combat.js';
 export const SPECIAL_COOLDOWN=20;
 export const TIME_STOP_DURATION=2.5;
-export const abilityNames={5:'CRICKET’S JUMP',8:'SPECIAL RELATIVITY',10:'DIZZY SMOKE',11:'HOLY AURA',12:'SIX-HEART RECOVERY'};
+export const abilityNames={5:'CRICKET’S JUMP',8:'SPECIAL RELATIVITY',9:'FASHION-STATEMENT',10:'DIZZY SMOKE',11:'HOLY AURA',12:'SIX-HEART RECOVERY'};
+export function fashionDamage(cuteness){return Math.max(1,5-cuteness);}
 export function frozen(world,id){return world.specialAbilities!==false&&world.timeStop>0&&world.timeOwner!==id;}
 export function useSpecial(world,actor=world){
-  if(world.specialAbilities===false||world.phase!=='racing'||world.finishCountdown!==null||![8,11,12].includes(actor.driver)||actor.specialCooldown>0||actor.destroyed>0||actor.inactive||actor.afk||actor.bomber||world.timeStop>0)return false;
-  switch(actor.driver){case 8:world.timeStop=TIME_STOP_DURATION;world.timeOwner=actor.id;break;case 11:actor.specialActive=8;break;case 12:if(actor.health>=6)return false;actor.health=6;actor.healTimer=0;actor.specialActive=1.5;break;}actor.specialCooldown=SPECIAL_COOLDOWN;return true;
+  if(world.specialAbilities===false||world.phase!=='racing'||world.finishCountdown!==null||![8,9,11,12].includes(actor.driver)||actor.specialCooldown>0||actor.destroyed>0||actor.inactive||actor.afk||actor.bomber||world.timeStop>0)return false;
+  switch(actor.driver){case 8:world.timeStop=TIME_STOP_DURATION;world.timeOwner=actor.id;break;case 9:actor.specialActive=1.6;world.effects.push({type:'fashionSnap',owner:actor.id,wx:actor.wx,wz:actor.wz,age:0,life:1.2});for(const victim of [world,...world.bots]){if(victim.id===actor.id||victim.afk||Math.hypot(victim.wx-actor.wx,victim.wz-actor.wz)>35)continue;const wx=victim.wx,wz=victim.wz;if(damageBattle(world,victim,actor.id,fashionDamage(drivers[victim.driver].cuteness),'fashion'))world.effects.push({type:'fashionSnap',owner:actor.id,wx,wz,age:0,life:1.2});}break;case 11:actor.specialActive=8;break;case 12:if(actor.health>=6)return false;actor.health=6;actor.healTimer=0;actor.specialActive=1.5;break;}actor.specialCooldown=SPECIAL_COOLDOWN;return true;
 }
 export function tickSpecials(world,dt){
   if(world.specialAbilities===false)return;
