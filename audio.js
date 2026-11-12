@@ -144,7 +144,7 @@ export class RaceAudio {
     this.previousWarp=warp;
     const c=this.context,t=c.currentTime,active=r.phase==='racing';this.engineGain.gain.setTargetAtTime(active&&!r.bomber?.09:0,t,.03);const rpm=28+r.speed*.045+Math.sin(r.elapsed*18)*.6;this.engine.frequency.setTargetAtTime(rpm,t,.03);this.harmonic.frequency.setTargetAtTime(rpm*2,t,.03);this.skidGain.gain.setTargetAtTime(active&&r.wasDrifting?.07:0,t,.02);this.jetGain.gain.setTargetAtTime(active&&(r.boost>0||r.somersault>0)?.18:0,t,.025);
     const remaining=r.vulcan??0,powered=this.enabled&&active&&remaining>0&&!r.destroyed&&r.finishCountdown==null,firing=powered&&(r.driver===14?r.projectiles.some(s=>s.owner===r.id&&s.vulcan&&s.age<.12):r.item==='hedgehog'&&r.fireCooldown>0);
-    this.vulcanGain.gain.setTargetAtTime(powered?.18:0,t,.07);this.vulcanRotor.frequency.setTargetAtTime(firing?130:94,t,.1);this.vulcanBass.frequency.setTargetAtTime(firing?65:47,t,.1);this.vulcanPulse.frequency.setTargetAtTime(firing?24:12,t,.1);
+    this.vulcanGain.gain.setTargetAtTime(powered&&r.driver!==14?.18:0,t,.07);this.vulcanRotor.frequency.setTargetAtTime(firing?130:94,t,.1);this.vulcanBass.frequency.setTargetAtTime(firing?65:47,t,.1);this.vulcanPulse.frequency.setTargetAtTime(firing?24:12,t,.1);
     const warning=Math.ceil(remaining);
     if(powered&&warning<=3&&warning!==this.vulcanWarning){this.event('vulcanWarning');this.vulcanWarning=warning;}
     if(remaining>3||remaining<=0)this.vulcanWarning=0;

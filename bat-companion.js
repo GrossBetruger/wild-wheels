@@ -31,8 +31,17 @@ export function drawBat(m,phase,firing){
   }
   m.ball(0,1.08,.47,.17,.09,.07,'#c48f9d',8,5);m.box(0,.9,.4,.28,.035,.025,'#e7d8d6');
   m.box(0,.25,.28,.85,.1,.18,'#a34f69');m.tri([.35,.3,.1],[1.15,.22,-.4],[.8,-.1,-.3],'#a34f69');
-  // The gun hangs from his feet and rotates with the bat's aim.
-  m.box(0,-.52,.45,.78,.4,1.1,'#303a4e');m.ball(0,-.3,.85,.36,.3,.18,'#7e8a9c',10,6);
-  for(let i=0;i<6;i++){const a=phase*Math.PI/8+i*Math.PI/3,x=Math.sin(a)*.23,y=-.3+Math.cos(a)*.23;m.box(x,y,1.5,.12,.12,1.3,'#b7c4cd');m.ball(x,y,2.16,.075,.075,.035,'#202638',6,4);}
-  if(firing){m.cone(0,-.42,2.4,.25,.5,'#ffe5a0',7);m.ball(0,-.3,2.4,.25,.2,.45,'#ffbd66',8,5);}
+  // Compact Uzi: box receiver, vertical magazine, folding stock and one short barrel.
+  const recoil=firing?-.055:0;
+  m.box(0,-.52,.42+recoil,.58,.34,1.05,'#303a45');
+  m.box(0,-1.02,.35+recoil,.24,.55,.32,'#202b35');
+  m.box(0,-.65,.05+recoil,.2,.36,.23,'#48525b');
+  m.box(0,-.72,.35+recoil,.4,.07,.4,'#6d7880');
+  for(const side of [-1,1])m.box(side*.21,-.45,-.48+recoil,.055,.055,.8,'#87949d');
+  m.box(0,-.63,-.85+recoil,.5,.24,.07,'#48525b');
+  m.ball(0,-.3,1.14+recoil,.105,.105,.26,'#87949d',10,5);
+  m.ball(0,-.3,1.4+recoil,.075,.075,.025,'#101b23',8,4);
+  for(const z of [.18,.34,.5,.66])m.box(0,-.16,z+recoil,.28,.025,.055,'#101b23');
+  for(const z of [-.02,1.08])m.box(0,-.18,z+recoil,.07,.18,.07,'#87949d');
+  if(firing)m.ball(0,-.3,1.55,.16,.13,.24,'#ffd18a',8,5);
 }

@@ -274,9 +274,9 @@ export class Renderer {
     const dt=Math.min(.05,Math.max(0,time-state.time));state.time=time;state.amount+=(Number(actor.vulcan>0)-state.amount)*(1-Math.exp(-dt*12));
     if(state.amount<.01)return;
     const aim=batAim(world,actor,arenas[world.arena]),x=p.x+(aim.origin.wx-p.x)*state.amount,z=p.z+(aim.origin.wz-p.z)*state.amount,height=3.8+(actor.boost>0?2.4:0)+(jump?.height??0)+(1-state.amount)*1.5,phase=Math.floor(time*18)%16;
-    const firing=actor.vulcan>0&&world.projectiles.some(s=>s.owner===actor.id&&s.vulcan&&s.age<.12);
+    const firing=actor.vulcan>0&&world.projectiles.some(s=>s.owner===actor.id&&s.vulcan&&s.age<.09);
     this.model('owl:bat:'+phase+':'+firing,x,height,z,aim.heading,mesh=>drawBat(mesh,phase,firing));
-    if(firing){this.glow.at(x,height-.3,z,aim.heading);this.glow.particle(0,0,2.45,1.2,[.7,.35,.05]);}
+    if(firing){this.glow.at(x,height-.3,z,aim.heading);this.glow.particle(0,0,1.55,.7,[.7,.35,.05]);}
     if(state.amount<.95){this.glow.at(x,height,z);for(let i=0;i<10;i++){const a=time*5+i*2.399;this.glow.particle(Math.cos(a)*.9,i*.2,Math.sin(a)*.9,.15,[.3,.1,.4]);}}
   }
   holyArchangels(p,actor,time,jump){

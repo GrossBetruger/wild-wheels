@@ -370,10 +370,10 @@ export function tickBattle(r,keys,dt,inputs=null){
   for(const actor of actors){
     if(actor.driver!==14||actor.vulcan<=0||actor.batCooldown>0||actor.afk||!canAct(r,actor))continue;
     const aim=batAim(r,actor,arena);if(!aim.target)continue;
-    const wx=aim.origin.wx+Math.sin(aim.heading)*2.2,wz=aim.origin.wz+Math.cos(aim.heading)*2.2;if(blocked(arena,wx,wz,.3))continue;
+    const wx=aim.origin.wx+Math.sin(aim.heading)*1.4,wz=aim.origin.wz+Math.cos(aim.heading)*1.4;if(blocked(arena,wx,wz,.3))continue;
     r.projectileSequence=(r.projectileSequence??0)+1;
     r.projectiles.push({id:r.projectileSequence,owner:actor.id,kind:'hedgehog',vulcan:true,target:aim.target.id,wx,wz,heading:aim.heading,speed:125,height:3.5+(actor.boost>0?2.4:0)+(somersaultPose(actor)?.height??0),vy:3,life:1.3,age:0,trail:[],bounces:0});
-    actor.batCooldown=.075;if(r.multiplayer||distance(actor,r)<90)sound(r,'vulcanFire',actor);
+    actor.batCooldown=.15;if(r.multiplayer||distance(actor,r)<90)sound(r,'vulcanFire',actor);
   }
   for(const cloud of r.chaffClouds)divertMissiles(r,cloud);
   for(const shot of r.projectiles){
