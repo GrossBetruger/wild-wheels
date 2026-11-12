@@ -104,8 +104,32 @@ export class RaceAudio {
     case 'victory':this.fanfare();break;
     case 'finish':for(const [i,f] of [392,493.88,587.33].entries())this.note(f,.4,{delay:i*.12,volume:.2});break;
   }}
+  stopTimeWarp(){
+    const music=this.warpMusic;if(!music)return;this.warpMusic=null;
+    const t=this.context.currentTime;music.gain.gain.cancelScheduledValues(t);music.gain.gain.setTargetAtTime(0,t,.06);
+    for(const node of music.sources)node.stop(t+.3);
+  }
+  timeWarp(seconds){
+    if(!this.context||!this.enabled)return;
+    this.stopTimeWarp();const c=this.context,t=c.currentTime,duration=Math.min(2.5,Math.max(.1,seconds)),end=t+duration;
+    const gain=c.createGain(),filter=c.createBiquadFilter(),pan=c.createStereoPanner(),echo=c.createDelay(.5),feedback=c.createGain();
+    gain.gain.setValueAtTime(.001,t);gain.gain.linearRampToValueAtTime(.65,t+.12);gain.gain.setTargetAtTime(.001,end-.15,.08);
+    filter.type='lowpass';filter.Q.value=4;filter.frequency.setValueAtTime(4500,t);filter.frequency.exponentialRampToValueAtTime(480,t+duration*.6);filter.frequency.exponentialRampToValueAtTime(6000,end);
+    echo.delayTime.setValueAtTime(.17,t);echo.delayTime.linearRampToValueAtTime(.29,end);feedback.gain.value=.28;
+    gain.connect(filter).connect(pan).connect(this.effects);pan.connect(echo).connect(feedback).connect(echo);echo.connect(this.effects);
+    const sources=[],nodes=[gain,filter,pan,echo,feedback],add=(frequency,when,length,volume,target)=>{const o=c.createOscillator(),g=c.createGain();o.type='sine';o.frequency.setValueAtTime(frequency,when);o.frequency.exponentialRampToValueAtTime(target,when+length);g.gain.setValueAtTime(.001,when);g.gain.linearRampToValueAtTime(volume,when+.025);g.gain.exponentialRampToValueAtTime(.001,when+length);o.connect(g).connect(gain);o.start(when);o.stop(when+length+.02);sources.push(o);nodes.push(o,g);return o;};
+    const lfo=c.createOscillator(),depth=c.createGain();lfo.frequency.setValueAtTime(.6,t);lfo.frequency.exponentialRampToValueAtTime(7,end);depth.gain.value=.85;lfo.connect(depth).connect(pan.pan);lfo.start(t);lfo.stop(end+.4);sources.push(lfo);nodes.push(lfo,depth);
+    for(const [i,note]of [110,164.81,233.08].entries()){const drone=add(note*4,t,duration,.09,note);const bend=c.createOscillator(),amount=c.createGain();bend.frequency.value=2+i*.7;amount.gain.value=45;bend.connect(amount).connect(drone.detune);bend.start(t);bend.stop(end+.05);sources.push(bend);nodes.push(bend,amount);}
+    const scale=[220,277.18,311.13,440,466.16,622.25];for(let i=0;i* .12<duration-.2;i++){const f=scale[i%6]*2**(i%3);add(f,t+i*.12,.24,.09,f*(i%2?.5:2));}
+    lfo.onended=()=>{for(const node of nodes)node.disconnect();if(this.warpMusic?.gain===gain)this.warpMusic=null;};
+    this.warpMusic={gain,sources};
+  }
   update(r){
     if(!this.context)return;
+    const warp=this.enabled&&r.phase==='racing'?(r.timeStop??0):0;
+    if(warp>0&&(!(this.previousWarp>0)||warp>this.previousWarp+.3))this.timeWarp(warp);
+    if(warp<=0&&this.previousWarp>0){this.stopTimeWarp();if(this.enabled&&r.phase==='racing'){this.note(440,.45,{type:'sine',end:880,volume:.12});this.note(660,.6,{type:'sine',volume:.08});}}
+    this.previousWarp=warp;
     const c=this.context,t=c.currentTime,active=r.phase==='racing';this.engineGain.gain.setTargetAtTime(active&&!r.bomber?.09:0,t,.03);const rpm=28+r.speed*.045+Math.sin(r.elapsed*18)*.6;this.engine.frequency.setTargetAtTime(rpm,t,.03);this.harmonic.frequency.setTargetAtTime(rpm*2,t,.03);this.skidGain.gain.setTargetAtTime(active&&r.wasDrifting?.07:0,t,.02);this.jetGain.gain.setTargetAtTime(active&&(r.boost>0||r.somersault>0)?.18:0,t,.025);
     const remaining=r.vulcan??0,powered=this.enabled&&active&&remaining>0&&!r.destroyed&&r.finishCountdown==null,firing=powered&&r.item==='hedgehog'&&r.fireCooldown>0;
     this.vulcanGain.gain.setTargetAtTime(powered?.18:0,t,.07);this.vulcanRotor.frequency.setTargetAtTime(firing?130:94,t,.1);this.vulcanBass.frequency.setTargetAtTime(firing?65:47,t,.1);this.vulcanPulse.frequency.setTargetAtTime(firing?24:12,t,.1);

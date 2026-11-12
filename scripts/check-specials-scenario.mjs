@@ -8,7 +8,9 @@ export async function checkSpecials(evaluate,app,room,id,sleep,capture){
   Object.assign(own,{driver:8,destroyed:0,wx:65,wz:40,heading:0,motionHeading:0,cameraHeading:0,speed:0,specialCooldown:0});
   Object.assign(other,{driver:10,destroyed:0,wx:-65,wz:0,heading:0,motionHeading:0,cameraHeading:0,speed:100});app.broadcast(room);
   const available=await wait(()=>evaluate("__game.race.driver===8&&!document.querySelector('#special-ability').classList.contains('hidden')&&!document.querySelector('#special-ability').disabled"));
+  await evaluate('__game.audio.unlock()');
   const activate=await evaluate("__game.network.action('special')===true")&&await wait(()=>evaluate('__game.race.timeStop>1.5'));
+  const warpAudio=await wait(()=>evaluate('Boolean(__game.audio.warpMusic)'));
   app.controls(peer,{sequence:0,keys:['arrowup'],actions:[],epoch:room.world.soundEpoch});
   const stoppedAt=app.snapshot(room,peer).world.wz;
   await evaluate("__game.keys.add('arrowup')");const start=await evaluate('__game.race.wz');await sleep(600);
@@ -16,6 +18,7 @@ export async function checkSpecials(evaluate,app,room,id,sleep,capture){
   const notice=await evaluate("document.querySelector('.special-status').textContent.includes('RELATIVITY')");await capture('relativity');
   await evaluate('__game.keys.clear()');
   const resumed=await wait(()=>evaluate('__game.race.timeStop===0'));app.controls(peer,{sequence:1,keys:['arrowup'],actions:[],epoch:room.world.soundEpoch});
+  const audioResolved=await wait(()=>evaluate('__game.audio.warpMusic===null'));
   const movesAgain=await wait(()=>app.snapshot(room,peer).world.wz>stoppedAt+.05);
   const cooldown=await evaluate("__game.race.specialCooldown>15&&__game.network.action('special')!==true");
   Object.assign(room.world,{timeStop:2.5,timeOwner:peer.id});app.broadcast(room);
@@ -35,5 +38,5 @@ export async function checkSpecials(evaluate,app,room,id,sleep,capture){
   const smoke=await wait(()=>app.snapshot(room,peer).world.dizzy>7);
   member.driver=10;room.specialAbilities=false;app.syncRoom(room);app.broadcast(room);
   const disabled=await wait(()=>evaluate("__game.race.specialAbilities===false&&__game.network.abilities.textContent.includes('OFF')&&document.querySelector('.special-status').classList.contains('hidden')"));
-  return {available,activate,moves,frozen,notice,resumed,movesAgain,cooldown,frozenClient,clientStaysStill,holy,angels,angelsGone,heal,smoke,disabled,pass:available&&activate&&moves&&frozen&&notice&&resumed&&movesAgain&&cooldown&&frozenClient&&clientStaysStill&&holy&&angels&&angelsGone&&heal&&smoke&&disabled};
+  return {available,activate,warpAudio,audioResolved,moves,frozen,notice,resumed,movesAgain,cooldown,frozenClient,clientStaysStill,holy,angels,angelsGone,heal,smoke,disabled,pass:available&&activate&&warpAudio&&audioResolved&&moves&&frozen&&notice&&resumed&&movesAgain&&cooldown&&frozenClient&&clientStaysStill&&holy&&angels&&angelsGone&&heal&&smoke&&disabled};
 }

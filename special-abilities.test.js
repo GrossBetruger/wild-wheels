@@ -5,6 +5,15 @@ import {ArenaCore,ArenaClient} from './arena-core.js';
 import {useSpecial} from './special-abilities.js';
 import {decodeBinarySnapshot} from './binary-wire.js';
 
+for(const engine of ['JavaScript','Rust'])test(`${engine}: bots keep their AI and resume driving after relativity`,()=>{
+  const world=createBattle(8);Object.assign(world,{phase:'racing',human:true,wx:65,wz:70,supplies:[]});
+  for(const a of world.bots)Object.assign(a,{inactive:true,destroyed:999});Object.assign(world.bots[0],{inactive:false,destroyed:0,human:false,wx:65,wz:0,heading:0,motionHeading:0,speed:0});
+  const core=engine==='Rust'?new ArenaCore(world):null,step=()=>core?core.step(1/60):tickBattle(world,new Set(),1/60),read=()=>core?core.snapshot():world;
+  if(core)core.step(0,[{actor:0,actions:[{type:'special'}]}]);if(!core)useSpecial(world);
+  for(let i=0;i<155;i++)step();const after=read();assert.equal(after.bots[0].human,false);const z=after.bots[0].wz;
+  for(let i=0;i<60;i++)step();assert.ok(read().bots[0].wz>z+1);
+});
+
 for(const engine of ['JavaScript','Rust'])for(const driver of [11,12])test(`${engine}: driver ${driver} starts inactive and must recharge for twenty seconds`,()=>{
   const world=createBattle(driver);Object.assign(world,{phase:'racing',human:true,wx:-65,wz:0,health:3,supplies:[]});for(const a of world.bots)Object.assign(a,{inactive:true,destroyed:999});
   const core=engine==='Rust'?new ArenaCore(world):null,read=()=>core?core.snapshot():world;

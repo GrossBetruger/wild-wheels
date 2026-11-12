@@ -308,7 +308,7 @@ export function tickBattle(r,keys,dt,inputs=null){
   ageDriftEffects(r,worldDt);
   const actors=[r,...r.bots],arena=arenas[r.arena];
   for(const actor of actors){
-    if(frozen(r,actor.id)){const control=inputs?.get(actor.id)??(actor===r?keys:new Set());advanceKartMovement(r,actor,control.keys instanceof Set?control.keys:control,dt*.025);continue;}
+    if(frozen(r,actor.id)){const human=actor.human;const control=inputs?.get(actor.id)??(actor===r?keys:new Set());advanceKartMovement(r,actor,control.keys instanceof Set?control.keys:control,dt*.025);actor.human=human;continue;}
     const recoveryHealth=RECOVERY_HEALTH;
     if(actor!==r)actor.noticeTime=Math.max(0,(actor.noticeTime??0)-dt);
     for(const key of ['fireCooldown','shield','hedgeShield','tehilim','celebrate','voiceCooldown','wallCooldown','vulcan','chaffCooldown']){if(inputs?.get(actor.id)?.actionClock&&['fireCooldown','chaffCooldown'].includes(key))continue;actor[key]=Math.max(0,(actor[key]??0)-dt);}
