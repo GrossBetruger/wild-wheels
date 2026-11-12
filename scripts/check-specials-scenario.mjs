@@ -53,8 +53,9 @@ export async function checkSpecials(evaluate,app,room,id,sleep,capture){
   const xylophone=await wait(()=>evaluate("(()=>{const r=__game.race,renderer=__game.renderer,buffers=new Set([...renderer.models].filter(([key])=>key.startsWith('xylophone:')).map(([,model])=>model.buffer)),instruments=renderer.instances.filter(i=>buffers.has(i.buffer)),inFront=a=>instruments.some(i=>Math.hypot(i.x-a.wx-Math.sin(a.cameraHeading??a.heading)*5,i.z-a.wz-Math.cos(a.cameraHeading??a.heading)*5)<.2);return r.driver===13&&r.specialActive>0&&__game.audio.xylophoneBeat!==null&&!inFront(r)&&r.bots.some(a=>!a.destroyed&&!a.inactive&&inFront(a));})()"));await capture('xylophone-attack');
   Object.assign(own,{driver:14,ammo:10,specialCooldown:0,specialActive:0,boost:2,dizzy:0});Object.assign(other,{driver:10,health:3,destroyed:0,specialActive:0,wx:65,wz:60});app.broadcast(room);
   await wait(()=>evaluate('__game.race.driver===14&&__game.renderer.owlFlight.riders.size>0'));await sleep(750);await capture('knowitowl-flight');
-  await evaluate("__game.network.action('special')");
-  const darkCaster=await wait(()=>evaluate('__game.renderer.darkState?.strength>.8&&__game.renderer.darkState.xray&&__game.audio.darkLaughBeat!==null'));await capture('dark-humor-xray');
+  Object.assign(own,{wx:-35,wz:0,speed:0,boost:0,heading:Math.PI/2,cameraHeading:Math.PI/2,motionHeading:Math.PI/2});Object.assign(other,{wx:35,wz:0,speed:0,heading:-Math.PI/2,health:3,destroyed:0});app.broadcast(room);
+  await wait(()=>evaluate('__game.race.boost===0'));await evaluate("__game.network.action('special')");
+  const darkCaster=await wait(()=>evaluate('__game.renderer.darkState?.strength>.99&&__game.renderer.darkState.xray&&__game.audio.darkLaughBeat!==null'));await capture('dark-humor-xray');
   Object.assign(own,{driver:10,specialActive:0,boost:0});Object.assign(other,{driver:14,specialActive:7});app.broadcast(room);
   const darkOpponent=await wait(()=>evaluate('__game.renderer.darkState?.strength>.8&&!__game.renderer.darkState.xray'));await capture('dark-humor-opponent');
   member.driver=10;peer.driver=14;room.specialAbilities=false;app.syncRoom(room);app.broadcast(room);

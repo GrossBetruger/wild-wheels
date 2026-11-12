@@ -59,9 +59,9 @@ export class RaceAudio {
     // Synthesized cartoon calls, including a trumpet, chirps and a human hum.
     const profiles=[{pitch:460,formant:1150,wobble:9,depth:14},{pitch:610,formant:1550,wobble:28,depth:35},{pitch:780,formant:1900,wobble:13,depth:22},{pitch:205,formant:660,wobble:7,depth:9},{pitch:125,formant:720,wobble:6,depth:24},{pitch:1450,formant:3400,wobble:52,depth:90},{pitch:165,formant:1050,wobble:4,depth:3},{pitch:240,formant:820,wobble:3,depth:7},{pitch:920,formant:2100,wobble:17,depth:30},{pitch:720,formant:1700,wobble:6,depth:18},{pitch:135,formant:760,wobble:3,depth:5},{pitch:115,formant:580,wobble:8,depth:16},{pitch:840,formant:1950,wobble:5,depth:12},{pitch:1050,formant:2400,wobble:17,depth:24},{pitch:185,formant:900,wobble:5,depth:9}];
     const profile=profiles[driver];if(!profile)return false;
-    const patterns={pass:[[0,.14,1,1.25],[.17,.16,1.15,.95]],hurt:[[0,.24,1.5,.65]],cheer:[[0,.13,.9,1.3],[.16,.2,1.1,1.45]],lap:[[0,.16,.9,1.1],[.2,.2,1.15,1.4]],win:[[0,.16,1,1.3],[.2,.17,1.2,1.5],[.43,.32,1.35,1.05]]};
+    const patterns={laugh:[[0,.14,1.25,.75],[.18,.13,1.15,.65],[.36,.19,1.4,.6]],pass:[[0,.14,1,1.25],[.17,.16,1.15,.95]],hurt:[[0,.24,1.5,.65]],cheer:[[0,.13,.9,1.3],[.16,.2,1.1,1.45]],lap:[[0,.16,.9,1.1],[.2,.2,1.15,1.4]],win:[[0,.16,1,1.3],[.2,.17,1.2,1.5],[.43,.32,1.35,1.05]]};
     const pattern=patterns[cue];if(!pattern)return false;
-    const c=this.context,important=cue==='win'||cue==='lap';
+    const c=this.context,important=cue==='win'||cue==='lap'||cue==='laugh';
     if(!important&&(this.voiceUntil??0)-c.currentTime>.35)return false;
     const start=important?c.currentTime+.04:Math.max(c.currentTime,this.voiceUntil??0);
     this.voiceUntil=start+(important?.55:.14);
@@ -129,7 +129,7 @@ export class RaceAudio {
     if(!this.context)return;
     const dark=darkHumorState(r),laughBeat=Math.floor(r.elapsed/.62);
     if(this.enabled&&dark.strength>0&&this.darkLaughBeat!==laughBeat){
-      for(let i=0;i<3;i++){const f=150-i*19+(laughBeat%3)*13;this.note(f,.13,{type:'sawtooth',end:f*.65,delay:i*.16,volume:.045});this.note(f*2.04,.12,{type:'sine',end:f*1.1,delay:i*.16,volume:.045});this.burst(.07,650,.055,i*.16,260);}
+      this.voice({driver:14,cue:'laugh',pan:Math.sin(laughBeat*1.7)*.75,volume:.6});
     }
     this.darkLaughBeat=this.enabled&&dark.strength>0?laughBeat:null;
     const xylophone=this.enabled&&r.phase==='racing'&&r.specialAbilities!==false&&[r,...(r.bots??[])].some(a=>a.driver===13&&a.specialActive>0);

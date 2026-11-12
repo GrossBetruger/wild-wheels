@@ -17,6 +17,7 @@ export function drawOwl(m,phase,flight=0,gesture=0){
   m.ball(0,3.35,-.3,1,.95,.72,white,16,9);
   // Layered breast and shoulder plumage, scalloped rather than a smooth white blob.
   for(let row=0;row<4;row++)for(let i=0;i<7;i++){const a=(i-3)*.32;m.ball(Math.sin(a)*(.9-row*.08),3.8-row*.32,.35+Math.cos(a)*.2,.17,.27,.085,row%2?white:ivory,7,5);}
+  for(let row=0;row<4;row++)for(let i=0;i<7;i++){const a=(i-3)*.32;m.ball(Math.sin(a)*(.9-row*.08),3.8-row*.32,-.45-Math.cos(a)*.5,.18,.26,.09,row%2?white:ivory,7,5);}
   for(const side of [-1,1]){
     const point=m.point,wingAngle=flight*(.8+flap*.43)+(gesture===1&&side===1?.7:gesture===2?.8:gesture===4?1.4:0);
     m.point=function([x,y,z]){const xx=x* Math.cos(wingAngle)-y*Math.sin(wingAngle),yy=x*Math.sin(wingAngle)+y*Math.cos(wingAngle);return point.call(this,[side*(.75+xx),3.55+yy,-.35+z]);};
