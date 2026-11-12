@@ -8,7 +8,7 @@ import {previewPose} from './preview-pose.js';
 import {drawRococoChariot,drawPearococo,drawPeacockFeather,drawRoyalWing,drawBalletPump,drawFairyStar,drawFairyBoost} from './pearococo.js';
 import {drawMotorcycle,drawYuda,drawYudaJacket,YudaJackets,YudaStunts,YudaExhaust,drawBikerBadge,drawMotorcycleBoost} from './master-yuda.js';
 import {YudaDrift} from './yuda-drift.js';
-import {drawJetRanger,drawLionPilot,drawJetRangerRotors,drawRotorWash} from './r-yeah.js';
+import {drawJetRanger,miniJetRanger,drawLionPilot,drawLionMane,drawJetRangerRotors,drawRotorWash} from './r-yeah.js';
 const rgb=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255);
 const sub=(a,b)=>a.map((v,i)=>v-b[i]);
 const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
@@ -44,6 +44,7 @@ export class Renderer {
     this.models=new Map();this.instances=[];this.quality='auto';this.resolution=1.25;this.fps=0;this.fpsStart=0;this.frameCount=0;this.slowWindows=0;this.fastWindows=0;
     this.tailFolds=new Map();
     this.yudaDrift=new YudaDrift();
+    this.chopperTilts=new Map();
     this.yudaJackets=new YudaJackets();this.yudaStunts=new YudaStunts();this.yudaExhaust=new YudaExhaust();
     this.lastBodies=new Map();this.ashBodies=new Map();
     const debug=gl.getExtension('WEBGL_debug_renderer_info');this.gpuName=debug?gl.getParameter(debug.UNMASKED_RENDERER_WEBGL):'WebGL';this.softwareGPU=/swiftshader|llvmpipe|software/i.test(this.gpuName);if(this.softwareGPU)this.resolution=.75;
@@ -220,15 +221,24 @@ export class Renderer {
   lionChopper(m,p,color,yaw,spin,boost,clock,celebrate,jump,gesture=null){
     const angle=Math.atan2(p.tx,p.tz)-yaw+spin,height=(jump?.height??0)+.18+Math.sin(clock*3)*.08,pitch=jump?.pitch??0;
     m.at(p.x,.05,p.z,angle);m.disc(0,0,-.5,2.4,4,'#3b4247');
-    this.model(`kart:11:${color}`,p.x,height,p.z,angle,mesh=>drawJetRanger(mesh,color),pitch);
-    const waving=celebrate>0||(gesture?.right??0)>0,phase=waving?Math.floor(clock*6)%8:0,roaring=celebrate>0||gesture?.id==='cheer';
-    this.model(`r-yeah:lion:${phase}:${roaring}`,p.x,height,p.z,angle+(gesture?.yaw??0),mesh=>drawLionPilot(mesh,phase,roaring),pitch);
+    this.model(`kart:11:${color}`,p.x,height,p.z,angle,mesh=>miniJetRanger(mesh,m=>drawJetRanger(m,color)),pitch);
+    const waving=!boost&&(celebrate>0||(gesture?.right??0)>0),phase=waving?Math.floor(clock*6)%8:0,roaring=celebrate>0||gesture?.id==='cheer';
+    const lion={...p,x:p.x-1.3*Math.cos(angle),z:p.z+1.3*Math.sin(angle)};
+    this.model(`r-yeah:lion:${phase}:${roaring}:${boost}`,lion.x,height,lion.z,angle,mesh=>drawLionPilot(mesh,phase,roaring,boost?2:true),pitch);
+    this.lionMane(lion,height,angle,pitch,clock,boost);
     this.chopperRotors(p,height,angle,pitch,clock,boost);
     if(boost||jump)drawRotorWash(this.glow,this.smoke,p,angle,clock,{height,pitch});
   }
+  lionMane(p,height,angle,pitch,time,boost){
+    const phase=Math.floor(time*(boost?24:8))%12;
+    this.model(`r-yeah:mane:${phase}:${boost}`,p.x,height,p.z,angle,mesh=>drawLionMane(mesh,phase,boost),pitch);
+  }
   chopperRotors(p,height,angle,pitch,time,boost){
-    const phase=Math.floor(time*(boost?62:42))%8;
-    this.model(`r-yeah:rotors:${phase}`,p.x,height,p.z,angle,mesh=>drawJetRangerRotors(mesh,phase),pitch);
+    const key=p.id??'preview';let state=this.chopperTilts.get(key);
+    if(!state||time<state.time){state={time,amount:0};this.chopperTilts.set(key,state);}
+    const dt=Math.min(.05,Math.max(0,time-state.time));state.time=time;state.amount+=(Number(boost)-state.amount)*(1-Math.exp(-dt*12));
+    const tilt=Math.round(state.amount*5)/5*.28,phase=Math.floor(time*(boost?80:42))%8;
+    this.model(`r-yeah:rotors:${phase}:${tilt}`,p.x,height,p.z,angle,mesh=>miniJetRanger(mesh,m=>drawJetRangerRotors(m,phase,tilt)),pitch);
   }
   yudaMotorcycle(m,p,color,yaw,spin,boost=false,clock=0,celebrate=0,jump=null,gesture=null){
     const angle=Math.atan2(p.tx,p.tz)-yaw+spin+(jump?.yaw??0),roll=jump?.roll??p.bikeRoll??0;
@@ -445,7 +455,7 @@ export class Renderer {
     const gl=this.gl,canvas=this.canvas,width=Math.max(1,Math.round(canvas.clientWidth*this.pixelRatio())),height=Math.max(1,Math.round(canvas.clientHeight*this.pixelRatio()));
     if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;}gl.viewport(0,0,width,height);
     this.instances=[];this.glow=new Mesh();this.smoke=new Mesh();
-    const pose=previewPose(driver,time),orbit=time*.28+.35,eye=[Math.sin(orbit)*12,7.4,Math.cos(orbit)*12],view=cameraMatrix(eye,[0,2.55,0],width/height,.8),sky=rgb('#e5deef');
+    const pose=previewPose(driver,time),orbit=time*.28+.35,radius=driver===11?15:12,eye=[Math.sin(orbit)*radius,driver===11?9.5:7.4,Math.cos(orbit)*radius],view=cameraMatrix(eye,[0,driver===11?4:2.55,0],width/height,.8),sky=rgb('#e5deef');
     gl.clearColor(...sky,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(this.program);
     gl.uniformMatrix4fv(this.matrix,false,view);gl.uniform3fv(this.eyeUniform,eye);gl.uniform3fv(this.fog,sky);gl.uniform1f(this.fogScale,1);gl.uniform1f(this.emission,0);
     const m=new Mesh();m.disc(0,-.22,0,40,40,'#e5deef',48);m.disc(0,-.12,0,4.7,4.7,'#c6bad6',48);m.disc(0,-.08,0,4.5,4.5,'#f8f3e5',48);
