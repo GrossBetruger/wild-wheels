@@ -26,7 +26,7 @@ export class NetworkGame {
   constructor({anchor,keys,driver,arena,onState,onLeave,unlock,sound=()=>{},role='driver'}){
     Object.assign(this,{keys,driver,arena,onState,onLeave,unlock,sound,role});
     this.panel=document.createElement('section');this.panel.className='network-panel';this.panel.setAttribute('aria-label','Multiplayer arena lobby');
-    const title=document.createElement('strong');title.textContent='PLAY TOGETHER · UP TO 6 PLAYERS';
+    const title=this.title=document.createElement('strong');title.textContent='PLAY TOGETHER · UP TO 6 PLAYERS';
     this.name=document.createElement('input');this.name.placeholder='Your name';this.name.value=savedPlayerName(document.cookie);this.name.maxLength=24;this.name.setAttribute('aria-label','Player name');
     this.nameDirty=document.cookie.split(';').some(part=>part.trim().startsWith('wild-wheels-name='));
     this.nameFeedback=document.createElement('span');this.nameFeedback.className='network-name-status';this.nameFeedback.setAttribute('role','status');
@@ -35,7 +35,7 @@ export class NetworkGame {
     this.botCount=document.createElement('select');this.botCount.setAttribute('aria-label','Number of multiplayer bots');for(let count=0;count<=5;count++){const option=document.createElement('option');option.value=String(count);option.textContent=`${count} BOT${count===1?'':'S'}`;this.botCount.append(option);}this.botCount.value='1';this.botCount.onchange=()=>{if(this.active)this.control('bots',undefined,Number(this.botCount.value));};
     this.abilities=this.button('SPECIAL ABILITIES · ON',()=>this.request('/api/control',{action:'special-abilities',enabled:this.state?.specialAbilities===false}).catch(error=>{this.status.textContent=error.message;}));
     this.animalChoice=document.createElement('select');this.animalChoice.className='hidden';this.animalChoice.setAttribute('aria-label','Your multiplayer character');for(const [index,animal] of drivers.entries()){const option=document.createElement('option');option.value=String(index);option.textContent=`${animal.emoji} ${animal.name}`;this.animalChoice.append(option);}this.animalChoice.onchange=()=>this.chooseDriver(Number(this.animalChoice.value));
-    this.hostButton=this.button('HOST ARENA',()=>this.connect('/api/rooms'));
+    this.hostButton=this.button('HOST ARENA',()=>this.connect(this.dedicated?'/api/join':'/api/rooms'));
     this.leaveButton=this.button('AFK',()=>this.setAway(!this.afk));this.leaveButton.classList.add('hidden');
     this.status=document.createElement('p');this.status.setAttribute('role','status');this.status.textContent='Host an arena and share the link. Opening it joins the game automatically.';
     this.players=document.createElement('div');this.players.className='network-players';
@@ -65,7 +65,7 @@ export class NetworkGame {
     this.readyDialog.append(art,this.readyTitle,detail,this.readyCountdown,this.readyPeople,actions,this.readyError);document.querySelector('.viewport').append(this.readyDialog);
     this.readyDialog.addEventListener('cancel',event=>{event.preventDefault();this.refusePlayRequest();});
     this.readyDialog.addEventListener('keydown',event=>event.stopPropagation());
-    this.refreshInfo();
+    this.infoReady=this.refreshInfo();
     this.infoTimer=setInterval(()=>{if(this.active&&this.isHost)this.refreshInfo();},5000);
     this.timer=setInterval(()=>this.input(),1000/30);
     this.hostButton.disabled=true;queueMicrotask(()=>this.restore());
@@ -129,7 +129,7 @@ export class NetworkGame {
   }
   async restore(){
     try{this.adopt(await this.request('/api/session',{}));}
-    catch(error){if(error.status!==401){this.status.textContent=error.message;return;}if(this.active){this.leave('This room is no longer available.',false);return;}if(this.invitation)await this.connect('/api/join');}
+    catch(error){if(error.status!==401){this.status.textContent=error.message;return;}if(this.active){this.leave('This room is no longer available.',false);return;}await this.infoReady;if(this.invitation)await this.connect('/api/join');}
     finally{this.hostButton.disabled=this.active&&!this.isHost;}
   }
   async setAway(afk){
@@ -140,7 +140,7 @@ export class NetworkGame {
   async refreshInfo(){
     try{
       const response=await fetch('/api/info',{signal:AbortSignal.timeout(2000)});if(!response.ok)return;
-      const info=await response.json();this.lan=info.addresses?.[0];this.publicOrigin=info.publicOrigin;this.controlPort=info.controlPort;this.updateShare();
+      const info=await response.json();this.dedicated=Boolean(info.dedicated);if(this.dedicated){this.invitation=info.room;this.hostButton.textContent='JOIN SERVER';this.title.textContent='PLAY TOGETHER · UP TO 8 PLAYERS';for(let count=this.botCount.options.length;count<info.maxPlayers;count++){const option=document.createElement('option');option.value=String(count);option.textContent=`${count} BOTS`;this.botCount.append(option);}}this.lan=info.addresses?.[0];this.publicOrigin=info.publicOrigin;this.controlPort=info.controlPort;this.updateShare();
     }catch{}
   }
   updateShare(){
@@ -148,7 +148,7 @@ export class NetworkGame {
     const local=['localhost','127.0.0.1'].includes(location.hostname);
     if(!this.shareEdited)this.share.value=invitationUrl(location.href,this.state.code,{publicOrigin:this.publicOrigin,lan:this.lan});
     this.internetButton.classList.toggle('hidden',!local||!this.isHost||!this.controlPort||Boolean(this.publicOrigin));
-    this.help.textContent=this.internetError?'Could not start ngrok. Install it and sign in once, then try again.':location.protocol==='https:'||local&&this.publicOrigin?'Share this HTTPS link with a friend to play over the internet.':local&&this.controlPort?'To play with a friend elsewhere, click START INTERNET LINK, then COPY INVITE.':'Same Wi-Fi: share this link.';
+    this.help.textContent=this.dedicated?'Share this server’s invitation link with a friend.':this.internetError?'Could not start ngrok. Install it and sign in once, then try again.':location.protocol==='https:'||local&&this.publicOrigin?'Share this HTTPS link with a friend to play over the internet.':local&&this.controlPort?'To play with a friend elsewhere, click START INTERNET LINK, then COPY INVITE.':'Same Wi-Fi: share this link.';
   }
   async startInternetLink(){
     if(!this.active||!this.isHost||!this.controlPort||!['localhost','127.0.0.1'].includes(location.hostname))return;
@@ -194,12 +194,13 @@ export class NetworkGame {
     const rosterKey=JSON.stringify([state.host,state.you,state.players]);
     this.state=state;this.leaveButton.classList.remove('hidden');this.share.classList.remove('hidden');this.copyButton.classList.remove('hidden');this.animalChoice.classList.toggle('hidden',!this.isHost);
     for(const node of [this.hostButton,this.botCount,this.share.parentElement,this.help])node.classList.toggle('hidden',!this.isHost);
+    if(this.dedicated)this.hostButton.classList.add('hidden');
     this.leaveButton.textContent=this.afk?'BACK TO ARENA':'AFK';this.hostButton.disabled=this.connecting||!this.isHost;
     if(!this.nameDirty&&!this.namePending&&this.name.value!==state.world.name)this.name.value=state.world.name;
     if(this.nameDirty&&!this.namePending&&this.name.value.trim()&&['countdown','racing'].includes(state.world.phase))this.saveName();
     this.updateShare();
     this.abilities.textContent=state.specialAbilities===false?'SPECIAL ABILITIES · OFF':'SPECIAL ABILITIES · ON';this.abilities.disabled=!this.isHost;this.abilities.setAttribute('aria-pressed',String(state.specialAbilities!==false));
-    this.botCount.value=String(state.bots);this.botCount.disabled=!this.isHost||!['ready','finished'].includes(state.world.phase);for(const option of this.botCount.options)option.disabled=Number(option.value)>6-state.players.length;
+    this.botCount.value=String(state.bots);this.botCount.disabled=!this.isHost||!['ready','finished'].includes(state.world.phase);for(const option of this.botCount.options)option.disabled=Number(option.value)>(state.maxPlayers??6)-state.players.length;
     this.animalChoice.value=String(state.world.driver);this.animalChoice.disabled=!['ready','finished'].includes(state.world.phase);
     this.status.textContent=`${state.players.length} PLAYER${state.players.length===1?'':'S'} · ${state.bots} BOT${state.bots===1?'':'S'} · ${this.isHost?'Share the link, then press Let’s Battle.':this.role==='bomber'?'Press Let’s Play when you’re ready.':'Choose your racer and press Let’s Play.'}`;
     if(['ready','finished'].includes(state.world.phase)){

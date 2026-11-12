@@ -13,6 +13,16 @@ npm start
 
 Open [localhost:5173](http://localhost:5173). Keep the terminal open while playing.
 
+## Dedicated Rust server
+
+With Rust installed, run this alongside the Node server:
+
+```sh
+PORT=5174 cargo run --release --locked --manifest-path dedicated-server/Cargo.toml
+```
+
+Open [localhost:5174](http://localhost:5174). Everyone joins one shared arena automatically, with up to eight players. The server keeps the game running when the lobby host disconnects. After building, the executable runs independently with no Node.js dependency. See [dedicated server setup](docs/dedicated-server.md) for public hosting.
+
 ## Play with friends
 
 1. Enter your name, choose a character, and click **Host Arena**.

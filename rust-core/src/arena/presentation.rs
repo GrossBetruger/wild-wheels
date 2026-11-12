@@ -31,4 +31,4 @@ pub(super) fn present(game:&Game,viewer:usize)->usize{
 #[no_mangle]pub extern "C" fn presentation_text_ptr()->*const u8{unsafe{(&*core::ptr::addr_of!(TEXT)).as_ptr()}}
 #[no_mangle]pub extern "C" fn presentation_text_len()->usize{unsafe{(&*core::ptr::addr_of!(TEXT)).len()}}
 #[no_mangle]pub extern "C" fn presentation_text_version()->u32{unsafe{*core::ptr::addr_of!(TEXT_VERSION)}}
-#[no_mangle]pub extern "C" fn game_present(viewer:usize)->usize{if viewer>=6{return 0;}let Some(game)=(unsafe{&*core::ptr::addr_of!(super::WORLD)})else{return 0;};present(game,viewer)}
+#[no_mangle]pub extern "C" fn game_present(viewer:usize)->usize{let Some(game)=(unsafe{&*core::ptr::addr_of!(super::WORLD)})else{return 0;};if viewer>=game.actors.len(){return 0;}present(game,viewer)}

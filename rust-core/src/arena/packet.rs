@@ -69,11 +69,13 @@ pub(super) fn decode_packet(input:&[u8])->Result<(Game,usize),()>{
     let meta=uint(4);let n=uint(8);let offset=(16+meta+3)/4*4;
     if offset>input.len()||offset+n*4!=input.len(){return Err(());}
     let Received{layout,state}=serde_json::from_slice::<Received>(&input[16..16+meta]).map_err(|_|())?;
-    if layout.skids>512||layout.particles>512||layout.trails.len()>512||layout.trails.iter().any(|&n|n>24)||layout.skids*6+layout.particles*11+layout.trails.iter().sum::<usize>()*3!=n||state.kind!="state"||state.wire_version!=3||state.you>=6||!state.time.is_finite()||state.world.player.id!=state.you||state.world.global.arena>1{return Err(());}
+    let capacity=state.room.get("maxPlayers").and_then(|v|v.as_u64()).unwrap_or(6) as usize;
+    if !matches!(capacity,6|8){return Err(());}
+    if layout.skids>512||layout.particles>512||layout.trails.len()>512||layout.trails.iter().any(|&n|n>24)||layout.skids*6+layout.particles*11+layout.trails.iter().sum::<usize>()*3!=n||state.kind!="state"||state.wire_version!=3||state.you>=capacity||!state.time.is_finite()||state.world.player.id!=state.you||state.world.global.arena>1{return Err(());}
     let Seed{mut global,player,bots}=state.world;
     if !global.skids.is_empty()||!global.drift_particles.is_empty()||global.projectiles.len()!=layout.trails.len()||global.projectiles.iter().any(|s|!s.trail.is_empty()){return Err(());}
-    let mut actors:Vec<_>=(0..6).map(|id|Actor{id,inactive:true,destroyed:1e9,..Actor::default()}).collect();let mut seen=[false;6];
-    for a in std::iter::once(player).chain(bots){if a.id>=6||seen[a.id]{return Err(());}let id=a.id;seen[id]=true;actors[id]=a;}
+    let mut actors:Vec<_>=(0..capacity).map(|id|Actor{id,inactive:true,destroyed:1e9,..Actor::default()}).collect();let mut seen=[false;MAX_PLAYERS];
+    for a in std::iter::once(player).chain(bots){if a.id>=capacity||seen[a.id]{return Err(());}let id=a.id;seen[id]=true;actors[id]=a;}
     let mut at=offset;
     let mut read=|scale:f64|{let value=i32::from_le_bytes(input[at..at+4].try_into().unwrap()) as f64/scale;at+=4;value};
     for _ in 0..layout.skids{global.skids.push(Skid{ax:read(100.0),az:read(100.0),bx:read(100.0),bz:read(100.0),time:read(1000.0),owner:read(1.0) as usize});}
@@ -83,7 +85,8 @@ pub(super) fn decode_packet(input:&[u8])->Result<(Game,usize),()>{
     game.network_time=state.time;game.input_ack[state.you]=state.input_sequence;game.movement_ack[state.you]=state.movement_sequence;game.action_ack[state.you]=state.action_sequence;game.room=state.room;Ok((game,state.you))
 }
 #[no_mangle]pub extern "C" fn game_cues(viewer:usize)->usize{
-    if viewer>=6{return 0;}let Some(game)=(unsafe{&*core::ptr::addr_of!(super::WORLD)})else{return 0;};
+    let Some(game)=(unsafe{&*core::ptr::addr_of!(super::WORLD)})else{return 0;};
+    if viewer>=game.actors.len(){return 0;}
     let output=unsafe{&mut *core::ptr::addr_of_mut!(super::OUTPUT)};output.clear();
     match serde_json::to_writer(&mut *output,&json!({"epoch":game.global.sound_epoch,"events":game.viewer_events(viewer),"voices":game.global.voices})){Ok(())=>output.len(),Err(_)=>0}
 }

@@ -62,7 +62,7 @@ class World extends Actor{
 export class CoreView{
   text={actors:[],killFeed:[],events:[],voices:[],room:{}};version=-1;events=[];voices=[];paused=false;botIds=[];bases={};pools={};
   constructor(core){
-    this.core=core;this.world=new World(this,0);this.bots=indexed(new Pool(()=>this.botIds.length,i=>this.actors[this.botIds[i]]));this.actors=Array.from({length:6},(_,i)=>new Actor(this,()=>32+i*48));
+    this.core=core;this.world=new World(this,0);this.bots=indexed(new Pool(()=>this.botIds.length,i=>this.actors[this.botIds[i]]));this.actors=Array.from({length:8},(_,i)=>new Actor(this,()=>32+i*48));
     const groups=[['skids',2,6,Skid],['driftParticles',3,12,Particle],['projectiles',4,96,Shot],['supplies',5,8,Supply],['bombs',6,10,Bomb],['chaffClouds',7,16,Chaff],['stinkClouds',8,8,Stink],['effects',9,8,Effect]];
     this.groups=groups;
     for(const[name,count,stride,Type]of groups)this.pools[name]=indexed(new Pool(()=>this.n(count),i=>new Type(this,()=>this.bases[name]+i*stride)));

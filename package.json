@@ -1,1 +1,21 @@
-{"name":"wild-wheels","version":"1.0.0","private":true,"type":"module","scripts":{"start":"node server.js","dev":"node server.js","test":"node --test","test:netcode":"node scripts/check-netcode.mjs","test:browser-netcode":"node scripts/check-browser-netcode.mjs","profile:network":"node scripts/profile-network.mjs","test:regression":"node scripts/check-regressions.mjs","build:core":"node scripts/build-rust-core.mjs"},"dependencies":{"ws":"8.22.2"}}
+{
+  "name": "wild-wheels",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "node --test",
+    "test:netcode": "node scripts/check-netcode.mjs",
+    "test:browser-netcode": "node scripts/check-browser-netcode.mjs",
+    "profile:network": "node scripts/profile-network.mjs",
+    "test:regression": "node scripts/check-regressions.mjs",
+    "build:core": "node scripts/build-rust-core.mjs",
+    "test:dedicated": "node scripts/check-dedicated-server.mjs",
+    "benchmark:dedicated": "node scripts/benchmark-dedicated.mjs"
+  },
+  "dependencies": {
+    "ws": "8.22.2"
+  }
+}

@@ -8,6 +8,8 @@ mod packet;
 mod client;
 mod presentation;
 mod control;
+pub mod native;
+pub const MAX_PLAYERS:usize=8;
 pub use types::*;
 use serde_json::json;
 
@@ -55,7 +57,7 @@ impl Game {
     pub fn combat_active(&self)->bool{self.global.phase=="racing"}
     pub fn human_controlled(&self,id:usize)->bool{self.actors[id].human||id==0&&!self.global.multiplayer}
     pub fn from_seed(seed:Seed)->Result<Self,()> {
-        if seed.global.arena>1||seed.bots.len()!=5||seed.player.id!=0{return Err(());}
+        if seed.global.arena>1||!matches!(seed.bots.len(),5|7)||seed.player.id!=0{return Err(());}
         let mut actors=vec![seed.player];actors.extend(seed.bots);
         if actors.iter().enumerate().any(|(i,a)|a.id!=i||a.driver>=DRIVER_NAMES.len()||!a.wx.is_finite()||!a.wz.is_finite()){return Err(());}
         for i in 0..2 {
@@ -63,7 +65,7 @@ impl Game {
             for (j,b) in blocks(i).iter().enumerate(){config[j*4..j*4+4].copy_from_slice(b);}
             if crate::set_arena(i,96.0,blocks(i).len())!=1{return Err(());}
         }
-        Ok(Self{global:seed.global,actors,input_ack:[-1;6],movement_ack:[-1;6],action_ack:[-1;6],accepted_action:[-1;6],pending:vec![Vec::new();6],network_time:0.0,room:Default::default()})
+        Ok(Self{global:seed.global,actors,input_ack:[-1;MAX_PLAYERS],movement_ack:[-1;MAX_PLAYERS],action_ack:[-1;MAX_PLAYERS],accepted_action:[-1;MAX_PLAYERS],pending:vec![Vec::new();MAX_PLAYERS],network_time:0.0,room:Default::default()})
     }
     pub fn view(&self,viewer:usize)->View<'_> {
         View{global:&self.global,player:&self.actors[viewer],bots:self.actors.iter().filter(|a|a.id!=viewer&&!a.inactive).collect()}
@@ -92,10 +94,10 @@ impl Game {
         }
     }
     pub fn validate(&self,frame:&Frame)->bool {
-        if !frame.dt.is_finite()||frame.dt<0.0||frame.dt>0.05||frame.inputs.len()>6{return false;}
-        let mut seen=[false;6];
+        if !frame.dt.is_finite()||frame.dt<0.0||frame.dt>0.05||frame.inputs.len()>self.actors.len(){return false;}
+        let mut seen=[false;MAX_PLAYERS];
         for input in &frame.inputs {
-            if input.actor>=6||seen[input.actor]||input.keys&!63!=0||input.steer.is_some_and(|s|!s.is_finite()||s.abs()>1.0)||input.actions.len()>8{return false;}seen[input.actor]=true;
+            if input.actor>=self.actors.len()||seen[input.actor]||input.keys&!63!=0||input.steer.is_some_and(|s|!s.is_finite()||s.abs()>1.0)||input.actions.len()>8{return false;}seen[input.actor]=true;
             let mut previous=self.movement_ack[input.actor];
             if let Some(moves)=&input.moves {
                 if moves.len()>8{return false;}
@@ -132,15 +134,17 @@ static mut OUTPUT:Vec<u8>=Vec::new();
     if !game.validate(&frame){return 0;}game.tick(frame);1
 }
 #[no_mangle]pub extern "C" fn game_snapshot(viewer:usize)->usize{
-    if viewer>=6{return 0;}
+
     let Some(game)=(unsafe{&*core::ptr::addr_of!(WORLD)}) else{return 0;};
+    if viewer>=game.actors.len(){return 0;}
     let output=unsafe{&mut *core::ptr::addr_of_mut!(OUTPUT)};output.clear();
     match serde_json::to_writer(&mut *output,&game.view(viewer)){Ok(())=>output.len(),Err(_)=>0}
 }
 #[no_mangle]pub extern "C" fn game_output_ptr()->*const u8{unsafe{(&*core::ptr::addr_of!(OUTPUT)).as_ptr()}}
 #[no_mangle]pub extern "C" fn game_drain(){if let Some(game)=unsafe{&mut *core::ptr::addr_of_mut!(WORLD)}{game.global.events.clear();game.global.voices.clear();}}
 #[no_mangle]pub extern "C" fn game_packet(viewer:usize)->usize{
-    if viewer>=6{return 0;}let Some(game)=(unsafe{&*core::ptr::addr_of!(WORLD)}) else{return 0;};
+    let Some(game)=(unsafe{&*core::ptr::addr_of!(WORLD)}) else{return 0;};
+    if viewer>=game.actors.len(){return 0;}
     let output=unsafe{&mut *core::ptr::addr_of_mut!(OUTPUT)};
     match game.encode_packet(viewer,output){Ok(())=>output.len(),Err(_)=>0}
 }

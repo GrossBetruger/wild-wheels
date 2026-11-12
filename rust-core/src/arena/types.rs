@@ -97,4 +97,4 @@ pub struct Frame { pub dt:f64,pub inputs:Vec<Input> }
 #[derive(Serialize)]
 pub struct View<'a> { #[serde(flatten)]pub global:&'a Globals,#[serde(flatten)]pub player:&'a Actor,pub bots:Vec<&'a Actor> }
 #[derive(Clone)]
-pub struct Game { pub global:Globals,pub actors:Vec<Actor>,pub input_ack:[i64;6],pub movement_ack:[i64;6],pub action_ack:[i64;6],pub accepted_action:[i64;6],pub pending:Vec<Vec<Action>>,pub network_time:f64,pub room:BTreeMap<String,Value> }
+pub struct Game { pub global:Globals,pub actors:Vec<Actor>,pub input_ack:[i64;super::MAX_PLAYERS],pub movement_ack:[i64;super::MAX_PLAYERS],pub action_ack:[i64;super::MAX_PLAYERS],pub accepted_action:[i64;super::MAX_PLAYERS],pub pending:Vec<Vec<Action>>,pub network_time:f64,pub room:BTreeMap<String,Value> }
