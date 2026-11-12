@@ -20,7 +20,7 @@ for(const engine of ['solo','Rust multiplayer']){
     if(!core)assert.equal(somersaultBattle(seed),true);
     const read=()=>core?core.snapshot():seed;
     assert.equal(read().heading,Math.PI);assert.equal(read().somersault,.55);
-    assert.deepEqual(somersaultPose({...read(),somersault:.275}),{height:5,pitch:-Math.PI});
+    const middle=somersaultPose({...read(),somersault:.275});assert.equal(middle.height,2.8);assert.equal(middle.roll,Math.PI);assert.equal(middle.yaw,-Math.PI/2);
     for(let frame=0;frame<34;frame++){if(core){core.step(1/60,[]);continue;}tickBattle(seed,new Set(),1/60);}
     assert.equal(somersaultPose(read()),null);assert.equal(read().ammo,10);assert.equal(read().missiles,1);assert.equal(read().turbos,1);
   });

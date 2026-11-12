@@ -110,6 +110,10 @@ export function somersaultBattle(world,actor=world){
 export function somersaultPose(actor){
   if(!(actor.somersault>0))return null;
   const progress=clamp(1-actor.somersault/SOMERSAULT_DURATION,0,1);
+  if(actor.driver===10){
+    const turn=progress*progress*(3-2*progress);
+    return {height:Math.sin(progress*Math.PI)*2.8,pitch:-Math.sin(progress*Math.PI*2)*.45,roll:turn*Math.PI*2,yaw:-(1-turn)*Math.PI};
+  }
   return {height:Math.sin(progress*Math.PI)*5,pitch:-progress*Math.PI*2};
 }
 export function fireBattle(r,actor=r,actionId){

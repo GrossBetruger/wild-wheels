@@ -3,7 +3,7 @@ export async function checkYuda(evaluate,app,room,id,observer,wait,sleep,capture
   await evaluate(`{
     const renderer=__game.renderer,bike=renderer.yudaMotorcycle.bind(renderer),laser=renderer.laserBolt.bind(renderer),burner=renderer.afterburner.bind(renderer);
     __game.yudaDressing=new Set();__game.yudaFlips=[];__game.yudaSalutes=new Set();__game.yudaBoosts=[];__game.laserDraws=0;
-    renderer.yudaMotorcycle=(m,p,color,yaw,spin,boost,time,celebrate,jump,gesture)=>{const result=bike(m,p,color,yaw,spin,boost,time,celebrate,jump,gesture);if(renderer.yudaJackets.riders.get(p.id)?.dressStart!==null&&renderer.yudaJackets.riders.has(p.id))__game.yudaDressing.add(p.id);if(jump)__game.yudaFlips.push({id:p.id,height:jump.height,pitch:jump.pitch});if(celebrate>0)__game.yudaSalutes.add(renderer.instances.at(-1).buffer);return result;};
+    renderer.yudaMotorcycle=(m,p,color,yaw,spin,boost,time,celebrate,jump,gesture)=>{const result=bike(m,p,color,yaw,spin,boost,time,celebrate,jump,gesture);if(renderer.yudaJackets.riders.get(p.id)?.dressStart!==null&&renderer.yudaJackets.riders.has(p.id))__game.yudaDressing.add(p.id);if(jump)__game.yudaFlips.push({id:p.id,height:jump.height,pitch:jump.pitch,roll:jump.roll,yaw:jump.yaw});if(celebrate>0)__game.yudaSalutes.add(renderer.instances.at(-1).buffer);return result;};
     renderer.afterburner=(p,angle,time,jump,driver)=>{const result=burner(p,angle,time,jump,driver);if(driver!==10)return result;const smoke=renderer.yudaExhaust.clouds.some(c=>c.owner===p.id);__game.yudaBoosts.push({id:p.id,smoke});return result;};
     renderer.laserBolt=(...args)=>{__game.laserDraws++;return laser(...args);};
   }`);
@@ -14,10 +14,10 @@ export async function checkYuda(evaluate,app,room,id,observer,wait,sleep,capture
   const boost=await evaluate("__game.network.action('turbo')===true")&&await wait(()=>evaluate(`__game.yudaBoosts.some(p=>p.id===${id}&&p.smoke)`));await capture('yuda-afterburners');
   const jacketFlight=await wait(()=>evaluate(`__game.renderer.yudaJackets.riders.get(${id})?.bare&&__game.renderer.yudaJackets.riders.get(${id})?.flight&&__game.renderer.instances.some(part=>part.detached)`));await capture('yuda-jacket-flight');
   const wheelie=await wait(()=>evaluate(`__game.renderer.yudaStunts.riders.get(${id})?.wheelie>.9`));await evaluate('__game.characterAngle=Math.PI/2');await capture('yuda-wheelie');await evaluate('__game.characterAngle=0');
-  const flip=await evaluate("__game.network.action('somersault')===true")&&await wait(()=>evaluate(`__game.yudaFlips.some(p=>p.id===${id}&&p.height>3&&p.pitch < -1)`));await capture('yuda-motorcycle-flip');
+  const flip=await evaluate("__game.network.action('somersault')===true")&&await wait(()=>evaluate(`__game.yudaFlips.some(p=>p.id===${id}&&p.height>1&&p.height<=2.8&&p.roll>1&&p.roll<5&&Math.abs(p.yaw)>.2)`));await capture('yuda-motorcycle-flip');
   own.boost=0;own.somersault=0;
   Object.assign(peer,{driver:10,human:true,destroyed:0,shield:0,wx:own.wx+7,wz:own.wz+5,boost:1.5,somersault:.55});app.broadcast(room);
-  const remoteFlip=await wait(()=>evaluate(`__game.yudaFlips.some(p=>p.id===${observer.id}&&p.height>3)&&__game.yudaBoosts.some(p=>p.id===${observer.id}&&p.smoke)`));await capture('yuda-remote-flip');
+  const remoteFlip=await wait(()=>evaluate(`__game.yudaFlips.some(p=>p.id===${observer.id}&&p.height>1&&p.height<=2.8&&p.roll>1&&p.roll<5)&&__game.yudaBoosts.some(p=>p.id===${observer.id}&&p.smoke)`));await capture('yuda-remote-flip');
   const remoteJacket=await wait(()=>evaluate(`__game.renderer.yudaJackets.riders.get(${observer.id})?.bare===true`));
   const remoteWheelie=await wait(()=>evaluate(`__game.renderer.yudaStunts.riders.get(${observer.id})?.wheelie>.9`));await capture('yuda-remote-wheelie');
   peer.boost=0;peer.celebrate=1.6;app.broadcast(room);

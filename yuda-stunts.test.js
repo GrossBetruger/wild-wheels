@@ -1,6 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {YudaStunts} from './master-yuda.js';
+import {somersaultPose} from './combat.js';
+
+test('Yuda corkscrews low, turns continuously through 180 degrees and returns wheels-down',()=>{
+  const start=somersaultPose({driver:10,somersault:.55});assert.equal(start.height,0);assert.equal(start.roll,0);assert.equal(start.yaw,-Math.PI);
+  const quarter=somersaultPose({driver:10,somersault:.55*.75});assert.ok(quarter.pitch<-.44);assert.ok(quarter.roll>.9&&quarter.roll<1);assert.ok(quarter.yaw>-Math.PI);
+  const middle=somersaultPose({driver:10,somersault:.275});assert.equal(middle.height,2.8);assert.equal(middle.roll,Math.PI);assert.equal(middle.yaw,-Math.PI/2);
+  const landing=somersaultPose({driver:10,somersault:.000001});assert.ok(landing.height<.0001);assert.ok(Math.abs(landing.pitch)<.0001);assert.ok(Math.abs(landing.roll-Math.PI*2)<.0001);assert.ok(Math.abs(landing.yaw)<.0001);
+  assert.equal(somersaultPose({driver:10,somersault:0}),null);
+  assert.equal(somersaultPose({driver:0,somersault:.275}).height,5);
+});
 
 test('boost lifts the front wheel while the rear axle stays planted, then lowers it smoothly',()=>{
   const stunts=new YudaStunts();stunts.update(0,0,false,0);let pose;

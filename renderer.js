@@ -216,7 +216,8 @@ export class Renderer {
     if(boost)this.afterburner(p,angle,clock,null,driver);
   }
   yudaMotorcycle(m,p,color,yaw,spin,boost,clock,celebrate,jump,gesture=null){
-    const angle=Math.atan2(p.tx,p.tz)-yaw+spin,roll=p.bikeRoll??0;
+    const angle=Math.atan2(p.tx,p.tz)-yaw+spin+(jump?.yaw??0),roll=jump?.roll??p.bikeRoll??0;
+    p={...p,bikeRoll:roll};
     const outfit=this.yudaJackets.update(p.id??'preview',clock,boost||p.vulcan>0,{x:p.x,z:p.z,height:jump?.height??0,angle});
     const stunt=this.yudaStunts.update(p.id??'preview',clock,boost,gesture?.id==='cheer'?1:celebrate,Boolean(jump)||Math.abs(roll)>.2,outfit.dressing!==null);
     const height=(jump?.height??0)+stunt.y,pitch=(jump?.pitch??0)+stunt.pitch;
@@ -257,13 +258,14 @@ export class Renderer {
     for(let i=0;i<5;i++)this.glow.particle(0,0,-.9+i*.45,.42,[.025,.38,.32]);
   }
   laserMount(m,pose,actor,time,jump){
+    const facing=actor.heading+(jump?.yaw??0),roll=jump?.roll??pose.bikeRoll??0;
     const wheelie=this.yudaStunts.riders.get(actor.id)?.wheelie??0,pitch=-.62*wheelie;
     const height=(jump?.height??0)+1.08*(Math.cos(pitch)-1)-1.65*Math.sin(pitch),behind=-1.65+1.08*Math.sin(pitch)+1.65*Math.cos(pitch);
-    pose={...pose,x:pose.x+Math.sin(actor.heading)*behind,z:pose.z+Math.cos(actor.heading)*behind};
+    pose={...pose,x:pose.x+Math.sin(facing)*behind,z:pose.z+Math.cos(facing)*behind};
     jump={height,pitch:(jump?.pitch??0)+pitch};
-    m.at(pose.x,height,pose.z,actor.heading);m.pitch=jump?.pitch??0;m.pivot=2;
-    this.glow.at(pose.x,height,pose.z,actor.heading);this.glow.pitch=jump?.pitch??0;this.glow.pivot=2;
-    m.roll=pose.bikeRoll??0;this.glow.roll=pose.bikeRoll??0;
+    m.at(pose.x,height,pose.z,facing);m.pitch=jump?.pitch??0;m.pivot=2;
+    this.glow.at(pose.x,height,pose.z,facing);this.glow.pitch=jump?.pitch??0;this.glow.pivot=2;
+    m.roll=roll;this.glow.roll=roll;
     for(const side of [-1,1]){m.box(side*.57,1.65,1.45,.25,.23,1.5,'#273a43');m.ball(side*.57,1.77,2.22,.12,.12,.04,'#8dfff0',8,4);if(actor.item==='hedgehog'&&actor.fireCooldown>.035)this.glow.particle(side*.57,1.77,2.4,.9,[.15,.8,.65]);}
   }
   starshipEngines(p,angle,clock,jump=null,boost=false){
