@@ -1,6 +1,6 @@
 import {Renderer} from './renderer.js';
 import {drivers} from './engine.js';
-import {abilityDetails,abilityNames} from './special-abilities.js';
+import {characterAbilities} from './special-abilities.js';
 
 export class CharacterPreview{
   clock=0;last=null;nextFrame=0;driver=null;color=null;dirty=true;inView=false;renderer=null;presentation=null;
@@ -18,11 +18,14 @@ export class CharacterPreview{
   updateButton(){this.button.textContent=this.paused?'▶ PLAY':'Ⅱ PAUSE';this.button.setAttribute('aria-label',this.paused?'Play character preview animation':'Pause character preview animation');}
   frame(now,driver,color,phase,abilitiesEnabled=true){
     if(this.abilityDriver!==driver||this.abilityEnabled!==abilitiesEnabled){
-      this.abilityDriver=driver;this.abilityEnabled=abilitiesEnabled;const detail=abilityDetails[driver];
-      this.abilityTitle.textContent=detail?abilityNames[driver]:'NO SPECIAL ABILITY';
-      this.abilityText.textContent=detail?.description??'This racer uses the standard arena weapons and power-ups.';
-      this.abilityControl.textContent=detail?(abilitiesEnabled?detail.control:'DISABLED BY ROOM HOST'):'';
-      this.abilityTiming.textContent=detail?`Arena ability · ${detail.timing}`:'';this.ability.classList.toggle('disabled',!abilitiesEnabled);
+      this.abilityDriver=driver;this.abilityEnabled=abilitiesEnabled;const details=characterAbilities(driver);
+      if(!details.length)details.push({title:'NO SPECIAL ABILITY',description:'This racer uses the standard arena weapons and power-ups.',control:'',timing:'',requiresAbilities:false});
+      this.ability.replaceChildren(...details.map((detail,index)=>{
+        const section=document.createElement('section');section.className='preview-ability-entry';
+        const title=index===0?this.abilityTitle:document.createElement('strong'),text=index===0?this.abilityText:document.createElement('p'),control=index===0?this.abilityControl:document.createElement('span'),timing=index===0?this.abilityTiming:document.createElement('small');
+        const disabled=!abilitiesEnabled&&detail.requiresAbilities!==false;
+        title.textContent=detail.title;text.textContent=detail.description;control.textContent=disabled?'DISABLED BY ROOM HOST':detail.control;timing.textContent=detail.timing?`Arena ability · ${detail.timing}`:'';section.classList.toggle('disabled',disabled);section.append(title,text,control,timing);return section;
+      }));
     }
     const available=['ready','finished'].includes(phase);this.element.classList.toggle('hidden',!available);
     if(!available||!this.inView||document.hidden){this.last=null;return;}

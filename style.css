@@ -86,3 +86,5 @@ body.mobile-playing{overflow:hidden;overscroll-behavior:none}.race-panel.mobile-
 @media(prefers-reduced-motion:reduce){.ring-of-fire-announcement.blue-fire{animation:none}}
 /* A dedicated service offers only its shared arena, from the first paint. */
 .dedicated-server .mode-switch{display:none!important}
+.preview-ability-entry+.preview-ability-entry{margin-top:13px;padding-top:13px;border-top:1px solid #ded0ec}
+.preview-ability-entry.disabled span{background:#eadfdf;color:#7e4343}

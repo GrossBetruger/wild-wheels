@@ -24,7 +24,7 @@ try{
   git('init','--initial-branch=main');git('add','.');git('commit','-m','Initial launcher');git('init','--bare',join(root,'remote.git'));git('remote','add','origin',join(root,'remote.git'));git('push','origin','main');
   git('clone','--branch','main',join(root,'remote.git'),join(root,'publisher'));await writeFile(join(root,'publisher','release-marker'),'updated\n');
   execFileSync('git',['-C',join(root,'publisher'),'add','release-marker'],{env});execFileSync('git',['-C',join(root,'publisher'),'commit','-m','New release'],{env});execFileSync('git',['-C',join(root,'publisher'),'push','origin','main'],{env});
-  shell('update_server.sh');assert.equal(await readFile(join(repo,'release-marker'),'utf8'),'updated\n');assert.equal(await health(),true,'Update must restart native service');
+  assert.match(shell('update_server.sh'),/Installing [a-f0-9]+ — New release/);assert.equal(await readFile(join(repo,'release-marker'),'utf8'),'updated\n');assert.equal(await health(),true,'Update must restart native service');
   shell('kill_server.sh');assert.equal(await health(),false);assert.match(shell('kill_server.sh'),/No managed server/);
   unrelated=spawn('sleep',['30']);await new Promise(r=>unrelated.once('spawn',r));await writeFile(join(state,'server.pid'),`${unrelated.pid}\n${join(target,'release/wild-wheels-server')}\n`);
   shell('kill_server.sh');assert.equal(unrelated.exitCode,null,'A stale PID must not kill an unrelated process');

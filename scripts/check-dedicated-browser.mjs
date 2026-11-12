@@ -31,6 +31,7 @@ try{
   for(const session of sessions){assert.equal(await evaluate(session,"getComputedStyle(document.querySelector('.mode-switch')).display"),'none');assert.equal(await evaluate(session,'__game.race.mode'),'combat');}
   assert.equal(await evaluate(host,'__game.network.dedicated'),true);assert.equal(await evaluate(host,"__game.network.hostButton.classList.contains('hidden')"),true);
   await evaluate(host,`(async()=>{const n=__game.network;n.name.value='Ubuntu Pilot';n.name.dispatchEvent(new Event('input'));await n.saveName();await n.request('/api/driver',{driver:10});await n.control('bots',undefined,${ringMode?0:6});})()`);
+  await wait(()=>evaluate(host,"Array.from(document.querySelectorAll('.preview-ability-entry>strong')).map(n=>n.textContent).join('|')==='REEFER MADNESS|RING OF FIRE'"),'Yuda abilities did not have separate titles');
   await wait(()=>evaluate(guest,`__game.network.state.world.bots.length===${ringMode?1:7}`),'Eight-actor roster did not arrive');
   await evaluate(guest,'__game.network.requestPlay()');await wait(()=>evaluate(host,'__game.network.readyDialog.open'),'Host did not see guest play request');
   await wait(()=>evaluate(guest,"__game.race.phase==='racing'"),'Native auto-start did not reach browser',8000);
