@@ -611,6 +611,10 @@ export class Renderer {
       const parts=this.instances.slice(bodyStart);this.rememberBody(actor,parts,parts.length?[]:m.data.slice(dataStart));
       if(actor.driver===7)this.houstonHelmet(pose,actor,time,jump);
       if(actor.hedgeShield>0)this.hedgeguard(m,pose,actor,time,jump);
+      if(r.specialAbilities!==false&&actor.driver===7&&actor.specialActive>0){
+        this.glow.at(pose.x,2,pose.z);for(let i=0;i<32;i++){const a=i*Math.PI/16+time*1.5;this.glow.particle(Math.cos(a)*3,Math.sin(a*3)*.5,Math.sin(a)*3,.22,[.16,.32,.8]);}
+        for(const s of r.supplies){if(s.cooldown>0||Math.hypot(s.wx-pose.x,s.wz-pose.z)>80)continue;this.glow.at(s.wx,1.8,s.wz);for(let i=0;i<8;i++){const t=(time*.7+i/8)%1,a=t*10+time*3;this.glow.particle((pose.x-s.wx)*t+Math.cos(a)*.4,Math.sin(t*Math.PI)*2,(pose.z-s.wz)*t+Math.sin(a)*.4,.13,[.12,.35,.7]);}}
+      }
       if(r.specialAbilities!==false&&actor.driver===11&&actor.specialActive>0)this.holyArchangels(pose,actor,time,jump);
 
       if(actor.tehilim>0)this.tehilimAura(pose,time,actor.tehilim,jump);
@@ -657,7 +661,7 @@ export class Renderer {
       m.at(bomb.wx,height,bomb.wz,bomb.age*3);m.ball(0,0,0,2.2*scale,3.4*scale,2.2*scale,'#39334e',10,6);m.box(0,2.3*scale,0,5*scale,.5,.7*scale,'#ffdb69');m.box(0,2.3*scale,0,.7*scale,.5,5*scale,'#ffdb69');
       this.glow.at(bomb.wx,height+3,bomb.wz);this.glow.particle(0,0,0,3,[.8,.35,.03]);
     }
-    for(const effect of r.effects){if(effect.type==='fashionSnap'){this.fashionSnap(m,effect,time);continue;}if(effect.type==='yudaSmoke')continue;if(effect.type==='radiation'){this.radiationZone(m,effect,time);continue;}if(effect.type==='ash'){this.ashRemains(m,effect);continue;}if(effect.type==='abomb'){this.atomicExplosion(m,effect);continue;}if(effect.type==='explosion'){this.explosion(m,effect);continue;}for(let i=0;i<10;i++){const a=i*2.4,t=effect.age;m.at(effect.wx+Math.cos(a)*t*8,1+t*4,effect.wz+Math.sin(a)*t*8);m.ball(0,0,0,.12,.12,.12,'#f4dc8b',5,3);}}
+    for(const effect of r.effects){if(effect.type==='heartbeat'){const actor=[r,...r.bots].find(a=>a.id===effect.owner),x=actor?.wx??effect.wx,z=actor?.wz??effect.wz,t=effect.age,fade=1-t/effect.life,size=(1+.35*Math.exp(-t*18)+.3*Math.exp(-(((t-.18)*20)**2)))*fade;m.at(x,7+t*.6,z,r.cameraHeading);m.ball(-.28*size,.18*size,0,.38*size,.38*size,.24*size,'#ff779d',10,6);m.ball(.28*size,.18*size,0,.38*size,.38*size,.24*size,'#ff779d',10,6);m.cone(0,.1*size,0,.6*size,-.85*size,'#e94c7f',12);this.glow.at(x,7,z);this.glow.particle(0,0,0,size*1.4,[.5*fade,.08*fade,.17*fade]);continue;}if(effect.type==='fashionSnap'){this.fashionSnap(m,effect,time);continue;}if(effect.type==='yudaSmoke')continue;if(effect.type==='radiation'){this.radiationZone(m,effect,time);continue;}if(effect.type==='ash'){this.ashRemains(m,effect);continue;}if(effect.type==='abomb'){this.atomicExplosion(m,effect);continue;}if(effect.type==='explosion'){this.explosion(m,effect);continue;}for(let i=0;i<10;i++){const a=i*2.4,t=effect.age;m.at(effect.wx+Math.cos(a)*t*8,1+t*4,effect.wz+Math.sin(a)*t*8);m.ball(0,0,0,.12,.12,.12,'#f4dc8b',5,3);}}
     for(const cloud of r.stinkClouds??[]){const fade=Math.min(1,(cloud.life-cloud.age)/.7);for(let i=0;i<15;i++){const angle=i*2.399+cloud.age*.2,radius=2+(i%5)*2.6,x=cloud.wx+Math.sin(angle)*radius,z=cloud.wz+Math.cos(angle)*radius,y=1+(i%3)+Math.sin(cloud.age*2+i)*.7;this.smoke.at(x,y,z);this.smoke.particle(0,0,0,(7+cloud.age*2)*Math.sqrt(fade),[.5,.7,.23]);this.glow.at(x,y+.4,z);this.glow.particle(0,0,0,.25*fade,[.15,.3,.04]);}}
     for(const cloud of r.chaffClouds){
       const t=cloud.age,fade=Math.min(1,(cloud.life-t)/1.4),expansion=1-Math.exp(-t*2.5);

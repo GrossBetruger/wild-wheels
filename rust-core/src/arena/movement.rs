@@ -70,7 +70,7 @@ impl Game{
                 "missile"=>{a.missiles=(a.missiles+1).min(item_capacity(a.driver,"missile"));if !(a.vulcan>0.0&&a.item=="hedgehog"){a.item="missile".into();}},
                 "hedgeproof"=>a.hedge_shield=25.0,"tehilim"=>a.tehilim=25.0,"hedgehog"=>a.ammo=item_capacity(a.driver,"hedgehog"),"boost"=>a.turbos=(a.turbos+1).min(item_capacity(a.driver,"boost")),_=>{}
             }
-            supply.cooldown=match supply.kind.as_str(){"hedgeproof"|"tehilim"=>45.0,_=>8.0};supply.version+=1;supply.collector=Some(id);
+            supply.restore_home();supply.cooldown=match supply.kind.as_str(){"hedgeproof"|"tehilim"=>45.0,_=>8.0};supply.version+=1;supply.collector=Some(id);
             if g.multiplayer||id==0{
                 let key=format!("pickup:{}:{}",supply.id,supply.version);
                 g.sound_sequence+=1;

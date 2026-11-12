@@ -43,7 +43,7 @@ impl Game{
                 if !a.inactive&&!ending{let before=a.bomb_reload;a.bomb_reload+=dt;if before<5.0-1e-8&&a.bomb_reload>=5.0-1e-8{a.stink_ammo=(a.stink_ammo+1).min(item_capacity(a.driver,"stink"));a.bomb_reload=a.bomb_reload.max(5.0);}if a.bomb_reload>=10.0-1e-8{a.bomb_ammo=(a.bomb_ammo+1).min(item_capacity(a.driver,"abomb"));a.stink_ammo=(a.stink_ammo+1).min(item_capacity(a.driver,"stink"));a.bomb_reload=(a.bomb_reload-10.0).max(0.0);}}continue;
             }
             if a.destroyed>0.0{a.destroyed=(a.destroyed-dt).max(0.0);if a.destroyed==0.0&&!ending{self.spawn(id);}continue;}
-            if !ending&&!a.inactive&&a.health>0.0&&a.health<max_health{
+            if !ending&&!a.inactive&&!(a.driver==12&&a.special_active>0.0)&&a.health>0.0&&a.health<max_health{
                 a.heal_timer+=dt;let interval=recovery_interval(a.driver);
                 if a.heal_timer>=interval-1e-8{a.health=(a.health+1.0).min(max_health);a.heal_timer=match a.health>=max_health{true=>0.0,false=>(a.heal_timer-interval).max(0.0)};}
             }

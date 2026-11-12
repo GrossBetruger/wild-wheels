@@ -1,5 +1,5 @@
 import {boostDuration, createRace, drivers, START_HEDGEHOGS, itemCapacity } from './engine.js';
-import {frozen,tickSpecials,useSpecial} from './special-abilities.js';
+import {frozen,tickSpecials,useSpecial,restoreSupply} from './special-abilities.js';
 export const VULCAN_DURATION=15;
 export const HEDGEGUARD_DURATION=25;
 export const MAX_HEALTH=6;
@@ -147,7 +147,7 @@ function collectSupplies(r,actor){
   if(actor.bomber||actor.destroyed)return;
   for(const supply of r.supplies){
     if(supply.cooldown>0||distance(actor,supply)>=4||supply.kind==='health'&&actor.health>=MAX_HEALTH)continue;
-    applySupply(actor,supply.kind);supply.cooldown=['hedgeproof','tehilim'].includes(supply.kind)?45:8;supply.version=(supply.version??0)+1;supply.collector=actor.id;
+    applySupply(actor,supply.kind);restoreSupply(supply);supply.cooldown=['hedgeproof','tehilim'].includes(supply.kind)?45:8;supply.version=(supply.version??0)+1;supply.collector=actor.id;
     if(r.multiplayer||actor===r)fx(r,'pickup',actor,`pickup:${supply.id}:${supply.version}`);
   }
 }
@@ -321,7 +321,7 @@ export function tickBattle(r,keys,dt,inputs=null){
       continue;
     }
     if(actor.destroyed>0){actor.destroyed=Math.max(0,actor.destroyed-dt);if(actor.destroyed===0&&!ending)spawn(r,actor);continue;}
-    if(!ending&&!actor.inactive&&!actor.afk&&actor.health>0&&actor.health<recoveryHealth){
+    if(!ending&&!actor.inactive&&!actor.afk&&!(actor.driver===12&&actor.specialActive>0)&&actor.health>0&&actor.health<recoveryHealth){
       actor.healTimer=(actor.healTimer??0)+dt;const interval=recoveryInterval(actor.driver);
       if(actor.healTimer>=interval-1e-8){actor.health=Math.min(recoveryHealth,actor.health+1);actor.healTimer=actor.health>=recoveryHealth?0:Math.max(0,actor.healTimer-interval);}
     }

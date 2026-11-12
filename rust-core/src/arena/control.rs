@@ -45,7 +45,7 @@ impl Game {
         game.configure_room(room);Ok(game)
     }
     fn configure_room(&mut self,room:&Room){
-        self.global.host=Some(room.host);self.global.special_abilities=room.special_abilities;if !room.special_abilities{self.global.time_stop=0.0;self.global.time_owner=None;self.global.effects.retain(|f|f.kind!="yudaSmoke");for a in &mut self.actors{a.special_active=0.0;}}
+        self.global.host=Some(room.host);self.global.special_abilities=room.special_abilities;if !room.special_abilities{self.global.time_stop=0.0;self.global.time_owner=None;self.global.effects.retain(|f|f.kind!="yudaSmoke");for supply in &mut self.global.supplies{supply.restore_home();}for a in &mut self.actors{a.special_active=0.0;}}
         let mut bots=room.bots;
         for id in 0..6 {
             let person=room.players.iter().find(|p|p.id==id);

@@ -53,7 +53,8 @@ pub struct Chaff {
 pub struct Stink { pub id:u32,pub owner:usize,pub wx:f64,pub wz:f64,pub age:f64,pub life:f64,pub hits:Vec<usize> }
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(default,rename_all="camelCase")]
-pub struct Supply { pub id:u32,pub wx:f64,pub wz:f64,pub kind:String,pub cooldown:f64,pub version:u32,pub collector:Option<usize> }
+pub struct Supply { pub id:u32,pub wx:f64,pub wz:f64,pub kind:String,pub cooldown:f64,pub version:u32,pub collector:Option<usize>,#[serde(skip_serializing_if="Option::is_none")]pub home_wx:Option<f64>,#[serde(skip_serializing_if="Option::is_none")]pub home_wz:Option<f64> }
+impl Supply{pub fn restore_home(&mut self){if let Some(x)=self.home_wx.take(){self.wx=x;}if let Some(z)=self.home_wz.take(){self.wz=z;}}}
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(default,rename_all="camelCase")]
 pub struct Effect { #[serde(rename="type")] pub kind:String,pub wx:f64,pub wz:f64,pub age:f64,pub life:f64,pub color:Option<String>,#[serde(skip_serializing_if="Option::is_none")]pub owner:Option<usize>,#[serde(skip_serializing_if="BTreeMap::is_empty")]pub doses:BTreeMap<String,f64> }

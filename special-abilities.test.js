@@ -5,6 +5,16 @@ import {ArenaCore,ArenaClient} from './arena-core.js';
 import {useSpecial} from './special-abilities.js';
 import {decodeBinarySnapshot} from './binary-wire.js';
 
+for(const engine of ['JavaScript','Rust'])test(`${engine}: healing starts at t=0, repeats every second and stops at six hearts`,()=>{
+  const world=createBattle(12);Object.assign(world,{phase:'racing',human:true,wx:-65,wz:0,health:3,supplies:[]});for(const a of world.bots)Object.assign(a,{inactive:true,destroyed:999});
+  const core=engine==='Rust'?new ArenaCore(world):null,read=()=>core?core.snapshot():world,step=()=>core?core.step(.05):tickBattle(world,new Set(),.05);
+  if(core)core.step(0,[{actor:0,actions:[{type:'special'}]}]);if(!core)useSpecial(world);assert.equal(read().health,4);assert.equal(read().effects.filter(f=>f.type==='heartbeat').length,1);
+  for(let i=0;i<19;i++)step();assert.equal(read().health,4);step();assert.equal(read().health,5);assert.equal(read().effects.filter(f=>f.type==='heartbeat').length,1);
+  for(let i=0;i<20;i++)step();assert.equal(read().health,6);assert.equal(read().specialActive,0);
+  for(let i=0;i<20;i++)step();assert.equal(read().health,6);assert.equal(read().specialActive,0);
+  for(let i=0;i<20;i++)step();assert.equal(read().health,6);assert.equal(read().effects.filter(f=>f.type==='heartbeat').length,0);
+});
+
 for(const engine of ['JavaScript','Rust'])test(`${engine}: bots keep their AI and resume driving after relativity`,()=>{
   const world=createBattle(8);Object.assign(world,{phase:'racing',human:true,wx:65,wz:70,supplies:[]});
   for(const a of world.bots)Object.assign(a,{inactive:true,destroyed:999});Object.assign(world.bots[0],{inactive:false,destroyed:0,human:false,wx:65,wz:0,heading:0,motionHeading:0,speed:0});
@@ -19,7 +29,7 @@ for(const engine of ['JavaScript','Rust'])for(const driver of [11,12])test(`${en
   const core=engine==='Rust'?new ArenaCore(world):null,read=()=>core?core.snapshot():world;
   const step=dt=>core?core.step(dt):tickBattle(world,new Set(),dt),activate=()=>core?core.step(0,[{actor:0,actions:[{type:'special'}]}]):useSpecial(world);
   step(.05);assert.equal(read().specialActive??0,0);assert.equal(read().health,3);
-  activate();assert.equal(read().specialCooldown,20);assert.equal(read().specialActive,driver===11?8:1.5);assert.equal(read().health,driver===12?6:3);
+  activate();assert.equal(read().specialCooldown,20);assert.equal(read().specialActive,driver===11?8:5);assert.equal(read().health,driver===12?4:3);
   for(let i=0;i<200;i++)step(.05);assert.equal(read().specialActive,0);assert.ok(read().specialCooldown>9.9);activate();assert.equal(read().specialActive,0);
   for(let i=0;i<201;i++)step(.05);assert.equal(read().specialCooldown,0);
   if(driver===11){activate();assert.equal(read().specialActive,8);}
