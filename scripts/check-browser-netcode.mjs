@@ -10,6 +10,7 @@ import { checkFeedback } from './check-feedback-scenario.mjs';
 import { checkDrift } from './check-drift-scenario.mjs';
 import { checkControls } from './check-controls-scenario.mjs';
 import { checkMobile } from './check-mobile-scenario.mjs';
+import {checkSpecials} from "./check-specials-scenario.mjs";
 import {checkTehilim} from './check-tehilim-scenario.mjs';
 import {checkCharacters} from './check-characters-scenario.mjs';
 import {checkRoom} from './check-room-scenario.mjs';
@@ -123,9 +124,9 @@ try{
       const result={profile:profile.name,run:profile.run,...await checkRoom(evaluate,app.multiplayer,room,identity.you,sleep,reload,capture)};results.push(result);console.log(JSON.stringify(result));
       await evaluate('__game.network.leave()');await call('Target.closeTarget',{targetId});for(const current of [...app.multiplayer.rooms.values()])for(const member of [...current.members.values()])app.multiplayer.remove(member);continue;
     }
-    if(process.argv.includes('--characters')||process.argv.includes('--tehilim')){
+    if(process.argv.includes('--specials')||process.argv.includes('--characters')||process.argv.includes('--tehilim')){
       const capture=async(label,selector='#game')=>{await evaluate(`document.querySelector(${JSON.stringify(selector)}).scrollIntoView({block:'center'})`);const rect=await evaluate(`(()=>{const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return {x:r.left+scrollX,y:r.top+scrollY,width:r.width,height:r.height,scale:1};})()`);const screenshot=await call('Page.captureScreenshot',{format:'png',clip:rect},session);await writeFile(`${output}.${profile.run}.${profile.name}.${label}.png`,Buffer.from(screenshot.data,'base64'));};
-      const result={profile:profile.name,run:profile.run,...await (process.argv.includes('--tehilim')?checkTehilim:checkCharacters)(evaluate,app.multiplayer,room,identity.you,sleep,capture)};results.push(result);console.log(JSON.stringify(result));
+      const result={profile:profile.name,run:profile.run,...await (process.argv.includes('--specials')?checkSpecials:process.argv.includes('--tehilim')?checkTehilim:checkCharacters)(evaluate,app.multiplayer,room,identity.you,sleep,capture)};results.push(result);console.log(JSON.stringify(result));
       await evaluate('__game.network.leave()');await call('Target.closeTarget',{targetId});for(const member of [...room.members.values()])app.multiplayer.remove(member);continue;
     }
     if(process.argv.includes('--profile')){

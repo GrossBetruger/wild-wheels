@@ -41,6 +41,7 @@ Each running server keeps one room. Refresh to reconnect; names are remembered i
 | X | Use a turbo |
 | C | Deploy chaff to divert incoming missiles in arenas |
 | Z | Somersault and turn 180° in arenas |
+| F | Avita-Jas: stop everyone else's time for 2.5 seconds (20-second cooldown) |
 | Escape | Pause; multiplayer continues for everyone else |
 
 You can also click the ammo cards to select weapons. Watch for the incoming missile warning and use chaff to break the lock.

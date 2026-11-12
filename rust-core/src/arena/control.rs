@@ -14,6 +14,7 @@ struct Request {id:u32,remaining_ms:f64}
 #[derive(Deserialize)]
 #[serde(rename_all="camelCase",deny_unknown_fields)]
 struct Room {
+    #[serde(default="abilities_default")]special_abilities:bool,
     code:String,host:usize,arena:usize,bots:usize,epoch:u32,players:Vec<Player>,
     #[serde(default)]start_request:Option<Request>,#[serde(default)]seed:u32,
 }
@@ -38,13 +39,13 @@ impl Game {
         let mut state=room.seed.max(1);let mut random=||{state^=state<<13;state^=state>>17;state^=state<<5;state as f64/(u32::MAX as f64+1.0)};
         let mut skills=[0.0;5];for (i,(low,high)) in [(0.94,1.0),(0.86,0.93),(0.70,0.83),(0.53,0.68),(0.35,0.51)].into_iter().enumerate(){skills[i]=low+random()*(high-low);}
         for i in (1..5).rev(){let j=(random()*(i+1)as f64).floor()as usize;skills.swap(i,j);}
-        let global=Globals{mode:"combat".into(),phase:"ready".into(),arena:room.arena,countdown:3.0,duration:180.0,target_score:10.0,rank:6,multiplayer:true,sound_epoch:room.epoch as u64,
+        let global=Globals{special_abilities:room.special_abilities,mode:"combat".into(),phase:"ready".into(),arena:room.arena,countdown:3.0,duration:180.0,target_score:10.0,rank:6,multiplayer:true,sound_epoch:room.epoch as u64,
             supplies:[(-70.0,-65.0,"missile"),(70.0,65.0,"missile"),(-65.0,70.0,"hedgehog"),(65.0,-70.0,"hedgehog"),(-12.0,48.0,"boost"),(12.0,-48.0,"boost"),(-70.0,0.0,"health"),(70.0,0.0,"health"),(-50.0,-50.0,"hedgeproof"),(50.0,50.0,"tehilim")].into_iter().enumerate().map(|(id,(wx,wz,kind))|Supply{id:id as u32,wx,wz,kind:kind.into(),cooldown:match kind{"hedgeproof"|"tehilim"=>30.0,_=>0.0},..Supply::default()}).collect(),..Globals::default()};
         let mut game=Self::from_seed(Seed{global,player:initial_actor(0,0.85),bots:(1..6).map(|id|initial_actor(id,skills[id-1])).collect()})?;
         game.configure_room(room);Ok(game)
     }
     fn configure_room(&mut self,room:&Room){
-        self.global.host=Some(room.host);
+        self.global.host=Some(room.host);self.global.special_abilities=room.special_abilities;if !room.special_abilities{self.global.time_stop=0.0;self.global.time_owner=None;self.global.effects.retain(|f|f.kind!="yudaSmoke");for a in &mut self.actors{a.special_active=0.0;}}
         let mut bots=room.bots;
         for id in 0..6 {
             let person=room.players.iter().find(|p|p.id==id);
@@ -68,7 +69,7 @@ impl Game {
             }
         }
         self.room.clear();
-        for (key,value) in [("code",json!(room.code)),("host",json!(room.host)),("arena",json!(room.arena)),("bots",json!(room.bots)),("startRequest",json!(room.start_request)),("players",json!(room.players.iter().map(|p|json!({"id":p.id,"name":p.name.trim(),"driver":p.driver,"color":self.actors[p.id].color,"role":p.role,"afk":p.afk,"wantsToPlay":p.wants_to_play,"playRequestRefused":p.play_request_refused})).collect::<Vec<_>>()))]{self.room.insert(key.into(),value);}
+        for (key,value) in [("code",json!(room.code)),("host",json!(room.host)),("arena",json!(room.arena)),("bots",json!(room.bots)),("specialAbilities",json!(room.special_abilities)),("startRequest",json!(room.start_request)),("players",json!(room.players.iter().map(|p|json!({"id":p.id,"name":p.name.trim(),"driver":p.driver,"color":self.actors[p.id].color,"role":p.role,"afk":p.afk,"wantsToPlay":p.wants_to_play,"playRequestRefused":p.play_request_refused})).collect::<Vec<_>>()))]{self.room.insert(key.into(),value);}
     }
 }
 #[no_mangle]pub extern "C" fn game_create(len:usize)->u32 {

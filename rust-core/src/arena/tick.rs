@@ -23,15 +23,19 @@ impl Game{
             self.global.countdown-=dt;
             if self.global.countdown<=0.0{self.global.phase="racing".into();self.actors[0].notice="BATTLE ON! · FIRST TO 10 KILLS".into();self.actors[0].notice_time=3.0;}return;
         }
+        self.special_tick(frame.dt);
         let ending=self.global.finish_countdown.is_some();if let Some(left)=self.global.finish_countdown{dt=dt.min(left);}
+        let world_dt=match self.global.time_stop>0.0{true=>0.0,false=>dt};
         let g=&mut self.global;g.elapsed+=dt;g.shake=(g.shake-dt*2.0).max(0.0);
-        for supply in &mut g.supplies{supply.cooldown=(supply.cooldown-dt).max(0.0);}
-        for fx in &mut g.effects{fx.age+=dt;}g.effects.retain(|fx|fx.age<fx.life);
-        for c in &mut g.chaff_clouds{c.age+=dt;}g.chaff_clouds.retain(|c|c.age<c.life);
-        for c in &mut g.stink_clouds{c.age+=dt;}g.stink_clouds.retain(|c|c.age<c.life);
-        super::movement::age(g,dt);
+        for supply in &mut g.supplies{supply.cooldown=(supply.cooldown-world_dt).max(0.0);}
+        for fx in &mut g.effects{fx.age+=world_dt;}g.effects.retain(|fx|fx.age<fx.life);
+        for c in &mut g.chaff_clouds{c.age+=world_dt;}g.chaff_clouds.retain(|c|c.age<c.life);
+        for c in &mut g.stink_clouds{c.age+=world_dt;}g.stink_clouds.retain(|c|c.age<c.life);
+        super::movement::age(g,world_dt);
         for id in 0..self.actors.len(){
             let input=frame.inputs.iter().find(|input|input.actor==id);let action_clock=input.is_some_and(|i|i.action_clock);
+            if self.frozen(id){if let Some(last)=input.and_then(|i|i.moves.as_ref()).and_then(|m|m.last()){self.movement_ack[id]=last.sequence;self.apply_pending(id,last.sequence);}continue;}
+            let max_health=match self.global.special_abilities&&self.actors[id].driver==12{true=>6.0,false=>3.0};
             let a=&mut self.actors[id];if a.afk{continue;}a.notice_time=(a.notice_time-dt).max(0.0);
             for timer in [&mut a.shield,&mut a.hedge_shield,&mut a.tehilim,&mut a.celebrate,&mut a.voice_cooldown,&mut a.wall_cooldown,&mut a.vulcan]{*timer=(*timer-dt).max(0.0);}
             if !action_clock{a.fire_cooldown=(a.fire_cooldown-dt).max(0.0);a.chaff_cooldown=(a.chaff_cooldown-dt).max(0.0);}
@@ -39,11 +43,11 @@ impl Game{
                 if !a.inactive&&!ending{let before=a.bomb_reload;a.bomb_reload+=dt;if before<5.0-1e-8&&a.bomb_reload>=5.0-1e-8{a.stink_ammo=(a.stink_ammo+1).min(item_capacity(a.driver,"stink"));a.bomb_reload=a.bomb_reload.max(5.0);}if a.bomb_reload>=10.0-1e-8{a.bomb_ammo=(a.bomb_ammo+1).min(item_capacity(a.driver,"abomb"));a.stink_ammo=(a.stink_ammo+1).min(item_capacity(a.driver,"stink"));a.bomb_reload=(a.bomb_reload-10.0).max(0.0);}}continue;
             }
             if a.destroyed>0.0{a.destroyed=(a.destroyed-dt).max(0.0);if a.destroyed==0.0&&!ending{self.spawn(id);}continue;}
-            if !ending&&!a.inactive&&a.health>0.0&&a.health<3.0{
+            if !ending&&!a.inactive&&a.health>0.0&&a.health<max_health{
                 a.heal_timer+=dt;let interval=recovery_interval(a.driver);
-                if a.heal_timer>=interval-1e-8{a.health=(a.health+1.0).min(3.0);a.heal_timer=match a.health>=3.0{true=>0.0,false=>(a.heal_timer-interval).max(0.0)};}
+                if a.heal_timer>=interval-1e-8{a.health=(a.health+1.0).min(max_health);a.heal_timer=match a.health>=max_health{true=>0.0,false=>(a.heal_timer-interval).max(0.0)};}
             }
-            if a.health>=3.0{a.heal_timer=0.0;}
+            if a.health>=max_health{a.heal_timer=0.0;}
             a.reload+=dt;let reload_interval=hedgehog_recovery_interval(a.driver);if a.reload>=reload_interval-1e-8{a.ammo=(a.ammo+1).min(item_capacity(a.driver,"hedgehog"));a.reload=(a.reload-reload_interval).max(0.0);}
             if id==0&&!self.global.multiplayer||a.human{
                 let held=input.map_or(0,|i|i.keys);
@@ -62,6 +66,7 @@ impl Game{
             a.dizzy=(a.dizzy-dt).max(0.0);a.somersault=(a.somersault-dt).max(0.0);a.somersault_cooldown=(a.somersault_cooldown-dt).max(0.0);a.boost=(a.boost-dt).max(0.0);
             let target=self.actors.iter().filter(|b|b.id!=id&&!b.bomber&&!b.inactive&&!b.afk&&b.destroyed<=0.0).map(|b|b.id).min_by(|&x,&y|distance(self.actors[id].wx,self.actors[id].wz,self.actors[x].wx,self.actors[x].wz).total_cmp(&distance(self.actors[id].wx,self.actors[id].wz,self.actors[y].wx,self.actors[y].wz)).then(x.cmp(&y)));
             let Some(target)=target else{continue;};let arena=self.global.arena;let visible=clear(arena,self.actors[id].wx,self.actors[id].wz,self.actors[target].wx,self.actors[target].wz);
+            if visible&&distance(self.actors[id].wx,self.actors[id].wz,self.actors[target].wx,self.actors[target].wz)<50.0{self.special(id);}
             self.actors[id].brain-=dt;
             if self.actors[id].brain<=0.0{self.actors[id].path=match visible{true=>Vec::new(),false=>super::movement::navigate(arena,&self.actors[id],&self.actors[target])};self.actors[id].brain=0.4+(1.0-self.actors[id].skill)*0.4;}
             let target_x=self.actors[target].wx;let target_z=self.actors[target].wz;let a=&mut self.actors[id];
@@ -75,6 +80,7 @@ impl Game{
         }
         for input in &frame.inputs{if let Some(last)=input.moves.as_ref().and_then(|moves|moves.last()){self.movement_ack[input.actor]=last.sequence;}}
         for i in 0..self.actors.len(){for j in i+1..self.actors.len(){
+            if self.frozen(i)||self.frozen(j){continue;}
             let a=&self.actors[i];let b=&self.actors[j];let d=distance(a.wx,a.wz,b.wx,b.wz);
             if a.bomber||b.bomber||a.afk||b.afk||a.destroyed>0.0||b.destroyed>0.0||d>=3.8{continue;}
             let dx=(a.wx-b.wx)/match d==0.0{true=>1.0,false=>d};let dz=match d==0.0{true=>1.0,false=>(a.wz-b.wz)/d};let push=(3.8-d)/2.0;let arena=self.global.arena;
@@ -83,7 +89,7 @@ impl Game{
             self.actors[i].speed*=0.8;self.actors[j].speed*=0.8;
             if (i==0||j==0)&&self.actors[0].wall_cooldown<=0.0{let a=&mut self.actors[0];effect(&mut self.global,"crash",0,a.wx,a.wz,None);a.wall_cooldown=0.6;voice(&mut self.global,a,"hurt",a.wx);}
         }}
-        for id in 0..self.actors.len(){self.collect(id);}
+        for id in 0..self.actors.len(){if !self.frozen(id){self.collect(id);}}
         self.divert_all();
         let shots=std::mem::take(&mut self.global.projectiles);
         for mut shot in shots{
@@ -99,6 +105,7 @@ impl Game{
         }
         let bombs=std::mem::take(&mut self.global.bombs);
         for mut bomb in bombs{
+            if self.frozen(bomb.owner){self.global.bombs.push(bomb);continue;}
             bomb.age+=dt;if bomb.age<0.9-1e-8{self.global.bombs.push(bomb);continue;}
             if bomb.kind=="stink"{self.global.stink_clouds.push(Stink{id:bomb.id,owner:bomb.owner,wx:bomb.wx,wz:bomb.wz,life:5.0,..Stink::default()});sound(&mut self.global,"stinkBurst",bomb.owner,bomb.wx,bomb.wz,None);continue;}
             sound(&mut self.global,"bombExplosion",bomb.owner,bomb.wx,bomb.wz,None);self.global.effects.push(Effect{kind:"abomb".into(),wx:bomb.wx,wz:bomb.wz,life:3.0,color:Some(bomb.color),..Effect::default()});
@@ -109,6 +116,7 @@ impl Game{
         {
             let g=&mut self.global;
             for cloud in &mut g.stink_clouds{for a in &mut self.actors{
+                if g.time_stop>0.0&&g.time_owner!=Some(a.id){continue;}
                 if a.bomber||a.inactive||a.afk||a.destroyed>0.0||a.shield>0.0||a.hedge_shield>0.0||cloud.hits.contains(&a.id)||distance(a.wx,a.wz,cloud.wx,cloud.wz)>14.0{continue;}
                 cloud.hits.push(a.id);
                 if a.dizzy<=0.0{g.sound_sequence+=1;g.events.push(match g.multiplayer{true=>json!({"type":"dizzy","owner":a.id,"wx":a.wx,"wz":a.wz,"id":format!("{}:{}",g.sound_epoch,g.sound_sequence)}),false=>json!("dizzy")});}
@@ -118,6 +126,7 @@ impl Game{
         let mut doses=Vec::new();
         for zone in self.global.effects.iter_mut().filter(|f|f.kind=="radiation"&&f.age<f.life-1e-8){
             for a in &self.actors{
+                if self.global.time_stop>0.0&&self.global.time_owner!=Some(a.id){continue;}
                 let key=a.id.to_string();
                 if a.bomber||a.inactive||a.afk||a.destroyed>0.0||a.shield>0.0||a.hedge_shield>0.0||distance(a.wx,a.wz,zone.wx,zone.wz)>28.0{zone.doses.remove(&key);continue;}
                 if zone.age+1e-8<*zone.doses.get(&key).unwrap_or(&0.0){continue;}

@@ -2,6 +2,7 @@ mod types;
 mod movement;
 mod weapons;
 mod tick;
+mod specials;
 mod packet;
 mod client;
 mod presentation;
@@ -74,7 +75,9 @@ impl Game {
     }
     pub fn action(&mut self,id:usize,action:&Action){
         if id>=self.actors.len(){return;}
+        if self.frozen(id){return;}
         match action.kind.as_str(){
+            "special"=>{self.special(id);},
             "fire"=>{self.fire(id,action.id);},"bomb"=>{self.bomb(id,action);},"turbo"=>{self.turbo(id,action.id);},
             "chaff"=>{self.chaff(id);},"somersault"=>{self.flip(id);},
             "select"=>{let a=&mut self.actors[id];if !a.bomber&&self.global.phase!="finished"&&match action.item.as_str(){"missile"=>a.missiles>0,"hedgehog"=>a.ammo>0||a.vulcan>0.0,_=>false}{a.item=action.item.clone();}},
@@ -101,7 +104,7 @@ impl Game {
                 }
             }
             for action in &input.actions {
-                if !matches!(action.kind.as_str(),"fire"|"turbo"|"chaff"|"somersault"|"cycle"|"select"|"bomb")||!action.wx.is_finite()||!action.wz.is_finite()||action.after_move< -1||action.after_move>previous+128{return false;}
+                if !matches!(action.kind.as_str(),"special"|"fire"|"turbo"|"chaff"|"somersault"|"cycle"|"select"|"bomb")||!action.wx.is_finite()||!action.wz.is_finite()||action.after_move< -1||action.after_move>previous+128{return false;}
                 if action.kind=="bomb"&&(action.wx.abs()>96.0||action.wz.abs()>96.0||action.bomb_kind.as_ref().is_some_and(|s|s!="stink"&&s!="abomb")){return false;}
                 if action.kind=="select"&&!matches!(action.item.as_str(),"hedgehog"|"missile"){return false;}
             }

@@ -31,6 +31,7 @@ impl Client{
         let identity=viewer!=self.viewer||game.global.arena!=previous.global.arena||game.global.sound_epoch!=previous.global.sound_epoch||game.global.elapsed<previous.global.elapsed;
         let reset=identity||game.global.phase!=previous.global.phase||(game.actors[viewer].destroyed>0.0)!=(previous.actors[viewer].destroyed>0.0);
         if identity{*self=Self::new(game,viewer,now);return;}
+        let freeze_changed=game.frozen(viewer)!=self.pred.frozen(viewer);
         let old=&self.pred.actors[viewer];let old_pose=[old.wx+self.error[0],old.wz+self.error[1],old.heading+self.error[2],old.camera_heading+self.error[3]];
         let acknowledged=game.movement_ack[viewer];self.history.retain(|command|command.sequence>acknowledged);
         self.feedback_accept(&game,now,reset);
@@ -39,7 +40,7 @@ impl Client{
         for command in self.history.clone(){move_one(&mut self.pred,viewer,&command);self.replay_maneuvers(command.sequence,false);}
         self.pred.global.events.clear();
         let new=&self.pred.actors[viewer];
-        self.error=match reset||distance(old_pose[0],old_pose[1],new.wx,new.wz)>18.0{true=>[0.0;4],false=>[old_pose[0]-new.wx,old_pose[1]-new.wz,angle(old_pose[2],new.heading),angle(old_pose[3],new.camera_heading)]};
+        self.error=match freeze_changed||reset||distance(old_pose[0],old_pose[1],new.wx,new.wz)>18.0{true=>[0.0;4],false=>[old_pose[0]-new.wx,old_pose[1]-new.wz,angle(old_pose[2],new.heading),angle(old_pose[3],new.camera_heading)]};
         self.received=now;self.display=game.clone();let time=game.network_time;
         if reset{self.frames.clear();self.presented=time-0.1;self.offset=now-time;}
         if self.frames.back().is_some_and(|f|f.time==time){self.frames.pop_back();}
@@ -62,12 +63,14 @@ impl Client{
         let index=self.frames.iter().position(|f|f.time>=self.presented).unwrap_or(self.frames.len()-1);let before=&self.frames[index.saturating_sub(1)];let after=&self.frames[index];
         let fraction=match after.time==before.time{true=>1.0,false=>((self.presented-before.time)/(after.time-before.time)).clamp(0.0,1.0)};
         for a in &mut self.display.actors{
+            if latest.game.frozen(a.id){continue;}
             let old=&before.game.actors[a.id];let new=&after.game.actors[a.id];
             if a.destroyed>0.0||old.destroyed>0.0||new.destroyed>0.0||old.inactive||new.inactive||distance(old.wx,old.wz,new.wx,new.wz)>18.0||distance(a.wx,a.wz,new.wx,new.wz)>18.0{continue;}
             a.wx=old.wx+(new.wx-old.wx)*fraction;a.wz=old.wz+(new.wz-old.wz)*fraction;a.heading=old.heading+angle(new.heading,old.heading)*fraction;a.camera_heading=old.camera_heading+angle(new.camera_heading,old.camera_heading)*fraction;
             if old.somersault>0.0&&new.somersault>0.0{a.somersault=old.somersault+(new.somersault-old.somersault)*fraction;}
         }
         for shot in &mut self.display.global.projectiles{
+            if latest.game.frozen(shot.owner){continue;}
             let a=before.game.global.projectiles.iter().find(|s|s.id==shot.id);let b=after.game.global.projectiles.iter().find(|s|s.id==shot.id);
             if let(Some(a),Some(b))=(a,b){shot.wx=a.wx+(b.wx-a.wx)*fraction;shot.wz=a.wz+(b.wz-a.wz)*fraction;shot.height=a.height+(b.height-a.height)*fraction;shot.heading=a.heading+angle(b.heading,a.heading)*fraction;}
         }

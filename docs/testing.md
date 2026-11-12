@@ -88,6 +88,10 @@ The actual room host wins a tie for the highest points, including when they have
 
 ## Targeted checks
 
+Special abilities default on and are controlled by the room host. `special-abilities.test.js` checks JS/Rust parity: Catheterpillar recovers to six hearts; Yuda's three-second boost smoke causes eight seconds of dizziness without affecting its owner; R-yeah returns locked missiles without books; Avita-Jas freezes opponents and their projectiles for 2.5 seconds and has a 20-second cooldown. Disabling abilities releases time immediately and retains ordinary power-ups. Frozen movement commands must be acknowledged without movement or a backlog jump, including client prediction.
+
+After pushing, run `npm run test:browser-netcode -- --specials` for real Chrome checks of the ability button, movement during and after the freeze, cooldown, holy aura, healing, smoke, and replicated room toggle across host/guest and delayed networks.
+
 ```sh
 npm run test:netcode
 npm run test:browser-netcode -- --repeat 3

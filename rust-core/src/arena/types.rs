@@ -11,6 +11,7 @@ pub struct Sample { pub wx:f64,pub wz:f64,pub height:f64 }
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(default, rename_all="camelCase")]
 pub struct Actor {
+    pub special_cooldown:f64,pub special_active:f64,
     pub id:usize,pub driver:usize,pub name:Option<String>,pub color:String,
     pub wx:f64,pub wz:f64,pub heading:f64,pub motion_heading:f64,pub camera_heading:f64,
     pub speed:f64,pub health:f64,pub kills:f64,pub deaths:u32,pub kill_streak:u32,
@@ -68,6 +69,8 @@ pub struct Kill { pub id:u32,pub attacker:usize,pub victim:usize,pub victim_name
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(default,rename_all="camelCase")]
 pub struct Globals {
+    #[serde(default="abilities_default")]pub special_abilities:bool,
+    pub time_stop:f64,pub time_owner:Option<usize>,
     pub mode:String,pub phase:String,pub arena:usize,pub elapsed:f64,pub countdown:f64,pub duration:f64,pub target_score:f64,
     pub rank:usize,pub finish_rank:Option<usize>,pub finish_time:Option<f64>,pub finish_countdown:Option<f64>,pub winner:Value,
     pub multiplayer:bool,pub host:Option<usize>,pub sound_epoch:u64,pub sound_sequence:u64,pub shake:f64,
@@ -75,6 +78,7 @@ pub struct Globals {
     pub projectiles:Vec<Shot>,pub bombs:Vec<Bomb>,pub chaff_clouds:Vec<Chaff>,pub stink_clouds:Vec<Stink>,pub supplies:Vec<Supply>,
     pub effects:Vec<Effect>,pub skids:Vec<Skid>,pub drift_particles:Vec<Particle>,pub kill_feed:Vec<Kill>,pub events:Vec<Value>,pub voices:Vec<Value>,
 }
+pub fn abilities_default()->bool{true}
 #[derive(Deserialize)]
 pub struct Seed { #[serde(flatten)]pub global:Globals,#[serde(flatten)]pub player:Actor,pub bots:Vec<Actor> }
 #[derive(Clone, Default, Deserialize)]

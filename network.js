@@ -33,6 +33,7 @@ export class NetworkGame {
     this.name.oninput=()=>{this.rememberName();this.nameDirty=this.name.value.trim()!==this.state?.world.name;this.nameFeedback.textContent='';};
     this.invitation=new URL(location.href).searchParams.get('room')??'';
     this.botCount=document.createElement('select');this.botCount.setAttribute('aria-label','Number of multiplayer bots');for(let count=0;count<=5;count++){const option=document.createElement('option');option.value=String(count);option.textContent=`${count} BOT${count===1?'':'S'}`;this.botCount.append(option);}this.botCount.value='1';this.botCount.onchange=()=>{if(this.active)this.control('bots',undefined,Number(this.botCount.value));};
+    this.abilities=this.button('SPECIAL ABILITIES · ON',()=>this.request('/api/control',{action:'special-abilities',enabled:this.state?.specialAbilities===false}).catch(error=>{this.status.textContent=error.message;}));
     this.animalChoice=document.createElement('select');this.animalChoice.className='hidden';this.animalChoice.setAttribute('aria-label','Your multiplayer character');for(const [index,animal] of drivers.entries()){const option=document.createElement('option');option.value=String(index);option.textContent=`${animal.emoji} ${animal.name}`;this.animalChoice.append(option);}this.animalChoice.onchange=()=>this.chooseDriver(Number(this.animalChoice.value));
     this.hostButton=this.button('HOST ARENA',()=>this.connect('/api/rooms'));
     this.leaveButton=this.button('AFK',()=>this.setAway(!this.afk));this.leaveButton.classList.add('hidden');
@@ -41,7 +42,7 @@ export class NetworkGame {
     this.share=document.createElement('input');this.share.className='hidden';this.share.setAttribute('aria-label','Room invitation link');this.share.addEventListener('input',()=>{this.shareEdited=true;});
     this.internetButton=this.button('START INTERNET LINK',()=>this.startInternetLink());this.internetButton.classList.add('hidden');
     this.copyButton=this.button('COPY INVITE',async()=>{try{await navigator.clipboard.writeText(this.share.value);this.status.textContent='Invitation copied.';}catch{this.share.focus();this.share.select();this.status.textContent='Copy the selected invitation link.';}});this.copyButton.classList.add('hidden');
-    const row=document.createElement('div');row.className='network-controls';row.append(this.name,this.nameFeedback,this.animalChoice,this.botCount,this.hostButton,this.leaveButton);
+    const row=document.createElement('div');row.className='network-controls';row.append(this.abilities,this.name,this.nameFeedback,this.animalChoice,this.botCount,this.hostButton,this.leaveButton);
     const invite=document.createElement('div');invite.className='network-invite';invite.append(this.share,this.internetButton,this.copyButton);
     this.help=document.createElement('p');this.help.className='network-help hidden';
     this.panel.append(title,row,this.status,this.players,invite,this.help);anchor.before(this.panel);
@@ -197,6 +198,7 @@ export class NetworkGame {
     if(!this.nameDirty&&!this.namePending&&this.name.value!==state.world.name)this.name.value=state.world.name;
     if(this.nameDirty&&!this.namePending&&this.name.value.trim()&&['countdown','racing'].includes(state.world.phase))this.saveName();
     this.updateShare();
+    this.abilities.textContent=state.specialAbilities===false?'SPECIAL ABILITIES · OFF':'SPECIAL ABILITIES · ON';this.abilities.disabled=!this.isHost;this.abilities.setAttribute('aria-pressed',String(state.specialAbilities!==false));
     this.botCount.value=String(state.bots);this.botCount.disabled=!this.isHost||!['ready','finished'].includes(state.world.phase);for(const option of this.botCount.options)option.disabled=Number(option.value)>6-state.players.length;
     this.animalChoice.value=String(state.world.driver);this.animalChoice.disabled=!['ready','finished'].includes(state.world.phase);
     this.status.textContent=`${state.players.length} PLAYER${state.players.length===1?'':'S'} · ${state.bots} BOT${state.bots===1?'':'S'} · ${this.isHost?'Share the link, then press Let’s Battle.':this.role==='bomber'?'Press Let’s Play when you’re ready.':'Choose your racer and press Let’s Play.'}`;

@@ -52,7 +52,7 @@ export class Multiplayer {
   controls(member,body){
     if(member.afk)return;
     if(!Number.isSafeInteger(body.sequence)||body.sequence<0||!Array.isArray(body.keys)||body.keys.length>10||body.keys.some(k=>!KEYS.has(k))||!Array.isArray(body.actions)||body.actions.length>8)throw problem(400,'Invalid controls.');
-    for(const action of body.actions)if(!action||!['fire','turbo','somersault','chaff','cycle','select','bomb'].includes(action.type)||(action.type==='select'&&!['hedgehog','missile'].includes(action.item))||(action.type==='bomb'&&((!Number.isFinite(action.wx)||!Number.isFinite(action.wz)||Math.abs(action.wx)>96||Math.abs(action.wz)>96)||(action.kind!==undefined&&!['abomb','stink'].includes(action.kind)))))throw problem(400,'Invalid action.');
+    for(const action of body.actions)if(!action||!['special','fire','turbo','somersault','chaff','cycle','select','bomb'].includes(action.type)||(action.type==='select'&&!['hedgehog','missile'].includes(action.item))||(action.type==='bomb'&&((!Number.isFinite(action.wx)||!Number.isFinite(action.wz)||Math.abs(action.wx)>96||Math.abs(action.wz)>96)||(action.kind!==undefined&&!['abomb','stink'].includes(action.kind)))))throw problem(400,'Invalid action.');
     for(const action of body.actions)if(action.id!==undefined&&(!Number.isSafeInteger(action.id)||action.id<0||action.id>0xffffffff||!Number.isSafeInteger(action.afterMove)||action.afterMove< -1||action.afterMove>(member.acceptedMove??-1)+128))throw problem(400,'Invalid action sequence.');
     if(body.epoch!==undefined&&body.epoch!==member.room.core.status.soundEpoch)return;
     if(body.moves!==undefined){
@@ -76,7 +76,7 @@ export class Multiplayer {
       }
     }
   }
-  roomConfig(room){return {code:room.code,arena:room.arena,bots:room.botCount,host:room.host,epoch:room.soundEpoch,seed:room.seed??0,players:[...room.members.values()].map(p=>({id:p.id,name:p.name,driver:p.driver,role:p.role,afk:Boolean(p.afk),wantsToPlay:Boolean(p.wantsToPlay),playRequestRefused:Boolean(p.playRequestRefused)})),startRequest:room.startRequest?{id:room.startRequest.id,remainingMs:Math.max(0,room.startRequest.deadline-this.startNow())}:null};}
+  roomConfig(room){return {code:room.code,arena:room.arena,bots:room.botCount,specialAbilities:room.specialAbilities!==false,host:room.host,epoch:room.soundEpoch,seed:room.seed??0,players:[...room.members.values()].map(p=>({id:p.id,name:p.name,driver:p.driver,role:p.role,afk:Boolean(p.afk),wantsToPlay:Boolean(p.wantsToPlay),playRequestRefused:Boolean(p.playRequestRefused)})),startRequest:room.startRequest?{id:room.startRequest.id,remainingMs:Math.max(0,room.startRequest.deadline-this.startNow())}:null};}
   syncRoom(room){const config=this.roomConfig(room),text=JSON.stringify(config);if(text===room.configText)return;room.core.configure(config);room.configText=text;}
   makeWorld(room){
     room.startRequest=null;room.soundEpoch=(room.soundEpoch??0)+1;room.seed=randomInt(0x100000000);room.botCount=Math.min(room.botCount,6-room.members.size);
@@ -267,7 +267,7 @@ export class Multiplayer {
         }
         case '/api/control':{
           if(room.host!==member.id)throw problem(403,'Only the room host can start or change the match.');
-          switch(body.action){case 'start':if(!['ready','finished'].includes(room.core.status.phase))throw problem(409,'Match already running.');this.makeWorld(room);room.core.start();break;case 'refuse-start':this.refusePlayRequest(member,body.requestId);break;case 'reset':this.makeWorld(room);break;case 'arena':if(!Number.isInteger(body.arena)||body.arena<0||body.arena>1)throw problem(400,'Choose an arena.');room.arena=body.arena;this.makeWorld(room);break;case 'bots':if(!['ready','finished'].includes(room.core.status.phase))throw problem(409,'Change bots before the next match.');if(!Number.isInteger(body.bots)||body.bots<0||body.bots>6-room.members.size)throw problem(400,'Too many bots for this room.');room.botCount=body.bots;this.makeWorld(room);break;default:throw problem(400,'Unknown match control.');}
+          switch(body.action){case 'special-abilities':if(typeof body.enabled!=='boolean')throw problem(400,'Choose abilities on or off.');room.specialAbilities=body.enabled;this.syncRoom(room);break;case 'start':if(!['ready','finished'].includes(room.core.status.phase))throw problem(409,'Match already running.');this.makeWorld(room);room.core.start();break;case 'refuse-start':this.refusePlayRequest(member,body.requestId);break;case 'reset':this.makeWorld(room);break;case 'arena':if(!Number.isInteger(body.arena)||body.arena<0||body.arena>1)throw problem(400,'Choose an arena.');room.arena=body.arena;this.makeWorld(room);break;case 'bots':if(!['ready','finished'].includes(room.core.status.phase))throw problem(409,'Change bots before the next match.');if(!Number.isInteger(body.bots)||body.bots<0||body.bots>6-room.members.size)throw problem(400,'Too many bots for this room.');room.botCount=body.bots;this.makeWorld(room);break;default:throw problem(400,'Unknown match control.');}
           this.broadcast(room);json(200,{ok:true});break;
         }
         case '/api/leave':this.setAfk(member,true);json(200,{ok:true});break;

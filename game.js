@@ -2,6 +2,7 @@ import { LENGTH, drivers, tracks, createRace, tick, useItem, useTurbo, selectIte
 import { Renderer } from './renderer.js';
 import { RaceAudio } from './audio.js';
 import { sampleTrack, branches } from './track.js';
+import {useSpecial,abilityNames,frozen} from './special-abilities.js';
 import { createBattle, battleActive, tickBattle, fireBattle, releaseChaff, useBattleTurbo, somersaultBattle, arenas, standings, incomingMissiles, VULCAN_DURATION, MAX_HEALTH, equipBomber, dropBomb, BOMB_RECHARGE, recoveryInterval, hedgehogRecoveryInterval } from './combat.js';
 import { NetworkGame } from './network.js';
 import { matchResults, battleTieNotice } from './results.js';
@@ -32,6 +33,7 @@ const useWeapon=()=>network.active?network.action('fire'):mode==='combat'?fireBa
 const switchWeapon=()=>network.active?network.action('cycle'):cycleItem(race);
 const chaff=()=>network.active?network.action('chaff'):mode==='combat'?releaseChaff(race):false;
 const turbo=()=>network.active?network.action('turbo'):mode==='combat'?useBattleTurbo(race):useTurbo(race);
+const special=()=>network.active?network.action('special'):useSpecial(race);
 const somersault=()=>network.active?network.action('somersault'):mode==='combat'?somersaultBattle(race):false;
 const mobilePanel=document.createElement('div');mobilePanel.className='mobile-panel';mobilePanel.classList.toggle('hidden',!mobile);
 const mobileHint=document.createElement('span');
@@ -127,6 +129,8 @@ const somersaultButton=document.createElement('button');somersaultButton.id='som
 const incomingWarning=document.createElement('div');incomingWarning.id='incoming-warning';incomingWarning.className='incoming-warning hidden';incomingWarning.setAttribute('role','alert');incomingWarning.setAttribute('aria-atomic','true');
 const incomingTitle=document.createElement('strong'),incomingHelp=document.createElement('span');incomingWarning.append(incomingTitle,incomingHelp);document.querySelector('.viewport').append(incomingWarning);
 const killCelebration=new KillCelebration(),whackBanner=document.createElement('div');whackBanner.id='whack-banner';whackBanner.className='whack-banner hidden';whackBanner.setAttribute('role','status');whackBanner.setAttribute('aria-atomic','true');document.querySelector('.viewport').append(whackBanner);let whackKey=null;
+const specialButton=document.createElement('button');specialButton.id='special-ability';specialButton.className='chaff-button special-button hidden';specialButton.type='button';specialButton.onclick=special;document.querySelector('.viewport').append(specialButton);
+const specialStatus=document.createElement('div');specialStatus.className='special-status hidden';specialStatus.setAttribute('role','status');document.querySelector('.viewport').append(specialStatus);
 const chaffNotice=new ChaffNotice(),avertedBanner=document.createElement('div');avertedBanner.id='averted-notice';avertedBanner.className='incoming-warning averted-notice hidden';avertedBanner.setAttribute('role','status');avertedBanner.setAttribute('aria-atomic','true');const avertedTitle=document.createElement('strong'),avertedHelp=document.createElement('span');avertedTitle.textContent='✓ MISSILE AVERTED';avertedHelp.textContent='CHAFF BROKE THE LOCK';avertedBanner.append(avertedTitle,avertedHelp);document.querySelector('.viewport').append(avertedBanner);
 function updateMapLabels(){const maps=mode==='combat'?arenas:tracks,info=maps[track];$('track-name').textContent=info.name;$('track-label').textContent=info.name.toUpperCase();$('track-desc').textContent=info.desc;$('difficulty').textContent=mode==='combat'?'MELEE':info.difficulty;document.querySelector('.race-meta').textContent=mode==='combat'?'10 KILLS · 3 MIN · 6 FIGHTERS':'3 LAPS · 6 RACERS';document.querySelector('.race-bar .divider').nextElementSibling.textContent=mode==='combat'?'DEATHMATCH':'GRAND PRIX';for(const button of modeSwitch.children)button.setAttribute('aria-pressed',String(button.id===`mode-${mode}`));for(const [index,button] of mapButtons.entries()){button.textContent=maps[index].name;button.setAttribute('aria-pressed',String(index===track));}const next=maps[(track+1)%maps.length];$('change-track').textContent='NEXT MAP →';$('change-track').setAttribute('aria-label',`Switch to ${next.name}`);}
 const ammoRack=document.createElement('div');ammoRack.className='ammo-rack';const ammoCards=new Map();
@@ -234,6 +238,9 @@ function hud(){
   const speedNode=$('speed').querySelector('b'),speedText=String(Math.round(race.speed*.24));if(speedNode.textContent!==speedText)speedNode.textContent=speedText;put('toast',uiNotice&&performance.now()<uiNotice.until?uiNotice.text:race.finishRank===null&&race.noticeTime>0?race.notice:'');
   document.querySelector('.position small').textContent=mode==='combat'?'KILLS':'POSITION';document.querySelector('.lap small').textContent=mode==='combat'?'HEALTH':'LAP';document.querySelector('.timer small').textContent=mode==='combat'?'TIME LEFT':'RACE TIME';
   leaderboard.classList.toggle('hidden',mode!=='combat');
+  document.querySelector('.viewport').classList.toggle('time-stopped',mode==='combat'&&race.timeStop>0);
+  specialButton.classList.toggle('hidden',mode!=='combat'||race.driver!==8||race.bomber||race.specialAbilities===false);specialButton.textContent=(race.specialCooldown??0)>0?`F · RELATIVITY ${race.specialCooldown.toFixed(1)}s`:'F · STOP TIME';specialButton.disabled=!battleActive(race)||race.destroyed>0||race.specialCooldown>0||frozen(race,race.id);
+  specialStatus.classList.toggle('hidden',mode!=='combat'||race.specialAbilities===false||!abilityNames[race.driver]&&!race.timeStop);specialStatus.textContent=race.timeStop>0?`⏱ ${frozen(race,race.id)?'TIME FROZEN':'SPECIAL RELATIVITY'} · ${race.timeStop.toFixed(1)}s`:abilityNames[race.driver]??'';
   chaffButton.classList.toggle('hidden',mode!=='combat'||race.bomber);chaffButton.textContent=`C · CHAFF ${race.chaff??0}`;chaffButton.disabled=!battleActive(race)||race.destroyed>0||race.chaff<=0||race.chaffCooldown>0;chaffButton.setAttribute('aria-label',`Release chaff, ${race.chaff??0} charges remaining. Keyboard C.`);
   somersaultButton.classList.toggle('hidden',mode!=='combat'||race.bomber);somersaultButton.disabled=!battleActive(race)||race.destroyed>0||(race.somersaultCooldown??0)>1e-8;somersaultButton.textContent=(race.somersaultCooldown??0)>1e-8?`Z · ${race.somersaultCooldown.toFixed(1)}s`:'Z · SOMERSAULT';somersaultButton.setAttribute('aria-label','Somersault: jump and turn 180 degrees. Keyboard Z.');
   const guarded=mode==='combat'&&race.hedgeShield>0&&race.phase==='racing'&&!race.destroyed&&!race.bomber;
@@ -309,7 +316,7 @@ window.addEventListener('keydown',e=>{
   if(['arrowup','arrowdown','arrowleft','arrowright',' ','shift'].includes(key))e.preventDefault();
   keys.add(key);if(e.repeat)return;
   if(network.active)network.input();
-  switch(key){case 'enter':start();break;case 'escape':case 'p':pause();break;case ' ':useWeapon();break;case 'q':switchWeapon();break;case 'x':if(!e.ctrlKey&&!e.metaKey&&!e.altKey)turbo();break;case 'z':if(!e.ctrlKey&&!e.metaKey&&!e.altKey)somersault();break;case 'c':if(!e.ctrlKey&&!e.metaKey&&!e.altKey)chaff();break;}
+  switch(key){case 'enter':start();break;case 'escape':case 'p':pause();break;case ' ':useWeapon();break;case 'q':switchWeapon();break;case 'x':if(!e.ctrlKey&&!e.metaKey&&!e.altKey)turbo();break;case 'f':if(!e.ctrlKey&&!e.metaKey&&!e.altKey)special();break;case 'z':if(!e.ctrlKey&&!e.metaKey&&!e.altKey)somersault();break;case 'c':if(!e.ctrlKey&&!e.metaKey&&!e.altKey)chaff();break;}
 });
 window.addEventListener('keyup',e=>{keys.delete(e.key.toLowerCase());if(network.active)network.input();});window.addEventListener('blur',()=>{keys.clear();if(['racing','countdown'].includes(race.phase))pause();});document.addEventListener('visibilitychange',()=>{if(document.hidden&&['racing','countdown'].includes(race.phase))pause();});
 for(const event of ['pointerdown','keydown'])window.addEventListener(event,()=>{if(network.active)audio.unlock().catch(()=>{});},{once:true});

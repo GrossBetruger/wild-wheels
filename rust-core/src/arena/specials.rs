@@ -1,0 +1,27 @@
+use super::*;
+impl Game{
+    pub(super) fn frozen(&self,id:usize)->bool{self.global.special_abilities&&self.global.time_stop>0.0&&self.global.time_owner!=Some(id)}
+    pub(super) fn special(&mut self,id:usize){
+        let a=&self.actors[id];
+        if !self.global.special_abilities||!self.combat_active()||self.global.finish_countdown.is_some()||a.driver!=8||a.special_cooldown>0.0||a.destroyed>0.0||a.inactive||a.afk||a.bomber||self.global.time_stop>0.0{return;}
+        self.global.time_stop=2.5;self.global.time_owner=Some(id);self.actors[id].special_cooldown=20.0;
+    }
+    pub(super) fn special_tick(&mut self,dt:f64){
+        if !self.global.special_abilities{return;}
+        self.global.time_stop=(self.global.time_stop-dt).max(0.0);
+        if self.global.time_stop<=0.0{self.global.time_owner=None;}
+        for a in &mut self.actors{if self.global.time_stop<=0.0||self.global.time_owner==Some(a.id){a.special_cooldown=(a.special_cooldown-dt).max(0.0);}}
+        // World-space smoke samples persist for the same three seconds as the visual trail.
+        for a in &mut self.actors{
+            if a.driver!=10||a.boost<=0.0||a.destroyed>0.0||a.inactive||a.afk||a.bomber||self.global.time_stop>0.0&&self.global.time_owner!=Some(a.id){continue;}
+            let last=self.global.effects.iter().rev().find(|f|f.kind=="yudaSmoke"&&f.owner==Some(a.id));
+            if last.is_some_and(|f|f.age<0.05&&distance(f.wx,f.wz,a.wx,a.wz)<1.5){continue;}
+            self.global.effects.push(Effect{kind:"yudaSmoke".into(),owner:Some(a.id),wx:a.wx-a.heading.sin()*2.0,wz:a.wz-a.heading.cos()*2.0,life:3.0,..Effect::default()});
+        }
+        for a in &mut self.actors{
+            if a.bomber||a.inactive||a.afk||a.destroyed>0.0||a.hedge_shield>0.0||self.global.time_stop>0.0&&self.global.time_owner!=Some(a.id){continue;}
+            if self.global.effects.iter().any(|f|f.kind=="yudaSmoke"&&f.owner!=Some(a.id)&&f.age<f.life&&distance(a.wx,a.wz,f.wx,f.wz)<4.0){a.dizzy=DIZZY_DURATION;}
+        }
+        for a in &mut self.actors{a.special_active=match a.driver{11=>1.0,_=>0.0};}
+    }
+}

@@ -1,4 +1,5 @@
 import {boostDuration, createRace, drivers, START_HEDGEHOGS, itemCapacity } from './engine.js';
+import {frozen,tickSpecials,useSpecial} from './special-abilities.js';
 export const VULCAN_DURATION=15;
 export const HEDGEGUARD_DURATION=25;
 export const MAX_HEALTH=6;
@@ -39,7 +40,7 @@ function spawn(r,actor,initial=false){
   actor.dizzy=0;actor.stinkContributors=new Map();
 }
 export function createBattle(driver=0,arena=0,random=Math.random){
-  const r=createRace(driver,0,random);r.mode='combat';r.arena=arena;r.duration=180;r.targetScore=10;r.id=0;r.color=drivers[driver].color;r.killFeed=[];r.driftParticles=[];r.chaffClouds=[];r.chaffSequence=0;r.bombs=[];r.bombSequence=0;r.stinkClouds=[];
+  const r=createRace(driver,0,random);r.specialAbilities=true;r.timeStop=0;r.timeOwner=null;r.mode='combat';r.arena=arena;r.duration=180;r.targetScore=10;r.id=0;r.color=drivers[driver].color;r.killFeed=[];r.driftParticles=[];r.chaffClouds=[];r.chaffSequence=0;r.bombs=[];r.bombSequence=0;r.stinkClouds=[];
   const actors=[r,...r.bots];for(const [id,actor] of actors.entries())Object.assign(actor,{id,wx:0,wz:0,heading:0,kills:0,deaths:0,health:3,destroyed:0,shield:0,celebrate:0,fireCooldown:0,reload:0,brain:0,path:[],bomber:false,bombAmmo:0,bombReload:0,stinkAmmo:0});
   for(const actor of actors)spawn(r,actor,true);
   r.supplies=[[-70,-65,'missile'],[70,65,'missile'],[-65,70,'hedgehog'],[65,-70,'hedgehog'],[-12,48,'boost'],[12,-48,'boost'],[-70,0,'health'],[70,0,'health'],[-50,-50,'hedgeproof'],[50,50,'tehilim']].map(([wx,wz,kind],id)=>({id,version:0,wx,wz,kind,cooldown:['hedgeproof','tehilim'].includes(kind)?30:0}));
@@ -47,7 +48,7 @@ export function createBattle(driver=0,arena=0,random=Math.random){
 }
 export function battleActive(world){return world.mode==='combat'&&world.phase==='racing';}
 function humanControlled(world,actor){return actor.human||actor===world&&!world.multiplayer;}
-function canAct(world,actor){return battleActive(world)&&!actor.inactive&&!actor.bomber&&actor.destroyed<=0&&(world.finishCountdown===null||humanControlled(world,actor));}
+function canAct(world,actor){return !frozen(world,actor.id)&&battleActive(world)&&!actor.inactive&&!actor.bomber&&actor.destroyed<=0&&(world.finishCountdown===null||humanControlled(world,actor));}
 export function standings(r){
   const actors=[r,...r.bots].filter(actor=>!actor.inactive),top=Math.max(...actors.map(actor=>actor.kills)),host=r.multiplayer?actors.find(actor=>actor.id===r.host&&actor.kills===top):null;
   return actors.sort((a,b)=>b.kills-a.kills||Number(b===host)-Number(a===host)||a.deaths-b.deaths||a.id-b.id);
@@ -55,6 +56,7 @@ export function standings(r){
 export function equipBomber(actor){Object.assign(actor,{bomber:true,bombAmmo:BOMB_START_AMMO,stinkAmmo:2,bombReload:0,speed:0,shield:0,destroyed:0,dizzy:0});return actor;}
 export function validBombTarget(world,point){return Boolean(point)&&Number.isFinite(point.wx)&&Number.isFinite(point.wz)&&Math.abs(point.wx)<=arenas[world.arena].size&&Math.abs(point.wz)<=arenas[world.arena].size;}
 export function dropBomb(world,actor,point,actionId){
+  if(frozen(world,actor.id))return false;
   const kind=point?.kind??'abomb',resource=kind==='stink'?'stinkAmmo':'bombAmmo';
   if(!['abomb','stink'].includes(kind)||!actor.bomber||actor.inactive||!battleActive(world)||world.finishCountdown!==null&&!humanControlled(world,actor)||!(actor[resource]>=1)||!validBombTarget(world,point))return false;
   actor[resource]--;world.bombSequence++;
@@ -165,7 +167,7 @@ export function advanceProjectile(r,shot,dt){
   const actors=[r,...r.bots],arena=arenas[r.arena];
   shot.age=(shot.age??0)+dt;shot.life-=dt;shot.trail.push({wx:shot.wx,wz:shot.wz,height:shot.height});if(shot.trail.length>24)shot.trail.shift();
   if(shot.kind==='missile'&&!shot.reflected&&shot.decoy==null){
-    const defender=actors.find(a=>a.id===shot.target&&!a.destroyed&&!a.inactive&&!a.afk&&a.tehilim>0),shooter=actors.find(a=>a.id===shot.owner&&!a.destroyed&&!a.inactive&&!a.afk&&!a.bomber);
+    const defender=actors.find(a=>a.id===shot.target&&!a.destroyed&&!a.inactive&&!a.afk&&(a.tehilim>0||r.specialAbilities!==false&&a.driver===11)),shooter=actors.find(a=>a.id===shot.owner&&!a.destroyed&&!a.inactive&&!a.afk&&!a.bomber);
     if(defender&&shooter&&distance(shot,defender)<=distance(shot,shooter)){
       shot.owner=defender.id;shot.target=shooter.id;shot.reflected=true;delete shot.actionId;shot.speed=100;shot.life=Math.max(shot.life,6);
     }
@@ -275,6 +277,7 @@ function moveActor(r,actor,steer,gas,brake,dt,handbrake=false){
   actor.speed*=.3;actor.drift=0;actor.wasDrifting=false;actor.driftTrail=null;actor.motionHeading=actor.heading;if(actor===r&&actor.wallCooldown<=0){fx(r,'crash',actor);actor.wallCooldown=.7;r.shake=.3;voice(r,actor,'hurt');}
 }
 export function predictKartMovement(world,actor,keys,dt){
+  if(frozen(world,actor.id))return;
   if(actor.bomber||!battleActive(world)||actor.destroyed>0)return;
   // Reuse movement and wall collisions, without running weapons, damage or AI.
   const scene={prediction:true,mode:'combat',phase:world.phase,arena:world.arena,elapsed:world.elapsed,finishCountdown:null,events:[],effects:[],skids:[],driftParticles:[]};
@@ -292,17 +295,20 @@ function advanceKartMovement(world,actor,keys,dt){
 export function tickBattle(r,keys,dt,inputs=null){
   dt=clamp(dt,0,.05);if(!['racing','countdown'].includes(r.phase))return;
   if(r.phase==='countdown'){r.countdown-=dt;if(r.countdown<=0){r.phase='racing';r.notice='BATTLE ON! · FIRST TO 10 KILLS';r.noticeTime=3;}return;}
+  tickSpecials(r,dt);const worldDt=r.timeStop>0?0:dt;
   const ending=r.finishCountdown!==null;if(ending)dt=Math.min(dt,r.finishCountdown);
   r.elapsed+=dt;r.noticeTime=Math.max(0,r.noticeTime-dt);r.shake=Math.max(0,r.shake-dt*2);
-  for(const supply of r.supplies)supply.cooldown=Math.max(0,supply.cooldown-dt);
-  for(const effect of r.effects)effect.age+=dt;r.effects=r.effects.filter(f=>f.age<f.life);
-  for(const cloud of r.chaffClouds)cloud.age+=dt;
+  for(const supply of r.supplies)supply.cooldown=Math.max(0,supply.cooldown-worldDt);
+  for(const effect of r.effects)effect.age+=worldDt;r.effects=r.effects.filter(f=>f.age<f.life);
+  for(const cloud of r.chaffClouds)cloud.age+=worldDt;
   r.chaffClouds=r.chaffClouds.filter(c=>c.age<c.life);
-  for(const cloud of r.stinkClouds)cloud.age+=dt;
+  for(const cloud of r.stinkClouds)cloud.age+=worldDt;
   r.stinkClouds=r.stinkClouds.filter(cloud=>cloud.age<cloud.life);
-  ageDriftEffects(r,dt);
+  ageDriftEffects(r,worldDt);
   const actors=[r,...r.bots],arena=arenas[r.arena];
   for(const actor of actors){
+    if(frozen(r,actor.id))continue;
+    const recoveryHealth=r.specialAbilities!==false&&actor.driver===12?6:RECOVERY_HEALTH;
     if(actor!==r)actor.noticeTime=Math.max(0,(actor.noticeTime??0)-dt);
     for(const key of ['fireCooldown','shield','hedgeShield','tehilim','celebrate','voiceCooldown','wallCooldown','vulcan','chaffCooldown']){if(inputs?.get(actor.id)?.actionClock&&['fireCooldown','chaffCooldown'].includes(key))continue;actor[key]=Math.max(0,(actor[key]??0)-dt);}
     if(actor.bomber){
@@ -314,11 +320,11 @@ export function tickBattle(r,keys,dt,inputs=null){
       continue;
     }
     if(actor.destroyed>0){actor.destroyed=Math.max(0,actor.destroyed-dt);if(actor.destroyed===0&&!ending)spawn(r,actor);continue;}
-    if(!ending&&!actor.inactive&&!actor.afk&&actor.health>0&&actor.health<RECOVERY_HEALTH){
+    if(!ending&&!actor.inactive&&!actor.afk&&actor.health>0&&actor.health<recoveryHealth){
       actor.healTimer=(actor.healTimer??0)+dt;const interval=recoveryInterval(actor.driver);
-      if(actor.healTimer>=interval-1e-8){actor.health=Math.min(RECOVERY_HEALTH,actor.health+1);actor.healTimer=actor.health>=RECOVERY_HEALTH?0:Math.max(0,actor.healTimer-interval);}
+      if(actor.healTimer>=interval-1e-8){actor.health=Math.min(recoveryHealth,actor.health+1);actor.healTimer=actor.health>=recoveryHealth?0:Math.max(0,actor.healTimer-interval);}
     }
-    if(actor.health>=RECOVERY_HEALTH)actor.healTimer=0;
+    if(actor.health>=recoveryHealth)actor.healTimer=0;
     actor.reload+=dt;const reloadInterval=hedgehogRecoveryInterval(actor.driver);if(actor.reload>=reloadInterval-1e-8){actor.ammo=Math.min(itemCapacity(actor.driver,'hedgehog'),actor.ammo+1);actor.reload=Math.max(0,actor.reload-reloadInterval);}
     if((actor===r&&!r.multiplayer)||actor.human){
       const control=inputs?.get(actor.id)??(actor===r?keys:new Set());
@@ -335,6 +341,7 @@ export function tickBattle(r,keys,dt,inputs=null){
     actor.boost=Math.max(0,actor.boost-dt);
     const target=actors.filter(k=>k!==actor&&!k.bomber&&!k.inactive&&!k.destroyed).sort((a,b)=>distance(actor,a)-distance(actor,b))[0];if(!target)continue;
     actor.brain-=dt;const visible=clearShot(arena,actor,target);
+    if(visible&&distance(actor,target)<50)useSpecial(r,actor);
     if(actor.brain<=0){actor.path=visible?[]:navigate(arena,actor,target);actor.brain=.4+(1-actor.skill)*.4;}
     while(actor.path.length&&distance(actor,actor.path[0])<7)actor.path.shift();
     const waypoint=visible?target:actor.path[0]??target,desired=Math.atan2(waypoint.wx-actor.wx,waypoint.wz-actor.wz),turn=angleDelta(desired,actor.heading);
@@ -345,15 +352,16 @@ export function tickBattle(r,keys,dt,inputs=null){
     if(visible&&Math.abs(aim)<.18+(1-actor.skill)*.12&&distance(actor,target)<85){actor.item=actor.vulcan>0?'hedgehog':actor.missiles>0?'missile':'hedgehog';fireBattle(r,actor);}
   }
   for(let i=0;i<actors.length;i++)for(let j=i+1;j<actors.length;j++){
-    const a=actors[i],b=actors[j],d=distance(a,b);if(a.bomber||b.bomber||a.destroyed||b.destroyed||d>=3.8)continue;
+    const a=actors[i],b=actors[j],d=distance(a,b);if(frozen(r,a.id)||frozen(r,b.id)||a.bomber||b.bomber||a.destroyed||b.destroyed||d>=3.8)continue;
     const dx=(a.wx-b.wx)/(d||1),dz=d===0?1:(a.wz-b.wz)/d,push=(3.8-d)/2;
     if(!blocked(arena,a.wx+dx*push,a.wz+dz*push)){a.wx+=dx*push;a.wz+=dz*push;}
     if(!blocked(arena,b.wx-dx*push,b.wz-dz*push)){b.wx-=dx*push;b.wz-=dz*push;}
     a.speed*=.8;b.speed*=.8;if((a===r||b===r)&&r.wallCooldown<=0){fx(r,'crash',r);r.wallCooldown=.6;voice(r,r,'hurt');}
   }
-  for(const actor of actors)collectSupplies(r,actor);
+  for(const actor of actors)if(!frozen(r,actor.id))collectSupplies(r,actor);
   for(const cloud of r.chaffClouds)divertMissiles(r,cloud);
   for(const shot of r.projectiles){
+    if(frozen(r,shot.owner))continue;
     const {impact,victim,decoy}=advanceProjectile(r,shot,dt);
     if(victim&&shot.kind==='hedgehog')damageBattle(r,victim,shot.owner,1);
     if(!impact&&shot.life>0)continue;
@@ -366,6 +374,7 @@ export function tickBattle(r,keys,dt,inputs=null){
   }
   r.projectiles=r.projectiles.filter(p=>p.life>0);
   for(const bomb of r.bombs){
+    if(frozen(r,bomb.owner))continue;
     bomb.age+=dt;if(bomb.age<BOMB_FALL_TIME-1e-8)continue;
     if(bomb.kind==='stink'){
       r.stinkClouds.push({id:bomb.id,owner:bomb.owner,wx:bomb.wx,wz:bomb.wz,age:0,life:5,hits:[]});sound(r,'stinkBurst',bomb);continue;
@@ -377,13 +386,14 @@ export function tickBattle(r,keys,dt,inputs=null){
   }
   r.bombs=r.bombs.filter(bomb=>bomb.age<BOMB_FALL_TIME-1e-8);
   for(const cloud of r.stinkClouds)for(const actor of actors){
-    if(actor.bomber||actor.inactive||actor.destroyed||actor.shield>0||actor.hedgeShield>0||cloud.hits.includes(actor.id)||distance(actor,cloud)>STINK_RADIUS)continue;
+    if(frozen(r,actor.id)||actor.bomber||actor.inactive||actor.destroyed||actor.shield>0||actor.hedgeShield>0||cloud.hits.includes(actor.id)||distance(actor,cloud)>STINK_RADIUS)continue;
     cloud.hits.push(actor.id);if(!(actor.dizzy>0))sound(r,'dizzy',actor);actor.dizzy=DIZZY_DURATION;
     actor.stinkContributors??=new Map();
     for(const [id,expires] of actor.stinkContributors)if(expires<=r.elapsed+1e-8)actor.stinkContributors.delete(id);
     if(!ending)actor.stinkContributors.set(cloud.owner,r.elapsed+DIZZY_DURATION);
   }
   for(const zone of r.effects.filter(f=>f.type==='radiation'&&f.age<f.life-1e-8))for(const actor of actors){
+    if(frozen(r,actor.id))continue;
     zone.doses??={};
     if(actor.bomber||actor.inactive||actor.afk||actor.destroyed||actor.shield>0||actor.hedgeShield>0||distance(actor,zone)>BOMB_OUTER_RADIUS){delete zone.doses[actor.id];continue;}
     if(zone.age+1e-8<(zone.doses[actor.id]??0))continue;

@@ -580,6 +580,7 @@ export class Renderer {
       const parts=this.instances.slice(bodyStart);this.rememberBody(actor,parts,parts.length?[]:m.data.slice(dataStart));
       if(actor.driver===7)this.houstonHelmet(pose,actor,time,jump);
       if(actor.hedgeShield>0)this.hedgeguard(m,pose,actor,time,jump);
+      if(r.specialAbilities!==false&&actor.driver===11){const angle=time*.5;this.glow.at(pose.x,(jump?.height??0)+3.3,pose.z);for(let i=0;i<28;i++){const a=angle+i*Math.PI/14;this.glow.particle(Math.cos(a)*2.1,Math.sin(a*3)*.2,Math.sin(a)*2.1,.4,[.7,.5,.12]);}this.glow.at(pose.x,(jump?.height??0)+6.3,pose.z);this.glow.disc(0,0,0,1.2,1.2,[.65,.45,.06]);}
       if(actor.tehilim>0)this.tehilimAura(pose,time,actor.tehilim,jump);
       if(actor.dizzy>0)for(let i=0;i<6;i++){const angle=time*(actor.boost>0?9:5)+i*Math.PI/3;m.at(pose.x+Math.sin(angle)*3.2,6.8+Math.sin(angle*2)*.5,pose.z+Math.cos(angle)*3.2,angle);m.box(0,0,0,1.2,.22,.3,'#fff08b');m.box(0,0,0,.3,.22,1.2,'#fff08b');this.glow.at(m.origin[0],m.origin[1],m.origin[2]);this.glow.particle(0,0,0,.8,[.7,.6,.05]);}
       if(actor.vulcan>0&&actor.driver===10)this.laserMount(m,pose,actor,time,jump);
@@ -624,7 +625,7 @@ export class Renderer {
       m.at(bomb.wx,height,bomb.wz,bomb.age*3);m.ball(0,0,0,2.2*scale,3.4*scale,2.2*scale,'#39334e',10,6);m.box(0,2.3*scale,0,5*scale,.5,.7*scale,'#ffdb69');m.box(0,2.3*scale,0,.7*scale,.5,5*scale,'#ffdb69');
       this.glow.at(bomb.wx,height+3,bomb.wz);this.glow.particle(0,0,0,3,[.8,.35,.03]);
     }
-    for(const effect of r.effects){if(effect.type==='radiation'){this.radiationZone(m,effect,time);continue;}if(effect.type==='ash'){this.ashRemains(m,effect);continue;}if(effect.type==='abomb'){this.atomicExplosion(m,effect);continue;}if(effect.type==='explosion'){this.explosion(m,effect);continue;}for(let i=0;i<10;i++){const a=i*2.4,t=effect.age;m.at(effect.wx+Math.cos(a)*t*8,1+t*4,effect.wz+Math.sin(a)*t*8);m.ball(0,0,0,.12,.12,.12,'#f4dc8b',5,3);}}
+    for(const effect of r.effects){if(effect.type==='yudaSmoke')continue;if(effect.type==='radiation'){this.radiationZone(m,effect,time);continue;}if(effect.type==='ash'){this.ashRemains(m,effect);continue;}if(effect.type==='abomb'){this.atomicExplosion(m,effect);continue;}if(effect.type==='explosion'){this.explosion(m,effect);continue;}for(let i=0;i<10;i++){const a=i*2.4,t=effect.age;m.at(effect.wx+Math.cos(a)*t*8,1+t*4,effect.wz+Math.sin(a)*t*8);m.ball(0,0,0,.12,.12,.12,'#f4dc8b',5,3);}}
     for(const cloud of r.stinkClouds??[]){const fade=Math.min(1,(cloud.life-cloud.age)/.7);for(let i=0;i<15;i++){const angle=i*2.399+cloud.age*.2,radius=2+(i%5)*2.6,x=cloud.wx+Math.sin(angle)*radius,z=cloud.wz+Math.cos(angle)*radius,y=1+(i%3)+Math.sin(cloud.age*2+i)*.7;this.smoke.at(x,y,z);this.smoke.particle(0,0,0,(7+cloud.age*2)*Math.sqrt(fade),[.5,.7,.23]);this.glow.at(x,y+.4,z);this.glow.particle(0,0,0,.25*fade,[.15,.3,.04]);}}
     for(const cloud of r.chaffClouds){
       const t=cloud.age,fade=Math.min(1,(cloud.life-t)/1.4),expansion=1-Math.exp(-t*2.5);

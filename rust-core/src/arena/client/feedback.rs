@@ -63,6 +63,7 @@ impl Client{
         }}actor
     }
     pub(super) fn do_action(&mut self,mut action:Action,now:f64)->bool{
+        if self.pred.frozen(self.viewer){return false;}
         if self.ops.len()>=64||self.pred.actors[self.viewer].afk{return false;}let mut actor=self.inventory();let id=self.next_action;action.id=Some(id);let sequence=self.next_sequence-1;
         let after=self.ops.iter().filter_map(|op|match op{Op::Pickup{after,..}=>Some(*after),_=>None}).fold(sequence,i64::max);action.after_move=after;
         if actor.bomber{
@@ -78,6 +79,7 @@ impl Client{
         if !self.pred.combat_active()||actor.destroyed>0.0||now-self.received>0.5{return false;}
         let pending=|kind:&str|self.ops.iter().any(|op|matches!(op,Op::Action{action,..}if action.kind==kind));
         let (kind,resource,ready)=match action.kind.as_str(){
+            "special"=>{if !self.pred.global.special_abilities||actor.driver!=8||actor.special_cooldown>0.0||pending("special"){return false;}(String::new(),String::new(),0)},
             "somersault"=>{if actor.somersault_cooldown>1e-8||pending("somersault"){return false;}action.after_move=sequence;self.pred.flip(self.viewer);self.error[2]=0.0;self.error[3]=0.0;(String::new(),String::new(),0)},
             "turbo"=>{if actor.turbos==0||actor.boost>0.0||pending("turbo"){return false;}if action.after_move<self.next_sequence{self.pred.actors[self.viewer].boost=boost_duration(actor.driver);}self.emit("boost",now,Some(format!("action:{}",id)),true);(String::new(),"turbos".into(),0)},
             "chaff"=>{if sequence<self.chaff_tick||actor.chaff==0{return false;}self.chaff_tick=after+39;self.emit("chaff",now,None,true);(String::new(),"chaff".into(),self.chaff_tick)},
@@ -109,7 +111,7 @@ impl Client{
             self.display.global.bombs=self.frames.back().unwrap().game.global.bombs.clone();
             for op in &self.ops{if let Op::Action{action,kind,born,..}=op{if action.kind=="bomb"&&!self.display.global.bombs.iter().any(|b|b.owner==id&&b.action_id==action.id){self.display.global.bombs.push(Bomb{id:0x80000000u32.wrapping_add(action.id.unwrap_or(0)),kind:kind.clone(),owner:id,wx:action.wx,wz:action.wz,age:(now-born).max(0.0),color:actor.color.clone(),action_id:action.id});}}}return;
         }
-        if self.pred.combat_active()&&actor.destroyed<=0.0&&now-self.received<0.5{
+        if !self.pred.frozen(id)&&self.pred.combat_active()&&actor.destroyed<=0.0&&now-self.received<0.5{
             let supplies=self.frames.back().unwrap().game.global.supplies.clone();
             for s in supplies{
                 let key=format!("pickup:{}:{}",s.id,s.version+1);

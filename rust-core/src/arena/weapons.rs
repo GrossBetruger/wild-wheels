@@ -1,6 +1,6 @@
 use super::*;
 impl Game{
-    fn active(&self,id:usize)->bool{let a=&self.actors[id];self.combat_active()&&a.destroyed<=0.0&&!a.bomber&&!a.inactive&&!a.afk&&(self.global.finish_countdown.is_none()||self.human_controlled(id))}
+    fn active(&self,id:usize)->bool{let a=&self.actors[id];!self.frozen(id)&&self.combat_active()&&a.destroyed<=0.0&&!a.bomber&&!a.inactive&&!a.afk&&(self.global.finish_countdown.is_none()||self.human_controlled(id))}
     pub(super) fn target(&self,id:usize)->Option<usize>{
         let a=&self.actors[id];self.actors.iter().filter(|b|b.id!=id&&!b.bomber&&!b.inactive&&!b.afk&&b.destroyed<=0.0&&b.shield<=0.0&&distance(a.wx,a.wz,b.wx,b.wz)<100.0&&angle((b.wx-a.wx).atan2(b.wz-a.wz),a.heading).abs()<0.65&&clear(self.global.arena,a.wx,a.wz,b.wx,b.wz)).map(|a|a.id).min_by(|&x,&y|distance(a.wx,a.wz,self.actors[x].wx,self.actors[x].wz).total_cmp(&distance(a.wx,a.wz,self.actors[y].wx,self.actors[y].wz)).then(x.cmp(&y)))
     }
@@ -78,9 +78,10 @@ impl Game{
         if let Some(a)=self.actors.get_mut(owner){if !a.bomber&&a.destroyed<=0.0{a.kill_streak+=1;if a.kill_streak%2==0{a.vulcan=15.0;a.health=a.health.max(4.0);a.item="hedgehog".into();a.fire_cooldown=0.0;effect(g,"vulcanReady",owner,a.wx,a.wz,None);a.notice="2-KILL STREAK · HEDGEHOG VULCAN!".into();a.notice_time=3.0;}}}true
     }
     pub(super) fn advance_shot(&self,shot:&mut Shot,dt:f64)->(bool,Option<usize>,Option<usize>){
+        if self.frozen(shot.owner){return(false,None,None);}
         shot.age+=dt;shot.life-=dt;shot.trail.push(Sample{wx:shot.wx,wz:shot.wz,height:shot.height});if shot.trail.len()>24{shot.trail.remove(0);}
         if shot.kind=="missile"&&!shot.reflected&&shot.decoy.is_none(){
-            let defender=shot.target.and_then(|id|self.actors.get(id)).filter(|a|a.destroyed<=0.0&&!a.inactive&&!a.afk&&a.tehilim>0.0);
+            let defender=shot.target.and_then(|id|self.actors.get(id)).filter(|a|a.destroyed<=0.0&&!a.inactive&&!a.afk&&(a.tehilim>0.0||self.global.special_abilities&&a.driver==11));
             let shooter=self.actors.get(shot.owner).filter(|a|a.destroyed<=0.0&&!a.inactive&&!a.afk&&!a.bomber);
             if let (Some(defender),Some(shooter))=(defender,shooter){if distance(shot.wx,shot.wz,defender.wx,defender.wz)<=distance(shot.wx,shot.wz,shooter.wx,shooter.wz){shot.owner=defender.id;shot.target=Some(shooter.id);shot.reflected=true;shot.action_id=None;shot.speed=100.0;shot.life=shot.life.max(6.0);}}
         }
