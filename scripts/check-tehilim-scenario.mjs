@@ -8,10 +8,10 @@ export async function checkTehilim(evaluate,app,room,id,sleep,capture){
   Object.assign(enemy,{destroyed:0,wx:65,wz:40,heading:0,motionHeading:0,cameraHeading:0,speed:0,health:3,tehilim:25,fireCooldown:0,item:'missile',missiles:1});
   await evaluate(`{const renderer=__game.renderer,draw=renderer.tehilimAura.bind(renderer);__game.bookOwners=new Set();renderer.tehilimAura=(p,...args)=>{__game.bookOwners.add(p.id);return draw(p,...args);};}`);
   app.broadcast(room);
-  const aura=await wait(()=>evaluate(`__game.race.tehilim>24&&document.querySelector('.tehilim-status').textContent.includes('RETURN TO SENDER')&&__game.bookOwners.has(${id})&&__game.bookOwners.has(${peer.id})&&__game.renderer.models.has('tehilim:book')`));await capture('tehilim-books');
+  const aura=await wait(()=>evaluate(`__game.race.tehilim>24&&document.querySelector('.tehilim-status').textContent.includes('MISSILE REPULSION')&&__game.bookOwners.has(${id})&&__game.bookOwners.has(${peer.id})&&__game.renderer.models.has('tehilim:book')`));await capture('tehilim-books');
   app.controls(peer,{sequence:0,keys:[],actions:[{type:'fire',id:0,afterMove:-1}],epoch:room.world.soundEpoch});
-  const returning=await wait(()=>evaluate(`__game.race.projectiles.some(s=>s.kind==='missile'&&s.owner===${id}&&s.target===${peer.id})`));await capture('tehilim-return-to-sender');
-  const kill=await wait(()=>evaluate(`__game.race.kills===1&&__game.race.health===6&&__game.race.bots.some(a=>a.id===${peer.id}&&a.destroyed>0)`));
+  const repelled=await wait(()=>evaluate(`__game.race.projectiles.some(s=>s.kind==='missile'&&s.owner===${peer.id}&&s.target===null)`));await capture('tehilim-repulsion');
+  await sleep(1500);const protectedPlayer=await evaluate(`__game.race.kills===0&&__game.race.health===6&&__game.race.bots.some(a=>a.id===${peer.id}&&a.health===3)`);
   own.tehilim=.05;app.broadcast(room);const expired=await wait(()=>evaluate("__game.race.tehilim===0&&document.querySelector('.tehilim-status').classList.contains('hidden')"));
-  return {aura,returning,kill,expired,pass:aura&&returning&&kill&&expired};
+  return {aura,repelled,protectedPlayer,expired,pass:aura&&repelled&&protectedPlayer&&expired};
 }

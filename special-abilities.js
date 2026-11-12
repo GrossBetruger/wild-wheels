@@ -2,7 +2,7 @@ import {drivers} from './engine.js';
 import {damageBattle} from './combat.js';
 export const SPECIAL_COOLDOWN=20;
 export const TIME_STOP_DURATION=2.5;
-export const abilityNames={7:'REINE DE LA PARESSE',5:'CRICKET’S JUMP',8:'SPECIAL RELATIVITY',9:'FASHION-STATEMENT',10:'DIZZY SMOKE',11:'HOLY AURA',14:'DARK HUMOR',13:'TAX-AUDIT',12:'SIX-HEART RECOVERY'};
+export const abilityNames={7:'REINE DE LA PARESSE',5:'CRICKET’S JUMP',8:'SPECIAL RELATIVITY',9:'FASHION-STATEMENT',10:'DIZZY SMOKE',11:'PROVIDENCE',14:'DARK HUMOR',13:'TAX-AUDIT',12:'SIX-HEART RECOVERY'};
 export const abilityDetails={
   14:{control:'F · Activate',description:'Drown the arena in living violet-black fog and wicked laughter. Everyone loses visibility; KnowItOwl sees racers through fog and walls with luminous X-ray eyes, plus outlines of obstacles and arena boundaries to navigate safely.',timing:'7 seconds · 20-second recharge'},
   13:{control:'F · Activate',description:'Instantly defeats the active rival carrying the most hedgehogs, missiles, turbos and chaff, even through shields. If Fourmidable has the most (including a tie), Xylophone-Attack instead blocks every other racer’s view with giant instruments and a frantic tune for 5 seconds. Her own view stays clear.',timing:'Arena-wide · 20-second recharge'},
@@ -11,7 +11,7 @@ export const abilityDetails={
   8:{control:'F · Activate',description:'Special relativity slows other racers and their projectiles to 2.5% speed. Avita-Jas and his projectiles keep their normal speed.',timing:'2.5 seconds · 20-second recharge'},
   9:{control:'F · Activate',description:'Fashion-Statement snaps above every other racer: 2 damage, or 1 damage to characters with cuteness 5.',timing:'Arena-wide · 20-second recharge'},
   10:{control:'Boost · Passive',description:'Yuda’s thick smoke trail makes other racers dizzy for 8 seconds. His own smoke does not affect him.',timing:'Smoke lingers for 3 seconds'},
-  11:{control:'F · Activate',description:'Summon two archangels. Holy aura turns locked missiles back toward their shooter.',timing:'8 seconds · 20-second recharge'},
+  11:{control:'F · Activate',description:'Summon two archangels. Providence turns locked missiles back toward their shooter.',timing:'8 seconds · 20-second recharge'},
   12:{control:'F · Activate',description:'Heal one heart immediately, then one per heartbeat every second. Healing stops at 6 hearts, with up to 6 beats.',timing:'Heartbeat healing · 20-second recharge'},
 };
 export const carriedItems=a=>(a.ammo??0)+(a.missiles??0)+(a.turbos??0)+(a.chaff??0);

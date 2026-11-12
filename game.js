@@ -248,7 +248,7 @@ function hud(){
   const guarded=mode==='combat'&&race.hedgeShield>0&&race.phase==='racing'&&!race.destroyed&&!race.bomber;
   hedgeguardStatus.classList.toggle('hidden',!guarded);hedgeguardStatus.textContent=guarded?`HEDGEGUARD · ${race.hedgeShield.toFixed(1)}s · ${race.tehilim>0?'HEDGEHOGS + BOMBS BLOCKED':'MISSILES STILL HURT'}`:'';
   const books=mode==='combat'&&race.tehilim>0&&race.phase==='racing'&&!race.destroyed&&!race.bomber;
-  tehilimStatus.classList.toggle('hidden',!books);tehilimStatus.textContent=books?`TEHILIM VS TILIM · ${race.tehilim.toFixed(1)}s · RETURN TO SENDER`:'';
+  tehilimStatus.classList.toggle('hidden',!books);tehilimStatus.textContent=books?`TEHILIM VS TILIM · ${race.tehilim.toFixed(1)}s · MISSILE REPULSION`:'';
   routeHint.textContent='';
   driftMeter.classList.toggle('hidden',mode!=='combat'||!race.wasDrifting||race.phase!=='racing');driftCharge.value=race.drift;driftLabel.textContent=race.drift>=.85?'SUPER BOOST READY':race.drift>=.45?'BOOST READY':'DRIFT CHARGING';driftMeter.classList.toggle('charged',race.drift>=.45);driftMeter.classList.toggle('super',race.drift>=.85);
   if(mode==='combat'){

@@ -167,16 +167,19 @@ function orbitChaff(shot,decoy,dt,arena){
 export function advanceProjectile(r,shot,dt){
   const actors=[r,...r.bots],arena=arenas[r.arena];
   shot.age=(shot.age??0)+dt;shot.life-=dt;shot.trail.push({wx:shot.wx,wz:shot.wz,height:shot.height});if(shot.trail.length>24)shot.trail.shift();
-  if(shot.kind==='missile'&&!shot.reflected&&shot.decoy==null){
+  if(shot.kind==='missile'&&shot.decoy==null){
     const defender=actors.find(a=>a.id===shot.target&&!a.destroyed&&!a.inactive&&!a.afk&&(a.tehilim>0||r.specialAbilities!==false&&a.driver===11&&a.specialActive>0)),shooter=actors.find(a=>a.id===shot.owner&&!a.destroyed&&!a.inactive&&!a.afk&&!a.bomber);
-    if(defender&&shooter&&distance(shot,defender)<=distance(shot,shooter)){
-      shot.owner=defender.id;shot.target=shooter.id;shot.reflected=true;delete shot.actionId;shot.speed=100;shot.life=Math.max(shot.life,6);
+    if(defender&&(!shooter||distance(shot,defender)<=distance(shot,shooter))){
+      if(shooter&&!shot.reflected&&r.specialAbilities!==false&&defender.driver===11&&defender.specialActive>0){shot.owner=defender.id;shot.target=shooter.id;shot.reflected=true;delete shot.actionId;shot.speed=100;shot.life=Math.max(shot.life,6);}
+      else if(defender.tehilim>0){shot.repelledFrom=defender.id;shot.target=null;}
     }
   }
   const decoy=r.chaffClouds?.find(c=>c.id===shot.decoy)??(shot.decoyCenter?{...shot.decoyCenter,owner:shot.decoyOwner}:null),target=decoy??actors.find(k=>k.id===shot.target&&!k.destroyed);
   if(decoy&&shot.orbitAge!==undefined)return orbitChaff(shot,decoy,dt,arena);
   let steering=0;
   if(shot.kind==='missile'&&target){const turnRate=decoy?4.5:shot.reflected?10:1.6,lead=shot.reflected&&!decoy?Math.min(.8,distance(shot,target)/shot.speed):0,heading=target.motionHeading??target.heading??0,speed=(target.speed??0)*.085;steering=clamp(angleDelta(Math.atan2(target.wx+Math.sin(heading)*speed*lead-shot.wx,target.wz+Math.cos(heading)*speed*lead-shot.wz),shot.heading),-turnRate*dt,turnRate*dt);shot.heading+=steering;}
+  const repeller=actors.find(a=>a.id===shot.repelledFrom&&a.tehilim>0&&!a.destroyed&&!a.inactive&&!a.afk);
+  if(repeller&&distance(shot,repeller)<45){const d=distance(shot,repeller),away=Math.atan2(shot.wx-repeller.wx,shot.wz-repeller.wz);steering=clamp(angleDelta(away,shot.heading),-12*dt,12*dt);shot.heading=d<5?away:shot.heading+steering;}
   let impact=false,victim;const steps=Math.ceil(shot.speed*dt/1.5);
   for(let step=0;step<steps&&!impact;step++){
     shot.wx+=Math.sin(shot.heading)*shot.speed*dt/steps;shot.wz+=Math.cos(shot.heading)*shot.speed*dt/steps;

@@ -57,7 +57,7 @@ for(const engine of ['JavaScript','Rust']){
       assert.equal(after.dizzy,0);assert.ok(enabled?after.bots[0].dizzy>7.9:after.bots[0].dizzy===0);
     }
   });
-  test(`${engine}: R-yeah's holy aura returns a locked missile without needing books`,()=>{
+  test(`${engine}: R-yeah's Providence returns a locked missile without needing books`,()=>{
     for(const enabled of [true,false]){
       const world=createBattle(11);Object.assign(world,{phase:'racing',human:true,wx:65,wz:80,specialAbilities:enabled,supplies:[]});
       for(const a of world.bots)Object.assign(a,{inactive:true,destroyed:999});Object.assign(world.bots[0],{inactive:false,destroyed:0,human:true,wx:65,wz:40});

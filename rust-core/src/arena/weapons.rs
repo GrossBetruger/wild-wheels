@@ -84,10 +84,15 @@ impl Game{
     pub(super) fn advance_shot(&self,shot:&mut Shot,dt:f64)->(bool,Option<usize>,Option<usize>){
         let dt=dt*match self.frozen(shot.owner){true=>0.025,false=>1.0};
         shot.age+=dt;shot.life-=dt;shot.trail.push(Sample{wx:shot.wx,wz:shot.wz,height:shot.height});if shot.trail.len()>24{shot.trail.remove(0);}
-        if shot.kind=="missile"&&!shot.reflected&&shot.decoy.is_none(){
+        if shot.kind=="missile"&&shot.decoy.is_none(){
             let defender=shot.target.and_then(|id|self.actors.get(id)).filter(|a|a.destroyed<=0.0&&!a.inactive&&!a.afk&&(a.tehilim>0.0||self.global.special_abilities&&a.driver==11&&a.special_active>0.0));
             let shooter=self.actors.get(shot.owner).filter(|a|a.destroyed<=0.0&&!a.inactive&&!a.afk&&!a.bomber);
-            if let (Some(defender),Some(shooter))=(defender,shooter){if distance(shot.wx,shot.wz,defender.wx,defender.wz)<=distance(shot.wx,shot.wz,shooter.wx,shooter.wz){shot.owner=defender.id;shot.target=Some(shooter.id);shot.reflected=true;shot.action_id=None;shot.speed=100.0;shot.life=shot.life.max(6.0);}}
+            if let Some(defender)=defender{if shooter.map_or(true,|a|distance(shot.wx,shot.wz,defender.wx,defender.wz)<=distance(shot.wx,shot.wz,a.wx,a.wz)){
+                match (!shot.reflected&&self.global.special_abilities&&defender.driver==11&&defender.special_active>0.0,shooter){
+                    (true,Some(shooter))=>{shot.owner=defender.id;shot.target=Some(shooter.id);shot.reflected=true;shot.action_id=None;shot.speed=100.0;shot.life=shot.life.max(6.0);},
+                    _ if defender.tehilim>0.0=>{shot.repelled_from=Some(defender.id);shot.target=None;},_=>{}
+                }
+            }}
         }
         let decoy=shot.decoy.and_then(|id|self.global.chaff_clouds.iter().find(|c|c.id==id).map(|c|(c.wx,c.wz,c.owner))).or_else(||shot.decoy_center.as_ref().map(|p|(p.wx,p.wz,shot.decoy_owner.unwrap_or(0))));
         let orbit=|shot:&mut Shot,point:(f64,f64,usize),delta:f64|{
@@ -101,6 +106,7 @@ impl Game{
         let target=decoy.map(|p|(p.0,p.1)).or_else(||shot.target.and_then(|id|self.actors.get(id)).filter(|a|a.destroyed<=0.0&&!a.afk).map(|a|{let lead=match shot.reflected{true=>(distance(shot.wx,shot.wz,a.wx,a.wz)/shot.speed).min(0.8),false=>0.0};(a.wx+a.motion_heading.sin()*a.speed*0.085*lead,a.wz+a.motion_heading.cos()*a.speed*0.085*lead)}));
         let mut steering=0.0;
         if shot.kind=="missile"{if let Some((x,z))=target{let rate=match decoy.is_some(){true=>4.5,false=>match shot.reflected{true=>10.0,false=>1.6}};steering=angle((x-shot.wx).atan2(z-shot.wz),shot.heading).clamp(-rate*dt,rate*dt);shot.heading+=steering;}}
+        if let Some(a)=shot.repelled_from.and_then(|id|self.actors.get(id)).filter(|a|a.tehilim>0.0&&a.destroyed<=0.0&&!a.inactive&&!a.afk){let d=distance(shot.wx,shot.wz,a.wx,a.wz);if d<45.0{let away=(shot.wx-a.wx).atan2(shot.wz-a.wz);steering=angle(away,shot.heading).clamp(-12.0*dt,12.0*dt);shot.heading=match d<5.0{true=>away,false=>shot.heading+steering};}}
         let steps=(shot.speed*dt/1.5).ceil() as usize;
         for step in 0..steps{
             shot.wx+=shot.heading.sin()*shot.speed*dt/steps as f64;shot.wz+=shot.heading.cos()*shot.speed*dt/steps as f64;

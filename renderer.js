@@ -105,13 +105,13 @@ export class Renderer {
         gl_Position=matrix*vec4(p,1.0);shade=tint*mix(light,1.,emission);distanceToEye=length(p-eye)*fogScale;
       }
     `));
-    gl.attachShader(this.program,shader(gl,gl.FRAGMENT_SHADER,`precision mediump float;varying vec3 shade;varying float distanceToEye;uniform vec3 fog;void main(){float amount=smoothstep(130.,950.,distanceToEye);gl_FragColor=vec4(mix(shade,fog,amount*.92),1.);}`));
+    gl.attachShader(this.program,shader(gl,gl.FRAGMENT_SHADER,`precision mediump float;varying vec3 shade;varying float distanceToEye;uniform vec3 fog;uniform float darkness;void main(){float amount=smoothstep(130.,950.,distanceToEye);float nearby=mix(1.,.12,smoothstep(20.,85.,distanceToEye));gl_FragColor=vec4(mix(shade,fog,amount*.92)*mix(1.,nearby,darkness),1.);}`));
     gl.linkProgram(this.program);if(!gl.getProgramParameter(this.program,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(this.program));gl.useProgram(this.program);
     this.attributes=['position','normal','color'].map(n=>gl.getAttribLocation(this.program,n));this.matrix=gl.getUniformLocation(this.program,'matrix');this.eyeUniform=gl.getUniformLocation(this.program,'eye');this.fog=gl.getUniformLocation(this.program,'fog');this.emission=gl.getUniformLocation(this.program,'emission');this.xray=gl.getUniformLocation(this.program,'xray');this.staticBuffer=gl.createBuffer();this.dynamicBuffer=gl.createBuffer();this.glowBuffer=gl.createBuffer();gl.enable(gl.DEPTH_TEST);this.track=-1;this.eye=null;
     this.originUniform=gl.getUniformLocation(this.program,'origin');this.rotationUniform=gl.getUniformLocation(this.program,'rotation');gl.uniform3f(this.originUniform,0,0,0);gl.uniform2f(this.rotationUniform,1,0);
     this.pitchUniform=gl.getUniformLocation(this.program,'pitch');gl.uniform2f(this.pitchUniform,1,0);
     this.rollUniform=gl.getUniformLocation(this.program,'roll');gl.uniform2f(this.rollUniform,1,0);
-    this.fogScale=gl.getUniformLocation(this.program,'fogScale');
+    this.fogScale=gl.getUniformLocation(this.program,'fogScale');this.darknessUniform=gl.getUniformLocation(this.program,'darkness');
     this.plumageUniform=gl.getUniformLocation(this.program,'plumage');gl.uniform4f(this.plumageUniform,0,0,0,0);
     this.particleProgram=gl.createProgram();
     gl.attachShader(this.particleProgram,shader(gl,gl.VERTEX_SHADER,`attribute vec3 position;attribute float size;attribute vec3 color;uniform mat4 matrix;uniform float height;varying vec3 tint;void main(){gl_Position=matrix*vec4(position,1.);gl_PointSize=clamp(size*height/max(.1,gl_Position.w),1.,180.);tint=color;}`));
@@ -272,10 +272,11 @@ export class Renderer {
     const age=Math.max(0,8-actor.specialActive),presence=Math.min(1,age/.65,actor.specialActive/.7),smooth=presence*presence*(3-2*presence),stage=Math.round(smooth*12)/12,angle=Math.atan2(p.tx,p.tz),phase=Math.floor(time*8)%8;
     for(const side of [-1,1]){
       const x=p.x+Math.cos(angle)*side*4.5,z=p.z-Math.sin(angle)*side*4.5,height=(jump?.height??0)+1.3+Math.sin(time*2+side)*.16+(1-smooth)*2.5;
-      this.model(`r-yeah:archangel:${phase}:${stage}`,x,height,z,angle,mesh=>drawArchangel(mesh,phase,stage));
+      const role=side<0?'michael':'gabriel';
+      this.model(`r-yeah:archangel:${role}:${phase}:${stage}`,x,height,z,angle,mesh=>drawArchangel(mesh,phase,stage,role));
       this.glow.at(x,height,z,angle);
       const flare=1-smooth;
-      for(let i=0;i<48;i++){const a=i*2.399+time*.7,t=(time*.6+i/48)%1,radius=.65+flare*1.8+t*.5;this.glow.particle(Math.cos(a)*radius,t*4.4,Math.sin(a)*radius,(.09+flare*.23)*(1-t*.5),[.65,.44,.1]);}
+      for(let i=0;i<48;i++){const a=i*2.399+time*.7,t=(time*.6+i/48)%1,radius=.65+flare*1.8+t*.5;this.glow.particle(Math.cos(a)*radius,t*4.4,Math.sin(a)*radius,(.09+flare*.23)*(1-t*.5),side<0?[.65,.44,.1]:[.2,.42,.7]);}
       for(let i=0;i<32;i++){const a=i*Math.PI/16,b=(i+1)*Math.PI/16,r=1+flare*1.4;this.glow.quad([Math.cos(a)*r,-.4,Math.sin(a)*r],[Math.cos(b)*r,-.4,Math.sin(b)*r],[Math.cos(b)*(r+.08),-.4,Math.sin(b)*(r+.08)],[Math.cos(a)*(r+.08),-.4,Math.sin(a)*(r+.08)],[.5,.3,.04]);}
       this.glow.particle(0,3.36*stage,0,.75,[.4,.25,.045]);
       if(flare>.02)for(let i=0;i<10;i++)this.glow.particle(0,i*.6,0,flare*.65,[.36*flare,.28*flare,.11*flare]);
@@ -479,6 +480,7 @@ export class Renderer {
     const strength=Math.min(1,remaining/1.5),height=jump?.height??0;
     for(let i=0;i<6;i++){const a=time*1.2+i*Math.PI/3,x=pose.x+Math.sin(a)*3.6,z=pose.z+Math.cos(a)*3.6,y=height+2.1+Math.sin(a*2)*.55;
       this.tehilimBook(x,y,z,a+Math.PI/2);this.glow.at(x,y,z);this.glow.particle(0,0,0,.7*strength,[.16*strength,.24*strength,.5*strength]);
+      for(let j=0;j<3;j++){const t=(time*1.2+j/3)%1,r=3.6+t*4,fade=(1-t)*strength;this.glow.at(pose.x+Math.sin(a)*r,height+1.7+t*.6,pose.z+Math.cos(a)*r);this.glow.particle(0,0,0,.15+fade*.18,[.1*fade,.18*fade,.45*fade]);}
     }
   }
   hedgeguard(m,pose,actor,time,jump){
@@ -510,7 +512,7 @@ export class Renderer {
     const tall=driver===11||driver===12||driver===14;
     const pose=previewPose(driver,time),orbit=time*.28+.35,radius=tall?15:12,eye=[Math.sin(orbit)*radius,tall?9.5:7.4,Math.cos(orbit)*radius],view=cameraMatrix(eye,[0,tall?4:2.55,0],width/height,.8),sky=rgb('#e5deef');
     gl.clearColor(...sky,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(this.program);
-    gl.uniformMatrix4fv(this.matrix,false,view);gl.uniform3fv(this.eyeUniform,eye);gl.uniform3fv(this.fog,sky);gl.uniform1f(this.fogScale,1);gl.uniform1f(this.emission,0);
+    gl.uniformMatrix4fv(this.matrix,false,view);gl.uniform3fv(this.eyeUniform,eye);gl.uniform3fv(this.fog,sky);gl.uniform1f(this.fogScale,1);gl.uniform1f(this.darknessUniform,0);gl.uniform1f(this.emission,0);
     const m=new Mesh();m.disc(0,-.22,0,40,40,'#e5deef',48);m.disc(0,-.12,0,4.7,4.7,'#c6bad6',48);m.disc(0,-.08,0,4.5,4.5,'#f8f3e5',48);
     for(let i=0;i<24;i++){const a=i*Math.PI/12;m.at(Math.sin(a)*4.58,-.06,Math.cos(a)*4.58,a);m.box(0,0,0,.1,.025,.14,color);}
     this.kart(m,{x:0,z:0,tx:0,tz:1},color,driver,0,0,pose.boost,time,0,null,true,pose);this.owlFlight.trail(m);this.flush(m,view,height);
@@ -518,7 +520,7 @@ export class Renderer {
   }
   draw(r,time){
     this.instances=[];
-    this.nameplates=[];
+    this.nameplates=[];this.gl.useProgram(this.program);this.gl.uniform1f(this.darknessUniform,0);
     if(r.mode==='combat'){this.drawBattle(r,time);return;}
     if(this.track!==r.track)this.scenery(r.track);
     const gl=this.gl,canvas=this.canvas;const width=Math.round(canvas.clientWidth*this.pixelRatio()),height=Math.round(canvas.clientHeight*this.pixelRatio());if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;}gl.viewport(0,0,width,height);
@@ -580,7 +582,7 @@ export class Renderer {
     const wobble=r.dizzy>0&&!matchMedia('(prefers-reduced-motion: reduce)').matches?Math.sin((DIZZY_DURATION-r.dizzy)*(r.boost>0?14:10))*(r.boost>0?.24:.14):0;
     const p=combatPose(r),cx=Math.sin(r.cameraHeading+wobble),cz=Math.cos(r.cameraHeading+wobble),overview=r.bomber?bomberCamera(width,height,arenas[r.arena].size,this.bomberView??'3d',this.bomberFocus,this.bomberZoom??1):null,eye=overview?.eye??[p.x-cx*17,10+(r.destroyed?5:0),p.z-cz*17],view=overview?.matrix??cameraMatrix(eye,[p.x+cx*18,1.5,p.z+cz*18],width/height,r.boost>0?1.2:r.wasDrifting?1.13:1.07);
     this.bomberMatrix=overview?.matrix??null;
-    gl.uniform1f(this.fogScale,overview?.fogScale??1);
+    gl.uniform1f(this.fogScale,overview?.fogScale??1);gl.uniform1f(this.darknessUniform,darkHumorState(r).strength);
     this.nameplates=kartNameplates(r,view,eye);
     gl.uniformMatrix4fv(this.matrix,false,view);gl.uniform3fv(this.eyeUniform,eye);gl.uniform3fv(this.fog,sky);gl.uniform1f(this.emission,0);this.drawBuffer(this.staticBuffer,this.staticCount);
     const m=new Mesh();this.glow=new Mesh();this.smoke=new Mesh();

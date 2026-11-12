@@ -1,10 +1,11 @@
 import {logoRuns} from './r-yeah-logo.js';
 const gold='#e2af50',mane='#8f5029',cream='#fff0c9',navy='#243d62';
-export function drawArchangel(m,phase,manifest){
+export function drawArchangel(m,phase,manifest,role='michael'){
   const point=m.point,scale=.12+.88*manifest;
   m.point=function(p){return point.call(this,[p[0]*scale,p[1]*scale,p[2]*scale]);};
   try{
-    const white='#fff7db',light='#e6eaf3',metal='#ecc36b',skin='#dba878',wing=Math.sin(phase*Math.PI/4)*.23;
+    const gabriel=role==='gabriel',white=gabriel?'#eff8ff':'#fff7db',light=gabriel?'#c7e5f4':'#ead9b5',metal=gabriel?'#cadbe8':'#ecc36b',robe=gabriel?'#5689ba':'#c54b51',skin='#dba878',wing=Math.sin((phase+(gabriel?2:0))*Math.PI/4)*.23;
+    m.ball(0,1.5,-.29,.62,1.45,.2,robe,12,8);for(const x of [-.4,-.2,0,.2,.4])strut(m,[x,.2,-.43],[x*.65,2.6,-.38],.035,metal);
     // Layered flight feathers spread from the shoulder, with raised golden leading edges.
     for(const side of [-1,1]){
       for(let i=0;i<9;i++){
@@ -24,12 +25,25 @@ export function drawArchangel(m,phase,manifest){
     m.box(0,1.35,.3,.12,.8,.08,white);m.box(0,1.72,.3,.55,.1,.08,white);
     for(const x of [-.42,-.21,0,.21,.42])m.tri([x,0,.58],[x+.07,0,.58],[x*.3,1.5,.25],metal);
     m.ball(0,2.67,.06,.4,.44,.35,skin,12,7);
-    m.ball(0,2.91,-.03,.44,.3,.36,'#79512e',10,6);
+    m.ball(0,2.91,-.03,.44,.3,.36,gabriel?'#ddc17f':'#79512e',10,6);
+    if(gabriel){for(const side of [-1,1])m.ball(side*.35,2.65,-.12,.14,.42,.15,'#ddc17f',8,5);}
+    if(!gabriel){m.ball(0,3.02,-.06,.46,.25,.36,metal,12,6);m.box(0,2.9,.3,.1,.42,.09,metal);}
     for(const x of [-.14,.14])m.ball(x,2.72,.39,.045,.07,.025,'#433636',6,4);
     m.box(0,2.49,.39,.17,.035,.025,'#fff6da');
-    // Flaming ceremonial sword, held outside the robe.
+    if(!gabriel){
+    // Michael: armored guardian, crimson cloak, shield and flaming sword.
     m.box(.85,.48,.4,.085,.95,.085,white);m.cone(.85,.35,.4,.12,.3,metal,6);
     m.box(.85,1.02,.4,.48,.08,.12,metal);m.box(.85,1.1,.4,.09,.33,.09,metal);
+    for(let i=0;i<5;i++)m.cone(.85+Math.sin(phase+i)*.07,.38+i*.14,.4,.12,.35,i%2?'#ffe39a':'#ef994d',7);
+    m.ball(-.84,1.2,.5,.4,.53,.1,metal,12,7);m.box(-.84,.87,.61,.09,.67,.035,white);m.box(-.84,1.2,.61,.43,.08,.035,white);
+    }
+    if(gabriel){
+      // Gabriel: silver-blue messenger with a trumpet and illuminated scroll.
+      strut(m,[.84,1.16,.36],[.84,1.4,.85],.08,'#dfbe73');
+      const saved=m.point;m.point=function([x,y,z]){return saved.call(this,[.84+x,1.4+z,.6+y]);};
+      try{m.cone(0,.9,0,.38,-.75,'#d9b567',16);m.ball(0,.91,0,.31,.035,.31,'#5c4b35',16,5);}finally{m.point=saved;}
+      m.box(-.85,.9,.52,.57,.7,.07,'#fff0ce');for(const y of [.92,1.6])m.ball(-.85,y,.57,.35,.07,.11,metal,10,5);for(let i=0;i<4;i++)m.box(-.85,1.08+i*.1,.57,.35,.025,.015,'#6b91b2');
+    }
     for(let i=0;i<32;i++){const a=i*Math.PI/16,b=(i+1)*Math.PI/16;m.quad([Math.cos(a)*.53,3.36,Math.sin(a)*.53],[Math.cos(b)*.53,3.36,Math.sin(b)*.53],[Math.cos(b)*.65,3.36,Math.sin(b)*.65],[Math.cos(a)*.65,3.36,Math.sin(a)*.65],metal);}
   }finally{m.point=point;}
 }

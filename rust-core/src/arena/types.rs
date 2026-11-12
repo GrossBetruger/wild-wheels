@@ -37,7 +37,7 @@ pub struct Shot {
     pub trail:Vec<Sample>,pub target:Option<usize>,pub vulcan:bool,pub action_id:Option<u32>,
     pub decoy:Option<u32>,pub decoy_owner:Option<usize>,pub decoy_center:Option<Point>,
     #[serde(skip_serializing_if="Option::is_none")]pub orbit_age:Option<f64>,pub orbit_angle:f64,pub orbit_radius:f64,pub orbit_height:f64,pub chaffed:bool,pub reflected:bool,
-    pub orbit_direction:f64,#[serde(skip_serializing_if="Option::is_none")]pub orbit_center:Option<Point>,
+    #[serde(skip_serializing_if="Option::is_none")]pub repelled_from:Option<usize>,pub orbit_direction:f64,#[serde(skip_serializing_if="Option::is_none")]pub orbit_center:Option<Point>,
 }
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(default,rename_all="camelCase")]

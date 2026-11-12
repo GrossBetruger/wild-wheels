@@ -23,7 +23,7 @@ export class DarkFog{
         vec3 color=vec3(.008,.004,.022)+vec3(.09,.015,.18)*clouds+vec3(.035,.12,.13)*tendrils*pulse;
         float vignette=smoothstep(.1,1.2,length((uv-.5)*vec2(1.1,1.4)));
         color*=1.-vignette*.65;
-        gl_FragColor=vec4(color,strength*(.955+.035*clouds));
+        gl_FragColor=vec4(color,strength*(.90+.025*clouds));
       }`));
     gl.linkProgram(this.program);if(!gl.getProgramParameter(this.program,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(this.program));
     this.position=gl.getAttribLocation(this.program,'position');this.clock=gl.getUniformLocation(this.program,'clock');this.strength=gl.getUniformLocation(this.program,'strength');this.aspect=gl.getUniformLocation(this.program,'aspect');
