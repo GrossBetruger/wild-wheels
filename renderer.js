@@ -6,6 +6,7 @@ import { bomberCamera } from './mobile.js';
 import {drawNewDriver,drawRoadster,drawRoadsterJets,drawCricketHaze,drawCricketProjectile,drawHoustonHelmet,drawDollarBundle,drawCessna,drawCessnaPropeller,drawCessnaBoost,drawElectron,drawPilotWorm,drawStarship,drawStarshipThrust} from './characters.js';
 import {previewPose} from './preview-pose.js';
 import {drawRococoChariot,drawPearococo,drawPeacockFeather,drawRoyalWing,drawBalletPump,drawFairyStar,drawFairyBoost} from './pearococo.js';
+import {drawMotorcycle,drawYuda,drawBikerBadge,drawMotorcycleBoost} from './master-yuda.js';
 const rgb=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255);
 const sub=(a,b)=>a.map((v,i)=>v-b[i]);
 const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
@@ -161,6 +162,7 @@ export class Renderer {
     m.at(0,0,0);this.gl.bindBuffer(this.gl.ARRAY_BUFFER,this.staticBuffer);this.gl.bufferData(this.gl.ARRAY_BUFFER,new Float32Array(m.data),this.gl.STATIC_DRAW);this.staticCount=m.data.length/9;this.track=track;
   }
   kart(m,p,color,driver,yaw=0,spin=0,boost=false,clock=0,celebrate=0,jump=null,helmet=true,gesture=null){
+    if(driver===10){this.yudaMotorcycle(m,p,color,yaw,spin,boost,clock,celebrate,jump,gesture);return;}
     if(driver===9){this.royalChariot(m,p,color,yaw,spin,boost,clock,celebrate,jump,gesture);return;}
     if(driver===8&&!this.buildingModel){this.pilotPlane(m,p,color,yaw,spin,boost,clock,celebrate,jump,gesture);return;}
     if(driver===6)color='#e8edf2';
@@ -205,6 +207,39 @@ export class Renderer {
     m.box(0,1.2,-2.25,.8,.35,.12,'#f7edce');m.box(0,1.26,-2.33,.12,.25,.03,'#33364b');
     for(const side of [-1,1]){m.ball(side*1.2,.75,-2.45,.31,.31,.5,'#69788b',10,5);m.ball(side*1.2,.75,-2.85,.24,.24,.08,'#161d2a',10,4);}
     if(boost)this.afterburner(p,angle,clock,null,driver);
+  }
+  yudaMotorcycle(m,p,color,yaw,spin,boost,clock,celebrate,jump,gesture=null){
+    const angle=Math.atan2(p.tx,p.tz)-yaw+spin,height=jump?.height??0,pitch=jump?.pitch??0;
+    m.at(p.x,.08,p.z,angle);m.disc(0,0,0,1.1,2.8,'#343b43');
+    this.model(`kart:10:${color}`,p.x,height,p.z,angle,mesh=>drawMotorcycle(mesh,color),pitch);
+    const saluting=!jump&&(celebrate>0||(gesture?.right??0)>0),phase=saluting?Math.floor(clock*5)%8:0;
+    const tuck=Boolean(jump)||boost;
+    this.model(`yuda:rider:${phase}:${tuck}`,p.x,height,p.z,angle+(gesture?.yaw??0)*.35,mesh=>drawYuda(mesh,phase,tuck),pitch+(tuck?.18:0));
+    // Restrained neon underglow is always present; protection adds winged badges.
+    this.bikerAura(m,p,angle,clock,jump);
+    if(boost||jump)this.afterburner(p,angle,clock,jump,10);
+  }
+  bikerAura(m,p,angle,time,jump=null,strength=0){
+    const height=jump?.height??0,g=this.glow;g.at(p.x,height,p.z,angle);g.pitch=jump?.pitch??0;g.pivot=2;
+    for(const side of [-1,1])for(let i=0;i<8;i++)g.particle(side*.5,.35,-1.4+i*.4,.32,[.015,.12,.16]);
+    if(strength<=0)return;
+    g.at(p.x,height+.1,p.z);
+    for(let i=0;i<36;i++){const a=i*Math.PI/18+time*.7;g.particle(Math.sin(a)*3.4,.15,Math.cos(a)*3.4,.42*strength,[.04,.48,.65]);}
+    for(let i=0;i<6;i++){
+      const a=time*.8+i*Math.PI/3;
+      this.model('yuda:winged-badge',p.x+Math.sin(a)*3.4,height+1.8+Math.sin(a*2)*.4,p.z+Math.cos(a)*3.4,a,drawBikerBadge);
+    }
+  }
+  laserBolt(m,x,y,z,angle){
+    this.model('yuda:laser',x,y,z,angle,mesh=>{mesh.ball(0,0,0,.1,.1,1.15,'#d9fffc',8,5);});
+    this.glow.at(x,y,z,angle);this.glow.ball(0,0,0,.18,.18,1.4,[.03,.75,.65],8,5);
+    for(let i=0;i<5;i++)this.glow.particle(0,0,-.9+i*.45,.42,[.025,.38,.32]);
+  }
+  laserMount(m,pose,actor,time,jump){
+    const height=jump?.height??0;
+    m.at(pose.x,height,pose.z,actor.heading);m.pitch=jump?.pitch??0;m.pivot=2;
+    this.glow.at(pose.x,height,pose.z,actor.heading);this.glow.pitch=jump?.pitch??0;this.glow.pivot=2;
+    for(const side of [-1,1]){m.box(side*.57,1.65,1.45,.25,.23,1.5,'#273a43');m.ball(side*.57,1.77,2.22,.12,.12,.04,'#8dfff0',8,4);if(actor.item==='hedgehog'&&actor.fireCooldown>.035)this.glow.particle(side*.57,1.77,2.4,.9,[.15,.8,.65]);}
   }
   starshipEngines(p,angle,clock,jump=null,boost=false){
     drawStarshipThrust(this.glow,this.smoke,p,angle,clock,jump,boost);
@@ -260,6 +295,7 @@ export class Renderer {
     this.model(`cessna:propeller:${phase}`,p.x,jump?.height??0,p.z,angle,mesh=>{mesh.at(0,.13,0);drawCessnaPropeller(mesh,phase);},jump?.pitch??0);
   }
   afterburner(p,angle,clock,jump=null,driver=0){
+    if(driver===10){drawMotorcycleBoost(this.glow,this.smoke,p,angle,clock,jump);return;}
     if(driver===7){this.starshipEngines(p,angle,clock,jump,true);return;}
     if(driver===9){drawFairyBoost(this.glow,this.smoke,p,angle,clock,jump);return;}
     if(driver===5){drawCricketHaze(this.glow,this.smoke,p,angle,clock,jump);return;}
@@ -321,6 +357,7 @@ export class Renderer {
     mesh.box(0,.03,.06,.17,.8,.12,'#e5fff6');mesh.box(0,.2,.07,.65,.16,.12,'#e5fff6');
   });}
   hedgeguard(m,pose,actor,time,jump){
+    if(actor.driver===10){this.bikerAura(m,pose,actor.heading,time,jump,Math.min(1,actor.hedgeShield/1.5));return;}
     if(actor.driver===9){this.fairyProtection(m,pose,time,Math.min(1,actor.hedgeShield/1.5),jump);return;}
     const strength=Math.min(1,actor.hedgeShield/1.5),pulse=(.75+.25*Math.sin(time*5))*strength,color=actor.driver===5?[.12,.7,.14]:actor.driver===6?[.5,.65,.08]:[.06,.65,.58];
     this.glow.at(pose.x,.15+(jump?.height??0),pose.z);
@@ -446,7 +483,8 @@ export class Renderer {
       if(actor.driver===7)this.houstonHelmet(pose,actor,time,jump);
       if(actor.hedgeShield>0)this.hedgeguard(m,pose,actor,time,jump);
       if(actor.dizzy>0)for(let i=0;i<6;i++){const angle=time*(actor.boost>0?9:5)+i*Math.PI/3;m.at(pose.x+Math.sin(angle)*3.2,6.8+Math.sin(angle*2)*.5,pose.z+Math.cos(angle)*3.2,angle);m.box(0,0,0,1.2,.22,.3,'#fff08b');m.box(0,0,0,.3,.22,1.2,'#fff08b');this.glow.at(m.origin[0],m.origin[1],m.origin[2]);this.glow.particle(0,0,0,.8,[.7,.6,.05]);}
-      if(actor.vulcan>0){
+      if(actor.vulcan>0&&actor.driver===10)this.laserMount(m,pose,actor,time,jump);
+      if(actor.vulcan>0&&actor.driver!==10){
         const pulse=.8+.2*Math.sin(time*4);this.glow.at(pose.x,.15,pose.z);
         for(let i=0;i<32;i++){const a=i/32*Math.PI*2,b=(i+1)/32*Math.PI*2;this.glow.quad([Math.cos(a)*3.3,0,Math.sin(a)*3.3],[Math.cos(b)*3.3,0,Math.sin(b)*3.3],[Math.cos(b)*3.65,0,Math.sin(b)*3.65],[Math.cos(a)*3.65,0,Math.sin(a)*3.65],[.55*pulse,.23*pulse,.02]);}
         for(let i=0;i<8;i++){const a=time*1.5+i*Math.PI/4;this.glow.particle(Math.cos(a)*3.5,.3+Math.sin(a*2)*.12,Math.sin(a)*3.5,.8,[.8*pulse,.35*pulse,.03]);}
@@ -457,20 +495,22 @@ export class Renderer {
       }
       m.at(pose.x,6,pose.z,r.heading);for(let i=0;i<actor.health;i++)m.box((i-(actor.health-1)/2)*.6,0,0,.5,.25,.15,i>=3?'#ffe095':'#b8ef8e');
       if(actor.shield>0&&actor.driver===9)this.fairyProtection(m,pose,time,Math.min(1,actor.shield),jump);
-      if(actor.shield>0&&actor.driver!==9){this.glow.at(pose.x,.12,pose.z);for(let i=0;i<18;i++){const a=i/18*Math.PI*2+time;this.glow.particle(Math.cos(a)*3,1,Math.sin(a)*3,.4,[.05,.25,.4]);}}
+      if(actor.shield>0&&actor.driver===10)this.bikerAura(m,pose,actor.heading,time,jump,Math.min(1,actor.shield));
+      if(actor.shield>0&&actor.driver!==9&&actor.driver!==10){this.glow.at(pose.x,.12,pose.z);for(let i=0;i<18;i++){const a=i/18*Math.PI*2+time;this.glow.particle(Math.cos(a)*3,1,Math.sin(a)*3,.4,[.05,.25,.4]);}}
     }
     for(const supply of r.supplies){if(supply.cooldown>0)continue;const pose={x:supply.wx,z:supply.wz,tx:0,tz:1},bob=Math.sin(time*2)*.3;m.at(pose.x,.1,pose.z);m.disc(0,0,0,3,3,{missile:'#c65d51',hedgehog:'#bb9c68',boost:'#d4bc55',health:'#78b88c',hedgeproof:'#52c9bc'}[supply.kind]);switch(supply.kind){case 'hedgeproof':this.hedgeguardIcon(pose.x,2+bob,pose.z,time);this.glow.at(pose.x,1.8+bob,pose.z);this.glow.particle(0,0,0,2.8,[.08,.45,.38]);break;case 'missile':this.missile(m,pose,2+bob,time,1.5);break;case 'hedgehog':this.hedgehog(m,pose.x,1.5+bob,pose.z,1.1,time);break;case 'boost':m.at(pose.x,1+bob,pose.z,time);m.box(0,0,0,1.2,2,.8,'#f1cc62');break;case 'health':m.at(pose.x,1+bob,pose.z,time);m.box(0,.7,0,2.4,.7,.5,'#d6f4c6');m.box(0,0,0,.7,2.4,.5,'#d6f4c6');break;}}
     for(const shot of r.projectiles){
-      const pose={x:shot.wx,z:shot.wz,tx:Math.sin(shot.heading),tz:Math.cos(shot.heading)},owner=shot.vulcan?(shot.owner===r.id?r:r.bots.find(actor=>actor.id===shot.owner)):null,cricket=shot.kind==='hedgehog'&&owner?.driver===5,dollars=shot.kind==='hedgehog'&&owner?.driver===6,electrons=shot.kind==='hedgehog'&&owner?.driver===8,pumps=shot.kind==='hedgehog'&&owner?.driver===9;
+      const pose={x:shot.wx,z:shot.wz,tx:Math.sin(shot.heading),tz:Math.cos(shot.heading)},owner=shot.vulcan?(shot.owner===r.id?r:r.bots.find(actor=>actor.id===shot.owner)):null,cricket=shot.kind==='hedgehog'&&owner?.driver===5,dollars=shot.kind==='hedgehog'&&owner?.driver===6,electrons=shot.kind==='hedgehog'&&owner?.driver===8,pumps=shot.kind==='hedgehog'&&owner?.driver===9,laser=shot.kind==='hedgehog'&&owner?.driver===10;
       if(shot.kind==='missile'){this.missile(m,pose,shot.height);this.glow.at(shot.wx,shot.height,shot.wz,shot.heading);this.glow.flame(0,0,-1,.25,2,[.5,.17,.03],time);}
       if(shot.kind==='hedgehog'){
         if(cricket)this.cricket(m,shot.wx,shot.height,shot.wz,shot.heading,time);
         if(dollars)this.dollarBundle(m,shot.wx,shot.height,shot.wz,shot.heading,time);
         if(electrons)this.electron(m,shot.wx,shot.height,shot.wz,shot.heading,time);
         if(pumps)this.balletPump(m,shot.wx,shot.height,shot.wz,shot.heading,time);
-        if(!cricket&&!dollars&&!electrons&&!pumps)this.hedgehog(m,shot.wx,shot.height,shot.wz,shot.vulcan?.45:.6,time*15);
+        if(laser)this.laserBolt(m,shot.wx,shot.height,shot.wz,shot.heading);
+        if(!cricket&&!dollars&&!electrons&&!pumps&&!laser)this.hedgehog(m,shot.wx,shot.height,shot.wz,shot.vulcan?.45:.6,time*15);
       }
-      for(let i=0;i<shot.trail.length;i+=3){const t=shot.trail[i],size=.12+(1-i/shot.trail.length)*.5;if(shot.vulcan){this.glow.at(t.wx,t.height,t.wz);this.glow.particle(0,0,0,.32,cricket?[.12,.6,.035]:dollars?[.2,.55,.06]:electrons?[.04,.35,.8]:pumps?(i%2?[.8,.46,.12]:[.7,.16,.38]):[.7,.35,.03]);continue;}m.at(t.wx,t.height,t.wz);m.ball(0,0,0,size,size,size,shot.kind==='missile'?'#c5c6c8':'#d7bf85',5,3);}
+      for(let i=0;i<shot.trail.length;i+=3){const t=shot.trail[i],size=.12+(1-i/shot.trail.length)*.5;if(shot.vulcan){this.glow.at(t.wx,t.height,t.wz);this.glow.particle(0,0,0,.32,cricket?[.12,.6,.035]:dollars?[.2,.55,.06]:electrons?[.04,.35,.8]:laser?[.025,.65,.45]:pumps?(i%2?[.8,.46,.12]:[.7,.16,.38]):[.7,.35,.03]);continue;}m.at(t.wx,t.height,t.wz);m.ball(0,0,0,size,size,size,shot.kind==='missile'?'#c5c6c8':'#d7bf85',5,3);}
     }
     for(const bomb of r.bombs??[]){
       const progress=Math.min(1,bomb.age/BOMB_FALL_TIME),height=65*(1-progress*progress),stink=bomb.kind==='stink',radius=stink?STINK_RADIUS:BOMB_OUTER_RADIUS;

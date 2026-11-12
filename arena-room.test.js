@@ -65,7 +65,10 @@ test('elephant, cricket, Roadster, astronaut sloth, worm pilot and Pearococo sur
     const client=new ArenaClient();client.accept(core.packet(viewer),0);client.frame(0,[],0);const view=client.present();
     assert.equal(view.driver,driver);assert.equal(view.name,name);assert.equal(view.health,3);assert.equal(view.bots.length,5);
   }
-  assert.throws(()=>core.configure({code:'11',host:0,arena:0,bots:0,epoch:1,players:[{id:0,name:'Invalid',driver:10,role:'driver'}]}),/Invalid Rust room/);
+  const yuda=ArenaCore.room({code:'12',host:0,arena:0,bots:0,epoch:1,players:[{id:0,name:'Master-Yuda',driver:10,role:'driver'}]});
+  const client=new ArenaClient();client.accept(yuda.packet(0),0);client.frame(0,[],0);
+  assert.equal(client.present().driver,10);assert.equal(client.present().name,'Master-Yuda');
+  assert.throws(()=>core.configure({code:'11',host:0,arena:0,bots:0,epoch:1,players:[{id:0,name:'Invalid',driver:11,role:'driver'}]}),/Invalid Rust room/);
 });
 
 test('every Roadster and its chaff remain white across room slots and character changes',()=>{

@@ -11,7 +11,7 @@ test('Houston has maximum Fuel and every other character has at most three',()=>
 
 for(const engine of ['Grand Prix','solo arena','Rust multiplayer']){
   test(`${engine}: Fuel determines how long one turbo lasts for every character`,()=>{
-    for(const [driver,fuel,seconds]of [[0,3,3.6],[1,2,2.8],[2,2,2.8],[3,3,3.6],[4,3,3.6],[5,2,2.8],[6,3,3.6],[7,5,5.2],[8,3,3.6],[9,3,3.6]]){
+    for(const [driver,fuel,seconds]of [[0,3,3.6],[1,2,2.8],[2,2,2.8],[3,3,3.6],[4,3,3.6],[5,2,2.8],[6,3,3.6],[7,5,5.2],[8,3,3.6],[9,3,3.6],[10,3,3.6]]){
       assert.equal(drivers[driver].fuel,fuel);assert.equal(boostDuration(driver),seconds);
       if(engine==='Grand Prix'){
         const race=createRace(driver);Object.assign(race,{phase:'racing',turbos:1});assert.equal(useTurbo(race),true);assert.equal(race.boost,seconds);assert.equal(race.turbos,0);continue;

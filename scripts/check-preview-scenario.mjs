@@ -13,7 +13,7 @@ export async function checkPreview(evaluate,app,room,id,sleep,capture){
     renderer.drawPreview=(driver,...args)=>{const result=draw(driver,...args);__game.previewDraws++;if(!__game.previewPixelsWanted)return result;__game.previewPixelsWanted=false;const gl=renderer.gl,pixels=new Uint8Array(gl.drawingBufferWidth*gl.drawingBufferHeight*4);gl.readPixels(0,0,gl.drawingBufferWidth,gl.drawingBufferHeight,gl.RGBA,gl.UNSIGNED_BYTE,pixels);const colors=new Set();for(let i=0;i<pixels.length;i+=4)colors.add(pixels[i]*65536+pixels[i+1]*256+pixels[i+2]);__game.previewPixels={driver,colors:colors.size,error:gl.getError()};return result;};
   }`);
   const selections=[];
-  for(const [driver,name]of [[0,'Pip the Panda'],[1,'Rocco the Raccoon'],[2,'Felix the Fox'],[3,'Benny the Bear'],[4,'Ellie the Elephant'],[5,'Tamar the Cricket'],[6,'Elon Musk'],[7,'Houston the RTPL'],[8,'Avita-Jas'],[9,'Pearococo']]){
+  for(const [driver,name]of [[0,'Pip the Panda'],[1,'Rocco the Raccoon'],[2,'Felix the Fox'],[3,'Benny the Bear'],[4,'Ellie the Elephant'],[5,'Tamar the Cricket'],[6,'Elon Musk'],[7,'Houston the RTPL'],[8,'Avita-Jas'],[9,'Pearococo'],[10,'Master-Yuda']]){
     await evaluate(`__game.network.chooseDriver(${driver})`);
     const selected=await wait(()=>evaluate(`__game.race.driver===${driver}&&__game.preview.driver===${driver}`));
     await evaluate('{__game.preview.clock=1;__game.preview.dirty=true;__game.previewPixelsWanted=true;}');
@@ -21,6 +21,7 @@ export async function checkPreview(evaluate,app,room,id,sleep,capture){
     const pixels=await evaluate('__game.previewPixels'),named=await evaluate(`document.getElementById('character-preview').getAttribute('aria-label').includes(${JSON.stringify(name)})`);
     selections.push({driver,name,selected,named,rendered:pixels?.colors>20&&pixels?.error===0});await capture(`preview-${driver}`,'.character-preview');
   }
+  await evaluate("__game.network.chooseDriver(9)");await wait(()=>evaluate("__game.preview.driver===9"));
   const gestures=[];
   for(const [clock,gesture]of [[1,'hello'],[5,'cheer'],[9,'look'],[13,'rev']]){
     await evaluate(`{__game.preview.clock=${clock};__game.preview.dirty=true;}`);

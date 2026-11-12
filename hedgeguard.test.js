@@ -16,7 +16,7 @@ for(const engine of ['solo','Rust multiplayer']){
     }
   });
 
-  for(const [weapon,vulcan,shooter,health]of [['hedgehog',false,0,6],['hedgehog',true,0,6],['hedgehog',true,5,6],['hedgehog',true,6,6],['hedgehog',true,8,6],['hedgehog',true,9,6],['missile',false,0,3],['abomb',false,0,6]]){
+  for(const [weapon,vulcan,shooter,health]of [['hedgehog',false,0,6],['hedgehog',true,0,6],['hedgehog',true,5,6],['hedgehog',true,6,6],['hedgehog',true,8,6],['hedgehog',true,9,6],['hedgehog',true,10,6],['missile',false,0,3],['abomb',false,0,6]]){
     test(`${engine}: Hedgeguard ${health===6?'blocks':'allows'} ${vulcan?'Vulcan ':''}${weapon} damage from character ${shooter}`,()=>{
       const seed=createBattle();Object.assign(seed,{phase:'racing',human:true,wx:-65,wz:0,shield:0,hedgeShield:25,health:6,healTimer:1,supplies:[]});
       for(const bot of seed.bots)Object.assign(bot,{inactive:true,destroyed:1e9});Object.assign(seed.bots[0],{driver:shooter,human:true,inactive:false,destroyed:0,wx:-65,wz:20});

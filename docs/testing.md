@@ -10,7 +10,9 @@ A-bomb deaths turn the character and vehicle's last rendered shape into rubble. 
 
 Fuel controls each turbo's duration: `2 + 0.8 × (Fuel − 1)` seconds. Houston alone has 5 Fuel (5.2 seconds); every other character has at most 3. `fuel.test.js` checks all character durations in Grand Prix, solo Arena and Rust multiplayer, plus immediate/queued client prediction and server agreement. The character browser group checks Fuel bars and duration tooltips.
 
-The character browser group checks the selection preview for all ten characters, orbiting camera, pause/resume, four gesture stages, and unchanged live-game inventory. Preview rendering must stop once a match starts.
+The character browser group checks the selection preview for all eleven characters, orbiting camera, pause/resume, four gesture stages, and unchanged live-game inventory. Preview rendering must stop once a match starts.
+
+Master-Yuda coverage includes his sunglasses salute, motorcycle silhouette, local and remote boost/flip exhaust, winged biker protection and laser Vulcan shots. Lasers retain normal Vulcan damage, cadence, ammunition and kill credit in both engines. His flip retains the 180-degree reversal, full rotation and landing; recovery, capacity and fuel tests cover Cuteness 3, Intelligence 5 and Fuel 3.
 
 Pearococo coverage includes local and remote royal waves, fairy-dust boost/flip/chaff and protection, and pink ballet-pump Vulcan shots. The preview checks framebuffer changes in her rippling fan and folded silhouette with the camera held still, and reproducible pixels when its animation clock is restored. Boosting must smoothly fold only that player's tail, with both local and remote tails reopening afterward. Combat tests preserve normal damage, inventory and kill credit; recovery and capacity tables include her Cuteness 5 and Intelligence 4.
 
