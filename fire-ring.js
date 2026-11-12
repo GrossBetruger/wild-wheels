@@ -1,7 +1,7 @@
 import {damageBattle} from './combat.js';
 import {frozen} from './special-abilities.js';
-export const FIRE_RING_RADIUS=40;
-export const fireRingRadius=remaining=>40+Math.max(0,Math.min(10,20-remaining));
+export const FIRE_RING_RADIUS=10;
+export const fireRingRadius=remaining=>10+1.5*Math.max(0,Math.min(20,20-remaining));
 export function tickFireRings(world,dt){
   world.effects=world.effects.filter(f=>f.type!=='fireRing');const actors=[world,...world.bots];
   for(const a of actors){
@@ -21,7 +21,7 @@ export function tickFireRings(world,dt){
   for(const ring of world.effects.filter(f=>f.type==='fireRing')){
     const owner=actors.find(a=>a.id===ring.owner);owner.ringDoses??={};
     for(const a of actors){if(a.id===owner.id||frozen(world,a.id))continue;
-      const touching=!a.inactive&&!a.afk&&!a.bomber&&!a.destroyed&&Math.abs(Math.hypot(a.wx-ring.wx,a.wz-ring.wz)-(ring.radius??40))<=2.5;
+      const touching=!a.inactive&&!a.afk&&!a.bomber&&!a.destroyed&&Math.abs(Math.hypot(a.wx-ring.wx,a.wz-ring.wz)-(ring.radius??10))<=2.5;
       if(!touching){delete owner.ringDoses[a.id];continue;}
       owner.ringDoses[a.id]=(owner.ringDoses[a.id]??dt)-dt;
       if(owner.ringDoses[a.id]<=1e-8){owner.ringDoses[a.id]+=.3;damageBattle(world,a,owner.id,2,'fireRing');}
@@ -30,5 +30,5 @@ export function tickFireRings(world,dt){
 }
 export function fireRingBlocks(world,ax,az,bx,bz){
   if(world.specialAbilities===false)return false;
-  return world.effects.some(f=>{if(f.type!=='fireRing')return false;const radius=f.radius??40,dx=bx-ax,dz=bz-az,len=dx*dx+dz*dz,t=len?Math.max(0,Math.min(1,((f.wx-ax)*dx+(f.wz-az)*dz)/len)):0;return Math.hypot(ax+dx*t-f.wx,az+dz*t-f.wz)<=radius+.8&&Math.max(Math.hypot(ax-f.wx,az-f.wz),Math.hypot(bx-f.wx,bz-f.wz))>=radius-.8;});
+  return world.effects.some(f=>{if(f.type!=='fireRing')return false;const radius=f.radius??10,dx=bx-ax,dz=bz-az,len=dx*dx+dz*dz,t=len?Math.max(0,Math.min(1,((f.wx-ax)*dx+(f.wz-az)*dz)/len)):0;return Math.hypot(ax+dx*t-f.wx,az+dz*t-f.wz)<=radius+.8&&Math.max(Math.hypot(ax-f.wx,az-f.wz),Math.hypot(bx-f.wx,bz-f.wz))>=radius-.8;});
 }

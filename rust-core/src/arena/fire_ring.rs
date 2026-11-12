@@ -1,5 +1,5 @@
 use super::*;
-fn radius(remaining:f64)->f64{40.0+(20.0-remaining).clamp(0.0,10.0)}
+fn radius(remaining:f64)->f64{10.0+1.5*(20.0-remaining).clamp(0.0,20.0)}
 impl Game{
     pub(super) fn ring_tick(&mut self,dt:f64){
         self.global.effects.retain(|f|f.kind!="fireRing");
@@ -17,7 +17,7 @@ impl Game{
             }
             if a.ring_remaining>0.0{self.global.effects.push(Effect{kind:"fireRing".into(),radius:Some(radius(a.ring_remaining)),color:Some(match a.ring_blue{true=>"#4abaff",false=>"#ff631c"}.into()),owner:Some(id),wx:a.wx,wz:a.wz,life:0.1,..Effect::default()});}
         }
-        let rings:Vec<_>=self.global.effects.iter().filter(|f|f.kind=="fireRing").map(|f|(f.owner.unwrap(),f.wx,f.wz,f.radius.unwrap_or(40.0))).collect();
+        let rings:Vec<_>=self.global.effects.iter().filter(|f|f.kind=="fireRing").map(|f|(f.owner.unwrap(),f.wx,f.wz,f.radius.unwrap_or(10.0))).collect();
         for (owner,x,z,radius) in rings{
             for victim in 0..self.actors.len(){
                 if victim==owner||self.frozen(victim){continue;}
@@ -35,7 +35,7 @@ impl Game{
             let dx=bx-ax;let dz=bz-az;let len=dx*dx+dz*dz;
             let t=match len>0.0{true=>(((f.wx-ax)*dx+(f.wz-az)*dz)/len).clamp(0.0,1.0),false=>0.0};
             let near=distance(ax+dx*t,az+dz*t,f.wx,f.wz);
-            let far=distance(ax,az,f.wx,f.wz).max(distance(bx,bz,f.wx,f.wz));near<=f.radius.unwrap_or(40.0)+0.8&&far>=f.radius.unwrap_or(40.0)-0.8
+            let far=distance(ax,az,f.wx,f.wz).max(distance(bx,bz,f.wx,f.wz));near<=f.radius.unwrap_or(10.0)+0.8&&far>=f.radius.unwrap_or(10.0)-0.8
         })
     }
 }

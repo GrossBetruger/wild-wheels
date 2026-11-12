@@ -1,7 +1,7 @@
 // Curved flame ribbons share the renderer's batched meshes and particle pass.
 export function drawFireRing(mesh,glow,effect,time){
   mesh.at(effect.wx,0,effect.wz);glow.at(effect.wx,0,effect.wz);
-  const ringRadius=effect.radius??40,spread=ringRadius/20,blue=effect.color==='#4abaff',count=144,tau=Math.PI*2;
+  const ringRadius=effect.radius??10,spread=ringRadius/20,blue=effect.color==='#4abaff',count=144,tau=Math.PI*2;
   for(let i=0;i<count;i++){
     const angle=i*tau/count,wave=Math.sin(time*8-i*1.9),height=6.8+wave*1.4+Math.sin(time*13+i*.83)*1.1;
     const x=Math.sin(angle)*ringRadius,z=Math.cos(angle)*ringRadius;
