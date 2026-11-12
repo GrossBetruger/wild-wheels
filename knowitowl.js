@@ -16,7 +16,15 @@ export function drawOwl(m,phase,flight=0,gesture=0){
   const flap=Math.sin(phase*Math.PI/8),bow=gesture===2?.3:gesture===5?.05:gesture===6?-.08:0;
   m.ball(0,3.35,-.3,1,.95,.72,white,16,9);
   // Layered breast and shoulder plumage, scalloped rather than a smooth white blob.
-  for(let row=0;row<4;row++)for(let i=0;i<7;i++){const a=(i-3)*.32;m.ball(Math.sin(a)*(.9-row*.08),3.8-row*.32,.35+Math.cos(a)*.2,.17,.27,.085,row%2?white:ivory,7,5);}
+  // The Sigma is pigment in the breast feathers, following their curved surface.
+  const marking=[[[-.36,3.68],[.36,3.68]],[[-.36,3.68],[.02,3.28]],[[.02,3.28],[-.36,2.88]],[[-.36,2.88],[.36,2.88]]];
+  for(let row=0;row<8;row++)for(let i=0;i<11;i++){
+    const a=(i-5)*.21,x=Math.sin(a)*(.9-row*.04),y=3.78-row*.145;
+    const distance=Math.min(...marking.map(([start,end])=>{const dx=end[0]-start[0],dy=end[1]-start[1],t=Math.max(0,Math.min(1,((x-start[0])*dx+(y-start[1])*dy)/(dx*dx+dy*dy)));return Math.hypot(x-start[0]-t*dx,y-start[1]-t*dy);}));
+    const color=distance<.065?'#9164ac':distance<.11?'#b59ac7':row%2?white:ivory;
+    const surface=-.3+.72*Math.sqrt(Math.max(.02,1-x*x-((y-3.35)/.95)**2));
+    m.ball(x,y,surface+.035,.11,.16,.065,color,7,5);
+  }
   for(let row=0;row<4;row++)for(let i=0;i<7;i++){const a=(i-3)*.32;m.ball(Math.sin(a)*(.9-row*.08),3.8-row*.32,-.45-Math.cos(a)*.5,.18,.26,.09,row%2?white:ivory,7,5);}
   for(const side of [-1,1]){
     if(!(side===1&&gesture>=5)){
@@ -42,9 +50,7 @@ export function drawOwl(m,phase,flight=0,gesture=0){
     for(let i=0;i<40;i++){const a=i*Math.PI/20,b=(i+1)*Math.PI/20;rod(m,[.46+Math.cos(a)*.39,.48+Math.sin(a)*.43,.96],[.46+Math.cos(b)*.39,.48+Math.sin(b)*.43,.96],.025,gold);}
     rod(m,[.8,.32,.8],[.93,-.25,.6],.024,gold);rod(m,[.93,-.25,.6],[.6,-.6,.65],.024,gold);
   }finally{m.point=point;}
-  // A raised royal-purple Sigma spans the white breast plumage.
-  const sigma=[[-.62,3.98],[.62,3.98],[-.62,2.65],[.62,2.65]],stroke=(a,b,width,z,color)=>{const dx=b[0]-a[0],dy=b[1]-a[1],length=Math.hypot(dx,dy),x=-dy/length*width/2,y=dx/length*width/2;m.quad([a[0]+x,a[1]+y,z],[b[0]+x,b[1]+y,z],[b[0]-x,b[1]-y,z],[a[0]-x,a[1]-y,z],color);};
-  for(const [a,b]of [[sigma[0],sigma[1]],[sigma[0],[.02,3.315]],[[.02,3.315],sigma[2]],[sigma[2],sigma[3]]]){stroke(a,b,.23,.75,'#4f2878');stroke(a,b,.16,.79,'#9749d4');}
+
 }
 export function drawFeather(m,size=1){
   for(let i=0;i<8;i++){const t=i/8,u=(i+1)/8,w=Math.sin(t*Math.PI)*.22*size,ww=Math.sin(u*Math.PI)*.22*size;m.quad([-w,t*size,0],[w,t*size,0],[ww,u*size,.04*Math.sin(u*Math.PI)],[-ww,u*size,.04*Math.sin(u*Math.PI)],i%3?white:edge);}
