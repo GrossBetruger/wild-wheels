@@ -106,7 +106,7 @@ export function useBattleTurbo(r,actor=r,actionId){
 }
 export function somersaultBattle(world,actor=world){
   if(!canAct(world,actor)||(actor.somersaultCooldown??0)>1e-8)return false;
-  if(world.specialAbilities!==false&&actor.driver===5){for(let i=0;i<128;i++){const wx=Math.random()*170-85,wz=Math.random()*170-85;if(blocked(arenas[world.arena],wx,wz,4)||[world,...world.bots].some(a=>a.id!==actor.id&&!a.inactive&&!a.destroyed&&Math.hypot(a.wx-wx,a.wz-wz)<8))continue;fx(world,'boost',actor);Object.assign(actor,{wx,wz,speed:0});fx(world,'boost',actor);break;}}
+  if(world.specialAbilities!==false&&actor.driver===5){for(let i=0;i<128;i++){const wx=Math.random()*170-85,wz=Math.random()*170-85;if(blocked(arenas[world.arena],wx,wz,4)||[world,...world.bots].some(a=>a.id!==actor.id&&!a.inactive&&!a.destroyed&&Math.hypot(a.wx-wx,a.wz-wz)<8))continue;world.effects.push({type:'teleportOut',owner:actor.id,wx:actor.wx,wz:actor.wz,heading:actor.heading,color:actor.color??drivers[5].color,age:0,life:1.35});sound(world,'teleportOut',actor);Object.assign(actor,{wx,wz,speed:0});world.effects.push({type:'teleportIn',owner:actor.id,wx,wz,heading:actor.heading+Math.PI,color:actor.color??drivers[5].color,age:0,life:1.35});sound(world,'teleportIn',actor);break;}}
   actor.somersaultCameraStart=actor.cameraHeading;
   actor.heading+=Math.PI;actor.motionHeading=actor.heading;
   actor.drift=0;actor.wasDrifting=false;actor.driftTrail=null;

@@ -1,3 +1,4 @@
+import {arenas,blocked} from '../combat.js';
 export async function checkSpecials(evaluate,app,room,id,sleep,capture){
   const wait=async predicate=>{for(let i=0;i<160;i++){for(const m of room.members.values())if(!m.socket)m.lastSeen=Date.now();if(await predicate())return true;await sleep(25);}return false;};
   if(room.members.size<2)app.join(room,{name:'Ability opponent',driver:1});
@@ -67,7 +68,17 @@ export async function checkSpecials(evaluate,app,room,id,sleep,capture){
   const remoteBat=await wait(()=>evaluate(`__game.race.bots.some(a=>a.id===${peer.id}&&a.driver===14&&a.vulcan>0)&&__game.renderer.batSummons.get(${peer.id})?.amount>.8`));await capture('remote-bat-companion');
   own.vulcan=.03;other.vulcan=.03;own.health=6;other.health=6;room.world.projectiles=[];app.broadcast(room);
   const batGone=await wait(()=>evaluate(`__game.race.vulcan===0&&__game.race.bots.find(a=>a.id===${peer.id}).vulcan===0&&[...__game.renderer.batSummons.values()].every(s=>s.amount<.01)`));
-  member.driver=14;peer.driver=14;room.specialAbilities=false;app.syncRoom(room);app.broadcast(room);
+  Object.assign(own,{wx:65,wz:-20,heading:0,motionHeading:0,cameraHeading:0,speed:0,vulcan:0,health:6,destroyed:0,specialActive:0});Object.assign(other,{driver:5,wx:65,wz:0,heading:0,motionHeading:0,cameraHeading:0,speed:0,vulcan:0,health:6,destroyed:0,somersault:0,somersaultCooldown:0,specialActive:0});room.world.projectiles=[];app.broadcast(room);
+  await wait(()=>evaluate(`__game.race.bots.some(a=>a.id===${peer.id}&&a.driver===5&&Math.abs(a.wz)<1)`));
+  app.controls(peer,{sequence:50,keys:[],actions:[{type:'somersault',id:50,afterMove:-1}],epoch:room.world.soundEpoch});
+  const teleportVisible=await wait(()=>evaluate(`['teleportOut','teleportIn'].every(type=>__game.race.effects.some(e=>e.type===type&&e.owner===${peer.id}))&&[...__game.renderer.models.keys()].some(k=>k.startsWith('teleport:tammy:'))`));await capture('cricket-teleport-departure');
+  const landing=room.world.effects.find(e=>e.type==='teleportIn'&&e.owner===peer.id),arena=arenas[room.world.arena];
+  if(landing){const camera=Array.from({length:8},(_,i)=>{const heading=i*Math.PI/4;return {wx:landing.wx-Math.sin(heading)*18,wz:landing.wz-Math.cos(heading)*18,heading};}).find(p=>!blocked(arena,p.wx,p.wz,2)&&[.2,.4,.6,.8].every(t=>!blocked(arena,p.wx+(landing.wx-p.wx)*t,p.wz+(landing.wz-p.wz)*t,.4)));
+    if(camera)Object.assign(own,{wx:camera.wx,wz:camera.wz,heading:camera.heading,motionHeading:camera.heading,cameraHeading:camera.heading,speed:0});
+    for(const e of room.world.effects)if(e.type==='teleportIn'||e.type==='teleportOut')e.age=.25;app.broadcast(room);await sleep(150);await capture('cricket-teleport-arrival');
+  }
+  const teleportGone=await wait(()=>evaluate(`!__game.race.effects.some(e=>(e.type==='teleportIn'||e.type==='teleportOut')&&e.owner===${peer.id})`));
+  member.driver=14;peer.driver=5;room.specialAbilities=false;app.syncRoom(room);app.broadcast(room);
   const disabled=await wait(()=>evaluate("__game.race.specialAbilities===false&&__game.network.abilities.textContent.includes('OFF')&&document.querySelector('.special-status').classList.contains('hidden')&&!__game.audio.laughter?.active"));
-  return {projectileXray,batAuto,remoteBat,batGone,casterNavigation,opponentNavigation,darkCaster,darkOpponent,xylophone,audit,previewHelp,available,activate,warpAudio,audioResolved,moves,frozen,notice,resumed,movesAgain,cooldown,frozenClient,clientStaysStill,holy,angels,angelsGone,heal,gravity,gravityPickup,fashion,smoke,disabled,pass:projectileXray&&batAuto&&remoteBat&&batGone&&casterNavigation&&opponentNavigation&&darkCaster&&darkOpponent&&xylophone&&audit&&previewHelp&&available&&activate&&warpAudio&&audioResolved&&moves&&frozen&&notice&&resumed&&movesAgain&&cooldown&&frozenClient&&clientStaysStill&&holy&&angels&&angelsGone&&heal&&gravity&&gravityPickup&&fashion&&smoke&&disabled};
+  return {teleportVisible,teleportGone,projectileXray,batAuto,remoteBat,batGone,casterNavigation,opponentNavigation,darkCaster,darkOpponent,xylophone,audit,previewHelp,available,activate,warpAudio,audioResolved,moves,frozen,notice,resumed,movesAgain,cooldown,frozenClient,clientStaysStill,holy,angels,angelsGone,heal,gravity,gravityPickup,fashion,smoke,disabled,pass:teleportVisible&&teleportGone&&projectileXray&&batAuto&&remoteBat&&batGone&&casterNavigation&&opponentNavigation&&darkCaster&&darkOpponent&&xylophone&&audit&&previewHelp&&available&&activate&&warpAudio&&audioResolved&&moves&&frozen&&notice&&resumed&&movesAgain&&cooldown&&frozenClient&&clientStaysStill&&holy&&angels&&angelsGone&&heal&&gravity&&gravityPickup&&fashion&&smoke&&disabled};
 }

@@ -83,6 +83,8 @@ export class RaceAudio {
     return true;
   }
   event(type){switch(type){
+    case 'teleportOut':this.burst(.25,900,.2,0,4200);this.note(220,.28,{type:'sine',end:880,volume:.14});break;
+    case 'teleportIn':this.burst(.22,3600,.13,0,800);for(const [i,f]of [880,1174.66,1567.98].entries())this.note(f,.18,{type:'sine',delay:i*.045,volume:.06});break;
     case 'chaff':this.note(110,.15,{type:'sine',end:45,volume:.4});this.burst(.8,5500,.45,0,900);this.note(880,.2,{type:'sine',end:330,volume:.12,delay:.08});break;
     case 'chaffDivert':this.note(1200,.22,{type:'triangle',end:160,volume:.18});this.burst(.22,3000,.24,0,500);this.note(660,.12,{type:'sine',end:990,volume:.2,delay:.1});this.note(990,.2,{type:'sine',end:1320,volume:.16,delay:.19});break;
     case 'crash':this.note(145,.24,{type:'sine',end:35,volume:.7});this.burst(.2,1800,.75,0,200);this.note(290,.12,{end:100,volume:.12});break;
