@@ -150,7 +150,7 @@ function announceFinish(){
 }
 function finishText(){return (battleTieNotice(race)?battleTieNotice(race)+' · ':'')+`${mode==='combat'?`${race.kills} KILLS`:timeLabel(race.finishTime)} · ${mode==='combat'?'BATTLE':'RACE'} ENDING IN ${Math.ceil(race.finishCountdown)}…`;}
 function draw(){
-  characterPreview.frame(performance.now(),selected,race.color??drivers[selected].color,race.phase);
+  characterPreview.frame(performance.now(),selected,race.color??drivers[selected].color,race.phase,race.specialAbilities!==false);
   renderer.draw(race,race.elapsed);drawMap();
   const visible=new Set();
   for(const plate of renderer.nameplates??[]){

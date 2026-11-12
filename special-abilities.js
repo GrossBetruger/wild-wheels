@@ -3,6 +3,15 @@ import {damageBattle} from './combat.js';
 export const SPECIAL_COOLDOWN=20;
 export const TIME_STOP_DURATION=2.5;
 export const abilityNames={7:'REINE DE LA PARESSE',5:'CRICKET’S JUMP',8:'SPECIAL RELATIVITY',9:'FASHION-STATEMENT',10:'DIZZY SMOKE',11:'HOLY AURA',12:'SIX-HEART RECOVERY'};
+export const abilityDetails={
+  5:{control:'Z · Somersault',description:'Cricket’s jump teleports Tamar to a random safe location when she somersaults.',timing:'1-second flip cooldown'},
+  7:{control:'F · Activate',description:'Reine de la paresse creates a gravity well that draws available power-ups toward Houston from up to 80 units away.',timing:'8 seconds · 20-second recharge'},
+  8:{control:'F · Activate',description:'Special relativity slows other racers and their projectiles to 2.5% speed. Avita-Jas and his projectiles keep their normal speed.',timing:'2.5 seconds · 20-second recharge'},
+  9:{control:'F · Activate',description:'Fashion-Statement snaps above every other racer: 2 damage, or 1 damage to characters with cuteness 5.',timing:'Arena-wide · 20-second recharge'},
+  10:{control:'Boost · Passive',description:'Yuda’s thick smoke trail makes other racers dizzy for 8 seconds. His own smoke does not affect him.',timing:'Smoke lingers for 3 seconds'},
+  11:{control:'F · Activate',description:'Summon two archangels. Holy aura turns locked missiles back toward their shooter.',timing:'8 seconds · 20-second recharge'},
+  12:{control:'F · Activate',description:'Heal one heart immediately, then one per heartbeat every second. Healing stops at 6 hearts, with up to 6 beats.',timing:'Heartbeat healing · 20-second recharge'},
+};
 export function fashionDamage(cuteness){return cuteness===5?1:2;}
 export function frozen(world,id){return world.specialAbilities!==false&&world.timeStop>0&&world.timeOwner!==id;}
 export function useSpecial(world,actor=world){

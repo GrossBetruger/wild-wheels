@@ -3,6 +3,7 @@ export async function checkSpecials(evaluate,app,room,id,sleep,capture){
   if(room.members.size<2)app.join(room,{name:'Ability opponent',driver:1});
   const peer=[...room.members.values()].find(m=>m.id!==id),member=room.members.get([...room.members.keys()].find(k=>room.members.get(k).id===id));
   member.driver=8;peer.driver=10;app.syncRoom(room);
+  app.broadcast(room);const previewHelp=await wait(()=>evaluate("__game.preview.abilityText.textContent.includes('2.5%')&&__game.preview.abilityControl.textContent==='F · Activate'"));await capture('special-ability-preview','.character-preview');
   const actors=[room.world,...room.world.bots],own=actors.find(a=>a.id===id),other=actors.find(a=>a.id===peer.id);
   Object.assign(room.world,{phase:'racing',duration:3600,supplies:[],projectiles:[]});for(const a of actors)Object.assign(a,{human:true,destroyed:999});
   Object.assign(own,{driver:8,destroyed:0,wx:65,wz:40,heading:0,motionHeading:0,cameraHeading:0,speed:0,specialCooldown:0});
@@ -35,11 +36,10 @@ export async function checkSpecials(evaluate,app,room,id,sleep,capture){
   Object.assign(own,{driver:12,health:3,healTimer:0,specialActive:0,specialCooldown:0});app.broadcast(room);await wait(()=>evaluate("__game.race.driver===12&&__game.race.specialCooldown===0"));await evaluate("__game.network.action('special')");
   const heartbeat=await wait(()=>evaluate(`__game.race.driver===12&&__game.race.health===4&&__game.race.effects.some(f=>f.type==='heartbeat')&&__game.audio.heartbeatSeen?.has(${id})`));await capture('healing-heartbeat');
   const heal=heartbeat&&await wait(()=>evaluate('__game.race.driver===12&&__game.race.health===6&&__game.race.specialActive===0'));
-  Object.assign(own,{driver:7,wx:-65,wz:0,heading:0,motionHeading:0,cameraHeading:0,speed:0,missiles:0,specialActive:0,specialCooldown:0});room.world.supplies=[{id:20,kind:'missile',wx:-65,wz:60,cooldown:0,version:0}];app.broadcast(room);
+  Object.assign(own,{driver:7,wx:-65,wz:0,heading:0,motionHeading:0,cameraHeading:0,speed:0,missiles:0,specialActive:0,specialCooldown:0});Object.assign(other,{wx:65,wz:-70,speed:0});room.world.supplies=[{id:20,kind:'missile',wx:-65,wz:60,cooldown:0,version:0}];app.broadcast(room);
   await wait(()=>evaluate('__game.race.driver===7&&__game.race.specialCooldown===0'));await evaluate("__game.network.action('special')");
   const gravity=await wait(()=>evaluate("__game.race.specialActive>0&&__game.race.supplies.some(s=>s.id===20&&s.wz<50&&s.wz>4)"));await capture('houston-gravity');
   const gravityPickup=await wait(()=>evaluate('__game.race.missiles===1&&__game.race.supplies.some(s=>s.id===20&&s.cooldown>0&&s.wz===60)'));
-  if(!gravityPickup)console.log(JSON.stringify({gravityFailure:{server:app.snapshot(room,member).world.missiles,serverSupplies:app.snapshot(room,member).world.supplies,client:await evaluate("({missiles:__game.race.missiles,supplies:__game.race.supplies.map(s=>({id:s.id,wx:s.wx,wz:s.wz,cooldown:s.cooldown})),wx:__game.race.wx,wz:__game.race.wz})")}}));
   Object.assign(own,{driver:9,wx:65,wz:40,speed:0,specialActive:0,specialCooldown:0});Object.assign(other,{driver:6,health:6,destroyed:0,wx:65,wz:55,speed:0});app.broadcast(room);
   await wait(()=>evaluate('__game.race.driver===9&&__game.race.specialCooldown===0'));await evaluate("__game.network.action('special')");
   const fashion=await wait(()=>evaluate('__game.race.specialActive>0&&__game.race.effects.filter(f=>f.type===\'fashionSnap\').length===1'))&&app.snapshot(room,peer).world.health===4;await capture('fashion-statement');
@@ -47,5 +47,5 @@ export async function checkSpecials(evaluate,app,room,id,sleep,capture){
   const smoke=await wait(()=>app.snapshot(room,peer).world.dizzy>7);
   member.driver=10;room.specialAbilities=false;app.syncRoom(room);app.broadcast(room);
   const disabled=await wait(()=>evaluate("__game.race.specialAbilities===false&&__game.network.abilities.textContent.includes('OFF')&&document.querySelector('.special-status').classList.contains('hidden')"));
-  return {available,activate,warpAudio,audioResolved,moves,frozen,notice,resumed,movesAgain,cooldown,frozenClient,clientStaysStill,holy,angels,angelsGone,heal,gravity,gravityPickup,fashion,smoke,disabled,pass:available&&activate&&warpAudio&&audioResolved&&moves&&frozen&&notice&&resumed&&movesAgain&&cooldown&&frozenClient&&clientStaysStill&&holy&&angels&&angelsGone&&heal&&gravity&&gravityPickup&&fashion&&smoke&&disabled};
+  return {previewHelp,available,activate,warpAudio,audioResolved,moves,frozen,notice,resumed,movesAgain,cooldown,frozenClient,clientStaysStill,holy,angels,angelsGone,heal,gravity,gravityPickup,fashion,smoke,disabled,pass:previewHelp&&available&&activate&&warpAudio&&audioResolved&&moves&&frozen&&notice&&resumed&&movesAgain&&cooldown&&frozenClient&&clientStaysStill&&holy&&angels&&angelsGone&&heal&&gravity&&gravityPickup&&fashion&&smoke&&disabled};
 }
