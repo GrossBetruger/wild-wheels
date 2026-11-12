@@ -4,7 +4,7 @@ export const SPECIAL_COOLDOWN=20;
 export const TIME_STOP_DURATION=2.5;
 export const abilityNames={7:'REINE DE LA PARESSE',5:'CRICKET’S JUMP',8:'SPECIAL RELATIVITY',9:'FASHION-STATEMENT',10:'DIZZY SMOKE',11:'PROVIDENCE',14:'DARK HUMOR',13:'TAX-AUDIT',12:'SIX-HEART RECOVERY'};
 export const abilityDetails={
-  14:{control:'F · Activate',description:'Drown the arena in living violet-black fog and wicked laughter. Everyone loses visibility; KnowItOwl sees racers through fog and walls with luminous X-ray eyes, plus outlines of obstacles and arena boundaries to navigate safely.',timing:'7 seconds · 20-second recharge'},
+  14:{control:'F · Activate',description:'Drown the arena in living violet-black fog and wicked laughter. Everyone loses visibility; KnowItOwl sees racers and projectiles through fog and walls with luminous X-ray eyes, plus obstacle outlines. During Vulcan, his friend BatYouDidn’tKnow flies alongside and automatically fires at enemies.',timing:'7 seconds · 20-second recharge'},
   13:{control:'F · Activate',description:'Instantly defeats the active rival carrying the most hedgehogs, missiles, turbos and chaff, even through shields. If Fourmidable has the most (including a tie), Xylophone-Attack instead blocks every other racer’s view with giant instruments and a frantic tune for 5 seconds. Her own view stays clear.',timing:'Arena-wide · 20-second recharge'},
   5:{control:'Z · Somersault',description:'Cricket’s jump teleports Tammy to a random safe location when she somersaults.',timing:'1-second flip cooldown'},
   7:{control:'F · Activate',description:'Reine de la paresse creates a gravity well that draws available power-ups toward Houston from up to 80 units away.',timing:'8 seconds · 20-second recharge'},

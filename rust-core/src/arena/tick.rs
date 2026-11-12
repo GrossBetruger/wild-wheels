@@ -37,7 +37,7 @@ impl Game{
             if self.frozen(id){let human=self.actors[id].human;let held=input.map_or(0,|i|i.keys);let steer=input.and_then(|i|i.steer).unwrap_or(f64::from(u8::from(held&4!=0))-f64::from(u8::from(held&8!=0)));self.move_cart(id,steer,held,dt,true,true);self.actors[id].human=human;if let Some(last)=input.and_then(|i|i.moves.as_ref()).and_then(|m|m.last()){self.movement_ack[id]=last.sequence;self.apply_pending(id,last.sequence);}continue;}
             let max_health=3.0;
             let a=&mut self.actors[id];if a.afk{continue;}a.notice_time=(a.notice_time-dt).max(0.0);
-            for timer in [&mut a.shield,&mut a.hedge_shield,&mut a.tehilim,&mut a.celebrate,&mut a.voice_cooldown,&mut a.wall_cooldown,&mut a.vulcan]{*timer=(*timer-dt).max(0.0);}
+            for timer in [&mut a.bat_cooldown,&mut a.shield,&mut a.hedge_shield,&mut a.tehilim,&mut a.celebrate,&mut a.voice_cooldown,&mut a.wall_cooldown,&mut a.vulcan]{*timer=(*timer-dt).max(0.0);}
             if !action_clock{a.fire_cooldown=(a.fire_cooldown-dt).max(0.0);a.chaff_cooldown=(a.chaff_cooldown-dt).max(0.0);}
             if a.bomber{
                 if !a.inactive&&!ending{let before=a.bomb_reload;a.bomb_reload+=dt;if before<5.0-1e-8&&a.bomb_reload>=5.0-1e-8{a.stink_ammo=(a.stink_ammo+1).min(item_capacity(a.driver,"stink"));a.bomb_reload=a.bomb_reload.max(5.0);}if a.bomb_reload>=10.0-1e-8{a.bomb_ammo=(a.bomb_ammo+1).min(item_capacity(a.driver,"abomb"));a.stink_ammo=(a.stink_ammo+1).min(item_capacity(a.driver,"stink"));a.bomb_reload=(a.bomb_reload-10.0).max(0.0);}}continue;
@@ -91,6 +91,7 @@ impl Game{
             if (i==0||j==0)&&self.actors[0].wall_cooldown<=0.0{let a=&mut self.actors[0];effect(&mut self.global,"crash",0,a.wx,a.wz,None);a.wall_cooldown=0.6;voice(&mut self.global,a,"hurt",a.wx);}
         }}
         for id in 0..self.actors.len(){if !self.frozen(id){self.collect(id);}}
+        for id in 0..self.actors.len(){self.bat_fire(id);}
         self.divert_all();
         let shots=std::mem::take(&mut self.global.projectiles);
         for mut shot in shots{

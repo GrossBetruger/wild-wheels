@@ -11,7 +11,7 @@ pub struct Sample { pub wx:f64,pub wz:f64,pub height:f64 }
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(default, rename_all="camelCase")]
 pub struct Actor {
-    pub special_cooldown:f64,pub special_active:f64,
+    pub bat_cooldown:f64,pub special_cooldown:f64,pub special_active:f64,
     pub id:usize,pub driver:usize,pub name:Option<String>,pub color:String,
     pub wx:f64,pub wz:f64,pub heading:f64,pub motion_heading:f64,pub camera_heading:f64,
     pub speed:f64,pub health:f64,pub kills:f64,pub deaths:u32,pub kill_streak:u32,

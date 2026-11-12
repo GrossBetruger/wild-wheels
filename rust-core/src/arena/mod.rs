@@ -1,6 +1,7 @@
 mod types;
 mod movement;
 mod weapons;
+mod bat;
 mod tick;
 mod specials;
 mod packet;

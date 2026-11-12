@@ -100,7 +100,7 @@ export class LocalFeedback {
     }
     if(type!=='fire'||sequence<this.fireTick)return false;
     const kind=actor.item==='missile'&&actor.missiles>0?'missile':'hedgehog';
-    const vulcan=kind==='hedgehog'&&actor.vulcan>0,resource=kind==='missile'?'missiles':vulcan?null:'ammo';
+    const vulcan=kind==='hedgehog'&&actor.vulcan>0;if(actor.driver===14&&vulcan)return false;const resource=kind==='missile'?'missiles':vulcan?null:'ammo';
     if(resource&&actor[resource]<=0)return false;
     const cooldown=kind==='missile'?.9:vulcan?.075:.225,id=this.nextId++;
     this.fireTick=afterMove+Math.ceil(cooldown/MOVEMENT_DT-1e-8);
