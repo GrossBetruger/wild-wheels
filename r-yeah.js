@@ -37,7 +37,7 @@ function strut(m,a,b,r,color){const n=Math.max(2,Math.ceil(Math.hypot(...a.map((
 function ryeahLogo(m,side){
   const palette=['#d00019','#050505','#b2b2b2','#ffffff'];
   // Same circular crest on both sides; reverse the local horizontal axis for readability.
-  const point=(u,v)=>[side*1.245,3.28-v/128*1.08,-1.2-side*(u/128-.5)*1.08];
+  const point=(u,v)=>[side*1.245,2.74+(.5-v/128)*1.35,-1.2-side*(u/128-.5)*1.35];
   for(const [y,left,right,color] of logoRuns)m.quad(point(left,y),point(right,y),point(right,y+1),point(left,y+1),palette[color]);
 }
 export function drawJetRanger(m,color){
