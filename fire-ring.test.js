@@ -90,3 +90,16 @@ test('growing fire blocks at its current edge rather than its old radius',()=>{
 });
 
 test('the expanding ring reaches radius 40 at twenty seconds without overshooting',()=>{assert.equal(fireRingRadius(0),40);assert.equal(fireRingRadius(-1),40);});
+
+test('manual release and timeout each leave one colored extinguishing ring in solo and Rust arenas',()=>{
+  for(const [reason,remaining,speed,previousHeading,oldRadius,expectedRadius]of [['release',10,0,0,25,25],['timeout',.01,100,.1,39.985,40]]){
+    const seed=createBattle();Object.assign(seed,{driver:10,phase:'racing',wx:70,wz:0,speed,heading:0,motionHeading:0,ringHeading:previousHeading,ringRemaining:remaining,ringSpent:true,supplies:[],effects:[{type:'fireRing',owner:0,wx:70,wz:0,radius:oldRadius,color:'#4abaff',age:0,life:.1}]});for(const a of seed.bots){a.inactive=true;a.destroyed=1e9;}
+    const solo=structuredClone(seed),native=new ArenaCore(seed),keys=new Set(reason==='timeout'?['w','arrowright']:[]);
+    tickBattle(solo,keys,1/60);native.step(1/60,[{actor:0,keys}]);
+    for(const world of [solo,native.snapshot()]){const out=world.effects.filter(f=>f.type==='fireRingOut');assert.equal(out.length,1,reason);assert.equal(out[0].radius,expectedRadius);assert.equal(out[0].color,'#4abaff');assert.equal(world.effects.some(f=>f.type==='fireRing'),false);assert.equal(fireRingBlocks(world,30,0,110,0),false,'The dying flames no longer block projectiles');}
+    tickBattle(solo,new Set(),1/60);native.step(1/60);assert.equal(solo.effects.filter(f=>f.type==='fireRingOut').length,1);assert.equal(native.snapshot().effects.filter(f=>f.type==='fireRingOut').length,1);
+    assert.equal(native.present().effects.find(f=>f.type==='fireRingOut').radius,expectedRadius);
+    for(let i=0;i<150;i++){tickBattle(solo,new Set(),1/60);native.step(1/60);}
+    assert.equal(solo.effects.some(f=>f.type==='fireRingOut'),false);assert.equal(native.snapshot().effects.some(f=>f.type==='fireRingOut'),false);
+  }
+});

@@ -2,6 +2,7 @@ use super::*;
 fn radius(remaining:f64)->f64{10.0+1.5*(20.0-remaining).clamp(0.0,20.0)}
 impl Game{
     pub(super) fn ring_tick(&mut self,dt:f64){
+        let previous:Vec<_>=self.global.effects.iter().filter(|f|f.kind=="fireRing").cloned().collect();
         self.global.effects.retain(|f|f.kind!="fireRing");
         for id in 0..self.actors.len(){
             if self.frozen(id){let a=&self.actors[id];if a.ring_remaining>0.0&&!a.afk&&!a.inactive&&a.destroyed<=0.0{self.global.effects.push(Effect{kind:"fireRing".into(),radius:Some(radius(a.ring_remaining)),color:Some(match a.ring_blue{true=>"#4abaff",false=>"#ff631c"}.into()),owner:Some(id),wx:a.wx,wz:a.wz,life:0.1,..Effect::default()});}continue;}
@@ -16,6 +17,12 @@ impl Game{
                 if a.drift>=0.85{a.ring_remaining=20.0;a.ring_spent=true;sound(&mut self.global,"boost",id,a.wx,a.wz,None);}
             }
             if a.ring_remaining>0.0{self.global.effects.push(Effect{kind:"fireRing".into(),radius:Some(radius(a.ring_remaining)),color:Some(match a.ring_blue{true=>"#4abaff",false=>"#ff631c"}.into()),owner:Some(id),wx:a.wx,wz:a.wz,life:0.1,..Effect::default()});}
+        }
+        for mut old in previous{
+            if self.global.effects.iter().any(|f|f.kind=="fireRing"&&f.owner==old.owner){continue;}
+            if old.owner.and_then(|id|self.actors.get(id)).is_some_and(|a|a.ring_spent&&a.ring_remaining<=0.0){old.radius=Some(40.0);}
+            old.kind="fireRingOut".into();old.age=0.0;old.life=2.4;
+            sound(&mut self.global,"fireRingOut",old.owner.unwrap_or(0),old.wx,old.wz,None);self.global.effects.push(old);
         }
         let rings:Vec<_>=self.global.effects.iter().filter(|f|f.kind=="fireRing").map(|f|(f.owner.unwrap(),f.wx,f.wz,f.radius.unwrap_or(10.0))).collect();
         for (owner,x,z,radius) in rings{

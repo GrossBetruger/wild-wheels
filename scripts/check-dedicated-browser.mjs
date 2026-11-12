@@ -47,10 +47,19 @@ try{
     assert.equal(await evaluate(guest,"__game.race.effects.find(f=>f.type==='fireRing').color"),'#4abaff');
     await evaluate(host,"document.getElementById('game').scrollIntoView({block:'center'})");
     const shot=await call('Page.captureScreenshot',{format:'png'},host);await writeFile(output+'.png',Buffer.from(shot.data,'base64'));
-    assert.ok(await evaluate(guest,"__game.race.effects.find(f=>f.type==='fireRing').radius>=10"));
+    await evaluate(host,'__game.keys.clear()');
+    await wait(()=>evaluate(guest,"__game.race.effects.some(f=>f.type==='fireRingOut')"),'Manual release did not extinguish for the guest');
+    assert.equal(await evaluate(guest,"__game.race.effects.some(f=>f.type==='fireRing')"),false);
+    assert.equal(await evaluate(guest,"__game.race.effects.find(f=>f.type==='fireRingOut').color"),'#4abaff');
+    await sleep(200);const extinguish=await call('Page.captureScreenshot',{format:'png'},host);await writeFile(output+'.extinguish.png',Buffer.from(extinguish.data,'base64'));
+    await wait(()=>evaluate(guest,"!__game.race.effects.some(f=>f.type==='fireRingOut')"),'Extinguishing smoke did not clear');
+    await evaluate(host,"__game.keys.add('w');__game.keys.add('shift');__game.keys.add('arrowright')");
+    await wait(()=>evaluate(guest,"__game.race.effects.some(f=>f.type==='fireRing')"),'Second charged drift did not ignite');
     await wait(()=>evaluate(guest,"(__game.race.effects.find(f=>f.type==='fireRing')?.radius??0)>=39.5"),'Remote fire ring did not grow toward radius 40',21000);
-    assert.ok(await evaluate(guest,"__game.race.effects.find(f=>f.type==='fireRing').radius<=40"));
-    await evaluate(host,'__game.keys.clear()');await wait(()=>evaluate(guest,"!__game.race.effects.some(f=>f.type==='fireRing')"),'Fire ring persisted after stopping');
+    await wait(()=>evaluate(guest,"__game.race.effects.some(f=>f.type==='fireRingOut')"),'Twenty-second expiry did not extinguish');
+    assert.equal(await evaluate(guest,"__game.race.effects.find(f=>f.type==='fireRingOut').radius"),40);
+    await evaluate(host,'__game.keys.clear()');
+
   }
   for(const session of sessions)assert.equal(await evaluate(session,'__game.renderer.gl.getError()'),0);
   const beforeRefresh=await evaluate(host,'({id:__game.network.state.you,epoch:__game.race.soundEpoch,name:__game.race.name})');await call('Page.reload',{},host);await wait(()=>evaluate(host,'Boolean(globalThis.__game?.network.active&&__game.network.state)'), 'Refresh failed to rejoin');const refreshed=await evaluate(host,'({id:__game.network.state.you,epoch:__game.race.soundEpoch,name:__game.race.name})');assert.deepEqual(refreshed,beforeRefresh);

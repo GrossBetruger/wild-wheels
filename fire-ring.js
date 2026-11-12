@@ -3,6 +3,7 @@ import {frozen} from './special-abilities.js';
 export const FIRE_RING_RADIUS=10;
 export const fireRingRadius=remaining=>10+1.5*Math.max(0,Math.min(20,20-remaining));
 export function tickFireRings(world,dt){
+  const previous=world.effects.filter(f=>f.type==='fireRing');
   world.effects=world.effects.filter(f=>f.type!=='fireRing');const actors=[world,...world.bots];
   for(const a of actors){
     if(frozen(world,a.id)){if(a.ringRemaining>0&&!a.afk&&!a.inactive&&!a.destroyed)world.effects.push({type:'fireRing',radius:fireRingRadius(a.ringRemaining),color:a.ringBlue?'#4abaff':'#ff631c',owner:a.id,wx:a.wx,wz:a.wz,age:0,life:.1});continue;}
@@ -17,6 +18,11 @@ export function tickFireRings(world,dt){
       if(a.drift>=.85){a.ringRemaining=20;a.ringSpent=true;world.events.push('boost');}
     }
     if(a.ringRemaining>0)world.effects.push({type:'fireRing',radius:fireRingRadius(a.ringRemaining),color:a.ringBlue?'#4abaff':'#ff631c',owner:a.id,wx:a.wx,wz:a.wz,age:0,life:.1});
+  }
+  for(const old of previous){
+    if(world.effects.some(f=>f.type==='fireRing'&&f.owner===old.owner))continue;
+    const owner=actors.find(a=>a.id===old.owner),radius=owner?.ringSpent&&owner.ringRemaining<=0?40:old.radius;
+    world.effects.push({...old,type:'fireRingOut',radius,age:0,life:2.4});world.events.push('fireRingOut');
   }
   for(const ring of world.effects.filter(f=>f.type==='fireRing')){
     const owner=actors.find(a=>a.id===ring.owner);owner.ringDoses??={};
