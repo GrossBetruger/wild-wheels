@@ -611,7 +611,7 @@ export class Renderer {
       const bodyStart=this.instances.length,dataStart=m.data.length;
       this.kart(m,pose,actor.color??drivers[actor.driver].color,actor.driver,0,0,actor.boost>0,time,actor.celebrate,jump,actor.driver!==7||actor.vulcan<=0);
       const parts=this.instances.slice(bodyStart);this.rememberBody(actor,parts,parts.length?[]:m.data.slice(dataStart));
-      if(r.specialAbilities!==false&&[r,...r.bots].some(a=>a.driver===13&&a.specialActive>0)){
+      if(r.specialAbilities!==false&&[r,...r.bots].some(a=>a.id!==actor.id&&a.driver===13&&a.specialActive>0)){
         const facing=actor.cameraHeading??actor.heading,phase=Math.floor(time*8)%8;
         this.model('xylophone:'+phase,pose.x+Math.sin(facing)*5,0,pose.z+Math.cos(facing)*5,facing,mesh=>drawXylophone(mesh,phase));
       }
