@@ -1,7 +1,7 @@
 export async function checkRoom(evaluate,app,room,id,sleep,reload,capture){
   const wait=async predicate=>{for(let attempt=0;attempt<120;attempt++){if(await predicate())return true;await sleep(25);}return false;};
   if(room.members.size===1)app.join(room,{name:'Friend',driver:1});
-  const count=room.members.size,code=room.code,host=room.host,name=room.members.get(id).name==='Tamar 🦗'?'Sam 🦗':'Tamar 🦗';
+  const count=room.members.size,code=room.code,host=room.host,name=room.members.get(id).name==='Tammy 🦗'?'Sam 🦗':'Tammy 🦗';
   const roomUrl=await evaluate(`new URL(location.href).searchParams.get('room')===${JSON.stringify(code)}`);
   await wait(()=>evaluate(`(document.getElementById('restart').getClientRects().length>0)===${id===host}`));
   const lobby=await evaluate(`(()=>{const visible=node=>node.getClientRects().length>0;const n=__game.network;return {hostControls:[n.hostButton,n.botCount,n.animalChoice,n.share.parentElement,n.help,document.querySelector('.mode-switch'),document.querySelector('.map-switch'),document.getElementById('restart'),document.getElementById('change-track')].map(visible),playerControls:[n.name,n.leaveButton,document.getElementById('drivers'),document.getElementById('start'),document.getElementById('fullscreen')].every(visible),noSaveButton:![...n.panel.querySelectorAll('button')].some(button=>button.textContent==='SAVE NAME')};})()`);

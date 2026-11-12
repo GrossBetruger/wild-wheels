@@ -7,7 +7,7 @@ export const drivers = [
   { name: 'Felix the Fox', emoji: '🦊', color: '#edb84f', desc: 'Quick on the corners. Quicker with trouble.', speed: 4, handling: 4, accel: 5, cuteness: 4, intelligence: 4, fuel: 2 },
   { name: 'Benny the Bear', emoji: '🐻', color: '#67a99c', desc: 'Big bear. Tiny kart. Absolutely no brakes.', speed: 5, handling: 4, accel: 3, cuteness: 4, intelligence: 2, fuel: 3 },
   { name: 'Ellie the Elephant', emoji: '🐘', color: '#81a5bc', desc: 'Big ears. Bigger corner exits.', speed: 4, handling: 4, accel: 5, cuteness: 5, intelligence: 4, fuel: 3 },
-  { name: 'Tamar the Cricket', emoji: '🦗', color: '#83b64d', desc: 'chirp chirp', speed: 3, handling: 5, accel: 5, cuteness: 5, intelligence: 3, fuel: 2 },
+  { name: 'Tammy the Cricket', emoji: '🦗', color: '#83b64d', desc: 'chirp chirp', speed: 3, handling: 5, accel: 5, cuteness: 5, intelligence: 3, fuel: 2 },
   { name: 'Elon Musk', emoji: '🚘', color: '#e8edf2', desc: 'New Roadster. Cold-gas thrusters. Zero chill.', speed: 5, handling: 3, accel: 5, cuteness: 1, intelligence: 4, fuel: 3 },
   { name: 'Houston the RTPL', emoji: '🦥', color: '#69a9c7', desc: 'Houston, we have ignition', speed: 2, handling: 4, accel: 2, cuteness: 5, intelligence: 5, fuel: 5 },
   { name: 'Avita-Jas', emoji: '🪱', color: '#e69d52', desc: 'Tiny worm. Trusty Cessna. Express electron delivery.', speed: 4, handling: 3, accel: 4, cuteness: 5, intelligence: 5, fuel: 3 },

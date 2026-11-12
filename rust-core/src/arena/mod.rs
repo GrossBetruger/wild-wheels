@@ -48,7 +48,7 @@ pub fn boost_duration(driver:usize)->f64{2.0+0.8*f64::from(DRIVER_FUEL[driver%DR
 pub fn item_capacity(driver:usize,kind:&str)->u32{let intelligence=DRIVER_INTELLIGENCE[driver%DRIVER_INTELLIGENCE.len()];match kind{"hedgehog"=>10+2*(intelligence-1),"missile"|"boost"|"abomb"|"stink"=>intelligence+1,_=>0}}
 pub fn recovery_interval(driver:usize)->f64{14.0-2.0*f64::from(DRIVER_CUTENESS[driver%DRIVER_CUTENESS.len()])}
 pub fn hedgehog_recovery_interval(driver:usize)->f64{2.25-0.25*f64::from(DRIVER_CUTENESS[driver%DRIVER_CUTENESS.len()])}
-pub const DRIVER_NAMES:[&str;15]=["Pip the Panda","Rocco the Raccoon","Felix the Fox","Benny the Bear","Ellie the Elephant","Tamar the Cricket","Elon Musk","Houston the RTPL","Avita-Jas","Pearococo","Master-Yuda","R-yeah","Catheterpillar","Fourmidable","KnowItOwl"];
+pub const DRIVER_NAMES:[&str;15]=["Pip the Panda","Rocco the Raccoon","Felix the Fox","Benny the Bear","Ellie the Elephant","Tammy the Cricket","Elon Musk","Houston the RTPL","Avita-Jas","Pearococo","Master-Yuda","R-yeah","Catheterpillar","Fourmidable","KnowItOwl"];
 pub fn driver_name(driver:usize)->&'static str { DRIVER_NAMES[driver%DRIVER_NAMES.len()] }
 impl Game {
     pub fn combat_active(&self)->bool{self.global.phase=="racing"}

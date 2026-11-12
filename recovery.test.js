@@ -80,7 +80,7 @@ for(const engine of ['solo','Rust multiplayer']){
 }
 
 test('resuming a multiplayer player preserves earned recovery progress and broadcasts their healed health to peers',()=>{
-  const seed=createBattle(5);Object.assign(seed,{phase:'racing',human:true,name:'Tamar',health:2,healTimer:2,shield:0,supplies:[]});
+  const seed=createBattle(5);Object.assign(seed,{phase:'racing',human:true,name:'Tammy',health:2,healTimer:2,shield:0,supplies:[]});
   Object.assign(seed.bots[0],{human:true,name:'Friend'});for(const bot of seed.bots.slice(1))Object.assign(bot,{inactive:true,destroyed:1e9});
   const core=new ArenaCore(seed);
   core.resume(0);for(let frame=0;frame<120;frame++)core.step(1/60);

@@ -251,7 +251,7 @@ test('a saved room cookie rejoins the same player rather than allocating a secon
   assert.equal(joined.you,host.you);assert.equal(joined.world.name,'Host');assert.equal(joined.players.length,1);assert.equal(joined.host,joined.you);
 });
 test('saved name cookies preserve names and treat malformed cookies as an empty preference',()=>{
-  assert.equal(savedPlayerName('other=1; wild-wheels-name=Tamar%20%F0%9F%A6%97'),'Tamar 🦗');
+  assert.equal(savedPlayerName('other=1; wild-wheels-name=Tammy%20%F0%9F%A6%97'),'Tammy 🦗');
   assert.equal(savedPlayerName('wild-wheels-name=Sam%20%3Cb%3E'),'Sam <b>');
   assert.equal(savedPlayerName('wild-wheels-name=%invalid'),'Player');assert.equal(savedPlayerName(''),'Player');assert.equal(savedPlayerName(`wild-wheels-name=${'x'.repeat(25)}`),'Player');
 });
