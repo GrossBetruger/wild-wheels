@@ -1,4 +1,37 @@
 const gold='#e2af50',mane='#8f5029',cream='#fff0c9',navy='#243d62';
+export function drawArchangel(m,phase,manifest){
+  const point=m.point,scale=.12+.88*manifest;
+  m.point=function(p){return point.call(this,[p[0]*scale,p[1]*scale,p[2]*scale]);};
+  try{
+    const white='#fff7db',light='#e6eaf3',metal='#ecc36b',skin='#dba878',wing=Math.sin(phase*Math.PI/4)*.23;
+    // Layered flight feathers spread from the shoulder, with raised golden leading edges.
+    for(const side of [-1,1]){
+      for(let i=0;i<9;i++){
+        const t=i/8,x=side*(.55+t*1.7),y=2.2+Math.sin(t*Math.PI*.8)*1.15,z=-.2-wing*t;
+        m.ball(x,y-.25,z,.17,.65-t*.16,.12,i%3===0?white:light,7,5);
+        strut(m,[side*.45,2.15,-.18],[x,y+.32,z],.065,metal);
+        m.cone(x,y-.97+t*.15,z,.14,.5,white,7);
+      }
+      // Armored shoulders and a relaxed, open guarding hand.
+      m.ball(side*.56,1.94,.1,.28,.26,.28,metal,9,5);
+      strut(m,[side*.56,1.85,.1],[side*.83,1.2,.35],.13,white);
+      m.ball(side*.84,1.16,.36,.16,.19,.14,skin,8,5);
+    }
+    // Flowing ivory robes and engraved gold breastplate.
+    m.cone(0,0,0,.72,2.2,white,12);
+    m.ball(0,1.75,0,.48,.52,.31,metal,12,7);
+    m.box(0,1.35,.3,.12,.8,.08,white);m.box(0,1.72,.3,.55,.1,.08,white);
+    for(const x of [-.42,-.21,0,.21,.42])m.tri([x,0,.58],[x+.07,0,.58],[x*.3,1.5,.25],metal);
+    m.ball(0,2.67,.06,.4,.44,.35,skin,12,7);
+    m.ball(0,2.91,-.03,.44,.3,.36,'#79512e',10,6);
+    for(const x of [-.14,.14])m.ball(x,2.72,.39,.045,.07,.025,'#433636',6,4);
+    m.box(0,2.49,.39,.17,.035,.025,'#fff6da');
+    // Flaming ceremonial sword, held outside the robe.
+    m.box(.85,.48,.4,.085,.95,.085,white);m.cone(.85,.35,.4,.12,.3,metal,6);
+    m.box(.85,1.02,.4,.48,.08,.12,metal);m.box(.85,1.1,.4,.09,.33,.09,metal);
+    for(let i=0;i<32;i++){const a=i*Math.PI/16,b=(i+1)*Math.PI/16;m.quad([Math.cos(a)*.53,3.36,Math.sin(a)*.53],[Math.cos(b)*.53,3.36,Math.sin(b)*.53],[Math.cos(b)*.65,3.36,Math.sin(b)*.65],[Math.cos(a)*.65,3.36,Math.sin(a)*.65],metal);}
+  }finally{m.point=point;}
+}
 function strut(m,a,b,r,color){const n=Math.max(2,Math.ceil(Math.hypot(...a.map((v,i)=>v-b[i]))/.2));for(let i=0;i<=n;i++)m.ball(...a.map((v,j)=>v+(b[j]-v)*i/n),r,r,r,color,6,4);}
 function iaiLogo(m,side){
   // Procedural decal based on the IAI mark shown at space.gov.il/node/134091.

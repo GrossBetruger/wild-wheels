@@ -9,7 +9,7 @@ import {previewPose} from './preview-pose.js';
 import {drawRococoChariot,drawPearococo,drawPeacockFeather,drawRoyalWing,drawBalletPump,drawFairyStar,drawFairyBoost} from './pearococo.js';
 import {drawMotorcycle,drawYuda,drawYudaJacket,YudaJackets,YudaStunts,YudaExhaust,drawBikerBadge,drawMotorcycleBoost} from './master-yuda.js';
 import {YudaDrift} from './yuda-drift.js';
-import {drawJetRanger,miniJetRanger,hangingLion,drawChopperVulcan,drawLionPilot,drawLionMane,drawJetRangerRotors,drawRotorWash} from './r-yeah.js';
+import {drawArchangel,drawJetRanger,miniJetRanger,hangingLion,drawChopperVulcan,drawLionPilot,drawLionMane,drawJetRangerRotors,drawRotorWash} from './r-yeah.js';
 const rgb=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255);
 const sub=(a,b)=>a.map((v,i)=>v-b[i]);
 const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
@@ -249,6 +249,19 @@ export class Renderer {
     if(actor.item!=='hedgehog'||actor.fireCooldown<=.035)return;
     this.glow.at(p.x,height,p.z,angle);this.glow.pitch=pitch;this.glow.pivot=2;
     this.glow.particle(1.3,4.56,3.2,1,[1,.55,.08]);this.glow.particle(1.3,4.56,3.6,.5,[1,.85,.4]);
+  }
+  holyArchangels(p,actor,time,jump){
+    const age=Math.max(0,8-actor.specialActive),presence=Math.min(1,age/.65,actor.specialActive/.7),smooth=presence*presence*(3-2*presence),stage=Math.round(smooth*12)/12,angle=Math.atan2(p.tx,p.tz),phase=Math.floor(time*8)%8;
+    for(const side of [-1,1]){
+      const x=p.x+Math.cos(angle)*side*4.5,z=p.z-Math.sin(angle)*side*4.5,height=(jump?.height??0)+1.3+Math.sin(time*2+side)*.16+(1-smooth)*2.5;
+      this.model(`r-yeah:archangel:${phase}:${stage}`,x,height,z,angle,mesh=>drawArchangel(mesh,phase,stage));
+      this.glow.at(x,height,z,angle);
+      const flare=1-smooth;
+      for(let i=0;i<48;i++){const a=i*2.399+time*.7,t=(time*.6+i/48)%1,radius=.65+flare*1.8+t*.5;this.glow.particle(Math.cos(a)*radius,t*4.4,Math.sin(a)*radius,(.09+flare*.23)*(1-t*.5),[.65,.44,.1]);}
+      for(let i=0;i<32;i++){const a=i*Math.PI/16,b=(i+1)*Math.PI/16,r=1+flare*1.4;this.glow.quad([Math.cos(a)*r,-.4,Math.sin(a)*r],[Math.cos(b)*r,-.4,Math.sin(b)*r],[Math.cos(b)*(r+.08),-.4,Math.sin(b)*(r+.08)],[Math.cos(a)*(r+.08),-.4,Math.sin(a)*(r+.08)],[.5,.3,.04]);}
+      this.glow.particle(0,3.36*stage,0,.75,[.4,.25,.045]);
+      if(flare>.02)for(let i=0;i<10;i++)this.glow.particle(0,i*.6,0,flare*.65,[.36*flare,.28*flare,.11*flare]);
+    }
   }
   lionMane(p,height,angle,pitch,time,boost){
     const phase=Math.floor(time*(boost?24:8))%12;
@@ -586,7 +599,7 @@ export class Renderer {
       const parts=this.instances.slice(bodyStart);this.rememberBody(actor,parts,parts.length?[]:m.data.slice(dataStart));
       if(actor.driver===7)this.houstonHelmet(pose,actor,time,jump);
       if(actor.hedgeShield>0)this.hedgeguard(m,pose,actor,time,jump);
-      if(r.specialAbilities!==false&&actor.driver===11&&actor.specialActive>0){const angle=time*.5;this.glow.at(pose.x,(jump?.height??0)+3.3,pose.z);for(let i=0;i<28;i++){const a=angle+i*Math.PI/14;this.glow.particle(Math.cos(a)*2.1,Math.sin(a*3)*.2,Math.sin(a)*2.1,.4,[.7,.5,.12]);}this.glow.at(pose.x,(jump?.height??0)+6.3,pose.z);this.glow.disc(0,0,0,1.2,1.2,[.65,.45,.06]);}
+      if(r.specialAbilities!==false&&actor.driver===11&&actor.specialActive>0)this.holyArchangels(pose,actor,time,jump);
       if(actor.tehilim>0)this.tehilimAura(pose,time,actor.tehilim,jump);
       if(actor.dizzy>0)for(let i=0;i<6;i++){const angle=time*(actor.boost>0?9:5)+i*Math.PI/3;m.at(pose.x+Math.sin(angle)*3.2,6.8+Math.sin(angle*2)*.5,pose.z+Math.cos(angle)*3.2,angle);m.box(0,0,0,1.2,.22,.3,'#fff08b');m.box(0,0,0,.3,.22,1.2,'#fff08b');this.glow.at(m.origin[0],m.origin[1],m.origin[2]);this.glow.particle(0,0,0,.8,[.7,.6,.05]);}
       if(actor.vulcan>0&&actor.driver===10)this.laserMount(m,pose,actor,time,jump);
