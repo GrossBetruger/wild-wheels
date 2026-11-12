@@ -43,3 +43,15 @@ export class ChaffNotice {
     return this.active;
   }
 }
+
+export class RingOfFireNotice {
+  identity=null;burning=false;active=null;sequence=0;
+  sample(world,now){
+    const identity=[world.mode,world.soundEpoch,world.arena,world.id].join(':');
+    const ring=world.specialAbilities!==false?(world.effects??[]).find(f=>f.type==='fireRing'&&f.owner===world.id):null;const burning=Boolean(ring);
+    if(identity!==this.identity){this.identity=identity;this.burning=burning;this.active=null;return null;}
+    if(world.mode!=='combat'||world.phase!=='racing'||world.destroyed>0){this.burning=false;this.active=null;return null;}
+    if(burning&&!this.burning&&!this.active)this.active={key:++this.sequence,blue:ring.color==='#4abaff',until:now+2.3};
+    this.burning=burning;if(this.active&&now>=this.active.until)this.active=null;return this.active;
+  }
+}

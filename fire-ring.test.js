@@ -50,3 +50,26 @@ test('the existing maximum boost charge ignites without a full revolution and su
   core.step(1/60,[{actor:0,keys,moves:[{sequence:0,keys}]}]);assert.equal(core.snapshot().effects.some(f=>f.type==='fireRing'),true);
   core.step(1/60,[{actor:0,keys,moves:[]}]);assert.equal(core.snapshot().effects.some(f=>f.type==='fireRing'),true);
 });
+
+test('Ring of Fire announces your ignition once, then expires while the flames keep burning',async()=>{
+  const {RingOfFireNotice}=await import('./combat-notices.js');const notice=new RingOfFireNotice();
+  const world={mode:'combat',phase:'racing',soundEpoch:1,arena:0,id:0,destroyed:0,effects:[]};
+  assert.equal(notice.sample(world,0),null);world.effects=[{type:'fireRing',owner:0}];const first=notice.sample(world,.1);assert.ok(first);
+  assert.equal(notice.sample(world,1).key,first.key);assert.equal(notice.sample(world,2.5),null);assert.equal(notice.sample(world,3),null);
+  world.effects=[];notice.sample(world,4);world.effects=[{type:'fireRing',owner:0}];assert.notEqual(notice.sample(world,5).key,first.key);
+});
+
+test('joining a burning ring or seeing another player’s ring does not announce your ability',async()=>{
+  const {RingOfFireNotice}=await import('./combat-notices.js');const notice=new RingOfFireNotice();
+  const world={mode:'combat',phase:'racing',soundEpoch:1,arena:0,id:0,destroyed:0,effects:[{type:'fireRing',owner:0}]};
+  assert.equal(notice.sample(world,0),null);assert.equal(notice.sample(world,1),null);
+  world.effects=[{type:'fireRing',owner:1}];assert.equal(notice.sample(world,2),null);
+});
+
+test('right drifts produce blue fire and left drifts produce orange fire in solo and native arenas',()=>{
+  for(const [steering,color]of [['arrowright','#4abaff'],['arrowleft','#ff631c']]){
+    const seed=createBattle();Object.assign(seed,{driver:10,phase:'racing',wx:70,wz:0,speed:200,heading:0,motionHeading:0,ringHeading:0,drift:.84,wasDrifting:true,supplies:[]});for(const a of seed.bots){a.inactive=true;a.destroyed=1e9;}
+    const solo=structuredClone(seed),native=new ArenaCore(seed),keys=new Set(['w','shift',steering]);tickBattle(solo,keys,1/60);native.step(1/60,[{actor:0,keys}]);
+    assert.equal(solo.effects.find(f=>f.type==='fireRing').color,color);assert.equal(native.snapshot().effects.find(f=>f.type==='fireRing').color,color);
+  }
+});

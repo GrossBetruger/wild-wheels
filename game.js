@@ -7,7 +7,7 @@ import {useSpecial,abilityNames,frozen,auditTarget} from './special-abilities.js
 import { createBattle, battleActive, tickBattle, fireBattle, releaseChaff, useBattleTurbo, somersaultBattle, arenas, standings, incomingMissiles, VULCAN_DURATION, MAX_HEALTH, equipBomber, dropBomb, BOMB_RECHARGE, recoveryInterval, hedgehogRecoveryInterval } from './combat.js';
 import { NetworkGame } from './network.js';
 import { ordinal, matchResults, battleTieNotice } from './results.js';
-import { KillCelebration, ChaffNotice } from './combat-notices.js';
+import { KillCelebration, ChaffNotice, RingOfFireNotice } from './combat-notices.js';
 import { usesMobileControls, bombTarget, panBomber } from './mobile.js';
 import {CharacterPreview} from './character-preview.js';
 const $ = id => document.getElementById(id);
@@ -132,6 +132,7 @@ const incomingTitle=document.createElement('strong'),incomingHelp=document.creat
 const killCelebration=new KillCelebration(),whackBanner=document.createElement('div');whackBanner.id='whack-banner';whackBanner.className='whack-banner hidden';whackBanner.setAttribute('role','status');whackBanner.setAttribute('aria-atomic','true');document.querySelector('.viewport').append(whackBanner);let whackKey=null;
 const specialButton=document.createElement('button');specialButton.id='special-ability';specialButton.className='chaff-button special-button hidden';specialButton.type='button';specialButton.onclick=special;document.querySelector('.viewport').append(specialButton);
 const specialStatus=document.createElement('div');specialStatus.className='special-status hidden';specialStatus.setAttribute('role','status');document.querySelector('.viewport').append(specialStatus);
+const ringNotice=new RingOfFireNotice(),ringBanner=document.createElement('div');ringBanner.id='ring-of-fire-announcement';ringBanner.className='ring-of-fire-announcement hidden';ringBanner.setAttribute('role','status');ringBanner.setAttribute('aria-atomic','true');const ringTitle=document.createElement('strong'),ringHelp=document.createElement('span');ringTitle.textContent='RING OF FIRE';ringHelp.textContent='KEEP TURNING · LET IT BURN';ringBanner.append(ringTitle,ringHelp);document.querySelector('.viewport').append(ringBanner);
 const chaffNotice=new ChaffNotice(),avertedBanner=document.createElement('div');avertedBanner.id='averted-notice';avertedBanner.className='incoming-warning averted-notice hidden';avertedBanner.setAttribute('role','status');avertedBanner.setAttribute('aria-atomic','true');const avertedTitle=document.createElement('strong'),avertedHelp=document.createElement('span');avertedTitle.textContent='✓ MISSILE AVERTED';avertedHelp.textContent='CHAFF BROKE THE LOCK';avertedBanner.append(avertedTitle,avertedHelp);document.querySelector('.viewport').append(avertedBanner);
 function updateMapLabels(){const maps=mode==='combat'?arenas:tracks,info=maps[track];$('track-name').textContent=info.name;$('track-label').textContent=info.name.toUpperCase();$('track-desc').textContent=info.desc;$('difficulty').textContent=mode==='combat'?'MELEE':info.difficulty;document.querySelector('.race-meta').textContent=mode==='combat'?'10 KILLS · 3 MIN · 6 FIGHTERS':'3 LAPS · 6 RACERS';document.querySelector('.race-bar .divider').nextElementSibling.textContent=mode==='combat'?'DEATHMATCH':'GRAND PRIX';for(const button of modeSwitch.children)button.setAttribute('aria-pressed',String(button.id===`mode-${mode}`));for(const [index,button] of mapButtons.entries()){button.textContent=maps[index].name;button.setAttribute('aria-pressed',String(index===track));}const next=maps[(track+1)%maps.length];$('change-track').textContent='NEXT MAP →';$('change-track').setAttribute('aria-label',`Switch to ${next.name}`);}
 const ammoRack=document.createElement('div');ammoRack.className='ammo-rack';const ammoCards=new Map();
@@ -190,6 +191,7 @@ function hud(){
   const dizzy=!race.bomber&&race.phase==='racing'&&race.destroyed<=0&&race.dizzy>0;
   dizzyNotice.classList.toggle('hidden',!dizzy);document.querySelector('.viewport').classList.toggle('dizzy-active',dizzy);if(dizzy)put('dizzy-notice',`✦ DIZZY · ${race.dizzy.toFixed(1)}s`);
   showResults();
+  const ignition=ringNotice.sample(race,performance.now()/1000);ringBanner.classList.toggle('hidden',!ignition);ringBanner.classList.toggle('blue-fire',Boolean(ignition?.blue));
   const whack=killCelebration.sample(race,performance.now()/1000);whackBanner.classList.toggle('hidden',!whack);
   if(!whack)whackKey=null;
   if(whack&&whackKey!==whack.key){

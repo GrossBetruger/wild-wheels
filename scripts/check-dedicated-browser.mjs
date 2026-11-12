@@ -40,6 +40,10 @@ try{
     await evaluate(host,"__game.keys.add('w');__game.keys.add('shift');__game.keys.add('arrowright')");
     await wait(()=>evaluate(host,"__game.race.effects.some(f=>f.type==='fireRing')"),'Charged drift failed to ignite ring');
     await wait(()=>evaluate(guest,"__game.race.effects.some(f=>f.type==='fireRing')"),'Guest did not see the fire ring');
+    await wait(()=>evaluate(host,"!document.getElementById('ring-of-fire-announcement').classList.contains('hidden')"),'Fiery ignition announcement did not appear');
+    assert.equal(await evaluate(guest,"document.getElementById('ring-of-fire-announcement').classList.contains('hidden')"),true);
+    assert.equal(await evaluate(host,"document.getElementById('ring-of-fire-announcement').classList.contains('blue-fire')"),true);
+    assert.equal(await evaluate(guest,"__game.race.effects.find(f=>f.type==='fireRing').color"),'#4abaff');
     await evaluate(host,"document.getElementById('game').scrollIntoView({block:'center'})");
     const shot=await call('Page.captureScreenshot',{format:'png'},host);await writeFile(output+'.png',Buffer.from(shot.data,'base64'));
     await evaluate(host,'__game.keys.clear()');await wait(()=>evaluate(guest,"!__game.race.effects.some(f=>f.type==='fireRing')"),'Fire ring persisted after stopping');

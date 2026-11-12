@@ -40,5 +40,6 @@
   "combat-notices.js",
   "nameplates.js",
   "mobile.js",
-  "fire-ring.js"
+  "fire-ring.js",
+  "fire-ring-visual.js"
 ]

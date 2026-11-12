@@ -4,9 +4,9 @@ impl Game{
     pub(super) fn ring_tick(&mut self,dt:f64){
         self.global.effects.retain(|f|f.kind!="fireRing");
         for id in 0..self.actors.len(){
-            if self.frozen(id){let a=&self.actors[id];if a.ring_remaining>0.0&&!a.afk&&!a.inactive&&a.destroyed<=0.0{self.global.effects.push(Effect{kind:"fireRing".into(),owner:Some(id),wx:a.wx,wz:a.wz,life:0.1,..Effect::default()});}continue;}
+            if self.frozen(id){let a=&self.actors[id];if a.ring_remaining>0.0&&!a.afk&&!a.inactive&&a.destroyed<=0.0{self.global.effects.push(Effect{kind:"fireRing".into(),color:Some(match a.ring_blue{true=>"#4abaff",false=>"#ff631c"}.into()),owner:Some(id),wx:a.wx,wz:a.wz,life:0.1,..Effect::default()});}continue;}
             let a=&mut self.actors[id];let previous=a.ring_heading.replace(a.heading);let delta=previous.map_or(0.0,|p|angle(a.heading,p));
-            if delta.abs()>0.0001{a.ring_turn_grace=0.15;}else{a.ring_turn_grace=(a.ring_turn_grace-dt).max(0.0);}
+            if delta.abs()>0.0001{a.ring_turn_grace=0.15;a.ring_blue=delta<0.0;}else{a.ring_turn_grace=(a.ring_turn_grace-dt).max(0.0);}
             let turning=a.ring_turn_grace>0.0&&a.speed.abs()>2.0;
             let eligible=self.global.special_abilities&&a.driver==10&&!a.inactive&&!a.afk&&!a.bomber&&a.destroyed<=0.0&&self.global.phase=="racing";
             if !eligible||!turning{a.ring_turn=0.0;a.ring_remaining=0.0;a.ring_spent=false;a.ring_doses.clear();continue;}
@@ -15,7 +15,7 @@ impl Game{
                 if !a.was_drifting{a.ring_turn=0.0;continue;}
                 if a.drift>=0.85{a.ring_remaining=20.0;a.ring_spent=true;sound(&mut self.global,"boost",id,a.wx,a.wz,None);}
             }
-            if a.ring_remaining>0.0{self.global.effects.push(Effect{kind:"fireRing".into(),owner:Some(id),wx:a.wx,wz:a.wz,life:0.1,..Effect::default()});}
+            if a.ring_remaining>0.0{self.global.effects.push(Effect{kind:"fireRing".into(),color:Some(match a.ring_blue{true=>"#4abaff",false=>"#ff631c"}.into()),owner:Some(id),wx:a.wx,wz:a.wz,life:0.1,..Effect::default()});}
         }
         let rings:Vec<_>=self.global.effects.iter().filter(|f|f.kind=="fireRing").map(|f|(f.owner.unwrap(),f.wx,f.wz)).collect();
         for (owner,x,z) in rings{
