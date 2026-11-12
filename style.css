@@ -84,3 +84,5 @@ body.mobile-playing{overflow:hidden;overscroll-behavior:none}.race-panel.mobile-
 .ring-of-fire-announcement.blue-fire::before,.ring-of-fire-announcement.blue-fire::after{background:#d4f7ff;box-shadow:40px 8px #369dff,95px -3px #e4fcff,145px 5px #86ddff,190px -8px #a3e8ff}
 @keyframes ring-blue-flicker{from{filter:brightness(1);box-shadow:0 0 22px #327fff55,inset 0 -3px 14px #39b9ff66}to{filter:brightness(1.2);box-shadow:0 0 34px #338cff77,inset 0 -4px 20px #6cdbff77}}
 @media(prefers-reduced-motion:reduce){.ring-of-fire-announcement.blue-fire{animation:none}}
+/* A dedicated service offers only its shared arena, from the first paint. */
+.dedicated-server .mode-switch{display:none!important}

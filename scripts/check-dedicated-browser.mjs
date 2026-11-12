@@ -28,6 +28,7 @@ try{
   }
   const [host,guest]=sessions;await wait(()=>evaluate(host,'__game.network.state.players.length===2'),'Roster did not update');
   assert.equal(await evaluate(host,'__game.network.state.you'),0);assert.equal(await evaluate(guest,'__game.network.state.you'),1);
+  for(const session of sessions){assert.equal(await evaluate(session,"getComputedStyle(document.querySelector('.mode-switch')).display"),'none');assert.equal(await evaluate(session,'__game.race.mode'),'combat');}
   assert.equal(await evaluate(host,'__game.network.dedicated'),true);assert.equal(await evaluate(host,"__game.network.hostButton.classList.contains('hidden')"),true);
   await evaluate(host,`(async()=>{const n=__game.network;n.name.value='Ubuntu Pilot';n.name.dispatchEvent(new Event('input'));await n.saveName();await n.request('/api/driver',{driver:10});await n.control('bots',undefined,${ringMode?0:6});})()`);
   await wait(()=>evaluate(guest,`__game.network.state.world.bots.length===${ringMode?1:7}`),'Eight-actor roster did not arrive');

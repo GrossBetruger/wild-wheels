@@ -24,7 +24,7 @@ export class NetworkGame {
   playRequestPrompt=new PlayRequestPrompt();
   token=null;state=null;paused=false;sequence=0;actions=[];client=null;rtt=0;lastPing=-Infinity;
   constructor({anchor,keys,driver,arena,onState,onLeave,unlock,sound=()=>{},role='driver'}){
-    Object.assign(this,{keys,driver,arena,onState,onLeave,unlock,sound,role});
+    Object.assign(this,{keys,driver,arena,onState,onLeave,unlock,sound,role});this.dedicated=document.body.classList.contains('dedicated-server');
     this.panel=document.createElement('section');this.panel.className='network-panel';this.panel.setAttribute('aria-label','Multiplayer arena lobby');
     const title=this.title=document.createElement('strong');title.textContent='PLAY TOGETHER · UP TO 6 PLAYERS';
     this.name=document.createElement('input');this.name.placeholder='Your name';this.name.value=savedPlayerName(document.cookie);this.name.maxLength=24;this.name.setAttribute('aria-label','Player name');

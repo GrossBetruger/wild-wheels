@@ -12,11 +12,12 @@ fn main() {
     let mut hash = Sha256::new();
     for name in assets {
         assert!(!name.contains("..") && !name.starts_with('/'));
-        let path = root.join(&name);
+        let source = root.join(&name);
+        println!("cargo:rerun-if-changed={}",source.display());
+        let path=match name.as_str(){"index.html"=>{let html=fs::read_to_string(&source).unwrap().replace("<body>","<body class=\"dedicated-server\">");let path=PathBuf::from(env::var("OUT_DIR").unwrap()).join("dedicated-index.html");fs::write(&path,html).unwrap();path},_=>source};
         let bytes = fs::read(&path).unwrap();
         hash.update(&name);
         hash.update(&bytes);
-        println!("cargo:rerun-if-changed={}", path.display());
         let mime = match name.rsplit('.').next().unwrap() {
             "html" => "text/html; charset=utf-8",
             "css" => "text/css; charset=utf-8",
