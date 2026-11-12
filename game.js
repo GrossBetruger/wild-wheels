@@ -116,6 +116,7 @@ function showResults(){
   finalResults.replaceChildren(table);
 }
 const hedgeguardStatus=document.createElement('div');hedgeguardStatus.className='hedgeguard-status hidden';hedgeguardStatus.setAttribute('role','status');document.querySelector('.item-box').prepend(hedgeguardStatus);
+const tehilimStatus=document.createElement('div');tehilimStatus.className='tehilim-status hidden';tehilimStatus.setAttribute('role','status');document.querySelector('.item-box').prepend(tehilimStatus);
 const routeHint=document.createElement('div');routeHint.className='route-hint';document.querySelector('.viewport').append(routeHint);
 const nameplateLayer=document.createElement('div');nameplateLayer.className='kart-nameplates';nameplateLayer.setAttribute('aria-hidden','true');document.querySelector('.viewport').append(nameplateLayer);const nameplateNodes=new Map();
 const dizzyNotice=document.createElement('div');dizzyNotice.id='dizzy-notice';dizzyNotice.className='dizzy-notice hidden';dizzyNotice.setAttribute('role','status');document.querySelector('.viewport').append(dizzyNotice);
@@ -236,7 +237,9 @@ function hud(){
   chaffButton.classList.toggle('hidden',mode!=='combat'||race.bomber);chaffButton.textContent=`C · CHAFF ${race.chaff??0}`;chaffButton.disabled=!battleActive(race)||race.destroyed>0||race.chaff<=0||race.chaffCooldown>0;chaffButton.setAttribute('aria-label',`Release chaff, ${race.chaff??0} charges remaining. Keyboard C.`);
   somersaultButton.classList.toggle('hidden',mode!=='combat'||race.bomber);somersaultButton.disabled=!battleActive(race)||race.destroyed>0||(race.somersaultCooldown??0)>1e-8;somersaultButton.textContent=(race.somersaultCooldown??0)>1e-8?`Z · ${race.somersaultCooldown.toFixed(1)}s`:'Z · SOMERSAULT';somersaultButton.setAttribute('aria-label','Somersault: jump and turn 180 degrees. Keyboard Z.');
   const guarded=mode==='combat'&&race.hedgeShield>0&&race.phase==='racing'&&!race.destroyed&&!race.bomber;
-  hedgeguardStatus.classList.toggle('hidden',!guarded);hedgeguardStatus.textContent=guarded?`HEDGEGUARD · ${race.hedgeShield.toFixed(1)}s · MISSILES STILL HURT`:'';
+  hedgeguardStatus.classList.toggle('hidden',!guarded);hedgeguardStatus.textContent=guarded?`HEDGEGUARD · ${race.hedgeShield.toFixed(1)}s · ${race.tehilim>0?'HEDGEHOGS + BOMBS BLOCKED':'MISSILES STILL HURT'}`:'';
+  const books=mode==='combat'&&race.tehilim>0&&race.phase==='racing'&&!race.destroyed&&!race.bomber;
+  tehilimStatus.classList.toggle('hidden',!books);tehilimStatus.textContent=books?`TEHILIM VS TILIM · ${race.tehilim.toFixed(1)}s · RETURN TO SENDER`:'';
   routeHint.textContent='';
   driftMeter.classList.toggle('hidden',mode!=='combat'||!race.wasDrifting||race.phase!=='racing');driftCharge.value=race.drift;driftLabel.textContent=race.drift>=.85?'SUPER BOOST READY':race.drift>=.45?'BOOST READY':'DRIFT CHARGING';driftMeter.classList.toggle('charged',race.drift>=.45);driftMeter.classList.toggle('super',race.drift>=.85);
   if(mode==='combat'){

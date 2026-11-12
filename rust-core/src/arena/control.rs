@@ -39,7 +39,7 @@ impl Game {
         let mut skills=[0.0;5];for (i,(low,high)) in [(0.94,1.0),(0.86,0.93),(0.70,0.83),(0.53,0.68),(0.35,0.51)].into_iter().enumerate(){skills[i]=low+random()*(high-low);}
         for i in (1..5).rev(){let j=(random()*(i+1)as f64).floor()as usize;skills.swap(i,j);}
         let global=Globals{mode:"combat".into(),phase:"ready".into(),arena:room.arena,countdown:3.0,duration:180.0,target_score:10.0,rank:6,multiplayer:true,sound_epoch:room.epoch as u64,
-            supplies:[(-70.0,-65.0,"missile"),(70.0,65.0,"missile"),(-65.0,70.0,"hedgehog"),(65.0,-70.0,"hedgehog"),(-12.0,48.0,"boost"),(12.0,-48.0,"boost"),(-70.0,0.0,"health"),(70.0,0.0,"health"),(-50.0,-50.0,"hedgeproof")].into_iter().enumerate().map(|(id,(wx,wz,kind))|Supply{id:id as u32,wx,wz,kind:kind.into(),cooldown:match kind{"hedgeproof"=>30.0,_=>0.0},..Supply::default()}).collect(),..Globals::default()};
+            supplies:[(-70.0,-65.0,"missile"),(70.0,65.0,"missile"),(-65.0,70.0,"hedgehog"),(65.0,-70.0,"hedgehog"),(-12.0,48.0,"boost"),(12.0,-48.0,"boost"),(-70.0,0.0,"health"),(70.0,0.0,"health"),(-50.0,-50.0,"hedgeproof"),(50.0,50.0,"tehilim")].into_iter().enumerate().map(|(id,(wx,wz,kind))|Supply{id:id as u32,wx,wz,kind:kind.into(),cooldown:match kind{"hedgeproof"|"tehilim"=>30.0,_=>0.0},..Supply::default()}).collect(),..Globals::default()};
         let mut game=Self::from_seed(Seed{global,player:initial_actor(0,0.85),bots:(1..6).map(|id|initial_actor(id,skills[id-1])).collect()})?;
         game.configure_room(room);Ok(game)
     }

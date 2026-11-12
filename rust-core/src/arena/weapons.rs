@@ -67,7 +67,7 @@ impl Game{
         let mut credit=Vec::new();if owner<self.actors.len(){credit.push(owner);}
         let a=&self.actors[victim];
         if a.dizzy>0.0{for(&id,&expires)in &a.credits{if expires>g.elapsed+1e-8&&self.actors.get(id).is_some_and(|b|b.bomber&&!b.inactive)&&id!=victim&&!credit.contains(&id){credit.push(id);}}}
-        let a=&mut self.actors[victim];a.credits.clear();a.destroyed=3.0;a.speed=0.0;a.boost=0.0;if !unscored{a.deaths+=1;}effect(g,match kind{"abomb"|"radiation"=>"ash",_=>"explosion"},victim,a.wx,a.wz,None);a.drift=0.0;a.was_drifting=false;a.drift_trail=None;a.kill_streak=0;a.vulcan=0.0;a.hedge_shield=0.0;a.somersault=0.0;a.dizzy=0.0;
+        let a=&mut self.actors[victim];a.credits.clear();a.destroyed=3.0;a.speed=0.0;a.boost=0.0;if !unscored{a.deaths+=1;}effect(g,match kind{"abomb"|"radiation"=>"ash",_=>"explosion"},victim,a.wx,a.wz,None);a.drift=0.0;a.was_drifting=false;a.drift_trail=None;a.kill_streak=0;a.vulcan=0.0;a.hedge_shield=0.0;a.tehilim=0.0;a.somersault=0.0;a.dizzy=0.0;
         if unscored{return true;}
         let victim_name=a.name.clone().unwrap_or_else(||driver_name(a.driver).into());let victim_color=a.color.clone();
         for scorer in credit{
@@ -79,6 +79,11 @@ impl Game{
     }
     pub(super) fn advance_shot(&self,shot:&mut Shot,dt:f64)->(bool,Option<usize>,Option<usize>){
         shot.age+=dt;shot.life-=dt;shot.trail.push(Sample{wx:shot.wx,wz:shot.wz,height:shot.height});if shot.trail.len()>24{shot.trail.remove(0);}
+        if shot.kind=="missile"&&!shot.reflected&&shot.decoy.is_none(){
+            let defender=shot.target.and_then(|id|self.actors.get(id)).filter(|a|a.destroyed<=0.0&&!a.inactive&&!a.afk&&a.tehilim>0.0);
+            let shooter=self.actors.get(shot.owner).filter(|a|a.destroyed<=0.0&&!a.inactive&&!a.afk&&!a.bomber);
+            if let (Some(defender),Some(shooter))=(defender,shooter){if distance(shot.wx,shot.wz,defender.wx,defender.wz)<=distance(shot.wx,shot.wz,shooter.wx,shooter.wz){shot.owner=defender.id;shot.target=Some(shooter.id);shot.reflected=true;shot.action_id=None;shot.life=shot.life.max(3.0);}}
+        }
         let decoy=shot.decoy.and_then(|id|self.global.chaff_clouds.iter().find(|c|c.id==id).map(|c|(c.wx,c.wz,c.owner))).or_else(||shot.decoy_center.as_ref().map(|p|(p.wx,p.wz,shot.decoy_owner.unwrap_or(0))));
         let orbit=|shot:&mut Shot,point:(f64,f64,usize),delta:f64|{
             let age=shot.orbit_age.unwrap_or(0.0)+delta;shot.orbit_age=Some(age);let direction=match shot.orbit_direction<0.0{true=>-1.0,false=>1.0};let circling=(age/0.6).min(1.0);let fall=(age-0.6).max(0.0);let angle=shot.orbit_angle+direction*std::f64::consts::TAU*circling;let radius=shot.orbit_radius;let speed=radius*std::f64::consts::TAU/0.6;
@@ -90,7 +95,7 @@ impl Game{
         if let Some(point)=decoy{if shot.orbit_age.is_some(){return orbit(shot,point,dt);}}
         let target=decoy.map(|p|(p.0,p.1)).or_else(||shot.target.and_then(|id|self.actors.get(id)).filter(|a|a.destroyed<=0.0&&!a.afk).map(|a|(a.wx,a.wz)));
         let mut steering=0.0;
-        if shot.kind=="missile"{if let Some((x,z))=target{let rate=match decoy.is_some(){true=>4.5,false=>1.6};steering=angle((x-shot.wx).atan2(z-shot.wz),shot.heading).clamp(-rate*dt,rate*dt);shot.heading+=steering;}}
+        if shot.kind=="missile"{if let Some((x,z))=target{let rate=match decoy.is_some(){true=>4.5,false=>match shot.reflected{true=>5.0,false=>1.6}};steering=angle((x-shot.wx).atan2(z-shot.wz),shot.heading).clamp(-rate*dt,rate*dt);shot.heading+=steering;}}
         let steps=(shot.speed*dt/1.5).ceil() as usize;
         for step in 0..steps{
             shot.wx+=shot.heading.sin()*shot.speed*dt/steps as f64;shot.wz+=shot.heading.cos()*shot.speed*dt/steps as f64;

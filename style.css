@@ -58,3 +58,5 @@ body.mobile-playing{overflow:hidden;overscroll-behavior:none}.race-panel.mobile-
 .item-box>.hedgeguard-status{max-width:260px;padding:0 0 7px!important;color:#9af5d8;font:bold 9px/1.4 monospace;letter-spacing:.3px}
 @media(max-width:760px){.item-box>.hedgeguard-status{max-width:190px;font-size:7px}}
 .whack-card .whack-subtitle{display:block;grid-column:1 / -1;margin-top:4px;font-size:12px;font-style:italic;font-weight:500;letter-spacing:.02em;color:#fff1ce;text-shadow:0 1px 2px #302637;}
+.item-box>.tehilim-status{max-width:280px;padding:0 0 7px!important;color:#c5d9ff;font:bold 9px/1.4 monospace;letter-spacing:.3px}
+@media(max-width:760px){.item-box>.tehilim-status{max-width:190px;font-size:7px}}

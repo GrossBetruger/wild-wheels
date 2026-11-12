@@ -8,7 +8,7 @@ pub(super) struct PendingSound{pub kind:String,pub time:f64,pub key:Option<Strin
 fn grant(a:&mut Actor,kind:&str){match kind{
     "health"=>{a.health=(a.health+1.0).min(6.0);a.notice=format!("+1 HEART · {} / 6",a.health);a.notice_time=2.0;},
     "missile"=>{a.missiles=(a.missiles+1).min(item_capacity(a.driver,"missile"));if !(a.vulcan>0.0&&a.item=="hedgehog"){a.item="missile".into();}},
-    "hedgeproof"=>a.hedge_shield=25.0,"hedgehog"=>a.ammo=item_capacity(a.driver,"hedgehog"),"boost"=>a.turbos=(a.turbos+1).min(item_capacity(a.driver,"boost")),_=>{}
+    "hedgeproof"=>a.hedge_shield=25.0,"tehilim"=>a.tehilim=25.0,"hedgehog"=>a.ammo=item_capacity(a.driver,"hedgehog"),"boost"=>a.turbos=(a.turbos+1).min(item_capacity(a.driver,"boost")),_=>{}
 }}
 fn select(a:&mut Actor,item:&str){if match item{"hedgehog"=>a.vulcan>0.0||a.ammo>0,"missile"=>a.missiles>0,_=>false}{a.item=item.into();}}
 fn spend(a:&mut Actor,resource:&str){let value=match resource{"ammo"=>&mut a.ammo,"missiles"=>&mut a.missiles,"turbos"=>&mut a.turbos,"chaff"=>&mut a.chaff,"bombAmmo"=>&mut a.bomb_ammo,"stinkAmmo"=>&mut a.stink_ammo,_=>return};*value=value.saturating_sub(1);}
@@ -118,8 +118,8 @@ impl Client{
                 self.ops.push(Op::Pickup{id:s.id,version:s.version,key:key.clone(),kind:s.kind.clone(),after:sequence+1});grant(&mut actor,&s.kind);self.emit("pickup",now,Some(key),false);
             }
         }
-        let a=&mut self.display.actors[id];a.ammo=actor.ammo;a.missiles=actor.missiles;a.turbos=actor.turbos;a.health=actor.health;a.hedge_shield=actor.hedge_shield;a.chaff=actor.chaff;a.item=actor.item;a.notice=actor.notice;a.notice_time=actor.notice_time;a.fire_cooldown=((self.fire_tick-sequence)as f64/60.0).max(0.0);
-        for supply in &mut self.display.global.supplies{if let Some(actual)=self.frames.back().unwrap().game.global.supplies.iter().find(|s|s.id==supply.id){supply.cooldown=actual.cooldown;}if self.ops.iter().any(|op|matches!(op,Op::Pickup{id,..}if *id==supply.id)){supply.cooldown=8.0;}}
+        let a=&mut self.display.actors[id];a.ammo=actor.ammo;a.missiles=actor.missiles;a.turbos=actor.turbos;a.health=actor.health;a.hedge_shield=actor.hedge_shield;a.tehilim=actor.tehilim;a.chaff=actor.chaff;a.item=actor.item;a.notice=actor.notice;a.notice_time=actor.notice_time;a.fire_cooldown=((self.fire_tick-sequence)as f64/60.0).max(0.0);
+        for supply in &mut self.display.global.supplies{if let Some(actual)=self.frames.back().unwrap().game.global.supplies.iter().find(|s|s.id==supply.id){supply.cooldown=actual.cooldown;}if self.ops.iter().any(|op|matches!(op,Op::Pickup{id,..}if *id==supply.id)){supply.cooldown=match supply.kind.as_str(){"hedgeproof"|"tehilim"=>45.0,_=>8.0};}}
         self.display.global.projectiles.retain(|s|s.owner!=id||s.action_id.is_none_or(|id|!self.local_shots.iter().any(|entry|entry.id==id)));
         let mut models=Vec::new();for entry in &mut self.local_shots{
             let elapsed=(now-entry.updated).max(0.0);advance(&self.display,&mut entry.model,elapsed);entry.updated=now;let decay=(-elapsed*20.0).exp();entry.error[0]*=decay;entry.error[1]*=decay;

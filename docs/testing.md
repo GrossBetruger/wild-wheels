@@ -1,5 +1,7 @@
 # Development checks
 
+Tehilim vs Tilim spawns once after 30 seconds, refills 45 seconds after pickup and lasts 25 seconds, matching Hedgeguard's rarity. Six orbiting books redirect an incoming locked missile after it passes halfway between its shooter and target. The missile makes a guided U-turn, targets its shooter and credits the books' owner on a kill. Each missile reflects once, and unlocked missiles and other weapons still deal damage. `tehilim.test.js` covers timing, damage, midpoint, return trajectory, credit, prevention of ping-pong, immediate pickup and remote aura. `npm run test:browser-netcode -- --tehilim` checks the books, return shot, kill credit and expiry in all four connection profiles.
+
 Drivers have no spawn immunity at match start, when joining an active room, or after respawning. `spawn-vulnerability.test.js` verifies immediate projectile damage in both engines and unprotected native room spawns. Hedgeguard remains a separate collectible power-up.
 
 Chaff diverts owner-targeted missiles within 40 units of its cloud, with a clear path. Boundary tests cover both simulation engines. Radiation kills use the Chernowhacked celebration with a combined radiation/hammer-and-sickle emblem and warning colors.

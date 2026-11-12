@@ -2,7 +2,7 @@ import { applySupply, makeProjectile, advanceProjectile, MOVEMENT_DT, MAX_HEALTH
 import { selectItem, cycleItem } from './engine.js';
 
 const poseFields=['wx','wz','heading','motionHeading','cameraHeading','speed','drift','wasDrifting','boost','yaw','somersault','somersaultCooldown','dizzy'];
-const resources=['ammo','missiles','turbos','health','hedgeShield','chaff','item','notice','noticeTime'];
+const resources=['ammo','missiles','turbos','health','hedgeShield','tehilim','chaff','item','notice','noticeTime'];
 const pick=(object,fields)=>Object.fromEntries(fields.filter(field=>object[field]!==undefined).map(field=>[field,object[field]]));
 const copyShot=shot=>({...shot,trail:shot.trail.map(point=>({...point}))});
 function advance(world,shot,seconds){

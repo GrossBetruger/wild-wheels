@@ -387,6 +387,23 @@ export class Renderer {
     mesh.quad([-.85,.65,0],[0,-1,0],[-.6,-.4,0],[-.85,.65,0],'#67e8da');
     mesh.box(0,.03,.06,.17,.8,.12,'#e5fff6');mesh.box(0,.2,.07,.65,.16,.12,'#e5fff6');
   });}
+  tehilimBook(x,y,z,angle){this.model('tehilim:book',x,y,z,angle,mesh=>{
+    mesh.box(0,-.65,0,.95,1.3,.34,'#f0dfb5');
+    for(const side of [-1,1])mesh.box(0,-.73,side*.21,1.1,1.46,.08,'#183b70');
+    mesh.box(-.53,-.73,0,.12,1.46,.5,'#254b82');
+    for(const side of [-1,1]){mesh.box(side*.46,-.6,.26,.035,1.2,.025,'#efc66b');mesh.box(0,side*.6,.26,.95,.035,.025,'#efc66b');}
+    // Gold Hebrew lettering: תהילים, right to left across the front cover.
+    const glyphs=['111/101/101/101/101','111/101/001/101/101','010/010/000/000/000','101/101/101/111/001','010/010/000/000/000','111/101/101/101/111'];
+    for(const [letter,glyph]of glyphs.entries())for(const [row,line]of glyph.split('/').entries())for(let col=0;col<3;col++)if(line[col]==='1')mesh.box(.4-letter*.145+col*.03,.14-row*.045,.27,.027,.04,.025,'#ffe0a0');
+    for(let i=0;i<5;i++)mesh.box(0,-.4+i*.055,.18,.84,.013,.025,'#bca77e');
+    mesh.box(.2,-.85,0,.12,.4,.06,'#ba4358');
+  });}
+  tehilimAura(pose,time,remaining,jump){
+    const strength=Math.min(1,remaining/1.5),height=jump?.height??0;
+    for(let i=0;i<6;i++){const a=time*1.2+i*Math.PI/3,x=pose.x+Math.sin(a)*3.6,z=pose.z+Math.cos(a)*3.6,y=height+2.1+Math.sin(a*2)*.55;
+      this.tehilimBook(x,y,z,a+Math.PI/2);this.glow.at(x,y,z);this.glow.particle(0,0,0,.7*strength,[.16*strength,.24*strength,.5*strength]);
+    }
+  }
   hedgeguard(m,pose,actor,time,jump){
     if(actor.driver===10){this.bikerAura(m,pose,actor.heading,time,jump,Math.min(1,actor.hedgeShield/1.5));return;}
     if(actor.driver===9){this.fairyProtection(m,pose,time,Math.min(1,actor.hedgeShield/1.5),jump);return;}
@@ -516,6 +533,7 @@ export class Renderer {
       const parts=this.instances.slice(bodyStart);this.rememberBody(actor,parts,parts.length?[]:m.data.slice(dataStart));
       if(actor.driver===7)this.houstonHelmet(pose,actor,time,jump);
       if(actor.hedgeShield>0)this.hedgeguard(m,pose,actor,time,jump);
+      if(actor.tehilim>0)this.tehilimAura(pose,time,actor.tehilim,jump);
       if(actor.dizzy>0)for(let i=0;i<6;i++){const angle=time*(actor.boost>0?9:5)+i*Math.PI/3;m.at(pose.x+Math.sin(angle)*3.2,6.8+Math.sin(angle*2)*.5,pose.z+Math.cos(angle)*3.2,angle);m.box(0,0,0,1.2,.22,.3,'#fff08b');m.box(0,0,0,.3,.22,1.2,'#fff08b');this.glow.at(m.origin[0],m.origin[1],m.origin[2]);this.glow.particle(0,0,0,.8,[.7,.6,.05]);}
       if(actor.vulcan>0&&actor.driver===10)this.laserMount(m,pose,actor,time,jump);
       if(actor.vulcan>0&&actor.driver!==10){
@@ -532,7 +550,7 @@ export class Renderer {
       if(actor.shield>0&&actor.driver===10)this.bikerAura(m,pose,actor.heading,time,jump,Math.min(1,actor.shield));
       if(actor.shield>0&&actor.driver!==9&&actor.driver!==10){this.glow.at(pose.x,.12,pose.z);for(let i=0;i<18;i++){const a=i/18*Math.PI*2+time;this.glow.particle(Math.cos(a)*3,1,Math.sin(a)*3,.4,[.05,.25,.4]);}}
     }
-    for(const supply of r.supplies){if(supply.cooldown>0)continue;const pose={x:supply.wx,z:supply.wz,tx:0,tz:1},bob=Math.sin(time*2)*.3;m.at(pose.x,.1,pose.z);m.disc(0,0,0,3,3,{missile:'#c65d51',hedgehog:'#bb9c68',boost:'#d4bc55',health:'#78b88c',hedgeproof:'#52c9bc'}[supply.kind]);switch(supply.kind){case 'hedgeproof':this.hedgeguardIcon(pose.x,2+bob,pose.z,time);this.glow.at(pose.x,1.8+bob,pose.z);this.glow.particle(0,0,0,2.8,[.08,.45,.38]);break;case 'missile':this.missile(m,pose,2+bob,time,1.5);break;case 'hedgehog':this.hedgehog(m,pose.x,1.5+bob,pose.z,1.1,time);break;case 'boost':m.at(pose.x,1+bob,pose.z,time);m.box(0,0,0,1.2,2,.8,'#f1cc62');break;case 'health':m.at(pose.x,1+bob,pose.z,time);m.box(0,.7,0,2.4,.7,.5,'#d6f4c6');m.box(0,0,0,.7,2.4,.5,'#d6f4c6');break;}}
+    for(const supply of r.supplies){if(supply.cooldown>0)continue;const pose={x:supply.wx,z:supply.wz,tx:0,tz:1},bob=Math.sin(time*2)*.3;m.at(pose.x,.1,pose.z);m.disc(0,0,0,3,3,{missile:'#c65d51',hedgehog:'#bb9c68',boost:'#d4bc55',health:'#78b88c',hedgeproof:'#52c9bc',tehilim:'#6388cf'}[supply.kind]);switch(supply.kind){case 'tehilim':this.tehilimBook(pose.x,2+bob,pose.z,time);this.glow.at(pose.x,2,pose.z);this.glow.particle(0,0,0,2.5,[.08,.15,.4]);break;case 'hedgeproof':this.hedgeguardIcon(pose.x,2+bob,pose.z,time);this.glow.at(pose.x,1.8+bob,pose.z);this.glow.particle(0,0,0,2.8,[.08,.45,.38]);break;case 'missile':this.missile(m,pose,2+bob,time,1.5);break;case 'hedgehog':this.hedgehog(m,pose.x,1.5+bob,pose.z,1.1,time);break;case 'boost':m.at(pose.x,1+bob,pose.z,time);m.box(0,0,0,1.2,2,.8,'#f1cc62');break;case 'health':m.at(pose.x,1+bob,pose.z,time);m.box(0,.7,0,2.4,.7,.5,'#d6f4c6');m.box(0,0,0,.7,2.4,.5,'#d6f4c6');break;}}
     for(const shot of r.projectiles){
       const pose={x:shot.wx,z:shot.wz,tx:Math.sin(shot.heading),tz:Math.cos(shot.heading)},owner=shot.vulcan?(shot.owner===r.id?r:r.bots.find(actor=>actor.id===shot.owner)):null,cricket=shot.kind==='hedgehog'&&owner?.driver===5,dollars=shot.kind==='hedgehog'&&owner?.driver===6,electrons=shot.kind==='hedgehog'&&owner?.driver===8,pumps=shot.kind==='hedgehog'&&owner?.driver===9,laser=shot.kind==='hedgehog'&&owner?.driver===10;
       if(shot.kind==='missile'){this.missile(m,pose,shot.height);this.glow.at(shot.wx,shot.height,shot.wz,shot.heading);this.glow.flame(0,0,-1,.25,2,[.5,.17,.03],time);}

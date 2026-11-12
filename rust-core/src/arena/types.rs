@@ -14,7 +14,7 @@ pub struct Actor {
     pub id:usize,pub driver:usize,pub name:Option<String>,pub color:String,
     pub wx:f64,pub wz:f64,pub heading:f64,pub motion_heading:f64,pub camera_heading:f64,
     pub speed:f64,pub health:f64,pub kills:f64,pub deaths:u32,pub kill_streak:u32,
-    pub destroyed:f64,pub shield:f64,pub hedge_shield:f64,pub celebrate:f64,pub fire_cooldown:f64,
+    pub destroyed:f64,pub shield:f64,pub hedge_shield:f64,pub tehilim:f64,pub celebrate:f64,pub fire_cooldown:f64,
     pub heal_timer:f64,pub reload:f64,pub brain:f64,pub skill:f64,pub path:Vec<Point>,
     pub human:bool,pub bomber:bool,pub inactive:bool,pub afk:bool,
     pub bomb_ammo:u32,pub stink_ammo:u32,pub bomb_reload:f64,
@@ -35,7 +35,7 @@ pub struct Shot {
     pub speed:f64,pub height:f64,pub vy:f64,pub life:f64,pub age:f64,pub bounces:u32,
     pub trail:Vec<Sample>,pub target:Option<usize>,pub vulcan:bool,pub action_id:Option<u32>,
     pub decoy:Option<u32>,pub decoy_owner:Option<usize>,pub decoy_center:Option<Point>,
-    #[serde(skip_serializing_if="Option::is_none")]pub orbit_age:Option<f64>,pub orbit_angle:f64,pub orbit_radius:f64,pub orbit_height:f64,pub chaffed:bool,
+    #[serde(skip_serializing_if="Option::is_none")]pub orbit_age:Option<f64>,pub orbit_angle:f64,pub orbit_radius:f64,pub orbit_height:f64,pub chaffed:bool,pub reflected:bool,
     pub orbit_direction:f64,#[serde(skip_serializing_if="Option::is_none")]pub orbit_center:Option<Point>,
 }
 #[derive(Clone, Default, Deserialize, Serialize)]

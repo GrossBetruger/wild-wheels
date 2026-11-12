@@ -20,6 +20,7 @@ function fields(Type,names,{booleans=[],nullable=[]}={}){
 class Actor extends Row{
   get healTimer(){return this.n(43);}
   get hedgeShield(){return this.n(44);}
+  get tehilim(){return this.n(45);}
   get afk(){return Boolean(this.n(42));}
   get name(){return this.frame.text.actors[this.id]?.name??undefined;}
   get notice(){return this.frame.text.actors[this.id]?.notice??'';}
@@ -37,7 +38,7 @@ class Shot extends Row{
   get orbitAge(){return this.n(15)<0?undefined:this.n(15);}
 }
 fields(Shot,['id','owner',null,'wx','wz','heading','speed','height','vy','life','age','vulcan','actionId','target','decoy',null,'orbitAngle','orbitRadius','orbitHeight','chaffed',null,'orbitDirection'],{booleans:['vulcan','chaffed'],nullable:['actionId','target','decoy']});
-class Supply extends Row{get kind(){return ['hedgehog','missile','boost','health','hedgeproof'][this.n(3)];}}
+class Supply extends Row{get kind(){return ['hedgehog','missile','boost','health','hedgeproof','tehilim'][this.n(3)];}}
 fields(Supply,['id','wx','wz',null,'cooldown','version','collector'],{nullable:['collector']});
 class Bomb extends Row{get kind(){return this.n(2)===1?'stink':'abomb';}get color(){return color(this.n(7));}}
 fields(Bomb,['id','owner',null,'wx','wz','age','actionId'],{nullable:['actionId']});
