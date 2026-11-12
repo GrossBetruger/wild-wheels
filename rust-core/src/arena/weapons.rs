@@ -22,6 +22,10 @@ impl Game{
     }
     pub(super) fn flip(&mut self,id:usize){
         if !self.active(id)||self.actors[id].somersault_cooldown>1e-8{return;}
+        if self.global.special_abilities&&self.actors[id].driver==5{
+            let a=&self.actors[id];let mut seed=(self.global.elapsed*1000000.0)as u64^(a.wx.to_bits().rotate_left(17))^a.wz.to_bits()^((id+1)as u64*7919);
+            for _ in 0..128{seed=seed.wrapping_mul(6364136223846793005).wrapping_add(1);let x=((seed>>32)%17000)as f64/100.0-85.0;seed=seed.wrapping_mul(6364136223846793005).wrapping_add(1);let z=((seed>>32)%17000)as f64/100.0-85.0;if blocked(self.global.arena,x,z,4.0)||self.actors.iter().any(|b|b.id!=id&&!b.inactive&&b.destroyed<=0.0&&distance(x,z,b.wx,b.wz)<8.0){continue;}let a=&mut self.actors[id];effect(&mut self.global,"boost",id,a.wx,a.wz,None);a.wx=x;a.wz=z;a.speed=0.0;effect(&mut self.global,"boost",id,x,z,None);break;}
+        }
         let a=&mut self.actors[id];a.somersault_camera_start=a.camera_heading;a.heading+=std::f64::consts::PI;a.motion_heading=a.heading;a.drift=0.0;a.was_drifting=false;a.drift_trail=None;a.somersault=0.55;a.somersault_cooldown=1.0;
     }
     pub(super) fn bomb(&mut self,id:usize,action:&Action){
@@ -78,7 +82,7 @@ impl Game{
         if let Some(a)=self.actors.get_mut(owner){if !a.bomber&&a.destroyed<=0.0{a.kill_streak+=1;if a.kill_streak%2==0{a.vulcan=15.0;a.health=a.health.max(4.0);a.item="hedgehog".into();a.fire_cooldown=0.0;effect(g,"vulcanReady",owner,a.wx,a.wz,None);a.notice="2-KILL STREAK · HEDGEHOG VULCAN!".into();a.notice_time=3.0;}}}true
     }
     pub(super) fn advance_shot(&self,shot:&mut Shot,dt:f64)->(bool,Option<usize>,Option<usize>){
-        if self.frozen(shot.owner){return(false,None,None);}
+        let dt=dt*match self.frozen(shot.owner){true=>0.025,false=>1.0};
         shot.age+=dt;shot.life-=dt;shot.trail.push(Sample{wx:shot.wx,wz:shot.wz,height:shot.height});if shot.trail.len()>24{shot.trail.remove(0);}
         if shot.kind=="missile"&&!shot.reflected&&shot.decoy.is_none(){
             let defender=shot.target.and_then(|id|self.actors.get(id)).filter(|a|a.destroyed<=0.0&&!a.inactive&&!a.afk&&(a.tehilim>0.0||self.global.special_abilities&&a.driver==11));

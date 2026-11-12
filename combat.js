@@ -104,6 +104,7 @@ export function useBattleTurbo(r,actor=r,actionId){
 }
 export function somersaultBattle(world,actor=world){
   if(!canAct(world,actor)||(actor.somersaultCooldown??0)>1e-8)return false;
+  if(world.specialAbilities!==false&&actor.driver===5){for(let i=0;i<128;i++){const wx=Math.random()*170-85,wz=Math.random()*170-85;if(blocked(arenas[world.arena],wx,wz,4)||[world,...world.bots].some(a=>a.id!==actor.id&&!a.inactive&&!a.destroyed&&Math.hypot(a.wx-wx,a.wz-wz)<8))continue;fx(world,'boost',actor);Object.assign(actor,{wx,wz,speed:0});fx(world,'boost',actor);break;}}
   actor.somersaultCameraStart=actor.cameraHeading;
   actor.heading+=Math.PI;actor.motionHeading=actor.heading;
   actor.drift=0;actor.wasDrifting=false;actor.driftTrail=null;
@@ -307,7 +308,7 @@ export function tickBattle(r,keys,dt,inputs=null){
   ageDriftEffects(r,worldDt);
   const actors=[r,...r.bots],arena=arenas[r.arena];
   for(const actor of actors){
-    if(frozen(r,actor.id))continue;
+    if(frozen(r,actor.id)){const control=inputs?.get(actor.id)??(actor===r?keys:new Set());advanceKartMovement(r,actor,control.keys instanceof Set?control.keys:control,dt*.025);continue;}
     const recoveryHealth=r.specialAbilities!==false&&actor.driver===12?6:RECOVERY_HEALTH;
     if(actor!==r)actor.noticeTime=Math.max(0,(actor.noticeTime??0)-dt);
     for(const key of ['fireCooldown','shield','hedgeShield','tehilim','celebrate','voiceCooldown','wallCooldown','vulcan','chaffCooldown']){if(inputs?.get(actor.id)?.actionClock&&['fireCooldown','chaffCooldown'].includes(key))continue;actor[key]=Math.max(0,(actor[key]??0)-dt);}
@@ -361,8 +362,7 @@ export function tickBattle(r,keys,dt,inputs=null){
   for(const actor of actors)if(!frozen(r,actor.id))collectSupplies(r,actor);
   for(const cloud of r.chaffClouds)divertMissiles(r,cloud);
   for(const shot of r.projectiles){
-    if(frozen(r,shot.owner))continue;
-    const {impact,victim,decoy}=advanceProjectile(r,shot,dt);
+    const {impact,victim,decoy}=advanceProjectile(r,shot,dt*(frozen(r,shot.owner)?.025:1));
     if(victim&&shot.kind==='hedgehog')damageBattle(r,victim,shot.owner,1);
     if(!impact&&shot.life>0)continue;
     shot.life=0;

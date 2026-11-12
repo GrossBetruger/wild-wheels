@@ -558,6 +558,12 @@ export class Renderer {
       const nx=-dz/length*.24,nz=dx/length*.24,fade=Math.min(1,(r.elapsed-skid.time)/6),ground=rgb(arenas[r.arena].ground),color=ground.map(c=>c*(.28+fade*.65));
       m.quad([skid.ax+nx,.025,skid.az+nz],[skid.bx+nx,.025,skid.bz+nz],[skid.bx-nx,.025,skid.bz-nz],[skid.ax-nx,.025,skid.az-nz],color);
     }
+    if(r.timeStop>0){
+      const caster=[r,...r.bots].find(a=>a.id===r.timeOwner)??r,phase=(2.5-r.timeStop)*3;
+      this.glow.at(caster.wx,0,caster.wz);
+      for(let ring=0;ring<7;ring++)for(let i=0;i<96;i++){const a=i*Math.PI/48+phase*(ring%2?1:-1),radius=4+((phase*6+ring*7)%48),b=a+Math.PI/48,y=2+Math.sin(a*3+phase)*1.5+ring*.5;this.glow.quad([Math.cos(a)*radius,y,Math.sin(a)*radius],[Math.cos(b)*radius,y,Math.sin(b)*radius],[Math.cos(b)*(radius+.16),y+.15,Math.sin(b)*(radius+.16)],[Math.cos(a)*(radius+.16),y+.15,Math.sin(a)*(radius+.16)],ring%2?[.08,.45,.7]:[.4,.08,.65]);}
+      for(let i=0;i<80;i++){const a=i*2.399+phase*.3,rad=6+(i%20)*2;this.glow.particle(Math.cos(a)*rad,1+(i%9)*1.4,Math.sin(a)*rad,.28,[.18,.6,.8]);}
+    }
     const ashKeys=new Set(r.effects.filter(f=>f.type==='ash').map(f=>`${f.wx}:${f.wz}`));for(const key of this.ashBodies.keys())if(!ashKeys.has(key))this.ashBodies.delete(key);
     for(const actor of [r,...r.bots]){
       if(actor.bomber||actor.inactive||actor.afk)continue;

@@ -1,6 +1,6 @@
 export const SPECIAL_COOLDOWN=20;
 export const TIME_STOP_DURATION=2.5;
-export const abilityNames={8:'SPECIAL RELATIVITY',10:'DIZZY SMOKE',11:'HOLY AURA',12:'SIX-HEART RECOVERY'};
+export const abilityNames={5:'CRICKET’S JUMP',8:'SPECIAL RELATIVITY',10:'DIZZY SMOKE',11:'HOLY AURA',12:'SIX-HEART RECOVERY'};
 export function frozen(world,id){return world.specialAbilities!==false&&world.timeStop>0&&world.timeOwner!==id;}
 export function useSpecial(world,actor=world){
   if(world.specialAbilities===false||world.phase!=='racing'||world.finishCountdown!==null||actor.driver!==8||actor.specialCooldown>0||actor.destroyed>0||actor.inactive||actor.afk||actor.bomber||world.timeStop>0)return false;

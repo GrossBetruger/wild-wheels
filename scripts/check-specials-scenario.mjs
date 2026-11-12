@@ -12,16 +12,16 @@ export async function checkSpecials(evaluate,app,room,id,sleep,capture){
   app.controls(peer,{sequence:0,keys:['arrowup'],actions:[],epoch:room.world.soundEpoch});
   const stoppedAt=app.snapshot(room,peer).world.wz;
   await evaluate("__game.keys.add('arrowup')");const start=await evaluate('__game.race.wz');await sleep(600);
-  const moves=await evaluate(`__game.race.wz>${start}+.1`),frozen=app.snapshot(room,peer).world.wz===stoppedAt;
+  const moves=await evaluate(`__game.race.wz>${start}+.1`),frozen=Math.abs(app.snapshot(room,peer).world.wz-stoppedAt)<1;
   const notice=await evaluate("document.querySelector('.special-status').textContent.includes('RELATIVITY')");await capture('relativity');
   await evaluate('__game.keys.clear()');
   const resumed=await wait(()=>evaluate('__game.race.timeStop===0'));app.controls(peer,{sequence:1,keys:['arrowup'],actions:[],epoch:room.world.soundEpoch});
   const movesAgain=await wait(()=>app.snapshot(room,peer).world.wz>stoppedAt+.05);
   const cooldown=await evaluate("__game.race.specialCooldown>15&&__game.network.action('special')!==true");
   Object.assign(room.world,{timeStop:2.5,timeOwner:peer.id});app.broadcast(room);
-  const frozenClient=await wait(()=>evaluate("__game.race.timeStop>1&&document.querySelector('.special-status').textContent.includes('TIME FROZEN')"));
+  const frozenClient=await wait(()=>evaluate("__game.race.timeStop>1&&document.querySelector('.special-status').textContent.includes('TIME DILATION')"));
   const heldAt=await evaluate('__game.race.wz');await evaluate("__game.keys.add('arrowup')");await sleep(400);
-  const clientStaysStill=await evaluate(`Math.abs(__game.race.wz-${heldAt})<.01&&__game.network.action('fire')!==true`);await capture('frozen-opponent');
+  const clientStaysStill=await evaluate(`Math.abs(__game.race.wz-${heldAt})<1&&__game.network.action('fire')!==true`);await capture('frozen-opponent');
   await evaluate('__game.keys.clear()');Object.assign(room.world,{timeStop:0,timeOwner:null});app.broadcast(room);
   // Keep the room's canonical actors; reset just the scenario, not the connection.
   Object.assign(own,{driver:11,wx:65,wz:40,speed:0,tehilim:0});other.speed=0;app.broadcast(room);

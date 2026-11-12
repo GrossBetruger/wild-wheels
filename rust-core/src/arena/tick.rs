@@ -34,7 +34,7 @@ impl Game{
         super::movement::age(g,world_dt);
         for id in 0..self.actors.len(){
             let input=frame.inputs.iter().find(|input|input.actor==id);let action_clock=input.is_some_and(|i|i.action_clock);
-            if self.frozen(id){if let Some(last)=input.and_then(|i|i.moves.as_ref()).and_then(|m|m.last()){self.movement_ack[id]=last.sequence;self.apply_pending(id,last.sequence);}continue;}
+            if self.frozen(id){let held=input.map_or(0,|i|i.keys);let steer=input.and_then(|i|i.steer).unwrap_or(f64::from(u8::from(held&4!=0))-f64::from(u8::from(held&8!=0)));self.move_cart(id,steer,held,dt,true,true);if let Some(last)=input.and_then(|i|i.moves.as_ref()).and_then(|m|m.last()){self.movement_ack[id]=last.sequence;self.apply_pending(id,last.sequence);}continue;}
             let max_health=match self.global.special_abilities&&self.actors[id].driver==12{true=>6.0,false=>3.0};
             let a=&mut self.actors[id];if a.afk{continue;}a.notice_time=(a.notice_time-dt).max(0.0);
             for timer in [&mut a.shield,&mut a.hedge_shield,&mut a.tehilim,&mut a.celebrate,&mut a.voice_cooldown,&mut a.wall_cooldown,&mut a.vulcan]{*timer=(*timer-dt).max(0.0);}

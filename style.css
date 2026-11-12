@@ -64,3 +64,5 @@ body.mobile-playing{overflow:hidden;overscroll-behavior:none}.race-panel.mobile-
 .special-button{right:12px;bottom:145px}.special-status{position:absolute;left:50%;top:108px;transform:translateX(-50%);padding:5px 10px;background:#232955aa;color:#fbeba7;font:700 11px monospace;border-radius:7px;pointer-events:none}
 
 .viewport.time-stopped{box-shadow:inset 0 0 55px 12px #7bafff88}.time-stopped .special-status{background:#17294cbb;color:#baf4ff;border:1px solid #a4eaff88}
+
+.viewport.time-stopped::after{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-radial-gradient(ellipse at center,transparent 0 13%,#a4eaff18 13.2% 13.6%,transparent 14% 22%);box-shadow:inset 0 0 90px #641baf88;mix-blend-mode:screen;animation:time-warp-wave 1.2s ease-in-out infinite alternate}@keyframes time-warp-wave{from{opacity:.45;transform:scale(1)}to{opacity:.95;transform:scale(1.12)}}
