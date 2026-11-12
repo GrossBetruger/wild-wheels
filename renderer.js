@@ -1,5 +1,5 @@
 import {OwlFlight} from './knowitowl.js';
-import {DarkFog,darkHumorState} from './dark-humor.js';
+import {DarkFog,darkHumorState,drawXrayArena} from './dark-humor.js';
 import {drawCalculator,drawAnt,drawTaxAudit,ReceiptRolls,drawXylophone} from './fourmidable.js';
 import { sampleTrack, branches } from './track.js';
 import { LENGTH, drivers, pickupType } from './engine.js';
@@ -707,7 +707,11 @@ export class Renderer {
       this.darkFog??=new DarkFog(gl);this.darkFog.draw(this,time,dark.strength);
       this.nameplates=[];
       if(dark.xray){
-        gl.disable(gl.DEPTH_TEST);gl.uniform1f(this.xray,1);gl.uniform1f(this.emission,1);gl.uniform1f(this.fogScale,0);
+        gl.disable(gl.DEPTH_TEST);gl.uniform1f(this.emission,1);gl.uniform1f(this.fogScale,0);
+        // Amber geometry outlines stay distinct from the cyan racer silhouettes.
+        this.model('dark:arena:'+r.arena,0,0,0,0,mesh=>drawXrayArena(mesh,arenas[r.arena]));
+        const navigation=this.instances.pop();this.drawBuffer(navigation.buffer,navigation.count);
+        gl.uniform1f(this.xray,1);
         for(const actor of [r,...r.bots]){if(actor.destroyed||actor.inactive||actor.afk||actor.bomber)continue;
           for(const instance of this.lastBodies.get(actor.id)?.parts??[]){gl.uniform3f(this.originUniform,instance.x,instance.y,instance.z);gl.uniform2f(this.rotationUniform,Math.cos(instance.angle),Math.sin(instance.angle));gl.uniform2f(this.pitchUniform,Math.cos(instance.pitch),Math.sin(instance.pitch));gl.uniform2f(this.rollUniform,Math.cos(instance.roll),Math.sin(instance.roll));this.drawBuffer(instance.buffer,instance.count);}
         }

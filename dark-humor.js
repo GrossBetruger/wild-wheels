@@ -37,3 +37,17 @@ export class DarkFog{
     gl.disableVertexAttribArray(this.position);gl.disable(gl.BLEND);gl.depthMask(true);gl.enable(gl.DEPTH_TEST);gl.useProgram(renderer.program);
   }
 }
+export function drawXrayArena(m,arena){
+  const wall='#b29a5d',floor='#12313e',thickness=.1;
+  const frame=(x,z,w,d,h)=>{
+    for(const y of [.08,h]){
+      for(const side of [-1,1]){m.box(x+side*w/2,y,z,thickness,thickness,d,wall);m.box(x,y,z+side*d/2,w,thickness,thickness,wall);}
+    }
+    for(const sx of [-1,1])for(const sz of [-1,1])m.box(x+sx*w/2,.08,z+sz*d/2,thickness,h,thickness,wall);
+  };
+  // Match the solid scenery, including the inner faces of the perimeter walls.
+  for(const [x,z,w,d] of arena.blocks)frame(x,z,w,d,6.35);
+  for(const side of [-1,1]){frame(side*(arena.size+2),0,4,(arena.size+4)*2,5);frame(0,side*(arena.size+2),(arena.size+4)*2,4,5);}
+  // A faint ground reference shows distances and open lanes without revealing the scene.
+  for(let n=-arena.size;n<=arena.size;n+=16){m.box(n,.025,0,.035,.025,arena.size*2,floor);m.box(0,.025,n,arena.size*2,.025,.035,floor);}
+}
