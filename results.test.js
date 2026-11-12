@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createBattle } from './combat.js';
 import { createRace } from './engine.js';
-import { matchResults, battleTieNotice } from './results.js';
+import { ordinal, matchResults, battleTieNotice } from './results.js';
 
 test('a host tied for the highest points wins even with more deaths, and the result explicitly reports the tie',()=>{
   const world=createBattle();Object.assign(world,{multiplayer:true,host:3,phase:'finished',finishRank:2,id:0,name:'Guest',kills:7,deaths:1});
@@ -46,4 +46,8 @@ test('race results keep recorded finish order even after an overtake and label u
     {place:2,name:'Alex · YOU',you:true,time:95},
     {place:3,name:'Jo',you:false,time:null}
   ]);
+});
+
+test('placement labels cover every eight-player finish and teen exceptions',()=>{
+  for(const [place,label]of [[1,'1ST PLACE'],[2,'2ND PLACE'],[3,'3RD PLACE'],[4,'4TH PLACE'],[5,'5TH PLACE'],[6,'6TH PLACE'],[7,'7TH PLACE'],[8,'8TH PLACE'],[11,'11TH PLACE'],[12,'12TH PLACE'],[13,'13TH PLACE'],[21,'21ST PLACE']])assert.equal(`${place}${ordinal(place)} PLACE`,label);
 });

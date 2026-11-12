@@ -6,7 +6,7 @@ import { sampleTrack, branches } from './track.js';
 import {useSpecial,abilityNames,frozen,auditTarget} from './special-abilities.js';
 import { createBattle, battleActive, tickBattle, fireBattle, releaseChaff, useBattleTurbo, somersaultBattle, arenas, standings, incomingMissiles, VULCAN_DURATION, MAX_HEALTH, equipBomber, dropBomb, BOMB_RECHARGE, recoveryInterval, hedgehogRecoveryInterval } from './combat.js';
 import { NetworkGame } from './network.js';
-import { matchResults, battleTieNotice } from './results.js';
+import { ordinal, matchResults, battleTieNotice } from './results.js';
 import { KillCelebration, ChaffNotice } from './combat-notices.js';
 import { usesMobileControls, bombTarget, panBomber } from './mobile.js';
 import {CharacterPreview} from './character-preview.js';
@@ -174,7 +174,6 @@ function drawMap(){
   for(const b of race.bots){const[x,y]=mapPoint(b.s/LENGTH*Math.PI*2,b.route);map.fillStyle=b.color;map.beginPath();map.arc(x,y,3,0,7);map.fill();}const[x,y]=mapPoint(race.s/LENGTH*Math.PI*2,race.route);map.fillStyle='#7251d2';map.beginPath();map.arc(x,y,5,0,7);map.fill();map.strokeStyle='#fff';map.lineWidth=2;map.stroke();map.font='9px monospace';map.fillStyle='#9a91a0';map.textAlign='center';map.fillText('CHOOSE YOUR ROUTE',140,69);
 }
 function tone(freq,duration=.1){ audio.tone(freq,duration); }
-const ordinal=n=>['','ST','ND','RD','TH','TH','TH'][n];
 function timeLabel(t){return `${String(Math.floor(t/60)).padStart(2,'0')}:${(t%60).toFixed(2).padStart(5,'0')}`;}
 let scoreboardKey='';
 function put(id,value){const node=$(id);if(node.textContent!==String(value))node.textContent=value;}

@@ -1,6 +1,8 @@
 import { drivers } from './engine.js';
 import { standings } from './combat.js';
 
+export function ordinal(place){const teen=place%100;if(teen>=11&&teen<=13)return 'TH';return ({1:'ST',2:'ND',3:'RD'})[place%10]??'TH';}
+
 export function battleTieNotice(world){
   if(world.mode!=='combat'||!world.multiplayer||world.finishRank==null)return '';
   const order=standings(world);
