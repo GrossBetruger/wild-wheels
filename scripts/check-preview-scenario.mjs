@@ -21,7 +21,8 @@ export async function checkPreview(evaluate,app,room,id,sleep,capture){
     const pixels=await evaluate('__game.previewPixels'),named=await evaluate(`document.getElementById('character-preview').getAttribute('aria-label').includes(${JSON.stringify(name)})`);
     selections.push({driver,name,selected,named,rendered:pixels?.colors>20&&pixels?.error===0});await capture(`preview-${driver}`,'.character-preview');
   }
-  for(const [clock,label]of [[1,'monocle-salute'],[5,'bow'],[9,'wink'],[13,'flight']]){await evaluate("__game.network.chooseDriver(14)");await wait(()=>evaluate('__game.preview.driver===14'));await evaluate(`{__game.preview.clock=${clock};__game.preview.dirty=true;}`);await sleep(100);await capture('knowitowl-'+label,'.character-preview');}
+  const owlGestures=[];
+  for(const [clock,label,gesture]of [[1,'monocle-salute','hello'],[5,'bow','cheer'],[9,'wink','look'],[13,'flight','rev'],[17,'monocle-check','monocle'],[21,'xray-monocle','xray']]){await evaluate("__game.network.chooseDriver(14)");await wait(()=>evaluate('__game.preview.driver===14'));await evaluate(`{__game.preview.clock=${clock};__game.preview.dirty=true;}`);const shown=await wait(()=>evaluate(`__game.preview.presentation.id===${JSON.stringify(gesture)}`));owlGestures.push({gesture,shown});await sleep(100);await capture('knowitowl-'+label,'.character-preview');}
   await evaluate("__game.network.chooseDriver(13)");await wait(()=>evaluate('__game.preview.driver===13'));
   await evaluate('{__game.preview.clock=13;__game.preview.dirty=true;}');await sleep(100);await capture('fourmidable-receipt-roll','.character-preview');
   await evaluate("__game.network.chooseDriver(9)");await wait(()=>evaluate("__game.preview.driver===9"));
@@ -48,5 +49,5 @@ export async function checkPreview(evaluate,app,room,id,sleep,capture){
   const noGameActions=world.phase==='ready'&&world.elapsed===0&&world.ammo===10&&world.missiles===1&&world.turbos===1&&world.boost===0&&world.projectiles.length===0;
   await evaluate("{__game.preview.clock=0;document.querySelector('.character-preview button').click();}");
   const resume=await wait(()=>evaluate('__game.preview.clock>.05'));
-  return {available,orbit,pause,resume,selections,gestures,tail,tailAnimation,tailFolding,noGameActions,pass:orbit&&pause&&resume&&selections.every(s=>s.selected&&s.named&&s.rendered)&&gestures.every(g=>g.shown)&&tailAnimation&&tailFolding&&noGameActions};
+  return {available,orbit,pause,resume,selections,owlGestures,gestures,tail,tailAnimation,tailFolding,noGameActions,pass:owlGestures.every(g=>g.shown)&&orbit&&pause&&resume&&selections.every(s=>s.selected&&s.named&&s.rendered)&&gestures.every(g=>g.shown)&&tailAnimation&&tailFolding&&noGameActions};
 }

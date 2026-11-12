@@ -1,5 +1,5 @@
 export function previewPose(driver,time){
-  const stage=Math.floor(time/4)%4,age=time%4,ramp=Math.min(1,age/.4,(4-age)/.4),ease=ramp*ramp*(3-2*ramp);
+  const stage=Math.floor(time/4)%(driver===14?6:4),age=time%4,ramp=Math.min(1,age/.4,(4-age)/.4),ease=ramp*ramp*(3-2*ramp);
   const pose={id:'hello',label:driver===8?'WORM SALUTE':'WAVING',left:0,right:0,yaw:0,lean:0,bounce:0,boost:false,tailFold:0};
   switch(stage){
     case 0:pose.right=(1.8+Math.sin(time*9)*.3)*ease;pose.lean=driver===8?.24*ease:0;break;
@@ -12,6 +12,9 @@ export function previewPose(driver,time){
   if(driver===11)pose.label=['REGAL WAVE','ROYAL ROAR','LOOKING AROUND','ROTOR WASH'][stage];
   if(driver===12)pose.label=['A CARING WAVE','BUTTERFLY JOY','CHECKING ON EVERYONE','CARE ON THE WAY'][stage];
   if(driver===13)pose.label=['NERVOUS HELLO','BOOKS BALANCED!','CHECKING THE TOTALS','CRUNCHING NUMBERS'][stage];
-  if(driver===14)pose.label=['MONOCLE SALUTE','TAKE A BOW','KNOWING WINK','TOO COOL TO PEDAL'][stage];
+  if(driver===14){
+    pose.label=['MONOCLE SALUTE','TAKE A BOW','KNOWING WINK','TOO COOL TO PEDAL','MONOCLE CHECK','X-RAY MONOCLE'][stage];
+    if(stage>=4){pose.id=stage===4?'monocle':'xray';pose.monocle=ease;pose.yaw=(stage===4?-.65:Math.sin(age*1.5)*.2)*ease;}
+  }
   return pose;
 }
