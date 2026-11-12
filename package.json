@@ -13,7 +13,8 @@
     "test:regression": "node scripts/check-regressions.mjs",
     "build:core": "node scripts/build-rust-core.mjs",
     "test:dedicated": "node scripts/check-dedicated-server.mjs",
-    "benchmark:dedicated": "node scripts/benchmark-dedicated.mjs"
+    "benchmark:dedicated": "node scripts/benchmark-dedicated.mjs",
+    "test:dedicated-browser": "node scripts/check-dedicated-browser.mjs"
   },
   "dependencies": {
     "ws": "8.22.2"

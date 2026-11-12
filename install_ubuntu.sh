@@ -8,6 +8,7 @@ case "${1:-}" in
 esac
 if [[ ! -r /etc/os-release ]]; then printf '%s\n' 'This installer requires Ubuntu or Debian.' >&2; exit 1; fi
 # This file is owned by the operating system, not downloaded input.
+# shellcheck source=/dev/null
 . /etc/os-release
 case "${ID:-}" in ubuntu|debian) ;; *) printf '%s\n' 'This installer requires Ubuntu or Debian.' >&2; exit 1 ;; esac
 case "$(uname -m)" in x86_64) rust_host=x86_64-unknown-linux-gnu ;; aarch64|arm64) rust_host=aarch64-unknown-linux-gnu ;; *) printf '%s\n' 'Supported CPU architectures: x86_64 and arm64.' >&2; exit 1 ;; esac

@@ -74,11 +74,20 @@ After pushing to main, build the release binary and run:
 ```sh
 npm run test:dedicated -- --seconds 20
 npm run benchmark:dedicated
+npm run test:dedicated-browser
 npm run test:browser-netcode
 ```
 
 `test:dedicated` starts an isolated native process from a directory without the repository, checks the embedded asset allowlist and API permissions, then drives eight real Wasm prediction clients over WebSockets. It verifies a ninth player is rejected, guest auto-start/refusal, movement/fire acknowledgements, session refresh and host disconnect persistence. For each player: at least 25 snapshots/second, p99 snapshot gap under 100 ms and sustained acknowledged movement. These are loopback service checks, not internet latency guarantees.
 
 `benchmark:dedicated` compares three trials of the native core against the existing Node/Wasm bridge using the same eight-player inputs. Each trial simulates 3,600 ticks, warms up for 600 and encodes eight snapshots every other tick. It checks gameplay/position parity and equivalent packet volume. Native p99 for a tick including all eight encodes must stay below 2 ms, within the 16.67 ms simulation budget. This measures CPU work; it does not measure a player’s GPU or claim an equivalent FPS increase.
+
+`test:dedicated-browser` runs two isolated Chrome players against the actual native server with eight active actors. It checks automatic joining, guest start, keyboard movement, shooting, refresh, rendered WebGL frames and lobby control transfer.
+
+To validate installation and launching on clean Ubuntu without Node:
+
+```sh
+docker run --rm --mount type=bind,source="$PWD",target=/game,readonly --workdir /game ubuntu:24.04 bash scripts/check-ubuntu-install.sh
+```
 
 The existing Chrome netcode suite continues to protect prediction and feedback under host, guest, latency and jitter profiles. See [testing](testing.md) for the broader suites.
