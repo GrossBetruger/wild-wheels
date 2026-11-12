@@ -55,10 +55,10 @@ export async function checkSpecials(evaluate,app,room,id,sleep,capture){
   await wait(()=>evaluate('__game.race.driver===14&&__game.renderer.owlFlight.riders.size>0'));await sleep(750);await capture('knowitowl-flight');
   Object.assign(own,{wx:-35,wz:0,speed:0,boost:0,heading:Math.PI/2,cameraHeading:Math.PI/2,motionHeading:Math.PI/2});Object.assign(other,{wx:35,wz:0,speed:0,heading:-Math.PI/2,health:3,destroyed:0});app.broadcast(room);
   await wait(()=>evaluate('__game.race.boost===0'));await evaluate("__game.network.action('special')");
-  const darkCaster=await wait(()=>evaluate('__game.renderer.darkState?.strength>.99&&__game.renderer.darkState.xray&&__game.audio.darkLaughBeat!==null'));await capture('dark-humor-xray');
+  const darkCaster=await wait(()=>evaluate('__game.renderer.darkState?.strength>.99&&__game.renderer.darkState.xray&&__game.audio.laughter?.active?.sources.length>=3&&__game.audio.laughter.buffers.every(b=>b.duration>3)'));await capture('dark-humor-xray');
   Object.assign(own,{driver:10,specialActive:0,boost:0});Object.assign(other,{driver:14,specialActive:7});app.broadcast(room);
   const darkOpponent=await wait(()=>evaluate('__game.renderer.darkState?.strength>.8&&!__game.renderer.darkState.xray'));await capture('dark-humor-opponent');
   member.driver=10;peer.driver=14;room.specialAbilities=false;app.syncRoom(room);app.broadcast(room);
-  const disabled=await wait(()=>evaluate("__game.race.specialAbilities===false&&__game.network.abilities.textContent.includes('OFF')&&document.querySelector('.special-status').classList.contains('hidden')"));
+  const disabled=await wait(()=>evaluate("__game.race.specialAbilities===false&&__game.network.abilities.textContent.includes('OFF')&&document.querySelector('.special-status').classList.contains('hidden')&&!__game.audio.laughter?.active"));
   return {darkCaster,darkOpponent,xylophone,audit,previewHelp,available,activate,warpAudio,audioResolved,moves,frozen,notice,resumed,movesAgain,cooldown,frozenClient,clientStaysStill,holy,angels,angelsGone,heal,gravity,gravityPickup,fashion,smoke,disabled,pass:darkCaster&&darkOpponent&&xylophone&&audit&&previewHelp&&available&&activate&&warpAudio&&audioResolved&&moves&&frozen&&notice&&resumed&&movesAgain&&cooldown&&frozenClient&&clientStaysStill&&holy&&angels&&angelsGone&&heal&&gravity&&gravityPickup&&fashion&&smoke&&disabled};
 }

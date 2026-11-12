@@ -50,10 +50,11 @@ export class OwlFlight{
   riders=new Map();feathers=[];
   draw(renderer,m,p,color,yaw,spin,boost,time,celebrate,jump,gesture){
     const id=p.id??'preview';let s=this.riders.get(id);if(!s||time<s.time||time-s.time>1){s={time,amount:boost?1:0,drop:boost?time-2:-99,last:0,boost};this.riders.set(id,s);}
-    const dt=Math.min(.05,Math.max(0,time-s.time));s.time=time;if(boost&&!s.boost)s.drop=time;s.boost=boost;s.amount+=(Number(boost)-s.amount)*(1-Math.exp(-dt*8));
+    const dt=Math.min(.05,Math.max(0,time-s.time));s.time=time;if(boost&&!s.boost){s.drop=time;s.bike={x:p.x,z:p.z,angle:Math.atan2(p.tx,p.tz)-yaw+spin,height:jump?.height??0};}s.boost=boost;s.amount+=(Number(boost)-s.amount)*(1-Math.exp(-dt*8));
     const a=s.amount,angle=Math.atan2(p.tx,p.tz)-yaw+spin,height=(jump?.height??0)+a*(2.4+Math.sin(time*5)*.15),phase=Math.floor(time*(boost?18:7))%16;
     const elapsed=time-s.drop,bikeScale=boost?Math.max(0,1-Math.max(0,elapsed-.65)*2):1;
-    if(bikeScale>0)renderer.model('owl:bike:'+phase+':'+Math.round(bikeScale*12),p.x,height*(1-a)-(boost?Math.min(.25,elapsed*.3):0),p.z-a*Math.min(2,elapsed*2),angle,mesh=>{const point=mesh.point;mesh.point=function(v){return point.call(this,v.map(n=>n*bikeScale));};drawBicycle(mesh,phase*Math.PI/8);},jump?.pitch??0,null,boost?Math.min(1.4,elapsed*2):0);
+    const abandoned=boost?s.bike:null,slide=1.3*(1-Math.exp(-Math.max(0,elapsed)*3));
+    if(bikeScale>0)renderer.model('owl:bike:'+phase+':'+Math.round(bikeScale*12),abandoned?abandoned.x+Math.sin(abandoned.angle)*slide:p.x,abandoned?Math.max(0,abandoned.height-elapsed*elapsed*5):height*(1-a),abandoned?abandoned.z+Math.cos(abandoned.angle)*slide:p.z,abandoned?.angle??angle,mesh=>{const point=mesh.point;mesh.point=function(v){return point.call(this,v.map(n=>n*bikeScale));};drawBicycle(mesh,phase*Math.PI/8);},jump?.pitch??0,null,boost?Math.min(1.4,elapsed*2):0);
     const pose=celebrate>0?1+Math.floor(time*1.3)%4:gesture?.id==='hello'?1:gesture?.id==='cheer'?2:gesture?.id==='look'?3:0;
     renderer.model('owl:body:'+phase+':'+Math.round(a*20)+':'+pose,p.x,height+(gesture?.bounce??0),p.z,angle+(gesture?.yaw??0)+(pose===4?Math.sin(time*4)*.45:0),mesh=>drawOwl(mesh,phase,a,pose),(jump?.pitch??0)+(pose===2?.15:0));
     if(boost&&time-s.last>.055){s.last=time;const side=Math.sin(time*29)>0?1:-1;this.feathers.push({x:p.x+Math.cos(angle)*side*(1.2+a),z:p.z-Math.sin(angle)*side*(1.2+a),y:height+3.5,vx:-Math.sin(angle)*3+side,vz:-Math.cos(angle)*3,age:0,time,seed:time*11});}
