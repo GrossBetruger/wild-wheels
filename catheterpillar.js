@@ -58,21 +58,22 @@ export function drawButterflyWings(m,phase){
 
 export function drawNurseButterfly(m,phase,waving){
   const skin="#f4c4d8",ink="#514568",mint="#b5e9db";
-  // Little dangling shoes make the whole airborne silhouette readable.
-  for(const side of [-1,1])m.ball(side*.24,1.7,.12,.17,.15,.3,mint,10,5);
+  // Tucked feet and elbows keep her flight posture compact.
+  for(const side of [-1,1])m.ball(side*.18,1.8,-.05,.16,.15,.25,mint,10,5);
   m.ball(0,2.47,0,.58,.78,.46,'#fff7eb',12,7);
   m.box(0,2.12,.42,.73,.35,.08,mint);
   m.ball(0,3.6,.17,.73,.72,.61,skin,14,8);
   for(const side of [-1,1]){
-    m.ball(side*.27,3.7,.72,.2,.25,.07,'#fffaf6',10,6);
-    m.ball(side*.27,3.69,.78,.105,.15,.04,'#4b7d82',8,5);
-    m.ball(side*.24,3.76,.82,.045,.055,.02,'#ffffff',6,4);
+    m.ball(side*.27,3.7,.72,.2,.22,.07,'#fffaf6',10,6);
+    m.ball(side*.27,3.74,.78,.105,.14,.04,'#4b7d82',8,5);
+    m.ball(side*.24,3.8,.82,.045,.05,.02,'#ffffff',6,4);
+    m.ball(side*.27,3.95,.7,.19,.035,.035,ink,8,4);
     m.ball(side*.48,3.37,.67,.16,.09,.04,'#ec94b5',8,4);
     for(let i=0;i<6;i++)m.ball(side*(.3+i*.065),4.12+i*.12,.1,.035,.08,.035,ink,6,4);
     m.ball(side*.64,4.83,.1,.12,.12,.1,mint,8,5);
     const lift=side>0&&waving?.65+Math.sin(phase*Math.PI/4)*.16:0;
-    m.ball(side*.64,2.51+lift*.5,.37,.17,.35+lift*.3,.18,'#fff7eb',8,5);
-    m.ball(side*.75,2.3+lift,.65,.2,.2,.18,skin,8,5);
+    m.ball(side*.51,2.58+lift*.5,.32,.16,.29+lift*.3,.18,'#fff7eb',8,5);
+    m.ball(side*(waving?.66:.52),2.46+lift,.57,.18,.18,.18,skin,8,5);
     // Stethoscope earpieces and curved tubing around the uniform collar.
     for(let i=0;i<6;i++)m.ball(side*(.28-i*.025),2.99-i*.1,.47,.035,.06,.035,ink,6,4);
   }

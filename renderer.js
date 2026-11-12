@@ -225,7 +225,8 @@ export class Renderer {
     m.at(p.x,.05,p.z,angle);m.disc(0,0,0,2.1,2.8,'#3a4147');
     this.model(`kart:12:${color}`,p.x,height,p.z,angle,mesh=>drawAmbulance(mesh,color),pitch);
     const phase=Math.floor(clock*6)%8,waving=celebrate>0||(gesture?.right??0)>0;
-    const hover=height+1.65+Math.sin(clock*3)*.09+(gesture?.bounce??0),facing=angle+(gesture?.yaw??0),lean=pitch+(gesture?.lean??0);
+    // Pitch the entire butterfly forward together, keeping the wing hinges attached.
+    const hover=height+1.7+Math.sin(clock*3)*.06+(gesture?.bounce??0),facing=angle+(gesture?.yaw??0),lean=pitch+.78+(gesture?.lean??0);
     this.model(`catheterpillar:nurse:${phase}:${waving}`,p.x,hover,p.z,facing,mesh=>drawNurseButterfly(mesh,phase,waving),lean);
     const wingPhase=Math.floor(clock*(boost?96:72))%24;
     this.model(`catheterpillar:wings:${wingPhase}`,p.x,hover,p.z,facing,mesh=>drawButterflyWings(mesh,wingPhase),lean);
