@@ -6,7 +6,7 @@ import { bomberCamera } from './mobile.js';
 import {drawNewDriver,drawRoadster,drawRoadsterJets,drawCricketHaze,drawCricketProjectile,drawHoustonHelmet,drawDollarBundle,drawCessna,drawCessnaPropeller,drawCessnaBoost,drawElectron,drawPilotWorm,drawStarship,drawStarshipThrust} from './characters.js';
 import {previewPose} from './preview-pose.js';
 import {drawRococoChariot,drawPearococo,drawPeacockFeather,drawRoyalWing,drawBalletPump,drawFairyStar,drawFairyBoost} from './pearococo.js';
-import {drawMotorcycle,drawYuda,drawYudaJacket,YudaJackets,YudaStunts,drawBikerBadge,drawMotorcycleBoost} from './master-yuda.js';
+import {drawMotorcycle,drawYuda,drawYudaJacket,YudaJackets,YudaStunts,YudaExhaust,drawBikerBadge,drawMotorcycleBoost} from './master-yuda.js';
 import {YudaDrift} from './yuda-drift.js';
 const rgb=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255);
 const sub=(a,b)=>a.map((v,i)=>v-b[i]);
@@ -43,7 +43,7 @@ export class Renderer {
     this.models=new Map();this.instances=[];this.quality='auto';this.resolution=1.25;this.fps=0;this.fpsStart=0;this.frameCount=0;this.slowWindows=0;this.fastWindows=0;
     this.tailFolds=new Map();
     this.yudaDrift=new YudaDrift();
-    this.yudaJackets=new YudaJackets();this.yudaStunts=new YudaStunts();
+    this.yudaJackets=new YudaJackets();this.yudaStunts=new YudaStunts();this.yudaExhaust=new YudaExhaust();
     this.lastBodies=new Map();this.ashBodies=new Map();
     const debug=gl.getExtension('WEBGL_debug_renderer_info');this.gpuName=debug?gl.getParameter(debug.UNMASKED_RENDERER_WEBGL):'WebGL';this.softwareGPU=/swiftshader|llvmpipe|software/i.test(this.gpuName);if(this.softwareGPU)this.resolution=.75;
     this.program=gl.createProgram();
@@ -320,7 +320,11 @@ export class Renderer {
     this.model(`cessna:propeller:${phase}`,p.x,jump?.height??0,p.z,angle,mesh=>{mesh.at(0,.13,0);drawCessnaPropeller(mesh,phase);},jump?.pitch??0);
   }
   afterburner(p,angle,clock,jump=null,driver=0){
-    if(driver===10){drawMotorcycleBoost(this.glow,this.smoke,p,angle,clock,jump);return;}
+    if(driver===10){
+      if(!this.arenaExhaust){drawMotorcycleBoost(this.glow,this.smoke,p,angle,clock,jump);return;}
+      this.smoke.at(p.x,jump?.height??0,p.z,angle);this.smoke.pitch=jump?.pitch??0;this.smoke.pivot=2;this.smoke.roll=p.bikeRoll??0;
+      const [x,y,z]=this.smoke.point([0,.67,-2.5]);this.yudaExhaust.emit(p.id,{x,y:Math.max(.2,y),z},clock);return;
+    }
     if(driver===7){this.starshipEngines(p,angle,clock,jump,true);return;}
     if(driver===9){drawFairyBoost(this.glow,this.smoke,p,angle,clock,jump);return;}
     if(driver===5){drawCricketHaze(this.glow,this.smoke,p,angle,clock,jump);return;}
@@ -403,6 +407,7 @@ export class Renderer {
     }
   }
   drawPreview(driver,color,time){
+    this.arenaExhaust=false;
     const gl=this.gl,canvas=this.canvas,width=Math.max(1,Math.round(canvas.clientWidth*this.pixelRatio())),height=Math.max(1,Math.round(canvas.clientHeight*this.pixelRatio()));
     if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;}gl.viewport(0,0,width,height);
     this.instances=[];this.glow=new Mesh();this.smoke=new Mesh();
@@ -462,6 +467,7 @@ export class Renderer {
     m.at(0,0,0);this.gl.bindBuffer(this.gl.ARRAY_BUFFER,this.staticBuffer);this.gl.bufferData(this.gl.ARRAY_BUFFER,new Float32Array(m.data),this.gl.STATIC_DRAW);this.staticCount=m.data.length/9;this.track=`arena-${index}`;
   }
   drawBattle(r,time){
+    this.arenaExhaust=true;this.yudaExhaust.update(`${r.arena}:${r.soundEpoch}:${r.id}`,time);
     this.yudaDrift.update(r,time);
     const helmetScene=`${r.arena}:${r.soundEpoch}:${r.id}`;
     if(this.helmetScene!==helmetScene||time<(this.helmetTime??0)){this.helmetScene=helmetScene;this.helmetFlights=new Map();this.tailFolds.clear();this.yudaJackets.riders.clear();this.yudaStunts.riders.clear();this.lastBodies.clear();this.ashBodies.clear();}this.helmetTime=time;
@@ -572,7 +578,7 @@ export class Renderer {
       const tint=[[.9,.35,.04],[.05,.55,1],[.65,.15,1]][particle.level].map(c=>c*fade);
       this.glow.at(particle.wx,particle.height,particle.wz);this.glow.particle(0,0,0,.42*fade,tint);this.glow.particle(-particle.vx*.025,-particle.vy*.025,-particle.vz*.025,.2*fade,tint);
     }
-    this.bikerSparks();
+    this.bikerSparks();this.yudaExhaust.draw(this.smoke,time);
     if(r.wasDrifting&&r.driver!==10){this.glow.at(p.x,.25,p.z,r.heading);const color=r.drift>=.85?[.5,.08,.9]:r.drift>=.45?[0,.4,.9]:[.6,.2,.02];for(const side of [-1,1])this.glow.particle(side*1.65,0,-1.4,1,color);}
     this.flush(m,view,overview?.halfHeight?height/(2*overview.halfHeight):height);
   }

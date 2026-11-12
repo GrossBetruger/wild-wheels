@@ -129,16 +129,31 @@ export function drawBikerBadge(m){
     m.tri([side*.2,-.1,0],[x,y+.15,0],[x+side*.12,y,0],i%2?chrome:cyan);
   }
 }
-export function drawMotorcycleBoost(glow,smoke,p,angle,clock,jump=null){
-  for(const mesh of [glow,smoke]){mesh.at(p.x,jump?.height??0,p.z,angle);mesh.pitch=jump?.pitch??0;mesh.pivot=2;mesh.roll=p.bikeRoll??0;}
-  for(const side of [-1,1]){
-    const x=side*.65,flicker=1+.1*Math.sin(clock*63+side);
-    glow.flame(x,.67,-2.3,.23,6*flicker,[.015,.26,.4],clock);
-    glow.flame(x,.67,-2.32,.12,3.7*flicker,[.35,.75,.85],clock);
-    for(let i=0;i<22;i++){
-      const t=(clock*2.4+i/22)%1,fade=1-t;
-      glow.particle(x+Math.sin(i*2.4)*t*.5,.67+Math.cos(i*1.7)*t*.4,-2.4-t*8,.24*fade,i%3?[.03,.48*fade,.8*fade]:[fade,.38*fade,.025]);
-      if(i%4===0)smoke.particle(x,.65+t*.7,-2.8-t*6,(.5+t)*fade,[.23,.37,.48]);
+export class YudaExhaust {
+  clouds=[];emitters=new Map();scene=null;time=0;sequence=0;
+  update(scene,time){
+    if(scene!==this.scene||time<this.time){this.clouds=[];this.emitters.clear();this.scene=scene;}
+    this.time=time;this.clouds=this.clouds.filter(p=>time-p.born<3);
+    for(const [id,e] of this.emitters)if(time-e.time>.2)this.emitters.delete(id);
+  }
+  emit(id,point,time){
+    const last=this.emitters.get(id),gap=last?time-last.time:1;
+    if(gap<.05-1e-8)return;
+    const distance=last?Math.hypot(point.x-last.x,point.z-last.z):0,from=last&&gap<.2&&distance<18?last:point;
+    const steps=Math.min(3,Math.max(1,Math.ceil(Math.hypot(point.x-from.x,point.z-from.z)/1.5)));
+    for(let i=1;i<=steps;i++){const t=i/steps;this.clouds.push({owner:id,x:from.x+(point.x-from.x)*t,y:from.y+(point.y-from.y)*t,z:from.z+(point.z-from.z)*t,born:time,seed:this.sequence++});}
+    this.emitters.set(id,{...point,time});this.clouds=this.clouds.slice(-1080);
+  }
+  draw(smoke,time){
+    for(const cloud of this.clouds){const age=Math.max(0,time-cloud.born),fade=Math.min(1,(3-age)/.45),size=(2.4+Math.min(age,1.8)*2)*Math.sqrt(Math.max(0,fade));
+      smoke.at(cloud.x,cloud.y+age*.7,cloud.z);
+      for(let i=0;i<6;i++){const a=i*2.399+cloud.seed*.7,r=.25+age*.55,gray=.13+Math.min(age,2)*.075+(i%2)*.045;smoke.particle(Math.cos(a)*r,.3+Math.sin(a)*r*.5,Math.sin(a)*r,size,[gray,gray*.98,gray*.94]);}
     }
   }
+}
+export function drawMotorcycleBoost(glow,smoke,p,angle,clock,jump=null){
+  // Preview plume; arena exhaust uses the same clouds with persistent world positions.
+  const exhaust=new YudaExhaust();
+  for(let i=0;i<24;i++){const age=i/12;exhaust.clouds.push({x:p.x-Math.sin(angle)*(2.4+age*5),y:.5+(jump?.height??0),z:p.z-Math.cos(angle)*(2.4+age*5),born:clock-age,seed:i});}
+  exhaust.draw(smoke,clock);
 }
