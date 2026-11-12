@@ -11,6 +11,7 @@ pub struct Sample { pub wx:f64,pub wz:f64,pub height:f64 }
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(default, rename_all="camelCase")]
 pub struct Actor {
+    pub ring_turn:f64,pub ring_heading:Option<f64>,pub ring_remaining:f64,pub ring_spent:bool,#[serde(skip)]pub ring_doses:BTreeMap<usize,f64>,
     pub bat_cooldown:f64,pub special_cooldown:f64,pub special_active:f64,
     pub id:usize,pub driver:usize,pub name:Option<String>,pub color:String,
     pub wx:f64,pub wz:f64,pub heading:f64,pub motion_heading:f64,pub camera_heading:f64,
@@ -32,6 +33,7 @@ pub struct Actor {
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(default,rename_all="camelCase")]
 pub struct Shot {
+    #[serde(default,skip_serializing_if="std::ops::Not::not")]pub quenched:bool,
     pub id:u32,pub owner:usize,pub kind:String,pub wx:f64,pub wz:f64,pub heading:f64,
     pub speed:f64,pub height:f64,pub vy:f64,pub life:f64,pub age:f64,pub bounces:u32,
     pub trail:Vec<Sample>,pub target:Option<usize>,pub vulcan:bool,pub action_id:Option<u32>,

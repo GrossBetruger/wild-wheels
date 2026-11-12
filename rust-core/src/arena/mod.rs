@@ -4,6 +4,7 @@ mod weapons;
 mod bat;
 mod tick;
 mod specials;
+mod fire_ring;
 mod packet;
 mod client;
 mod presentation;

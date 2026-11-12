@@ -1,3 +1,4 @@
+import {tickFireRings,fireRingBlocks} from './fire-ring.js';
 import {batAim} from './bat-companion.js';
 import {botSightRadius} from './dark-humor.js';
 import {boostDuration, createRace, drivers, START_HEDGEHOGS, itemCapacity } from './engine.js';
@@ -178,14 +179,16 @@ export function advanceProjectile(r,shot,dt){
     }
   }
   const decoy=r.chaffClouds?.find(c=>c.id===shot.decoy)??(shot.decoyCenter?{...shot.decoyCenter,owner:shot.decoyOwner}:null),target=decoy??actors.find(k=>k.id===shot.target&&!k.destroyed);
-  if(decoy&&shot.orbitAge!==undefined)return orbitChaff(shot,decoy,dt,arena);
+  if(decoy&&shot.orbitAge!==undefined){const x=shot.wx,z=shot.wz,result=orbitChaff(shot,decoy,dt,arena);if(fireRingBlocks(r,x,z,shot.wx,shot.wz)){shot.quenched=true;shot.life=0;return {impact:true,victim:null,decoy:null};}return result;}
   let steering=0;
   if(shot.kind==='missile'&&target){const turnRate=decoy?4.5:shot.reflected?10:1.6,lead=shot.reflected&&!decoy?Math.min(.8,distance(shot,target)/shot.speed):0,heading=target.motionHeading??target.heading??0,speed=(target.speed??0)*.085;steering=clamp(angleDelta(Math.atan2(target.wx+Math.sin(heading)*speed*lead-shot.wx,target.wz+Math.cos(heading)*speed*lead-shot.wz),shot.heading),-turnRate*dt,turnRate*dt);shot.heading+=steering;}
   const repeller=actors.find(a=>a.id===shot.repelledFrom&&a.tehilim>0&&!a.destroyed&&!a.inactive&&!a.afk);
   if(repeller&&distance(shot,repeller)<45){const d=distance(shot,repeller),away=Math.atan2(shot.wx-repeller.wx,shot.wz-repeller.wz);steering=clamp(angleDelta(away,shot.heading),-12*dt,12*dt);shot.heading=d<5?away:shot.heading+steering;}
   let impact=false,victim;const steps=Math.ceil(shot.speed*dt/1.5);
   for(let step=0;step<steps&&!impact;step++){
+    const previousX=shot.wx,previousZ=shot.wz;
     shot.wx+=Math.sin(shot.heading)*shot.speed*dt/steps;shot.wz+=Math.cos(shot.heading)*shot.speed*dt/steps;
+    if(fireRingBlocks(r,previousX,previousZ,shot.wx,shot.wz)){shot.quenched=true;shot.life=0;return {impact:true,victim:null,decoy:null};}
     if(decoy&&distance(shot,decoy)<6){
       shot.orbitAge=0;shot.orbitDirection=steering<0?-1:1;shot.orbitAngle=shot.heading-shot.orbitDirection*Math.PI/2;shot.orbitRadius=shot.speed*.6/(Math.PI*2);shot.orbitHeight=shot.height;
       shot.orbitCenter={wx:shot.wx-Math.sin(shot.orbitAngle)*shot.orbitRadius,wz:shot.wz-Math.cos(shot.orbitAngle)*shot.orbitRadius};shot.chaffed=true;shot.life=Math.max(shot.life,3);
@@ -359,6 +362,7 @@ export function tickBattle(r,keys,dt,inputs=null){
     const aim=angleDelta(Math.atan2(target.wx-actor.wx,target.wz-actor.wz),actor.heading);
     if(visible&&Math.abs(aim)<.18+(1-actor.skill)*.12&&distance(actor,target)<85){actor.item=actor.vulcan>0?'hedgehog':actor.missiles>0?'missile':'hedgehog';fireBattle(r,actor);}
   }
+  tickFireRings(r,dt);
   for(let i=0;i<actors.length;i++)for(let j=i+1;j<actors.length;j++){
     const a=actors[i],b=actors[j],d=distance(a,b);if(frozen(r,a.id)||frozen(r,b.id)||a.bomber||b.bomber||a.destroyed||b.destroyed||d>=3.8)continue;
     const dx=(a.wx-b.wx)/(d||1),dz=d===0?1:(a.wz-b.wz)/d,push=(3.8-d)/2;
@@ -381,6 +385,7 @@ export function tickBattle(r,keys,dt,inputs=null){
     if(victim&&shot.kind==='hedgehog')damageBattle(r,victim,shot.owner,1);
     if(!impact&&shot.life>0)continue;
     shot.life=0;
+    if(shot.quenched)continue;
     if(shot.kind==='missile'){
       fx(r,'explosion',shot);
       if(shot.chaffed){const defender=actors.find(actor=>actor.id===decoy.owner);if(defender){defender.notice='CHAFF INTERCEPT · MISSILE DESTROYED';defender.noticeTime=2;}if(decoy.owner===r.id)r.shake=Math.max(r.shake,.12);continue;}

@@ -80,6 +80,7 @@ impl Game{
             if visible&&aim.abs()<0.18+(1.0-a.skill)*0.12&&distance(a.wx,a.wz,target_x,target_z)<85.0{self.actors[id].item=match(self.actors[id].vulcan>0.0,self.actors[id].missiles>0){(true,_)=>"hedgehog",(_,true)=>"missile",_=>"hedgehog"}.into();self.fire(id,None);}
         }
         for input in &frame.inputs{if let Some(last)=input.moves.as_ref().and_then(|moves|moves.last()){self.movement_ack[input.actor]=last.sequence;}}
+        self.ring_tick(dt);
         for i in 0..self.actors.len(){for j in i+1..self.actors.len(){
             if self.frozen(i)||self.frozen(j){continue;}
             let a=&self.actors[i];let b=&self.actors[j];let d=distance(a.wx,a.wz,b.wx,b.wz);
@@ -98,7 +99,7 @@ impl Game{
             let(impact,victim,decoy)=self.advance_shot(&mut shot,dt);
             if let Some(victim)=victim{if shot.kind=="hedgehog"{self.damage(victim,shot.owner,1.0,"hedgehog");}}
             if !impact&&shot.life>0.0{self.global.projectiles.push(shot);continue;}
-            shot.life=0.0;
+            shot.life=0.0;if shot.quenched{continue;}
             if shot.kind=="missile"{
                 effect(&mut self.global,"explosion",shot.owner,shot.wx,shot.wz,None);
                 if shot.chaffed{if let Some(owner)=decoy.and_then(|id|self.actors.get_mut(id)){owner.notice="CHAFF INTERCEPT · MISSILE DESTROYED".into();owner.notice_time=2.0;}if decoy==Some(0){self.global.shake=self.global.shake.max(0.12);}continue;}
