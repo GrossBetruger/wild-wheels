@@ -4,6 +4,12 @@ import {createBattle,tickBattle,blocked,arenas} from './combat.js';
 import {ArenaCore,ArenaClient} from './arena-core.js';
 
 for(const engine of ['solo','Rust']){
+  test(`${engine}: a returned missile leads a moving shooter with aggressive steering`,()=>{
+    const seed=createBattle();Object.assign(seed,{phase:'racing',human:true,wx:65,wz:80,tehilim:25,supplies:[]});for(const bot of seed.bots)Object.assign(bot,{inactive:true,destroyed:999});Object.assign(seed.bots[0],{inactive:false,destroyed:0,human:true,wx:65,wz:40,heading:Math.PI/2,motionHeading:Math.PI/2,speed:300});
+    seed.projectiles=[{id:1,kind:'missile',owner:1,target:0,wx:65,wz:60,heading:Math.PI,speed:70,height:1.3,vy:0,life:3,age:0,trail:[]}];
+    const core=engine==='Rust'?new ArenaCore(seed):null;if(core)core.step(1/60,[{actor:1,keys:['arrowup']}]);if(!core)tickBattle(seed,new Set(),1/60,new Map([[1,new Set(['arrowup'])]]));
+    const shot=(core?core.snapshot():seed).projectiles[0];assert.equal(shot.target,1);assert.equal(shot.speed,100);assert.ok(shot.life>5.9);assert.ok(shot.heading<Math.PI-.1);
+  });
   test(`${engine}: Tehilim books have the same rarity, duration and refill as Hedgeguard`,()=>{
     for(const arena of [0,1]){
       const seed=createBattle(0,arena),books=seed.supplies.filter(s=>s.kind==='tehilim');assert.equal(books.length,1);assert.equal(books[0].cooldown,30);assert.equal(blocked(arenas[arena],books[0].wx,books[0].wz,4),false);
@@ -17,7 +23,8 @@ for(const engine of ['solo','Rust']){
     seed.projectiles=[{id:1,kind:'missile',owner:1,target:0,wx:65,wz:60,heading:0,speed:70,height:1.3,vy:0,life:3,age:0,trail:[]}];
     const core=engine==='Rust'?new ArenaCore(seed):null,step=dt=>core?core.step(dt):tickBattle(seed,new Set(),dt),read=()=>core?core.snapshot():seed;
     step(0);assert.equal(read().projectiles[0].owner,0);assert.equal(read().projectiles[0].target,1);assert.equal(read().projectiles[0].heading,0);
-    step(1/60);assert.ok(Math.abs(read().projectiles[0].heading)<.09);
+    assert.equal(read().projectiles[0].speed,100);assert.equal(read().projectiles[0].life,6);
+    step(1/60);assert.ok(Math.abs(read().projectiles[0].heading)>.15&&Math.abs(read().projectiles[0].heading)<.18);
     for(let i=0;i<120;i++)step(1/60);
     assert.equal(read().health,6);assert.equal(read().kills,1);assert.equal(read().bots[0].deaths,1);
   });

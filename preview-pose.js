@@ -9,5 +9,6 @@ export function previewPose(driver,time){
   }
   if(driver===9&&(stage===0||stage===1)){pose.label='ROYAL WAVE';pose.left=0;pose.right=1.8*ease;pose.bounce=0;}
   if(driver===10){pose.left=0;pose.bounce=0;pose.right=(stage===0||stage===1)?ease:0;pose.label=['SHADES SALUTE','LA VIE','CHECKING THE HORIZON','ONE-HANDED WHEELIE'][stage];}
+  if(driver===11)pose.label=['REGAL WAVE','ROYAL ROAR','LOOKING AROUND','ROTOR WASH'][stage];
   return pose;
 }

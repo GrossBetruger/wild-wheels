@@ -167,13 +167,13 @@ export function advanceProjectile(r,shot,dt){
   if(shot.kind==='missile'&&!shot.reflected&&shot.decoy==null){
     const defender=actors.find(a=>a.id===shot.target&&!a.destroyed&&!a.inactive&&!a.afk&&a.tehilim>0),shooter=actors.find(a=>a.id===shot.owner&&!a.destroyed&&!a.inactive&&!a.afk&&!a.bomber);
     if(defender&&shooter&&distance(shot,defender)<=distance(shot,shooter)){
-      shot.owner=defender.id;shot.target=shooter.id;shot.reflected=true;delete shot.actionId;shot.life=Math.max(shot.life,3);
+      shot.owner=defender.id;shot.target=shooter.id;shot.reflected=true;delete shot.actionId;shot.speed=100;shot.life=Math.max(shot.life,6);
     }
   }
   const decoy=r.chaffClouds?.find(c=>c.id===shot.decoy)??(shot.decoyCenter?{...shot.decoyCenter,owner:shot.decoyOwner}:null),target=decoy??actors.find(k=>k.id===shot.target&&!k.destroyed);
   if(decoy&&shot.orbitAge!==undefined)return orbitChaff(shot,decoy,dt,arena);
   let steering=0;
-  if(shot.kind==='missile'&&target){const turnRate=decoy?4.5:shot.reflected?5:1.6;steering=clamp(angleDelta(Math.atan2(target.wx-shot.wx,target.wz-shot.wz),shot.heading),-turnRate*dt,turnRate*dt);shot.heading+=steering;}
+  if(shot.kind==='missile'&&target){const turnRate=decoy?4.5:shot.reflected?10:1.6,lead=shot.reflected&&!decoy?Math.min(.8,distance(shot,target)/shot.speed):0,heading=target.motionHeading??target.heading??0,speed=(target.speed??0)*.085;steering=clamp(angleDelta(Math.atan2(target.wx+Math.sin(heading)*speed*lead-shot.wx,target.wz+Math.cos(heading)*speed*lead-shot.wz),shot.heading),-turnRate*dt,turnRate*dt);shot.heading+=steering;}
   let impact=false,victim;const steps=Math.ceil(shot.speed*dt/1.5);
   for(let step=0;step<steps&&!impact;step++){
     shot.wx+=Math.sin(shot.heading)*shot.speed*dt/steps;shot.wz+=Math.cos(shot.heading)*shot.speed*dt/steps;

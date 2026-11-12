@@ -1,5 +1,7 @@
 # Development checks
 
+R-yeah is driver 11: a lion with a black kippah and an open-cockpit JetRanger. Character checks cover front/side/chase-camera visibility, main/tail rotor animation locally and remotely, rotor-wash boost and somersaults. Room, weapon, recovery, capacity and Fuel tests include him. Reflected Tehilim missiles now travel at 100 units/s, turn at 10 radians/s, lead moving shooters and get six seconds to pursue; normal missiles retain their existing handling.
+
 Tehilim vs Tilim spawns once after 30 seconds, refills 45 seconds after pickup and lasts 25 seconds, matching Hedgeguard's rarity. Six orbiting books redirect an incoming locked missile after it passes halfway between its shooter and target. The missile makes a guided U-turn, targets its shooter and credits the books' owner on a kill. Each missile reflects once, and unlocked missiles and other weapons still deal damage. `tehilim.test.js` covers timing, damage, midpoint, return trajectory, credit, prevention of ping-pong, immediate pickup and remote aura. `npm run test:browser-netcode -- --tehilim` checks the books, return shot, kill credit and expiry in all four connection profiles.
 
 Drivers have no spawn immunity at match start, when joining an active room, or after respawning. `spawn-vulnerability.test.js` verifies immediate projectile damage in both engines and unprotected native room spawns. Hedgeguard remains a separate collectible power-up.
@@ -14,7 +16,7 @@ A-bomb deaths turn the character and vehicle's last rendered shape into rubble. 
 
 Fuel controls each turbo's duration: `2 + 0.8 × (Fuel − 1)` seconds. Houston alone has 5 Fuel (5.2 seconds); every other character has at most 3. `fuel.test.js` checks all character durations in Grand Prix, solo Arena and Rust multiplayer, plus immediate/queued client prediction and server agreement. The character browser group checks Fuel bars and duration tooltips.
 
-The character browser group checks the selection preview for all eleven characters, orbiting camera, pause/resume, four gesture stages, and unchanged live-game inventory. Preview rendering must stop once a match starts.
+The character browser group checks the selection preview for all twelve characters, orbiting camera, pause/resume, four gesture stages, and unchanged live-game inventory. Preview rendering must stop once a match starts.
 
 Master-Yuda coverage includes his sunglasses salute, motorcycle silhouette, local and remote boost/flip exhaust, winged biker protection and laser Vulcan shots. Lasers retain normal Vulcan damage, cadence, ammunition and kill credit in both engines. His flip retains the 180-degree reversal, full rotation and landing; recovery, capacity and fuel tests cover Cuteness 3, Intelligence 5 and Fuel 3.
 

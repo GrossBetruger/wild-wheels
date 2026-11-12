@@ -1,10 +1,11 @@
+import {checkRyeah} from './check-r-yeah-scenario.mjs';
 import {checkYuda} from './check-yuda-scenario.mjs';
 import {checkPearococo} from './check-pearococo-scenario.mjs';
 import {checkPreview} from './check-preview-scenario.mjs';
 export async function checkCharacters(evaluate,app,room,id,sleep,capture){
   const wait=async predicate=>{for(let i=0;i<120;i++){if(await predicate())return true;await sleep(25);}return false;};
   const menu=await evaluate("[...document.querySelectorAll('#drivers button')].map(button=>button.getAttribute('aria-label'))");
-  const menuPass=['Ellie the Elephant','Tamar the Cricket','Elon Musk','Houston the RTPL','Avita-Jas','Pearococo','Master-Yuda'].every(name=>menu.includes(name))&&menu.length===11;
+  const menuPass=['Ellie the Elephant','Tamar the Cricket','Elon Musk','Houston the RTPL','Avita-Jas','Pearococo','Master-Yuda','R-yeah'].every(name=>menu.includes(name))&&menu.length===12;
   if(room.members.size<2)app.join(room,{name:'Observer',driver:1});
   const observer=[...room.members.values()].find(member=>member.id!==id),characters=[];
   const preview=await checkPreview(evaluate,app,room,id,sleep,capture);
@@ -41,7 +42,7 @@ export async function checkCharacters(evaluate,app,room,id,sleep,capture){
     renderer.draw=(...args)=>{const result=draw(...args);if(__game.characterCapture===__game.race.driver){const gl=renderer.gl,w=gl.drawingBufferWidth,h=gl.drawingBufferHeight,width=50,height=Math.floor(h*.3),pixels=new Uint8Array(width*height*4);gl.readPixels(Math.floor(w/2)-25,Math.floor(h*.16),width,height,gl.RGBA,gl.UNSIGNED_BYTE,pixels);const colors=new Set();let white=0;for(let i=0;i<pixels.length;i+=4){colors.add(pixels[i]*65536+pixels[i+1]*256+pixels[i+2]);const low=Math.min(pixels[i],pixels[i+1],pixels[i+2]),high=Math.max(pixels[i],pixels[i+1],pixels[i+2]);if(low>150&&high-low<20)white++;}__game.characterPixels={driver:__game.race.driver,colors:colors.size,white,glError:gl.getError()};__game.characterCapture=null;}return result;};
     __game.keys.clear();
   }`);
-  for(const [driver,name,cuteness,recoverySeconds,ammoSeconds]of[[4,'Ellie the Elephant',5,4,1],[5,'Tamar the Cricket',5,4,1],[7,'Houston the RTPL',5,4,1],[8,'Avita-Jas',5,4,1],[9,'Pearococo',5,4,1],[10,'Master-Yuda',3,8,1.5],[6,'Elon Musk',1,12,2]]){
+  for(const [driver,name,cuteness,recoverySeconds,ammoSeconds]of[[4,'Ellie the Elephant',5,4,1],[5,'Tamar the Cricket',5,4,1],[7,'Houston the RTPL',5,4,1],[8,'Avita-Jas',5,4,1],[9,'Pearococo',5,4,1],[10,'Master-Yuda',3,8,1.5],[11,'R-yeah',5,4,1],[6,'Elon Musk',1,12,2]]){
     await evaluate('__game.characterAngle=Math.PI');
     app.makeWorld(room);app.broadcast(room);
     await wait(()=>evaluate("__game.network.state.world.phase==='ready'"));
@@ -60,7 +61,7 @@ export async function checkCharacters(evaluate,app,room,id,sleep,capture){
     await capture(name.split(' ')[0].toLowerCase());
     const paint=driver!==6||remote?.color==='#e8edf2'&&pixels.white>30&&await evaluate("__game.race.color==='#e8edf2'");
     const cutenessStat=await evaluate(`document.querySelectorAll('#cuteness-stat i.on').length===${cuteness}&&document.getElementById('cuteness-stat').parentElement.title.includes('every ${recoverySeconds} seconds')`);
-    const intelligenceStat=await evaluate(`document.querySelectorAll('#intelligence-stat i.on').length===${({4:4,5:3,7:5,8:5,9:4,10:5,6:4})[driver]}&&document.getElementById('intelligence-stat').parentElement.title.includes('Carrying limits')`);
+    const intelligenceStat=await evaluate(`document.querySelectorAll('#intelligence-stat i.on').length===${({4:4,5:3,7:5,8:5,9:4,10:5,11:4,6:4})[driver]}&&document.getElementById('intelligence-stat').parentElement.title.includes('Carrying limits')`);
     const fuelStat=await evaluate(`document.querySelectorAll('#fuel-stat i.on').length===${driver===7?5:driver===5?2:3}&&document.getElementById('fuel-stat').parentElement.title.includes('${driver===7?5.2:driver===5?2.8:3.6} seconds')`);
     const recovery=await wait(()=>evaluate("__game.race.health===3&&document.getElementById('lap').textContent==='♥♥♥'"))&&app.snapshot(room,observer).world.bots.find(actor=>actor.id===id)?.health===3;
     const ammoRecovery=await wait(()=>evaluate("__game.race.ammo>=1&&Number(document.getElementById('hedgehog-count').textContent)>=1"))&&app.snapshot(room,observer).world.bots.find(actor=>actor.id===id)?.ammo>=1;
@@ -148,7 +149,8 @@ export async function checkCharacters(evaluate,app,room,id,sleep,capture){
     }
     const pearococo=driver===9?await checkPearococo(evaluate,app,room,id,observer,wait,sleep,capture):{pass:true};
     const yuda=driver===10?await checkYuda(evaluate,app,room,id,observer,wait,sleep,capture):{pass:true};
-    characters.push({yuda,fuelStat,starshipBoost,starshipFlip,remoteStarship,pearococo,driver,name,selected,previewStopped,rendered:pixels.colors>20&&pixels.glError===0,remote:remote?.driver===driver,paint,pixels,cutenessStat,intelligenceStat,recovery,ammoRecovery,aura,auraModel,auraExpired,boostHaze,flipHaze,cricketVulcan,remoteCrickets,helmetAnimation,remoteHelmet,helmetRestored,dollarVulcan,remoteDollars,propellerAnimation,wormFlex,electronVulcan,remoteElectrons});
+    const ryeah=driver===11?await checkRyeah(evaluate,app,room,id,observer,wait,sleep,capture):{pass:true};
+    characters.push({ryeah,yuda,fuelStat,starshipBoost,starshipFlip,remoteStarship,pearococo,driver,name,selected,previewStopped,rendered:pixels.colors>20&&pixels.glError===0,remote:remote?.driver===driver,paint,pixels,cutenessStat,intelligenceStat,recovery,ammoRecovery,aura,auraModel,auraExpired,boostHaze,flipHaze,cricketVulcan,remoteCrickets,helmetAnimation,remoteHelmet,helmetRestored,dollarVulcan,remoteDollars,propellerAnimation,wormFlex,electronVulcan,remoteElectrons});
   }
   await evaluate('__game.characterAngle=0');
   const boostAccepted=await evaluate("__game.network.action('turbo')===true");
@@ -158,9 +160,9 @@ export async function checkCharacters(evaluate,app,room,id,sleep,capture){
   const flipVapor=await wait(async()=>await evaluate('__game.race.somersault>0')&&await vapor());
   const remoteFlip=await wait(()=>{const actor=app.snapshot(room,observer).world.bots.find(actor=>actor.id===id);return actor?.driver===6&&actor.somersault>0;});
   await capture('roadster-flip');
-  const voicePass=await evaluate("[4,5,6,7,8,9,10].every(driver=>__game.audio.voice({driver,cue:'win'}))");
+  const voicePass=await evaluate("[4,5,6,7,8,9,10,11].every(driver=>__game.audio.voice({driver,cue:'win'}))");
   // Restore the simulated observer's actual selection before room teardown.
   // Mid-match roster updates correctly reject the test's temporary character swap.
   Object.assign([room.world,...room.world.bots].find(actor=>actor.id===observer.id),{driver:observer.driver,bomber:observer.role==='bomber'});
-  return {menuPass,preview,characters,boostAccepted,boostVapor,flipAccepted,flipVapor,remoteFlip,voicePass,pass:menuPass&&preview.pass&&characters.every(character=>character.yuda.pass&&character.fuelStat&&character.starshipBoost&&character.starshipFlip&&character.remoteStarship&&character.pearococo.pass&&character.selected&&character.previewStopped&&character.rendered&&character.remote&&character.paint&&character.cutenessStat&&character.intelligenceStat&&character.recovery&&character.ammoRecovery&&character.aura&&character.auraModel&&character.auraExpired&&character.boostHaze&&character.flipHaze&&character.cricketVulcan&&character.remoteCrickets&&character.helmetAnimation&&character.remoteHelmet&&character.helmetRestored&&character.dollarVulcan&&character.remoteDollars&&character.propellerAnimation&&character.wormFlex&&character.electronVulcan&&character.remoteElectrons)&&boostAccepted&&boostVapor&&flipAccepted&&flipVapor&&remoteFlip&&voicePass};
+  return {menuPass,preview,characters,boostAccepted,boostVapor,flipAccepted,flipVapor,remoteFlip,voicePass,pass:menuPass&&preview.pass&&characters.every(character=>character.ryeah.pass&&character.yuda.pass&&character.fuelStat&&character.starshipBoost&&character.starshipFlip&&character.remoteStarship&&character.pearococo.pass&&character.selected&&character.previewStopped&&character.rendered&&character.remote&&character.paint&&character.cutenessStat&&character.intelligenceStat&&character.recovery&&character.ammoRecovery&&character.aura&&character.auraModel&&character.auraExpired&&character.boostHaze&&character.flipHaze&&character.cricketVulcan&&character.remoteCrickets&&character.helmetAnimation&&character.remoteHelmet&&character.helmetRestored&&character.dollarVulcan&&character.remoteDollars&&character.propellerAnimation&&character.wormFlex&&character.electronVulcan&&character.remoteElectrons)&&boostAccepted&&boostVapor&&flipAccepted&&flipVapor&&remoteFlip&&voicePass};
 }

@@ -8,6 +8,7 @@ import {previewPose} from './preview-pose.js';
 import {drawRococoChariot,drawPearococo,drawPeacockFeather,drawRoyalWing,drawBalletPump,drawFairyStar,drawFairyBoost} from './pearococo.js';
 import {drawMotorcycle,drawYuda,drawYudaJacket,YudaJackets,YudaStunts,YudaExhaust,drawBikerBadge,drawMotorcycleBoost} from './master-yuda.js';
 import {YudaDrift} from './yuda-drift.js';
+import {drawJetRanger,drawLionPilot,drawJetRangerRotors,drawRotorWash} from './r-yeah.js';
 const rgb=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255);
 const sub=(a,b)=>a.map((v,i)=>v-b[i]);
 const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
@@ -169,6 +170,7 @@ export class Renderer {
     m.at(0,0,0);this.gl.bindBuffer(this.gl.ARRAY_BUFFER,this.staticBuffer);this.gl.bufferData(this.gl.ARRAY_BUFFER,new Float32Array(m.data),this.gl.STATIC_DRAW);this.staticCount=m.data.length/9;this.track=track;
   }
   kart(m,p,color,driver,yaw=0,spin=0,boost=false,clock=0,celebrate=0,jump=null,helmet=true,gesture=null){
+    if(driver===11){this.lionChopper(m,p,color,yaw,spin,boost,clock,celebrate,jump,gesture);return;}
     if(driver===10){this.yudaMotorcycle(m,p,color,yaw,spin,boost,clock,celebrate,jump,gesture);return;}
     if(driver===9){this.royalChariot(m,p,color,yaw,spin,boost,clock,celebrate,jump,gesture);return;}
     if(driver===8&&!this.buildingModel){this.pilotPlane(m,p,color,yaw,spin,boost,clock,celebrate,jump,gesture);return;}
@@ -215,7 +217,20 @@ export class Renderer {
     for(const side of [-1,1]){m.ball(side*1.2,.75,-2.45,.31,.31,.5,'#69788b',10,5);m.ball(side*1.2,.75,-2.85,.24,.24,.08,'#161d2a',10,4);}
     if(boost)this.afterburner(p,angle,clock,null,driver);
   }
-  yudaMotorcycle(m,p,color,yaw,spin,boost,clock,celebrate,jump,gesture=null){
+  lionChopper(m,p,color,yaw,spin,boost,clock,celebrate,jump,gesture=null){
+    const angle=Math.atan2(p.tx,p.tz)-yaw+spin,height=(jump?.height??0)+.18+Math.sin(clock*3)*.08,pitch=jump?.pitch??0;
+    m.at(p.x,.05,p.z,angle);m.disc(0,0,-.5,2.4,4,'#3b4247');
+    this.model(`kart:11:${color}`,p.x,height,p.z,angle,mesh=>drawJetRanger(mesh,color),pitch);
+    const waving=celebrate>0||(gesture?.right??0)>0,phase=waving?Math.floor(clock*6)%8:0,roaring=celebrate>0||gesture?.id==='cheer';
+    this.model(`r-yeah:lion:${phase}:${roaring}`,p.x,height,p.z,angle+(gesture?.yaw??0),mesh=>drawLionPilot(mesh,phase,roaring),pitch);
+    this.chopperRotors(p,height,angle,pitch,clock,boost);
+    if(boost||jump)drawRotorWash(this.glow,this.smoke,p,angle,clock,{height,pitch});
+  }
+  chopperRotors(p,height,angle,pitch,time,boost){
+    const phase=Math.floor(time*(boost?62:42))%8;
+    this.model(`r-yeah:rotors:${phase}`,p.x,height,p.z,angle,mesh=>drawJetRangerRotors(mesh,phase),pitch);
+  }
+  yudaMotorcycle(m,p,color,yaw,spin,boost=false,clock=0,celebrate=0,jump=null,gesture=null){
     const angle=Math.atan2(p.tx,p.tz)-yaw+spin+(jump?.yaw??0),roll=jump?.roll??p.bikeRoll??0;
     p={...p,bikeRoll:roll};
     const outfit=this.yudaJackets.update(p.id??'preview',clock,boost||p.vulcan>0,{x:p.x,z:p.z,height:jump?.height??0,angle});

@@ -6,7 +6,7 @@ import {ArenaCore,ArenaClient} from './arena-core.js';
 
 for(const engine of ['solo','Rust multiplayer']){
   test(`${engine}: Intelligence sets hedgehog, missile and turbo pickup limits for each character`,()=>{
-    for(const [driver,intelligence,hedgehogs,items]of [[0,3,14,4],[1,5,18,6],[2,4,16,5],[3,2,12,3],[4,4,16,5],[5,3,14,4],[6,4,16,5],[7,5,18,6],[8,5,18,6],[9,4,16,5],[10,5,18,6]]){
+    for(const [driver,intelligence,hedgehogs,items]of [[0,3,14,4],[1,5,18,6],[2,4,16,5],[3,2,12,3],[4,4,16,5],[5,3,14,4],[6,4,16,5],[7,5,18,6],[8,5,18,6],[9,4,16,5],[10,5,18,6],[11,4,16,5]]){
       const seed=createBattle(driver);Object.assign(seed,{phase:'racing',human:true,wx:-65,wz:0,ammo:0,missiles:0,turbos:0});
       for(const bot of seed.bots)Object.assign(bot,{inactive:true,destroyed:1e9});
       seed.supplies=['hedgehog',...Array(10).fill('missile'),...Array(10).fill('boost')].map((kind,id)=>({id,version:0,wx:-65,wz:0,kind,cooldown:0}));
