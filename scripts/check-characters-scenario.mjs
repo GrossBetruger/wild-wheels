@@ -61,8 +61,8 @@ export async function checkCharacters(evaluate,app,room,id,sleep,capture){
     await capture(name.split(' ')[0].toLowerCase());
     const paint=driver!==6||remote?.color==='#e8edf2'&&pixels.white>30&&await evaluate("__game.race.color==='#e8edf2'");
     const cutenessStat=await evaluate(`document.querySelectorAll('#cuteness-stat i.on').length===${cuteness}&&document.getElementById('cuteness-stat').parentElement.title.includes('every ${recoverySeconds} seconds')`);
-    const intelligenceStat=await evaluate(`document.querySelectorAll('#intelligence-stat i.on').length===${({4:4,5:3,7:5,8:5,9:4,10:5,11:4,12:5,6:4})[driver]}&&document.getElementById('intelligence-stat').parentElement.title.includes('Carrying limits')`);
-    const fuelStat=await evaluate(`document.querySelectorAll('#fuel-stat i.on').length===${driver===7?5:driver===5?2:3}&&document.getElementById('fuel-stat').parentElement.title.includes('${driver===7?5.2:driver===5?2.8:3.6} seconds')`);
+    const intelligenceStat=await evaluate(`document.querySelectorAll('#intelligence-stat i.on').length===${({4:4,5:3,7:5,8:5,9:4,10:5,11:4,12:5,13:5,6:4})[driver]}&&document.getElementById('intelligence-stat').parentElement.title.includes('Carrying limits')`);
+    const fuelStat=await evaluate(`document.querySelectorAll('#fuel-stat i.on').length===${driver===7?5:(driver===5||driver===13)?2:3}&&document.getElementById('fuel-stat').parentElement.title.includes('${driver===7?5.2:(driver===5||driver===13)?2.8:3.6} seconds')`);
     const recovery=await wait(()=>evaluate("__game.race.health===3&&document.getElementById('lap').textContent==='♥♥♥'"))&&app.snapshot(room,observer).world.bots.find(actor=>actor.id===id)?.health===3;
     const ammoRecovery=await wait(()=>evaluate("__game.race.ammo>=1&&Number(document.getElementById('hedgehog-count').textContent)>=1"))&&app.snapshot(room,observer).world.bots.find(actor=>actor.id===id)?.ammo>=1;
     const own=[room.world,...room.world.bots].find(actor=>actor.id===id),peer=[room.world,...room.world.bots].find(actor=>actor.id===observer.id);
@@ -70,8 +70,8 @@ export async function checkCharacters(evaluate,app,room,id,sleep,capture){
     Object.assign(peer,{driver,human:true,inactive:false,destroyed:0,shield:0,wx:own.wx+7,wz:own.wz+5,hedgeShield:25});app.broadcast(room);
     await evaluate('__game.auraDraws=[]');
     const aura=await wait(async()=>await evaluate(`__game.race.hedgeShield>0&&document.querySelector('.hedgeguard-status').textContent.includes('MISSILES STILL HURT')&&__game.auraDraws.some(draw=>draw.id===${id}&&draw.driver===${driver}&&draw.icons===6)&&__game.auraDraws.some(draw=>draw.id===${observer.id}&&draw.driver===${driver}&&draw.icons===6)`)&&app.snapshot(room,observer).world.bots.find(actor=>actor.id===id)?.hedgeShield>0);
-    await capture(`${driver===5?'cricket':driver===6?'money':driver===9?'fairy':driver===10?'biker':'shield'}-hedgeguard`);
-    const auraModel=await evaluate(driver===5?"[...__game.renderer.models.keys()].some(key=>key.startsWith('cricket:'))":driver===6?"__game.renderer.models.has('dollar-bundle')":driver===9?"__game.renderer.models.has('fairy-star')":driver===10?"__game.renderer.models.has('yuda:winged-badge')":"__game.renderer.models.has('hedgeguard:shield')");
+    await capture(`${(driver===5||driver===13)?'cricket':driver===6?'money':driver===9?'fairy':driver===10?'biker':'shield'}-hedgeguard`);
+    const auraModel=await evaluate((driver===5||driver===13)?"[...__game.renderer.models.keys()].some(key=>key.startsWith('cricket:'))":driver===6?"__game.renderer.models.has('dollar-bundle')":driver===9?"__game.renderer.models.has('fairy-star')":driver===10?"__game.renderer.models.has('yuda:winged-badge')":"__game.renderer.models.has('hedgeguard:shield')");
     own.hedgeShield=.05;peer.hedgeShield=.05;room.world.supplies=[];app.broadcast(room);
     const auraExpired=await wait(()=>evaluate("__game.race.hedgeShield===0&&document.querySelector('.hedgeguard-status').classList.contains('hidden')"));
     peer.destroyed=999;app.broadcast(room);

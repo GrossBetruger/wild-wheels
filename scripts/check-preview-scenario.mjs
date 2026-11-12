@@ -21,6 +21,7 @@ export async function checkPreview(evaluate,app,room,id,sleep,capture){
     const pixels=await evaluate('__game.previewPixels'),named=await evaluate(`document.getElementById('character-preview').getAttribute('aria-label').includes(${JSON.stringify(name)})`);
     selections.push({driver,name,selected,named,rendered:pixels?.colors>20&&pixels?.error===0});await capture(`preview-${driver}`,'.character-preview');
   }
+  await evaluate('{__game.preview.clock=13;__game.preview.dirty=true;}');await sleep(100);await capture('fourmidable-math-dust','.character-preview');
   await evaluate("__game.network.chooseDriver(9)");await wait(()=>evaluate("__game.preview.driver===9"));
   const gestures=[];
   for(const [clock,gesture]of [[1,'hello'],[5,'cheer'],[9,'look'],[13,'rev']]){

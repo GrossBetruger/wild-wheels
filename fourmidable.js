@@ -35,7 +35,7 @@ export function drawAnt(m,phase,wave){
 }
 export function drawTaxAudit(m,e,angle){
   const t=e.age,fade=Math.min(1,(e.life-t)*2),height=7+Math.sin(Math.min(1,t*4)*Math.PI)*1.1;
-  m.at(e.wx,height,e.wz,angle);
+  m.at(e.wx,height,e.wz,angle+Math.PI);
   m.box(0,-1.6,0,3,3.8,.09,'#fff4d4');m.box(0,1.65,.08,2.7,.12,.04,'#355e54');
   // Clearly lettered TAX form, itemized rows and a red assessment stamp.
   const letters={T:['111','010','010','010','010'],A:['010','101','111','101','101'],X:['101','101','010','101','101']};
