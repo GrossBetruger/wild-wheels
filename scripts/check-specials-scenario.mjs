@@ -39,9 +39,10 @@ export async function checkSpecials(evaluate,app,room,id,sleep,capture){
   await wait(()=>evaluate('__game.race.driver===7&&__game.race.specialCooldown===0'));await evaluate("__game.network.action('special')");
   const gravity=await wait(()=>evaluate("__game.race.specialActive>0&&__game.race.supplies.some(s=>s.id===20&&s.wz<50&&s.wz>4)"));await capture('houston-gravity');
   const gravityPickup=await wait(()=>evaluate('__game.race.missiles===1&&__game.race.supplies.some(s=>s.id===20&&s.cooldown>0&&s.wz===60)'));
+  if(!gravityPickup)console.log(JSON.stringify({gravityFailure:{server:app.snapshot(room,member).world.missiles,serverSupplies:app.snapshot(room,member).world.supplies,client:await evaluate("({missiles:__game.race.missiles,supplies:__game.race.supplies.map(s=>({id:s.id,wx:s.wx,wz:s.wz,cooldown:s.cooldown})),wx:__game.race.wx,wz:__game.race.wz})")}}));
   Object.assign(own,{driver:9,wx:65,wz:40,speed:0,specialActive:0,specialCooldown:0});Object.assign(other,{driver:6,health:6,destroyed:0,wx:65,wz:55,speed:0});app.broadcast(room);
   await wait(()=>evaluate('__game.race.driver===9&&__game.race.specialCooldown===0'));await evaluate("__game.network.action('special')");
-  const fashion=await wait(()=>evaluate('__game.race.specialActive>0&&__game.race.effects.filter(f=>f.type===\'fashionSnap\').length===1'))&&app.snapshot(room,peer).world.health===2;await capture('fashion-statement');
+  const fashion=await wait(()=>evaluate('__game.race.specialActive>0&&__game.race.effects.filter(f=>f.type===\'fashionSnap\').length===1'))&&app.snapshot(room,peer).world.health===4;await capture('fashion-statement');
   Object.assign(own,{driver:10,wx:65,wz:40,heading:0,boost:1});Object.assign(other,{driver:10,wx:65,wz:35,boost:0,dizzy:0});app.broadcast(room);
   const smoke=await wait(()=>app.snapshot(room,peer).world.dizzy>7);
   member.driver=10;room.specialAbilities=false;app.syncRoom(room);app.broadcast(room);

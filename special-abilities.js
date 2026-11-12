@@ -3,11 +3,11 @@ import {damageBattle} from './combat.js';
 export const SPECIAL_COOLDOWN=20;
 export const TIME_STOP_DURATION=2.5;
 export const abilityNames={7:'REINE DE LA PARESSE',5:'CRICKET’S JUMP',8:'SPECIAL RELATIVITY',9:'FASHION-STATEMENT',10:'DIZZY SMOKE',11:'HOLY AURA',12:'SIX-HEART RECOVERY'};
-export function fashionDamage(cuteness){return Math.max(1,5-cuteness);}
+export function fashionDamage(cuteness){return cuteness===5?1:2;}
 export function frozen(world,id){return world.specialAbilities!==false&&world.timeStop>0&&world.timeOwner!==id;}
 export function useSpecial(world,actor=world){
   if(world.specialAbilities===false||world.phase!=='racing'||world.finishCountdown!==null||![7,8,9,11,12].includes(actor.driver)||actor.specialCooldown>0||actor.destroyed>0||actor.inactive||actor.afk||actor.bomber||world.timeStop>0)return false;
-  switch(actor.driver){case 7:actor.specialActive=8;break;case 8:world.timeStop=TIME_STOP_DURATION;world.timeOwner=actor.id;break;case 9:actor.specialActive=1.6;for(const victim of [world,...world.bots]){if(victim.id===actor.id||victim.afk||victim.bomber||victim.inactive||victim.destroyed>0)continue;const wx=victim.wx,wz=victim.wz;world.effects.push({type:'fashionSnap',owner:actor.id,wx,wz,age:0,life:1.2});if(Math.hypot(wx-actor.wx,wz-actor.wz)<=35)damageBattle(world,victim,actor.id,fashionDamage(drivers[victim.driver].cuteness),'fashion');}break;case 11:actor.specialActive=8;break;case 12:if(actor.health>=6)return false;actor.health=Math.min(6,actor.health+1);actor.healTimer=0;actor.specialActive=actor.health>=6?0:5;world.effects.push({type:'heartbeat',owner:actor.id,wx:actor.wx,wz:actor.wz,age:0,life:.7});break;}actor.specialCooldown=SPECIAL_COOLDOWN;return true;
+  switch(actor.driver){case 7:actor.specialActive=8;break;case 8:world.timeStop=TIME_STOP_DURATION;world.timeOwner=actor.id;break;case 9:actor.specialActive=1.6;for(const victim of [world,...world.bots]){if(victim.id===actor.id||victim.afk||victim.bomber||victim.inactive||victim.destroyed>0)continue;const wx=victim.wx,wz=victim.wz;world.effects.push({type:'fashionSnap',owner:actor.id,wx,wz,age:0,life:1.2});damageBattle(world,victim,actor.id,fashionDamage(drivers[victim.driver].cuteness),'fashion');}break;case 11:actor.specialActive=8;break;case 12:if(actor.health>=6)return false;actor.health=Math.min(6,actor.health+1);actor.healTimer=0;actor.specialActive=actor.health>=6?0:5;world.effects.push({type:'heartbeat',owner:actor.id,wx:actor.wx,wz:actor.wz,age:0,life:.7});break;}actor.specialCooldown=SPECIAL_COOLDOWN;return true;
 }
 export function restoreSupply(s){if(s.homeWx!==undefined){s.wx=s.homeWx;s.wz=s.homeWz;delete s.homeWx;delete s.homeWz;}}
 export function tickSpecials(world,dt){

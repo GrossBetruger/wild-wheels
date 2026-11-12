@@ -2,7 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createBattle,tickBattle} from './combat.js';
 import {useSpecial} from './special-abilities.js';
-import {ArenaCore} from './arena-core.js';
+import {ArenaCore,ArenaClient} from './arena-core.js';
+test('a gravity pickup reaches the browser inventory and retains its home position',()=>{
+  const w=createBattle(7);Object.assign(w,{phase:'racing',human:true,wx:-65,wz:0,missiles:0,supplies:[{id:20,kind:'missile',wx:-65,wz:60,cooldown:0,version:0}]});for(const a of w.bots)Object.assign(a,{inactive:true,destroyed:999});
+  const core=new ArenaCore(w),client=new ArenaClient();client.accept(core.packet(0),0);client.frame(0,[],0);assert.equal(client.action('special',null,0),true);
+  for(let i=1;i<=100;i++){const t=i/60;client.frame(1/60,[],t);core.step(1/60,[{actor:0,...client.outbound([])}]);if(i%2===0)client.accept(core.packet(0),t);}
+  const view=client.present();assert.equal(view.missiles,1);assert.equal(view.supplies[0].wz,60);assert.ok(view.supplies[0].cooldown>7);
+});
 for(const engine of ['JavaScript','Rust']){
   test(`${engine}: Houston attracts ready power-ups within 80 units and collected supplies respawn at home`,()=>{
     const w=createBattle(7);Object.assign(w,{phase:'racing',human:true,wx:-65,wz:0,missiles:0,supplies:[{id:0,kind:'missile',wx:-65,wz:80,cooldown:0,version:0},{id:1,kind:'boost',wx:-65,wz:81,cooldown:0,version:0},{id:2,kind:'tehilim',wx:-65,wz:55,cooldown:30,version:0}]});for(const a of w.bots)Object.assign(a,{inactive:true,destroyed:999});

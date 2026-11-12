@@ -612,7 +612,11 @@ export class Renderer {
       if(actor.driver===7)this.houstonHelmet(pose,actor,time,jump);
       if(actor.hedgeShield>0)this.hedgeguard(m,pose,actor,time,jump);
       if(r.specialAbilities!==false&&actor.driver===7&&actor.specialActive>0){
-        this.glow.at(pose.x,2,pose.z);for(let i=0;i<32;i++){const a=i*Math.PI/16+time*1.5;this.glow.particle(Math.cos(a)*3,Math.sin(a*3)*.5,Math.sin(a)*3,.22,[.16,.32,.8]);}
+        m.at(pose.x,.06,pose.z);m.disc(0,0,0,8,8,'#140e28',64);m.disc(0,.02,0,2.1,2.1,'#03040d',48);
+        this.glow.at(pose.x,.1,pose.z);
+        for(let arm=0;arm<5;arm++)for(let i=0;i<80;i++){const t=i/80,u=(i+1)/80,r=1.8+t*6.2,rr=1.8+u*6.2,a=arm*Math.PI*2/5+t*7-time*2.4,b=arm*Math.PI*2/5+u*7-time*2.4,y=t*t*1.7,yy=u*u*1.7,w=.12+t*.22;this.glow.quad([Math.cos(a)*r,y,Math.sin(a)*r],[Math.cos(b)*rr,yy,Math.sin(b)*rr],[Math.cos(b)*(rr+w),yy+.06,Math.sin(b)*(rr+w)],[Math.cos(a)*(r+w),y+.06,Math.sin(a)*(r+w)],arm%2?[.12,.32,.8]:[.5,.13,.7]);}
+        for(let i=0;i<60;i++){const t=(i/60-time*.24)%1+1,f=t%1,r=2+f*6,a=i*2.399-time*3-f*4;this.glow.particle(Math.cos(a)*r,f*f*1.8,Math.sin(a)*r,.12+f*.15,[.25,.45,.85]);}
+        for(let i=0;i<64;i++){const a=i*Math.PI/32,b=(i+1)*Math.PI/32;this.glow.quad([Math.cos(a)*2,.04,Math.sin(a)*2],[Math.cos(b)*2,.04,Math.sin(b)*2],[Math.cos(b)*2.12,.1,Math.sin(b)*2.12],[Math.cos(a)*2.12,.1,Math.sin(a)*2.12],[.35,.55,.9]);}
         for(const s of r.supplies){if(s.cooldown>0||Math.hypot(s.wx-pose.x,s.wz-pose.z)>80)continue;this.glow.at(s.wx,1.8,s.wz);for(let i=0;i<8;i++){const t=(time*.7+i/8)%1,a=t*10+time*3;this.glow.particle((pose.x-s.wx)*t+Math.cos(a)*.4,Math.sin(t*Math.PI)*2,(pose.z-s.wz)*t+Math.sin(a)*.4,.13,[.12,.35,.7]);}}
       }
       if(r.specialAbilities!==false&&actor.driver===11&&actor.specialActive>0)this.holyArchangels(pose,actor,time,jump);
