@@ -530,6 +530,22 @@ impl Room {
 mod tests {
     use super::*;
     #[test]
+    fn identical_names_have_separate_sessions_and_refresh_keeps_the_same_player() {
+        let mut room = Room::new(0, 0);
+        let first = room.join(&json!({"name":"Same name","driver":0})).unwrap();
+        let second = room.join(&json!({"name":"Same name","driver":1})).unwrap();
+        assert_eq!(first["you"], 0);
+        assert_eq!(second["you"], 1);
+        assert_ne!(first["token"], second["token"]);
+        assert_eq!(room.find(first["token"].as_str().unwrap()), Some(0));
+        assert_eq!(room.find(second["token"].as_str().unwrap()), Some(1));
+        let refreshed = room.resume(1, false);
+        assert_eq!(refreshed["you"], 1);
+        assert_eq!(refreshed["world"]["driver"], 1);
+        assert_eq!(room.find(refreshed["token"].as_str().unwrap()), Some(1));
+        assert_eq!(room.find(first["token"].as_str().unwrap()), Some(0));
+    }
+    #[test]
     fn eight_people_can_join_and_the_ninth_is_rejected() {
         let mut room = Room::new(0, 1);
         for id in 0..8 {
