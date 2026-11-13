@@ -143,7 +143,8 @@ export class GameChat {
       this.you=reply.you;
       const selected=this.conversation,selectedName=this.recipient.selectedOptions[0]?.textContent;
       const rosterKey=JSON.stringify(reply.players);
-      if(rosterKey!==this.rosterKey){
+      const rosterChanged=rosterKey!==this.rosterKey;
+      if(rosterChanged){
         this.rosterKey=rosterKey;
         this.recipient.replaceChildren(new Option('Everyone',''),...reply.players.filter(player=>player.id!==reply.you).map(player=>new Option(player.name,String(player.id))));
         if(selected&&!reply.players.some(player=>String(player.id)===selected)){
@@ -162,7 +163,8 @@ export class GameChat {
       this.initialized=true;this.updateBadges();
       this.messages=[...known.values()].sort((a,b)=>a.id-b.id);if(this.messages.length>1000)this.messages.splice(0,this.messages.length-1000);
       if(reply.messages.length||rosterKey!==this.renderedRoster){this.render(nearBottom||sending);this.renderedRoster=rosterKey;}
-      this.cursor=reply.cursor;
+      // Re-fetch retained messages when returning players acquire new slots.
+      this.cursor=rosterChanged?0:reply.cursor;
       if(sending){if(this.replies.get(to)===replyTarget)this.replies.delete(to);this.renderReply();if(this.drafts.get(to)===text)this.drafts.delete(to);if(this.conversation===to&&this.input.value===text)this.input.value='';}
       this.status.textContent='Connected';
     }catch(error){if(scope===this.roomScope())this.status.textContent=error.message;}

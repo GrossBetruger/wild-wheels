@@ -92,7 +92,7 @@ impl Member {
     }
 }
 pub struct Room {
-    chat: crate::chat::Chat,
+    pub(crate) chat: crate::chat::Chat,
     pub core: NativeArena,
     pub members: [Option<Member>; CAPACITY],
     pub bots: usize,

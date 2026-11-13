@@ -198,6 +198,7 @@ mod tests {
         }
         assert_eq!(room.core.phase(), "racing");
         let app = App {
+            shutdown: tokio::sync::watch::channel(false).0,
             updates: Default::default(),
             sessions: Arc::new(tokio::sync::Mutex::new(crate::sessions::Sessions::open(
                 std::env::temp_dir().join(format!("wild-wheels-photo-sessions-{}", crate::room::token())), crate::sessions::now(),

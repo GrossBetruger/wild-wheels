@@ -31,6 +31,7 @@ use tokio::{
 include!(concat!(env!("OUT_DIR"), "/assets.rs"));
 #[derive(Clone)]
 struct App {
+    shutdown: tokio::sync::watch::Sender<bool>,
     updates: Arc<tokio::sync::Mutex<updates::Updates>>,
     sessions: Arc<tokio::sync::Mutex<sessions::Sessions>>,
     photos: Arc<Mutex<photos::Album>>,
@@ -285,6 +286,8 @@ async fn upgrade(
         })
 }
 async fn connection(app: App, mut socket: WebSocket) {
+    let mut shutdown = app.shutdown.subscribe();
+    if *shutdown.borrow() { return; }
     let Ok(Some(Ok(Message::Text(text)))) = timeout(Duration::from_secs(3), socket.next()).await
     else {
         return;
@@ -380,7 +383,7 @@ async fn connection(app: App, mut socket: WebSocket) {
             }
         }
     };
-    tokio::select! {_=writer=>{},_=reader=>{}}
+    tokio::select! {_=writer=>{},_=reader=>{},_=shutdown.changed()=>{}}
     app.room.lock().unwrap().disconnect(id, generation);
 }
 #[tokio::main(flavor = "current_thread")]
@@ -419,14 +422,19 @@ async fn main() {
         );
         s
     });
+    let chat_path = std::env::var_os("WILD_WHEELS_CHAT_FILE").map(std::path::PathBuf::from)
+        .unwrap_or_else(|| ".wild-wheels/chat.json".into());
+    let mut room = Room::new(arena, bots);
+    room.chat = chat::Chat::open(&chat_path).expect("Unable to load saved chat");
     let app = App {
+        shutdown: tokio::sync::watch::channel(false).0,
         updates: Arc::new(tokio::sync::Mutex::new(updates::Updates::discover())),
         sessions: Arc::new(tokio::sync::Mutex::new(sessions::Sessions::open(
             std::env::var_os("WILD_WHEELS_SESSION_FILE").map(std::path::PathBuf::from)
                 .unwrap_or_else(|| ".wild-wheels/sessions.json".into()), sessions::now(),
         ).expect("Unable to load player sessions"))),
         photos: Default::default(),
-        room: Arc::new(Mutex::new(Room::new(arena, bots))),
+        room: Arc::new(Mutex::new(room)),
         limits: Default::default(),
         sockets: Arc::new(Semaphore::new(32)),
         origin,
@@ -456,18 +464,19 @@ async fn main() {
         .fallback(http)
         .layer(DefaultBodyLimit::max(2048))
         .layer(axum::middleware::from_fn(headers))
-        .with_state(app);
+        .with_state(app.clone());
     let listener = tokio::net::TcpListener::bind((bind, port))
         .await
         .expect("Unable to bind game port");
     println!(
         "Wild Wheels Rust: http://{bind}:{port} · one arena · 8 players · single async thread"
     );
+    let shutdown = app.shutdown.clone();
     axum::serve(
         listener,
         router.into_make_service_with_connect_info::<SocketAddr>(),
     )
-    .with_graceful_shutdown(async {
+    .with_graceful_shutdown(async move {
         #[cfg(unix)]
         {
             let mut term =
@@ -479,9 +488,15 @@ async fn main() {
         {
             let _ = tokio::signal::ctrl_c().await;
         }
+        // Stop upgraded connections too, so graceful shutdown can drain promptly.
+        let _ = shutdown.send(true);
     })
     .await
     .unwrap();
+    // All HTTP chat writes have drained before the final snapshot is taken.
+    tokio::task::spawn_blocking(move || app.room.lock().unwrap().chat.save(&chat_path))
+        .await.expect("Chat save task failed").expect("Unable to save chat during shutdown");
+    println!("Chat saved for the next server start.");
 }
 
 #[cfg(test)]

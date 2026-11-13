@@ -24,9 +24,12 @@ try{
   git('init','--initial-branch=main');git('add','.');git('commit','-m','Initial launcher');git('init','--bare',join(root,'remote.git'));git('remote','add','origin',join(root,'remote.git'));git('push','origin','main');
   git('clone','--branch','main',join(root,'remote.git'),join(root,'publisher'));await writeFile(join(root,'publisher','release-marker'),'updated\n');
   execFileSync('git',['-C',join(root,'publisher'),'add','release-marker'],{env});execFileSync('git',['-C',join(root,'publisher'),'commit','-m','New release'],{env});execFileSync('git',['-C',join(root,'publisher'),'push','origin','main'],{env});
-  const post=async(path,token,extra={})=>{const response=await fetch(`http://127.0.0.1:${port}`+path,{method:'POST',headers:{'content-type':'application/json',...(token?{authorization:`Bearer ${token}`}:{}) ,...extra},body:path==='/api/join'?JSON.stringify({code:'00',name:'Updater',driver:0}):'{}',signal:AbortSignal.timeout(30000)});return {status:response.status,value:await response.json(),cookie:response.headers.get('set-cookie')};};
+  const post=async(path,token,extra={},body=path==='/api/join'?{code:'00',name:'Updater',driver:0}:{})=>{const response=await fetch(`http://127.0.0.1:${port}`+path,{method:'POST',headers:{'content-type':'application/json',...(token?{authorization:`Bearer ${token}`}:{}) ,...extra},body:JSON.stringify(body),signal:AbortSignal.timeout(30000)});return {status:response.status,value:await response.json(),cookie:response.headers.get('set-cookie')};};
   assert.equal((await post('/api/updates/check')).status,401);
   const player=await post('/api/join');assert.equal(player.status,200);
+  const peer=await post('/api/join',null,{}, {code:'00',name:'Friend',driver:1});assert.equal(peer.status,200);
+  assert.equal((await post('/api/chat',player.value.token,{}, {text:'Public chat survives an update'})).status,200);
+  assert.equal((await post('/api/chat',peer.value.token,{}, {text:'Private chat survives too',to:player.value.you})).status,200);
   assert.equal((await post('/api/updates/check',player.value.token,{origin:'https://evil.invalid'})).status,403);
   assert.equal((await post('/api/updates/install',player.value.token)).status,409,'An update must be checked before installing');
   const update=await post('/api/updates/check',player.value.token);assert.equal(update.status,200);assert.equal(update.value.available,true);assert.match(update.value.description,/New release/);
@@ -34,9 +37,16 @@ try{
   let restarted=false;for(let tries=0;tries<100;tries++){await new Promise(r=>setTimeout(r,100));try{if(await readFile(join(state,'server.pid'),'utf8')!==first&&await health()){try{await access(join(state,'lock'));}catch{restarted=true;break;}}}catch{}}
   assert.equal(restarted,true,'Web update must restart the managed native service');
   assert.match(await readFile(join(state,'update.log'),'utf8'),/Installing [a-f0-9]+ — New release/);assert.equal(await readFile(join(repo,'release-marker'),'utf8'),'updated\n');
+  const restoredPeer=await post('/api/session',null,{cookie:peer.cookie.split(';')[0]});assert.equal(restoredPeer.status,200);
   const restored=await post('/api/session',null,{cookie:player.cookie.split(';')[0]});assert.equal(restored.status,200);assert.equal(restored.value.world.name,'Updater');
+  const history=await post('/api/chat',restored.value.token);assert.equal(history.status,200);
+  assert.deepEqual(history.value.messages.map(m=>m.text),['Public chat survives an update','Private chat survives too']);
+  assert.equal(history.value.messages[1].from,restoredPeer.value.you);assert.equal(history.value.messages[1].to,restored.value.you);
+  const stranger=await post('/api/join',null,{}, {code:'00',name:'Updater',driver:2});assert.equal(stranger.status,200);
+  assert.deepEqual((await post('/api/chat',stranger.value.token)).value.messages.map(m=>m.text),['Public chat survives an update']);
+  assert.match(await readFile(join(state,'server.log'),'utf8'),/Chat saved for the next server start/);
   shell('kill_server.sh');assert.equal(await health(),false);assert.match(shell('kill_server.sh'),/No managed server/);
   unrelated=spawn('sleep',['30']);await new Promise(r=>unrelated.once('spawn',r));await writeFile(join(state,'server.pid'),`${unrelated.pid}\n${join(target,'release/wild-wheels-server')}\n`);
   shell('kill_server.sh');assert.equal(unrelated.exitCode,null,'A stale PID must not kill an unrelated process');
-  console.log(JSON.stringify({pass:true,detached:true,survivesHangup:true,duplicatePrevented:true,updatePulledAndRestarted:true,cleanStop:true,stalePidSafe:true}));
+  console.log(JSON.stringify({pass:true,detached:true,survivesHangup:true,duplicatePrevented:true,updatePulledAndRestarted:true,chatRestored:true,privateChatProtected:true,cleanStop:true,stalePidSafe:true}));
 }finally{try{shell('kill_server.sh');}catch{}unrelated?.kill();}

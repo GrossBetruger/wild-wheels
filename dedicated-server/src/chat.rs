@@ -1,16 +1,60 @@
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
     collections::{HashMap, VecDeque},
+    io::{self, Read},
+    path::Path,
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
-#[derive(Default)]
+#[derive(Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Chat {
     sequence: u64,
     messages: VecDeque<(String, Option<String>, Value)>,
+    #[serde(skip)]
     sent: HashMap<String, Instant>,
 }
 impl Chat {
+    pub fn open(path: &Path) -> io::Result<Self> {
+        let file = match std::fs::File::open(path) {
+            Ok(file) => file,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Self::default()),
+            Err(error) => return Err(error),
+        };
+        // Bound allocation before parsing, including malformed or manually edited files.
+        const MAX_BYTES: u64 = 2 * 1024 * 1024;
+        let mut bytes = Vec::new();
+        file.take(MAX_BYTES + 1).read_to_end(&mut bytes)?;
+        if bytes.len() as u64 > MAX_BYTES {
+            return Err(io::Error::other("Saved chat is too large"));
+        }
+        let chat: Self = serde_json::from_slice(&bytes).map_err(io::Error::other)?;
+        let key = |s: &str| s.len() == 64 && s.bytes().all(|b| b.is_ascii_hexdigit());
+        let text = |v: &Value, limit| v.as_str().is_some_and(|s| s.encode_utf16().count() <= limit);
+        let cursor = |v: &Value| v.as_u64().is_some_and(|n| n > 0 && n <= chat.sequence);
+        if chat.sequence > 9_007_199_254_740_991 || chat.messages.len() > 200
+            || chat.messages.iter().any(|(from, to, m)| {
+                !key(from) || to.as_ref().is_some_and(|s| !key(s))
+                    || !cursor(&m["id"]) || m.get("updated").is_some_and(|v| !cursor(v))
+                    || !text(&m["name"], 24) || !text(&m["text"], 500)
+                    || m["from"].as_u64().is_none_or(|n| n >= 8)
+                    || (to.is_some() && (m["to"].as_u64().is_none_or(|n| n >= 8) || !text(&m["toName"], 24)))
+                    || (to.is_none() && !m["to"].is_null())
+                    || m["time"].as_u64().is_none()
+                    || (!m["reply"].is_null() && (!cursor(&m["reply"]["id"]) || !text(&m["reply"]["name"], 24) || !text(&m["reply"]["text"], 500)))
+            }) {
+            return Err(io::Error::other("Invalid saved chat"));
+        }
+        Ok(chat)
+    }
+
+    pub fn save(&self, path: &Path) -> io::Result<()> {
+        let bytes = serde_json::to_vec(self).map_err(io::Error::other)?;
+        // Reuse the session store's atomic replacement and 0600 permissions.
+        crate::sessions::write(path, &bytes)
+    }
+
     pub fn exchange(
         &mut self,
         id: usize,
@@ -133,7 +177,14 @@ impl Chat {
                     > after
                     && (to.is_none() || from == &sender.1 || to.as_ref() == Some(&sender.1))
             })
-            .map(|(_, _, message)| message)
+            .map(|(from, to, message)| {
+                let mut message = message.clone();
+                // Slots can change after reconnect/restart; identities do not.
+                let slot = |identity: &str| players.iter().find(|p| p.1 == identity).map_or(json!(-1), |p| json!(p.0));
+                message["from"] = slot(from);
+                if let Some(to) = to { message["to"] = slot(to); }
+                message
+            })
             .collect();
         Ok(
             json!({"you":id,"players":players.iter().map(|p|json!({"id":p.0,"name":p.2})).collect::<Vec<_>>(),"cursor":self.sequence,"messages":messages}),
@@ -143,6 +194,52 @@ impl Chat {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn restart_preserves_text_replies_deletions_and_private_ownership_when_slots_change() {
+        let path = std::env::temp_dir().join(format!("wild-wheels-chat-{}", crate::room::token())).join("chat.json");
+        let alice = "a".repeat(64);
+        let bob = "b".repeat(64);
+        let stranger = "c".repeat(64);
+        let players = vec![(0, alice.clone(), "Alice".into()), (1, bob.clone(), "Bob".into())];
+        let mut chat = super::Chat::default();
+        let text = "\"},\"command\":\"$(touch /tmp/chat-must-not-execute)\" <script> & \\";
+        chat.exchange(0, &players, &serde_json::json!({"text":text})).unwrap();
+        chat.exchange(1, &players, &serde_json::json!({"text":"Secret", "to":0, "replyTo":null})).unwrap();
+        chat.exchange(0, &players, &serde_json::json!({"deleteId":1})).unwrap();
+        chat.save(&path).unwrap();
+        let mut restored = super::Chat::open(&path).unwrap();
+        let players = vec![(0, stranger, "Alice".into()), (3, bob, "Bob".into()), (5, alice, "Alice".into())];
+        let public = restored.exchange(0, &players, &serde_json::json!({})).unwrap();
+        assert_eq!(public["messages"].as_array().unwrap().len(), 1);
+        assert_eq!(public["messages"][0]["deleted"], true);
+        let private = restored.exchange(5, &players, &serde_json::json!({})).unwrap();
+        assert_eq!(private["messages"][1]["text"], "Secret");
+        assert_eq!(private["messages"][1]["from"], 3);
+        assert_eq!(private["messages"][1]["to"], 5);
+        assert_eq!(restored.exchange(0, &players, &serde_json::json!({"deleteId":2})).unwrap_err().0, 403);
+        let reply = restored.exchange(5, &players, &serde_json::json!({"text":text,"to":3,"replyTo":2})).unwrap();
+        assert_eq!(reply["messages"][2]["reply"]["text"], "Secret");
+        restored.save(&path).unwrap();
+        let mut again = super::Chat::open(&path).unwrap();
+        assert_eq!(again.exchange(3, &players, &serde_json::json!({})).unwrap()["messages"][2]["text"], text);
+        #[cfg(unix)] {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
+        }
+        std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn invalid_or_oversized_chat_is_rejected_without_overwriting_it() {
+        let path = std::env::temp_dir().join(format!("wild-wheels-invalid-chat-{}", crate::room::token()));
+        assert!(super::Chat::open(&path).is_ok());
+        for bytes in [b"not json".to_vec(), b"{\"sequence\":0,\"messages\":[[\"bad identity\",null,{}]]}".to_vec(), vec![b' '; 2 * 1024 * 1024 + 1]] {
+            std::fs::write(&path, &bytes).unwrap();
+            assert!(super::Chat::open(&path).is_err());
+            assert_eq!(std::fs::read(&path).unwrap(), bytes);
+        }
+        std::fs::remove_file(path).unwrap();
+    }
     use super::*;
     #[test]
     fn replies_are_authoritative_and_stay_in_their_conversation() {
