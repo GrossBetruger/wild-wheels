@@ -4,9 +4,9 @@ impl Game{
     pub(super) fn bot_sight_radius(&self,id:usize)->f64{
         if !self.global.special_abilities{return f64::INFINITY;}
         let active=|a:&&Actor|a.special_active>0.0&&a.destroyed<=0.0&&!a.inactive&&!a.afk&&!a.bomber;
-        let xy=match self.actors.iter().filter(active).any(|a|a.driver==13&&a.id!=id){true=>90.0_f64,false=>f64::INFINITY};
+        let xy=match self.actors.iter().filter(active).any(|a|a.driver==13&&a.id!=id){true=>35.0_f64,false=>f64::INFINITY};
         let own_xray=self.actors[id].driver==14&&self.actors[id].special_active>0.0;
-        let fog=match !own_xray&&self.actors.iter().filter(active).any(|a|a.driver==14){true=>50.0_f64,false=>f64::INFINITY};
+        let fog=match !own_xray&&self.actors.iter().filter(active).any(|a|a.driver==14){true=>20.0_f64,false=>f64::INFINITY};
         xy.min(fog)
     }
     pub(super) fn special(&mut self,id:usize){

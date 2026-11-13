@@ -54,7 +54,7 @@ export function drawXrayArena(m,arena){
 export function botSightRadius(world,actor){
   if(world.specialAbilities===false)return Infinity;
   const active=[world,...world.bots].filter(a=>a.specialActive>0&&!a.destroyed&&!a.inactive&&!a.afk&&!a.bomber);
-  const xylophone=active.some(a=>a.driver===13&&a.id!==actor.id)?90:Infinity;
-  const fog=active.some(a=>a.driver===14)&&!(actor.driver===14&&actor.specialActive>0)?50:Infinity;
+  const xylophone=active.some(a=>a.driver===13&&a.id!==actor.id)?35:Infinity;
+  const fog=active.some(a=>a.driver===14)&&!(actor.driver===14&&actor.specialActive>0)?20:Infinity;
   return Math.min(xylophone,fog);
 }
