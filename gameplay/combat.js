@@ -45,7 +45,7 @@ function spawn(r, actor, initial = false) {
 }
 export function createBattle(driver = 0, arena = 0, random = Math.random) {
   const r = createRace(driver, 0, random); r.specialAbilities = true; r.timeStop = 0; r.timeOwner = null; r.mode = 'combat'; r.arena = arena; r.duration = 180; r.targetScore = 10; r.id = 0; r.color = drivers[driver].color; r.killFeed = []; r.driftParticles = []; r.chaffClouds = []; r.chaffSequence = 0; r.bombs = []; r.bombSequence = 0; r.stinkClouds = [];
-  const actors = [r, ...r.bots]; for (const [id, actor] of actors.entries()) Object.assign(actor, { id, wx: 0, wz: 0, heading: 0, kills: 0, deaths: 0, health: 3, destroyed: 0, shield: 0, celebrate: 0, fireCooldown: 0, reload: 0, brain: 0, path: [], bomber: false, bombAmmo: 0, bombReload: 0, stinkAmmo: 0 });
+  const actors = [r, ...r.bots]; for (const [id, actor] of actors.entries()) Object.assign(actor, { id, wx: 0, wz: 0, heading: 0, kills: 0, deaths: 0, bicyclesStolen: 0, health: 3, destroyed: 0, shield: 0, celebrate: 0, fireCooldown: 0, reload: 0, brain: 0, path: [], bomber: false, bombAmmo: 0, bombReload: 0, stinkAmmo: 0 });
   for (const actor of actors) spawn(r, actor, true);
   r.supplies = [[-70, -65, 'missile'], [70, 65, 'missile'], [-65, 70, 'hedgehog'], [65, -70, 'hedgehog'], [-12, 48, 'boost'], [12, -48, 'boost'], [-70, 0, 'health'], [70, 0, 'health'], [-50, -50, 'hedgeproof'], [50, 50, 'tehilim']].map(([wx, wz, kind], id) => ({ id, version: 0, wx, wz, kind, cooldown: ['hedgeproof', 'tehilim'].includes(kind) ? 30 : 0 }));
   return r;
@@ -154,6 +154,7 @@ function collectSupplies(r, actor) {
   for (const supply of r.supplies) {
     if (supply.kind === 'bicycle' && supply.age < 1.2) continue;
     if (supply.cooldown > 0 || distance(actor, supply) >= 4 || supply.kind === 'health' && actor.health >= MAX_HEALTH) continue;
+    if(supply.kind==='bicycle'&&supply.owner!==actor.id)actor.bicyclesStolen=(actor.bicyclesStolen??0)+1;
     applySupply(actor, supply.kind); restoreSupply(supply); supply.cooldown = supply.kind === 'bicycle' ? 1e9 : ['hedgeproof', 'tehilim'].includes(supply.kind) ? 45 : 8; supply.version = (supply.version ?? 0) + 1; supply.collector = actor.id;
     if (r.multiplayer || actor === r) fx(r, 'pickup', actor, `pickup:${supply.id}:${supply.version}`);
   }

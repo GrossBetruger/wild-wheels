@@ -19,6 +19,7 @@ function fields(Type,names,{booleans=[],nullable=[]}={}){
 }
 class Actor extends Row{
   get intelligenceBonus(){return this.frame.text.actors[this.id]?.intelligenceBonus??0;}
+  get bicyclesStolen(){return this.frame.text.actors[this.id]?.bicyclesStolen??0;}
   get specialCooldown(){return this.n(46);}
   get specialActive(){return this.n(47);}
   get healTimer(){return this.n(43);}

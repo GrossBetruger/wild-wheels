@@ -14,6 +14,7 @@ import {checkSpecials} from "../scenarios/check-specials-scenario.mjs";
 import {checkTehilim} from '../scenarios/check-tehilim-scenario.mjs';
 import {checkCharacters} from '../scenarios/check-characters-scenario.mjs';
 import {checkRoom} from '../scenarios/check-room-scenario.mjs';
+import {checkRewards} from '../scenarios/check-rewards-scenario.mjs';
 import { profilePerformance } from '../profiling/profile-performance.mjs';
 import { compareEncodingBrowser } from '../encoding-lab/browser.mjs';
 import { compareOwnedStateBrowser } from '../owned-state-lab/browser.mjs';
@@ -126,6 +127,11 @@ try{
       return {code:network.state.code,you:network.state.you};
     })()`);
     const room=app.multiplayer.rooms.get(identity.code);
+    if(process.argv.includes('--rewards')){
+      const capture=async()=>{const screenshot=await call('Page.captureScreenshot',{format:'png'},session);await writeFile(`${output}.${profile.run}.${profile.name}.reward.png`,Buffer.from(screenshot.data,'base64'));};
+      const result={profile:profile.name,run:profile.run,...await checkRewards(evaluate,app.multiplayer,room,identity.you,sleep,capture)};results.push(result);console.log(JSON.stringify(result));
+      await evaluate('__game.network.leave()');await call('Target.closeTarget',{targetId});for(const member of [...room.members.values()])app.multiplayer.remove(member);continue;
+    }
     if(process.argv.includes('--room')){
       const reload=async()=>{await evaluate('__game.reloadMarker=true');await call('Page.reload',{},session);for(let attempt=0;attempt<120;attempt++){try{if(await evaluate('Boolean(globalThis.__game)&&!__game.reloadMarker&&__game.network.active'))return;}catch{}await sleep(50);}throw new Error('Room did not restore after refresh');};
       const capture=async()=>{const screenshot=await call('Page.captureScreenshot',{format:'png'},session);await writeFile(`${output}.${profile.run}.${profile.name}.lobby.png`,Buffer.from(screenshot.data,'base64'));};

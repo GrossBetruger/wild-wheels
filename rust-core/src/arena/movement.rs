@@ -67,7 +67,7 @@ impl Game{
             if supply.kind=="bicycle"&&(supply.age<super::bicycles::BICYCLE_LANDING){continue;}
             if supply.cooldown>0.0||distance(a.wx,a.wz,supply.wx,supply.wz)>=4.0||supply.kind=="health"&&a.health>=6.0{continue;}
             match supply.kind.as_str(){
-                "bicycle"=>{a.intelligence_bonus=a.intelligence_bonus.saturating_add(1);a.notice=format!("+1 INTELLIGENCE · {}",a.intelligence());a.notice_time=3.0;},
+                "bicycle"=>{a.intelligence_bonus=a.intelligence_bonus.saturating_add(1);if supply.owner!=Some(id){a.bicycles_stolen=a.bicycles_stolen.saturating_add(1);}a.notice=format!("+1 INTELLIGENCE · {}",a.intelligence());a.notice_time=3.0;},
                 "health"=>{a.health=(a.health+1.0).min(6.0);a.notice=format!("+1 HEART · {} / 6",a.health);a.notice_time=2.0;},
                 "missile"=>{a.missiles=(a.missiles+1).min(a.item_capacity("missile"));if !(a.vulcan>0.0&&a.item=="hedgehog"){a.item="missile".into();}},
                 "hedgeproof"=>a.hedge_shield=25.0,"tehilim"=>a.tehilim=25.0,"hedgehog"=>a.ammo=a.item_capacity("hedgehog"),"boost"=>a.turbos=(a.turbos+1).min(a.item_capacity("boost")),_=>{}

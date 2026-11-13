@@ -6,6 +6,13 @@ import {bicyclePose,bicycleLanding} from '../../gameplay/bicycle-pickup.js';
 import {actorIntelligence,itemCapacity} from '../../gameplay/engine.js';
 
 for(const engine of ['JavaScript','Rust']){
+  test(`${engine}: collecting others’ bicycles counts thefts once, while collecting your own does not`,()=>{
+    const w=createBattle(1);Object.assign(w,{phase:'racing',human:true,wx:65,wz:0,supplies:[{id:1001,kind:'bicycle',owner:1,age:1.2,wx:65,wz:0,cooldown:0,version:0},{id:1002,kind:'bicycle',owner:1,age:1.2,wx:65,wz:0,cooldown:0,version:0},{id:1003,kind:'bicycle',owner:0,age:1.2,wx:65,wz:0,cooldown:0,version:0}]});for(const a of w.bots)Object.assign(a,{inactive:true,destroyed:999});
+    const core=engine==='Rust'?new ArenaCore(w):null,step=()=>core?core.step(0):tickBattle(w,new Set(),0),read=()=>core?core.snapshot():w;
+    step();assert.equal(read().bicyclesStolen,2);assert.equal(read().intelligenceBonus,3);
+    step();assert.equal(read().bicyclesStolen,2);
+    if(core)assert.equal(core.present().bicyclesStolen,2);
+  });
   test(`${engine}: each owl takeoff leaves one bicycle and a later takeoff leaves another`,()=>{
     const w=createBattle(14);Object.assign(w,{phase:'racing',human:true,wx:65,wz:0,heading:0,boost:3,supplies:[]});for(const a of w.bots)Object.assign(a,{inactive:true,destroyed:999});
     let core=engine==='Rust'?new ArenaCore(w):null;const step=dt=>core?core.step(dt):tickBattle(w,new Set(),dt),read=()=>core?core.snapshot():w;

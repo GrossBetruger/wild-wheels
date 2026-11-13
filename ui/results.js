@@ -3,6 +3,13 @@ import { standings } from '../gameplay/combat.js';
 
 export function ordinal(place){const teen=place%100;if(teen>=11&&teen<=13)return 'TH';return ({1:'ST',2:'ND',3:'RD'})[place%10]??'TH';}
 
+export function bicycleResults(world){
+  if(world.mode!=='combat')return [];
+  return [world,...world.bots].filter(actor=>!actor.inactive&&(actor.bicyclesStolen??0)>0)
+    .sort((a,b)=>b.bicyclesStolen-a.bicyclesStolen||a.id-b.id)
+    .map(actor=>({id:actor.id,name:actor.name??drivers[actor.driver].name,you:actor.id===world.id,count:actor.bicyclesStolen}));
+}
+
 export function battleTieNotice(world){
   if(world.mode!=='combat'||!world.multiplayer||world.finishRank==null)return '';
   const order=standings(world);

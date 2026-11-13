@@ -1,5 +1,6 @@
 [
   "index.html",
+  "ui/reward-notice.js",
   "style.css",
   "rust-core.wasm",
   "assets/audio/dark-humor-crowd.ogg",

@@ -1,4 +1,5 @@
 import {MatchLayout} from '../ui/match-layout.js';
+import {RewardNotice,PermanentStatGains} from '../ui/reward-notice.js';
 import {GameChat} from '../ui/chat.js';
 import {BomberPhotography} from '../photos/photography.js';
 import {darkHumorState} from '../characters/knowitowl/dark-humor.js';
@@ -9,7 +10,7 @@ import { sampleTrack, branches } from '../gameplay/track.js';
 import {useSpecial,abilityNames,frozen,auditTarget} from '../gameplay/special-abilities.js';
 import { createBattle, battleActive, tickBattle, fireBattle, releaseChaff, useBattleTurbo, somersaultBattle, arenas, standings, incomingMissiles, VULCAN_DURATION, MAX_HEALTH, equipBomber, dropBomb, BOMB_RECHARGE, recoveryInterval, hedgehogRecoveryInterval } from '../gameplay/combat.js';
 import { NetworkGame } from '../networking/network.js';
-import { ordinal, matchResults, battleTieNotice } from '../ui/results.js';
+import { ordinal, matchResults, battleTieNotice,bicycleResults } from '../ui/results.js';
 import { KillCelebration, ChaffNotice, RingOfFireNotice } from '../ui/combat-notices.js';
 import { usesMobileControls, bombTarget, panBomber } from '../ui/mobile.js';
 import {CharacterPreview} from './character-preview.js';
@@ -117,19 +118,26 @@ const chat=new GameChat({network,keys,anchor:racePanel});
 const matchLayout=new MatchLayout({layout:document.querySelector('.game-layout'),sidebar:document.querySelector('aside'),chat:chat.panel,map:$('map'),playground:document.querySelector('.track-panel'),viewport:document.querySelector('.viewport')});
 const leaderboard=document.createElement('section');leaderboard.className='leaderboard hidden';document.querySelector('aside').append(leaderboard);
 const finalResults=document.createElement('section');finalResults.id='match-results';finalResults.className='match-results hidden';finalResults.setAttribute('aria-label','Final leaderboard');startRow.before(finalResults);let resultsKey='';
+const bicycleScores=document.createElement('section');bicycleScores.id='bicycle-results';bicycleScores.className='bicycle-results hidden';finalResults.after(bicycleScores);
 function showResults(){
   const visible=race.phase==='finished';finalResults.classList.toggle('hidden',!visible);$('message').classList.toggle('results-visible',visible);
+  const thefts=bicycleResults(race);bicycleScores.classList.toggle('hidden',!visible||!thefts.length);
   if(!visible){resultsKey='';return;}
-  const rows=matchResults(race),version=JSON.stringify([mode,rows,battleTieNotice(race)]);if(version===resultsKey)return;resultsKey=version;
+  const rows=matchResults(race),version=JSON.stringify([mode,rows,battleTieNotice(race),thefts]);if(version===resultsKey)return;resultsKey=version;
   const table=document.createElement('table'),caption=document.createElement('caption');caption.textContent=battleTieNotice(race)||'FINAL LEADERBOARD';table.append(caption);
   const header=table.createTHead().insertRow();for(const label of mode==='combat'?['Place','Player','Kills','Deaths']:['Place','Player','Time']){const cell=document.createElement('th');cell.scope='col';cell.textContent=label;header.append(cell);}
   const body=table.createTBody();
   for(const result of rows){const row=body.insertRow();row.classList.toggle('you',result.you);for(const value of mode==='combat'?[result.place,result.name,result.kills,result.deaths]:[result.place,result.name,result.time===null?'DNF':timeLabel(result.time)])row.insertCell().textContent=String(value);}
   finalResults.replaceChildren(table);
+  const stolen=document.createElement('table'),heading=document.createElement('caption');heading.textContent='🚲 BICYCLES STOLEN';stolen.append(heading);
+  for(const thief of thefts){const row=stolen.insertRow();row.classList.toggle('you',thief.you);row.insertCell().textContent=thief.name+(thief.you?' · YOU':'');row.insertCell().textContent=String(thief.count);}
+  bicycleScores.replaceChildren(stolen);
 }
 const hedgeguardStatus=document.createElement('div');hedgeguardStatus.className='hedgeguard-status hidden';hedgeguardStatus.setAttribute('role','status');document.querySelector('.item-box').prepend(hedgeguardStatus);
 const tehilimStatus=document.createElement('div');tehilimStatus.className='tehilim-status hidden';tehilimStatus.setAttribute('role','status');document.querySelector('.item-box').prepend(tehilimStatus);
 const intelligenceStatus=document.createElement('div');intelligenceStatus.className='intelligence-status hidden';intelligenceStatus.setAttribute('role','status');document.querySelector('.item-box').prepend(intelligenceStatus);
+const rewardNotice=new RewardNotice(document.querySelector('.viewport')),permanentGains=new PermanentStatGains();
+let rewardEpoch='',rewardElapsed=0,rewardRound=0;
 const routeHint=document.createElement('div');routeHint.className='route-hint';document.querySelector('.viewport').append(routeHint);
 const nameplateLayer=document.createElement('div');nameplateLayer.className='kart-nameplates';nameplateLayer.setAttribute('aria-hidden','true');document.querySelector('.viewport').append(nameplateLayer);const nameplateNodes=new Map();
 const dizzyNotice=document.createElement('div');dizzyNotice.id='dizzy-notice';dizzyNotice.className='dizzy-notice hidden';dizzyNotice.setAttribute('role','status');document.querySelector('.viewport').append(dizzyNotice);
@@ -189,6 +197,12 @@ function timeLabel(t){return `${String(Math.floor(t/60)).padStart(2,'0')}:${(t%6
 let scoreboardKey='';
 function put(id,value){const node=$(id);if(node.textContent!==String(value))node.textContent=value;}
 function hud(){
+  if(race.elapsed+.5<rewardElapsed)rewardRound++;rewardElapsed=race.elapsed;
+  const epoch=[mode,race.soundEpoch,race.arena,race.id,race.driver,rewardRound].join(':');
+  if(epoch!==rewardEpoch){rewardEpoch=epoch;rewardNotice.reset();}
+  const gain=permanentGains.observe('intelligence',epoch,race.intelligenceBonus??0,actorIntelligence(race));
+  if(gain&&mode==='combat')rewardNotice.show({...gain,title:'INTELLIGENCE UP!',icon:'🧠',color:'#c6adff',detail:'BICYCLE COLLECTED · CARRY MORE ITEMS'});
+  rewardNotice.render(performance.now()/1000);
   matchLayout.update(race.phase,mode);
   photography.update(race);
   document.querySelector('.viewport').classList.toggle('bomber-view',Boolean(race.bomber));
