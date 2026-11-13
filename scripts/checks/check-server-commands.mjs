@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {mkdtemp,mkdir,copyFile,writeFile,readFile,chmod} from 'node:fs/promises';
+import {mkdtemp,mkdir,copyFile,writeFile,readFile,chmod,access} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {execFileSync,spawn} from 'node:child_process';
@@ -31,7 +31,7 @@ try{
   assert.equal((await post('/api/updates/install',player.value.token)).status,409,'An update must be checked before installing');
   const update=await post('/api/updates/check',player.value.token);assert.equal(update.status,200);assert.equal(update.value.available,true);assert.match(update.value.description,/New release/);
   const started=await post('/api/updates/install',player.value.token);assert.equal(started.status,200);assert.equal(started.value.updating,true);
-  let restarted=false;for(let tries=0;tries<100;tries++){await new Promise(r=>setTimeout(r,100));try{if(await readFile(join(state,'server.pid'),'utf8')!==first&&await health()){restarted=true;break;}}catch{}}
+  let restarted=false;for(let tries=0;tries<100;tries++){await new Promise(r=>setTimeout(r,100));try{if(await readFile(join(state,'server.pid'),'utf8')!==first&&await health()){try{await access(join(state,'lock'));}catch{restarted=true;break;}}}catch{}}
   assert.equal(restarted,true,'Web update must restart the managed native service');
   assert.match(await readFile(join(state,'update.log'),'utf8'),/Installing [a-f0-9]+ — New release/);assert.equal(await readFile(join(repo,'release-marker'),'utf8'),'updated\n');
   const restored=await post('/api/session',null,{cookie:player.cookie.split(';')[0]});assert.equal(restored.status,200);assert.equal(restored.value.world.name,'Updater');

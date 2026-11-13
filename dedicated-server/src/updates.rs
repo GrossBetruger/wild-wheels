@@ -46,10 +46,7 @@ impl Updates {
         }
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
     }
-    pub async fn check(&mut self) -> crate::room::Result<Value> {
-        if self.started {
-            return Err((409, "The server is already updating."));
-        }
+    async fn validate_checkout(&self) -> crate::room::Result<()> {
         if self.git(&["branch", "--show-current"]).await? != "main" {
             return Err((409, "Server updates require a checkout of main."));
         }
@@ -59,6 +56,13 @@ impl Updates {
                 "The server checkout has local changes. Commit or remove them before updating.",
             ));
         }
+        Ok(())
+    }
+    pub async fn check(&mut self) -> crate::room::Result<Value> {
+        if self.started {
+            return Err((409, "The server is already updating."));
+        }
+        self.validate_checkout().await?;
         self.git(&[
             "fetch",
             "--quiet",
@@ -95,6 +99,8 @@ impl Updates {
                 at.elapsed() < Duration::from_secs(300) && revision != crate::REVISION
             })
             .ok_or((409, "Check for updates before updating the server."))?;
+        self.validate_checkout().await?;
+        self.git(&["merge-base", "--is-ancestor", "HEAD", latest]).await?;
         let root = self.root.clone().ok_or((
             409,
             "Start this server with ./run_server.sh to enable updates.",
