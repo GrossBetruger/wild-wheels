@@ -1,4 +1,4 @@
-import { createBinaryEncoder, decodeBinarySnapshot } from '../../binary-wire.js';
+import { createBinaryEncoder, decodeBinarySnapshot } from '../../networking/binary-wire.js';
 
 const stats=values=>{const sorted=[...values].sort((a,b)=>a-b);return {samples:values.length,meanMs:values.reduce((a,b)=>a+b,0)/values.length,p95Ms:sorted[Math.floor(sorted.length*.95)]};};
 const commands=step=>[1/60,step%120<60?.03:-.02,.025,.001];

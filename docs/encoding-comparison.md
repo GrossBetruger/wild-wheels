@@ -57,7 +57,7 @@ Run lightweight checks first and push before the Chrome benchmark, following [th
 ```sh
 rustup target add wasm32-unknown-unknown
 rustc scripts/encoding-lab/kernel.rs --edition=2021 --crate-type=cdylib --target wasm32-unknown-unknown -C opt-level=3 -C panic=abort -C target-feature=+simd128 -o /private/tmp/wild-wheels-encoding-kernel.wasm
-node scripts/compare-encoding.mjs /private/tmp/wild-wheels-encoding-kernel.wasm /private/tmp/wild-wheels-encoding-comparison.json
+node scripts/profiling/compare-encoding.mjs /private/tmp/wild-wheels-encoding-kernel.wasm /private/tmp/wild-wheels-encoding-comparison.json
 npm run test:browser-netcode -- --encoding --repeat 3 --wasm /private/tmp/wild-wheels-encoding-kernel.wasm --corpus /private/tmp/wild-wheels-encoding-comparison.json.corpus.json --output /private/tmp/wild-wheels-encoding-browser.json
 ```
 

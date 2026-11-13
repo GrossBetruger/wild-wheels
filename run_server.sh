@@ -2,8 +2,8 @@
 set -euo pipefail
 project_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 cd -- "$project_dir"
-# shellcheck source=scripts/server-process.sh
-source "$project_dir/scripts/server-process.sh"
+# shellcheck source=scripts/server/server-process.sh
+source "$project_dir/scripts/server/server-process.sh"
 server_log_file="$server_state_dir/server.log"
 server_lock
 if server_running; then printf 'Server already running (PID %s). Log: %s\n' "$server_pid" "$server_log_file"; exit 0; fi

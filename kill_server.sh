@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 project_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-# shellcheck source=scripts/server-process.sh
-source "$project_dir/scripts/server-process.sh"
+# shellcheck source=scripts/server/server-process.sh
+source "$project_dir/scripts/server/server-process.sh"
 server_lock
 if ! server_running; then rm -f -- "$server_pid_file"; printf '%s\n' 'No managed server is running.'; exit 0; fi
 kill -TERM "$server_pid"

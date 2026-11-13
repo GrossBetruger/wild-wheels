@@ -43,7 +43,7 @@ Generate the deterministic corpus using the [earlier comparison](encoding-compar
 
 ```sh
 cargo build --locked --release --target wasm32-unknown-unknown --manifest-path scripts/owned-state-lab/Cargo.toml --target-dir /private/tmp/wild-wheels-owned-state-target
-node scripts/compare-owned-state.mjs /private/tmp/wild-wheels-owned-state-target/wasm32-unknown-unknown/release/wild_wheels_owned_state_lab.wasm /private/tmp/wild-wheels-encoding-comparison.json.corpus.json /private/tmp/wild-wheels-owned-state-node.json
+node scripts/profiling/compare-owned-state.mjs /private/tmp/wild-wheels-owned-state-target/wasm32-unknown-unknown/release/wild_wheels_owned_state_lab.wasm /private/tmp/wild-wheels-encoding-comparison.json.corpus.json /private/tmp/wild-wheels-owned-state-node.json
 npm run test:browser-netcode -- --owned-state --repeat 3 --wasm /private/tmp/wild-wheels-owned-state-target/wasm32-unknown-unknown/release/wild_wheels_owned_state_lab.wasm --corpus /private/tmp/wild-wheels-encoding-comparison.json.corpus.json --output /private/tmp/wild-wheels-owned-state-browser.json
 ```
 
