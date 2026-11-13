@@ -6,7 +6,7 @@ import {tmpdir} from 'node:os';
 import {resolve,join} from 'node:path';
 import WebSocket from 'ws';
 const arg=(flag,fallback)=>{const i=process.argv.indexOf(flag);return i<0?fallback:process.argv[i+1];},sleep=ms=>new Promise(r=>setTimeout(r,ms));
-const ringMode=process.argv.includes('--fire-ring');
+const ringMode=process.argv.includes('--fire-ring'),cameraMode=process.argv.includes('--camera');
 const binary=resolve(arg('--binary','dedicated-server/target/release/wild-wheels-server')),output=arg('--output',join(tmpdir(),'wild-wheels-dedicated-browser.json'));
 const wait=async(fn,message,ms=10000)=>{const end=performance.now()+ms;while(performance.now()<end){try{if(await fn())return;}catch{}await sleep(50);}throw new Error(message);};
 const probe=createServer();await new Promise(r=>probe.listen(0,'127.0.0.1',r));const port=probe.address().port;await new Promise(r=>probe.close(r));const origin=`http://127.0.0.1:${port}`;
@@ -19,25 +19,35 @@ try{
   await wait(async()=>{try{return(await fetch(origin+'/healthz')).ok;}catch{return false;}},'Native server did not start');
   await wait(()=>/DevTools listening on (ws:\/\/[^\s]+)/.test(chromeLog),'Chrome did not start');ws=new WebSocket(chromeLog.match(/DevTools listening on (ws:\/\/[^\s]+)/)[1]);await new Promise(r=>ws.once('open',r));
   ws.on('message',async bytes=>{const msg=JSON.parse(bytes);if(msg.id){const task=pending.get(msg.id);if(!task)return;pending.delete(msg.id);clearTimeout(task.timer);if(msg.error)task.reject(new Error(JSON.stringify(msg.error)));else task.resolve(msg.result);return;}if(msg.method==='Runtime.exceptionThrown')errors.push(msg.params.exceptionDetails.exception?.description??msg.params.exceptionDetails.text);
-    if(msg.method==='Fetch.requestPaused'){try{const {requestId}=msg.params;const reply=await call('Fetch.getResponseBody',{requestId},msg.sessionId);const source=Buffer.from(reply.body,reply.base64Encoded?'base64':'utf8').toString()+'\nglobalThis.__game={network,renderer,keys,get race(){return race}};';await call('Fetch.fulfillRequest',{requestId,responseCode:200,responseHeaders:[{name:'Content-Type',value:'text/javascript'}],body:Buffer.from(source).toString('base64')},msg.sessionId);}catch(e){errors.push(e.message);}}
+    if(msg.method==='Fetch.requestPaused'){try{const {requestId}=msg.params;const reply=await call('Fetch.getResponseBody',{requestId},msg.sessionId);const source=Buffer.from(reply.body,reply.base64Encoded?'base64':'utf8').toString()+'\nglobalThis.__game={network,renderer,keys,photography,get race(){return race}};';await call('Fetch.fulfillRequest',{requestId,responseCode:200,responseHeaders:[{name:'Content-Type',value:'text/javascript'}],body:Buffer.from(source).toString('base64')},msg.sessionId);}catch(e){errors.push(e.message);}}
   });
   const sessions=[];for(let index=0;index<2;index++){
     const {browserContextId}=await call('Target.createBrowserContext');contexts.push(browserContextId);const {targetId}=await call('Target.createTarget',{url:'about:blank',browserContextId});const {sessionId}=await call('Target.attachToTarget',{targetId,flatten:true});sessions.push(sessionId);
-    await call('Runtime.enable',{},sessionId);await call('Page.enable',{},sessionId);await call('Fetch.enable',{patterns:[{urlPattern:'*/game.js',requestStage:'Response'}]},sessionId);await call('Page.navigate',{url:origin},sessionId);
+    await call('Runtime.enable',{},sessionId);await call('Page.enable',{},sessionId);await call('Fetch.enable',{patterns:[{urlPattern:'*/game.js',requestStage:'Response'}]},sessionId);if(cameraMode&&index===1){await call('Emulation.setDeviceMetricsOverride',{width:430,height:900,deviceScaleFactor:1,mobile:true},sessionId);await call('Emulation.setTouchEmulationEnabled',{enabled:true,maxTouchPoints:5},sessionId);}
+    await call('Page.navigate',{url:origin},sessionId);
     await wait(()=>evaluate(sessionId,'Boolean(globalThis.__game?.network.active&&__game.network.state)'),`Browser ${index} failed to auto-join`);
   }
   const [host,guest]=sessions;await wait(()=>evaluate(host,'__game.network.state.players.length===2'),'Roster did not update');
   assert.equal(await evaluate(host,'__game.network.state.you'),0);assert.equal(await evaluate(guest,'__game.network.state.you'),1);
   for(const session of sessions){assert.equal(await evaluate(session,"getComputedStyle(document.querySelector('.mode-switch')).display"),'none');assert.equal(await evaluate(session,'__game.race.mode'),'combat');}
   assert.equal(await evaluate(host,'__game.network.dedicated'),true);assert.equal(await evaluate(host,"__game.network.hostButton.classList.contains('hidden')"),true);
-  await evaluate(host,`(async()=>{const n=__game.network;n.name.value='Ubuntu Pilot';n.name.dispatchEvent(new Event('input'));await n.saveName();await n.request('/api/driver',{driver:10});await n.control('bots',undefined,${ringMode?0:6});})()`);
+  await evaluate(host,`(async()=>{const n=__game.network;n.name.value='Ubuntu Pilot';n.name.dispatchEvent(new Event('input'));await n.saveName();await n.request('/api/driver',{driver:10});await n.control('bots',undefined,${ringMode||cameraMode?0:6});})()`);
   await wait(()=>evaluate(host,"Array.from(document.querySelectorAll('.preview-ability-entry>strong')).map(n=>n.textContent).join('|')==='REEFER MADNESS|RING OF FIRE'"),'Yuda abilities did not have separate titles');
-  await wait(()=>evaluate(guest,`__game.network.state.world.bots.length===${ringMode?1:7}`),'Eight-actor roster did not arrive');
+  await wait(()=>evaluate(guest,`__game.network.state.world.bots.length===${ringMode||cameraMode?1:7}`),'Eight-actor roster did not arrive');
   await evaluate(guest,'__game.network.requestPlay()');await wait(()=>evaluate(host,'__game.network.readyDialog.open'),'Host did not see guest play request');
   await wait(()=>evaluate(guest,"__game.race.phase==='racing'"),'Native auto-start did not reach browser',8000);
+  if(!cameraMode){
   const before=await evaluate(guest,'({x:__game.race.wx,z:__game.race.wz})');await evaluate(guest,"__game.keys.add('w')");await sleep(350);const after=await evaluate(guest,'({x:__game.race.wx,z:__game.race.wz})');assert.ok(Math.hypot(after.x-before.x,after.z-before.z)>.1,'Keyboard movement did not reach the native game');await evaluate(guest,"__game.keys.clear()");
   await wait(()=>evaluate(guest,"Boolean(__game.network.action('fire'))"),'Shot never became ready');
   await wait(()=>evaluate(guest,'__game.network.state.actionSequence>=0'),'Shot action was not acknowledged');
+  }
+  if(cameraMode){
+    await wait(()=>evaluate(guest,'__game.race.bomber'),'Mobile player did not become a bomber');
+    await evaluate(guest,"{const original=window.fetch;window.fetch=async(url,options)=>{const response=await original(url,options);if(url==='/api/photos'&&options?.method==='POST')__game.cameraUpload={status:response.status,bytes:options.body.size};return response;};document.getElementById('take-photo').click();}");
+    await wait(()=>evaluate(guest,'__game.photography.count===1'),'Native camera upload failed');
+    const uploaded=await evaluate(guest,'__game.cameraUpload');assert.equal(uploaded.status,200);assert.ok(uploaded.bytes>2048,'Native photo upload must use the larger image body allowance');
+  }
+
   if(ringMode){
     await evaluate(host,"__game.keys.add('w');__game.keys.add('shift');__game.keys.add('arrowright')");
     await wait(()=>evaluate(host,"__game.race.effects.some(f=>f.type==='fireRing')"),'Charged drift failed to ignite ring');
@@ -65,5 +75,5 @@ try{
   for(const session of sessions)assert.equal(await evaluate(session,'__game.renderer.gl.getError()'),0);
   const beforeRefresh=await evaluate(host,'({id:__game.network.state.you,epoch:__game.race.soundEpoch,name:__game.race.name})');await call('Page.reload',{},host);await wait(()=>evaluate(host,'Boolean(globalThis.__game?.network.active&&__game.network.state)'), 'Refresh failed to rejoin');const refreshed=await evaluate(host,'({id:__game.network.state.you,epoch:__game.race.soundEpoch,name:__game.race.name})');assert.deepEqual(refreshed,beforeRefresh);
   await call('Target.disposeBrowserContext',{browserContextId:contexts.pop()});await wait(()=>evaluate(host,'__game.network.isHost'),'Lobby controls did not transfer after disconnect');
-  assert.deepEqual(errors,[]);const report={pass:true,browsers:2,activeActors:ringMode?2:8,fireRing:ringMode,automaticJoin:true,nativeAutoStart:true,keyboardMovement:true,shotAcknowledged:true,refreshPreservesIdentity:true,hostTransfer:true,errors};await writeFile(output,JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify(report,null,2));
+  assert.deepEqual(errors,[]);const report={pass:true,browsers:2,activeActors:ringMode?2:8,fireRing:ringMode,automaticJoin:true,nativeAutoStart:true,keyboardMovement:!cameraMode,shotAcknowledged:!cameraMode,cameraUpload:cameraMode,refreshPreservesIdentity:true,hostTransfer:true,errors};await writeFile(output,JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify(report,null,2));
 }catch(e){console.error(serverLog);throw e;}finally{for(const browserContextId of contexts){try{await call('Target.disposeBrowserContext',{browserContextId});}catch{}}ws?.close();chrome.kill('SIGTERM');server.kill('SIGTERM');}
