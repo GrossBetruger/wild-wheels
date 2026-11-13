@@ -6,6 +6,7 @@ export async function checkRewards(evaluate,app,room,id,sleep,capture){
   const actor=[room.world,...room.world.bots].find(a=>a.id===id);
   Object.assign(actor,{wx:65,wz:0,speed:0,health:3,intelligenceBonus:0,bicyclesStolen:0});app.broadcast(room);
   await wait(()=>evaluate('__game.race.phase==="racing"&&__game.race.intelligenceBonus===0'),'Reward baseline was not ready');
+  await evaluate('document.querySelector(".viewport").scrollIntoView({block:"center"})');
   room.world.supplies=[{id:1001,kind:'bicycle',owner:id===0?1:0,age:1.2,wx:65,wz:0,cooldown:0,version:0}];
   await wait(()=>evaluate('!document.getElementById("reward-notice").classList.contains("hidden")&&document.getElementById("reward-notice").getAttribute("aria-label").includes("5 to 6")'),'Bicycle did not announce intelligence five to six');
   const start=await evaluate('getComputedStyle(document.querySelector(".reward-roll")).transform');await sleep(600);
