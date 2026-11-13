@@ -1,6 +1,6 @@
 mod benchmark;
-mod room;
 mod photos;
+mod room;
 use axum::{
     body::{Body, Bytes},
     extract::{
@@ -28,7 +28,7 @@ use tokio::{
 include!(concat!(env!("OUT_DIR"), "/assets.rs"));
 #[derive(Clone)]
 struct App {
-    photos:Arc<Mutex<photos::Album>>,
+    photos: Arc<Mutex<photos::Album>>,
     room: Arc<Mutex<Room>>,
     limits: Arc<Mutex<HashMap<(IpAddr, String), (Instant, u32)>>>,
     sockets: Arc<Semaphore>,
@@ -114,11 +114,11 @@ async fn http(
             path,
             match path {
                 "/api/input" => 180,
-                "/api/join" | "/api/rooms" => 20,
+                "/api/join" => 20,
                 _ => 30,
             },
             match path {
-                "/api/join" | "/api/rooms" => Duration::from_secs(60),
+                "/api/join" => Duration::from_secs(60),
                 _ => Duration::from_secs(1),
             },
         ) {
@@ -148,8 +148,8 @@ async fn http(
         let mut room = app.room.lock().unwrap();
         let existing = room.find(session(&h));
         let result = match path {
-            "/api/join" | "/api/rooms" => {
-                if path == "/api/join" && b["code"] != "00" {
+            "/api/join" => {
+                if b["code"] != "00" {
                     Err((404, "Room not found. Use room 00."))
                 } else {
                     match existing {
@@ -371,7 +371,7 @@ async fn main() {
         s
     });
     let app = App {
-        photos:Default::default(),
+        photos: Default::default(),
         room: Arc::new(Mutex::new(Room::new(arena, bots))),
         limits: Default::default(),
         sockets: Arc::new(Semaphore::new(32)),
@@ -392,8 +392,13 @@ async fn main() {
     });
     let router = Router::new()
         .route("/api/socket", get(upgrade))
-        .route("/api/photos",get(photos::list).post(photos::upload).layer(DefaultBodyLimit::max(65536)))
-        .route("/api/photos/{epoch}/{id}",get(photos::image))
+        .route(
+            "/api/photos",
+            get(photos::list)
+                .post(photos::upload)
+                .layer(DefaultBodyLimit::max(65536)),
+        )
+        .route("/api/photos/{epoch}/{id}", get(photos::image))
         .fallback(http)
         .layer(DefaultBodyLimit::max(2048))
         .layer(axum::middleware::from_fn(headers))
@@ -410,9 +415,16 @@ async fn main() {
     )
     .with_graceful_shutdown(async {
         #[cfg(unix)]
-        {let mut term=tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()).expect("Unable to listen for SIGTERM");tokio::select!{_=tokio::signal::ctrl_c()=>{},_=term.recv()=>{}}}
+        {
+            let mut term =
+                tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                    .expect("Unable to listen for SIGTERM");
+            tokio::select! {_=tokio::signal::ctrl_c()=>{},_=term.recv()=>{}}
+        }
         #[cfg(not(unix))]
-        {let _=tokio::signal::ctrl_c().await;}
+        {
+            let _ = tokio::signal::ctrl_c().await;
+        }
     })
     .await
     .unwrap();

@@ -8,7 +8,7 @@ const binary=resolve(arg('--binary','dedicated-server/target/release/wild-wheels
 const trials=[];
 for(let trial=0;trial<3;trial++){
   const native=JSON.parse(execFileSync(binary,['--benchmark'],{encoding:'utf8',maxBuffer:4*1024*1024}));
-  const config={code:'00',maxPlayers:8,arena:0,bots:0,host:0,epoch:1,seed:123,players:Array.from({length:8},(_,id)=>({id,name:`Player ${id}`,driver:id,role:'driver'}))};
+  const config={code:'00',maxPlayers:8,arena:0,bots:0,dedicated:true,host:null,epoch:1,seed:123,players:Array.from({length:8},(_,id)=>({id,name:`Player ${id}`,driver:id,role:'driver'}))};
   const game=ArenaCore.room(config);game.start();const times=[];let bytes=0;
   for(let step=0;step<3600;step++){
     const inputs=Array.from({length:8},(_,actor)=>{const keys=33|[4,8,16][(Math.floor(step/180)+actor)%3];return {actor,keys,moves:[{sequence:step,keys:keys&31}],sequence:step};});

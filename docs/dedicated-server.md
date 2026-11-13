@@ -55,9 +55,9 @@ Configuration is through environment variables:
 
 ## Arena and connection lifecycle
 
-One shared arena uses invitation `?room=00`, with eight combined human/bot slots. The first player is the lobby host. Leaving, disconnecting or going AFK transfers lobby controls to an active player; no browser drives the server simulation. Refresh preserves your identity, character, scores and acknowledged movement while rotating your session token. Disconnected places expire after 15 minutes. A connected AFK player retains their place. Room state is in memory and ends when the process stops.
+One shared arena uses invitation `?room=00`, with eight combined human/bot slots. The page displays a connection screen until the first shared-arena frame is ready, with a retry action if joining fails. There is no host or captain: every active player has the same room controls, and no browser drives the simulation. Refresh preserves your identity, character, scores and acknowledged movement while rotating your session token. Disconnected places expire after 15 minutes. A connected AFK player retains their place. Room state is in memory and ends when the process stops.
 
-Guest play requests retain the three-second auto-start/refusal flow. The host can reset, start, choose the map/bots and toggle special abilities. The arena code stays the same across matches.
+Any active player can choose the arena, bots and special abilities between matches, or start the normal three-second countdown directly. There are no play requests, vetoes, host tie advantages, or controls that reset a running match. AFK preserves the player’s place while the match continues; returning resumes the same identity. The arena code stays the same across matches.
 
 ## Timing and bounded work
 
@@ -85,7 +85,7 @@ npm run test:dedicated-browser
 npm run test:browser-netcode
 ```
 
-`test:dedicated` starts an isolated native process from a directory without the repository, checks the embedded asset allowlist and API permissions, then drives eight real Wasm prediction clients over WebSockets. It verifies a ninth player is rejected, guest auto-start/refusal, movement/fire acknowledgements, session refresh and host disconnect persistence. For each player: at least 25 snapshots/second, p99 snapshot gap under 100 ms and sustained acknowledged movement. These are loopback service checks, not internet latency guarantees.
+`test:dedicated` starts an isolated native process from a directory without the repository, checks the embedded asset allowlist and API permissions, then drives eight real Wasm prediction clients over WebSockets. It verifies a ninth player is rejected, equal room controls, direct starts without requests or vetoes, movement/fire acknowledgements, session refresh and match persistence after disconnects. For each player: at least 25 snapshots/second, p99 snapshot gap under 100 ms and sustained acknowledged movement. These are loopback service checks, not internet latency guarantees.
 
 `benchmark:dedicated` compares three trials of the native core against the existing Node/Wasm bridge using the same eight-player inputs. Each trial simulates 3,600 ticks, warms up for 600 and encodes eight snapshots every other tick. It checks gameplay/position parity and equivalent packet volume. Native p99 for a tick including all eight encodes must stay below 2 ms, within the 16.67 ms simulation budget. This measures CPU work; it does not measure a player’s GPU or claim an equivalent FPS increase.
 

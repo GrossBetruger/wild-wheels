@@ -13,8 +13,29 @@ fn main() {
     for name in assets {
         assert!(!name.contains("..") && !name.starts_with('/'));
         let source = root.join(&name);
-        println!("cargo:rerun-if-changed={}",source.display());
-        let path=match name.as_str(){"index.html"=>{let html=fs::read_to_string(&source).unwrap().replace("<body>","<body class=\"dedicated-server\">");let path=PathBuf::from(env::var("OUT_DIR").unwrap()).join("dedicated-index.html");fs::write(&path,html).unwrap();path},_=>source};
+        println!("cargo:rerun-if-changed={}", source.display());
+        let path = match name.as_str() {
+            "index.html" => {
+                let html = fs::read_to_string(&source)
+                    .unwrap()
+                    .replace("<body>", "<body class=\"dedicated-server\">");
+                let html = html
+                    .replace("SUNNY SIDE CIRCUIT", "SHARED ARENA")
+                    .replace("GRAND PRIX", "ARENA BATTLE")
+                    .replace("3 LAPS · 6 RACERS", "UP TO 8 PLAYERS")
+                    .replace(
+                        "Six racers. Three laps. One very shiny trophy.",
+                        "One shared arena. Up to eight players.",
+                    )
+                    .replace("LET’S RACE", "LET’S BATTLE")
+                    .replace("aria-label=\"Pause race\">Ⅱ", "aria-label=\"Go AFK\">AFK")
+                    .replace("<div class=\"viewport\">", "<div class=\"viewport\"><div id=\"arena-connection\" class=\"arena-connection\" role=\"status\" aria-live=\"polite\"><strong>JOINING THE ARENA…</strong><p>Connecting to the shared game.</p><button type=\"button\" class=\"primary hidden\">RETRY CONNECTION</button></div>");
+                let path = PathBuf::from(env::var("OUT_DIR").unwrap()).join("dedicated-index.html");
+                fs::write(&path, html).unwrap();
+                path
+            }
+            _ => source,
+        };
         let bytes = fs::read(&path).unwrap();
         hash.update(&name);
         hash.update(&bytes);

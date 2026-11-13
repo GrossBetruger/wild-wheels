@@ -15,7 +15,7 @@ export function invitationUrl(pageUrl,code,{publicOrigin,lan}={}){
 
 export class PlayRequestPrompt {
   sample(state){
-    if(!state?.startRequest||state.host!==state.you||!['ready','finished'].includes(state.world.phase))return [];
+    if(state?.dedicated||!state?.startRequest||state.host!==state.you||!['ready','finished'].includes(state.world.phase))return [];
     return state.players.filter(player=>player.id!==state.host&&player.wantsToPlay);
   }
 }
@@ -31,13 +31,15 @@ export class NetworkGame {
     this.nameDirty=document.cookie.split(';').some(part=>part.trim().startsWith('wild-wheels-name='));
     this.nameFeedback=document.createElement('span');this.nameFeedback.className='network-name-status';this.nameFeedback.setAttribute('role','status');
     this.name.oninput=()=>{this.rememberName();this.nameDirty=this.name.value.trim()!==this.state?.world.name;this.nameFeedback.textContent='';};
-    this.invitation=new URL(location.href).searchParams.get('room')??'';
+    this.invitation=new URL(location.href).searchParams.get('room')??(this.dedicated?'00':'');
+    this.connection=document.getElementById('arena-connection');
+    if(this.connection)this.connection.querySelector('button').onclick=()=>this.restore();
     this.botCount=document.createElement('select');this.botCount.setAttribute('aria-label','Number of multiplayer bots');for(let count=0;count<=5;count++){const option=document.createElement('option');option.value=String(count);option.textContent=`${count} BOT${count===1?'':'S'}`;this.botCount.append(option);}this.botCount.value='1';this.botCount.onchange=()=>{if(this.active)this.control('bots',undefined,Number(this.botCount.value));};
     this.abilities=this.button('SPECIAL ABILITIES · ON',()=>this.request('/api/control',{action:'special-abilities',enabled:this.state?.specialAbilities===false}).catch(error=>{this.status.textContent=error.message;}));
     this.animalChoice=document.createElement('select');this.animalChoice.className='hidden';this.animalChoice.setAttribute('aria-label','Your multiplayer character');for(const [index,animal] of drivers.entries()){const option=document.createElement('option');option.value=String(index);option.textContent=`${animal.emoji} ${animal.name}`;this.animalChoice.append(option);}this.animalChoice.onchange=()=>this.chooseDriver(Number(this.animalChoice.value));
-    this.hostButton=this.button('HOST ARENA',()=>this.connect(this.dedicated?'/api/join':'/api/rooms'));
+    this.hostButton=this.button(this.dedicated?'JOIN SERVER':'HOST ARENA',()=>this.connect(this.dedicated?'/api/join':'/api/rooms'));
     this.leaveButton=this.button('AFK',()=>this.setAway(!this.afk));this.leaveButton.classList.add('hidden');
-    this.status=document.createElement('p');this.status.setAttribute('role','status');this.status.textContent='Host an arena and share the link. Opening it joins the game automatically.';
+    this.status=document.createElement('p');this.status.setAttribute('role','status');this.status.textContent=this.dedicated?'Joining the shared arena…':'Host an arena and share the link. Opening it joins the game automatically.';
     this.players=document.createElement('div');this.players.className='network-players';
     this.share=document.createElement('input');this.share.className='hidden';this.share.setAttribute('aria-label','Room invitation link');this.share.addEventListener('input',()=>{this.shareEdited=true;});
     this.internetButton=this.button('START INTERNET LINK',()=>this.startInternetLink());this.internetButton.classList.add('hidden');
@@ -46,6 +48,7 @@ export class NetworkGame {
     const invite=document.createElement('div');invite.className='network-invite';invite.append(this.share,this.internetButton,this.copyButton);
     this.help=document.createElement('p');this.help.className='network-help hidden';
     this.panel.append(title,row,this.status,this.players,invite,this.help);anchor.before(this.panel);
+    if(!this.dedicated){
     this.readyDialog=document.createElement('dialog');this.readyDialog.id='play-request-popup';this.readyDialog.className='play-request-popup';this.readyDialog.setAttribute('aria-labelledby','play-request-title');
     const art=document.createElement('div');art.className='play-request-art';art.textContent='🏁';art.setAttribute('aria-hidden','true');
     this.readyTitle=document.createElement('h2');this.readyTitle.id='play-request-title';
@@ -65,17 +68,20 @@ export class NetworkGame {
     this.readyDialog.append(art,this.readyTitle,detail,this.readyCountdown,this.readyPeople,actions,this.readyError);document.querySelector('.viewport').append(this.readyDialog);
     this.readyDialog.addEventListener('cancel',event=>{event.preventDefault();this.refusePlayRequest();});
     this.readyDialog.addEventListener('keydown',event=>event.stopPropagation());
+    }
     this.infoReady=this.refreshInfo();
-    this.infoTimer=setInterval(()=>{if(this.active&&this.isHost)this.refreshInfo();},5000);
+    if(!this.dedicated)this.infoTimer=setInterval(()=>{if(this.active&&this.isHost)this.refreshInfo();},5000);
     this.timer=setInterval(()=>this.input(),1000/30);
     this.hostButton.disabled=true;queueMicrotask(()=>this.restore());
   }
   get active(){return Boolean(this.token);}
   get afk(){return Boolean(this.state?.players.find(player=>player.id===this.state.you)?.afk);}
-  get isHost(){return this.state?.host===this.state?.you;}
+  get isHost(){return Number.isInteger(this.state?.host)&&this.state.host===this.state.you;}
+  get canControl(){return this.isHost||this.dedicated&&this.active&&!this.afk;}
+  get canConfigure(){return this.canControl&&(!this.dedicated||['ready','finished'].includes(this.state.world.phase));}
   get wantsToPlay(){return Boolean(this.state?.players.find(player=>player.id===this.state.you)?.wantsToPlay);}
   get playRequestRefused(){return Boolean(this.state?.players.find(player=>player.id===this.state.you)?.playRequestRefused);}
-  dismissPlayRequest(){this.readyDialog.close();}
+  dismissPlayRequest(){this.readyDialog?.close();}
   async refusePlayRequest(){
     if(!this.isHost||!this.state?.startRequest||this.readyLaterButton.disabled)return;
     const requestId=this.state.startRequest.id;this.readyLaterButton.disabled=true;this.readyError.textContent='';
@@ -84,6 +90,7 @@ export class NetworkGame {
     finally{this.readyLaterButton.disabled=false;}
   }
   updatePlayRequest(){
+    if(this.dedicated)return;
     const waiting=this.playRequestPrompt.sample(this.state);
     if(!waiting.length){this.readyDialog.close();return;}
     if(this.nameDirty)this.saveName();
@@ -114,6 +121,7 @@ export class NetworkGame {
     })();return this.namePromise;
   }
   async requestPlay(){
+    if(this.dedicated)return;
     if(!this.active||this.isHost||this.readyPending||this.wantsToPlay||!['ready','finished'].includes(this.state.world.phase))return;
     this.readyPending=true;
     try{if(!await this.saveName())return;await this.request('/api/ready',{ready:true});}catch(error){this.status.textContent=error.message;}finally{this.readyPending=false;}
@@ -128,8 +136,9 @@ export class NetworkGame {
     this.rememberName();this.stream();
   }
   async restore(){
+    this.connectionStatus();
     try{this.adopt(await this.request('/api/session',{}));}
-    catch(error){if(error.status!==401){this.status.textContent=error.message;return;}if(this.active){this.leave('This room is no longer available.',false);return;}await this.infoReady;if(this.invitation)await this.connect('/api/join');}
+    catch(error){if(error.status!==401){this.status.textContent=error.message;this.connectionStatus(error.message);return;}if(this.active){this.leave('This room is no longer available.',false);return;}await this.infoReady;if(this.invitation)await this.connect('/api/join');}
     finally{this.hostButton.disabled=this.active&&!this.isHost;}
   }
   async setAway(afk){
@@ -180,29 +189,37 @@ export class NetworkGame {
   async connect(path){
     if(this.connecting||this.active&&(path!=='/api/rooms'||!this.isHost))return;
     this.connecting=true;
+    this.connectionStatus();
     this.hostButton.disabled=true;this.status.textContent='Connecting…';
     try{
       this.unlock().catch(()=>{});if(path==='/api/rooms')await this.refreshInfo();const reply=await this.request(path,{name:this.name.value.trim(),driver:path==='/api/join'?null:this.driver(),role:this.role,arena:this.arena(),bots:Number(this.botCount.value),code:this.invitation.toUpperCase()});
       this.adopt(reply);
-    }catch(error){this.status.textContent=error.message;}
+    }catch(error){this.status.textContent=error.message;this.connectionStatus(error.message);}
     this.connecting=false;this.hostButton.disabled=this.active&&!this.isHost;this.name.disabled=false;
+  }
+  connectionStatus(error=''){
+    if(!this.connection)return;
+    this.connection.querySelector('strong').textContent=error?'COULDN’T JOIN THE ARENA':'JOINING THE ARENA…';
+    this.connection.querySelector('p').textContent=error||'Connecting to the shared game.';
+    this.connection.querySelector('button').classList.toggle('hidden',!error);
   }
   accept(packet){
     if(!this.active)return;
     const now=performance.now()/1000;this.client.accept(packet,now);this.client.frame(0,this.paused?0:this.keys,now);this.client.peek();
     const state=this.client.state();
     const rosterKey=JSON.stringify([state.host,state.you,state.players]);
-    this.state=state;this.leaveButton.classList.remove('hidden');this.share.classList.remove('hidden');this.copyButton.classList.remove('hidden');this.animalChoice.classList.toggle('hidden',!this.isHost);
-    for(const node of [this.hostButton,this.botCount,this.share.parentElement,this.help])node.classList.toggle('hidden',!this.isHost);
+    this.state=state;this.leaveButton.classList.remove('hidden');this.share.classList.remove('hidden');this.copyButton.classList.remove('hidden');this.animalChoice.classList.toggle('hidden',this.dedicated||!this.isHost);
+    for(const node of [this.hostButton,this.botCount,this.share.parentElement,this.help])node.classList.toggle('hidden',!this.isHost&&!this.dedicated);
     if(this.dedicated)this.hostButton.classList.add('hidden');
     this.leaveButton.textContent=this.afk?'BACK TO ARENA':'AFK';this.hostButton.disabled=this.connecting||!this.isHost;
     if(!this.nameDirty&&!this.namePending&&this.name.value!==state.world.name)this.name.value=state.world.name;
     if(this.nameDirty&&!this.namePending&&this.name.value.trim()&&['countdown','racing'].includes(state.world.phase))this.saveName();
     this.updateShare();
-    this.abilities.textContent=state.specialAbilities===false?'SPECIAL ABILITIES · OFF':'SPECIAL ABILITIES · ON';this.abilities.disabled=!this.isHost;this.abilities.setAttribute('aria-pressed',String(state.specialAbilities!==false));
-    this.botCount.value=String(state.bots);this.botCount.disabled=!this.isHost||!['ready','finished'].includes(state.world.phase);for(const option of this.botCount.options)option.disabled=Number(option.value)>(state.maxPlayers??6)-state.players.length;
+    this.abilities.textContent=state.specialAbilities===false?'SPECIAL ABILITIES · OFF':'SPECIAL ABILITIES · ON';this.abilities.disabled=!this.canConfigure;this.abilities.setAttribute('aria-pressed',String(state.specialAbilities!==false));
+    this.botCount.value=String(state.bots);this.botCount.disabled=!this.canConfigure||!['ready','finished'].includes(state.world.phase);for(const option of this.botCount.options)option.disabled=Number(option.value)>(state.maxPlayers??6)-state.players.length;
     this.animalChoice.value=String(state.world.driver);this.animalChoice.disabled=!['ready','finished'].includes(state.world.phase);
     this.status.textContent=`${state.players.length} PLAYER${state.players.length===1?'':'S'} · ${state.bots} BOT${state.bots===1?'':'S'} · ${this.isHost?'Share the link, then press Let’s Battle.':this.role==='bomber'?'Press Let’s Play when you’re ready.':'Choose your racer and press Let’s Play.'}`;
+    if(this.dedicated)this.status.textContent=`SHARED ARENA · ${state.players.length} PLAYER${state.players.length===1?'':'S'} · ${state.bots} BOT${state.bots===1?'':'S'} · Anyone can start the match.`;
     if(['ready','finished'].includes(state.world.phase)){
       const waiting=state.players.filter(player=>player.id!==state.host&&player.wantsToPlay).map(player=>player.name);
       const seconds=Math.ceil((state.startRequest?.remainingMs??0)/1000);
@@ -245,13 +262,14 @@ export class NetworkGame {
     if(!this.active||!['ready','finished'].includes(this.state?.world.phase))return;
     try{await this.request('/api/driver',{driver});}catch(error){this.status.textContent=error.message;}
   }
-  pause(){this.paused=!this.paused;this.keys.clear();this.actions=[];this.input();this.onState(this.view());}
+  pause(){if(this.dedicated)return this.setAway(!this.afk);this.paused=!this.paused;this.keys.clear();this.actions=[];this.input();this.onState(this.view());}
   leave(message='You left the room.',notify=true){
     if(!this.active)return;
-    this.readyDialog.close();this.playRequestPrompt=new PlayRequestPrompt();
+    this.readyDialog?.close();this.playRequestPrompt=new PlayRequestPrompt();
     this.hostButton.classList.remove('hidden');this.botCount.classList.remove('hidden');this.share.parentElement.classList.remove('hidden');
     this.nameFeedback.textContent='';this.nameDirty=false;this.namePending=false;this.namePromise=null;
     if(notify)this.request('/api/leave',{}).catch(()=>{});this.token=null;this.socket?.close();this.state=null;this.pending=null;this.actions=[];this.keys.clear();this.client=null;this.rtt=0;this.lastPing=-Infinity;
     this.internetError=false;this.hostButton.disabled=false;this.name.disabled=false;this.botCount.disabled=false;for(const option of this.botCount.options)option.disabled=false;this.leaveButton.classList.add('hidden');this.copyButton.classList.add('hidden');this.internetButton.classList.add('hidden');this.animalChoice.classList.add('hidden');this.share.classList.add('hidden');this.help.classList.add('hidden');this.players.replaceChildren();this.status.textContent=message;this.onLeave();
+    if(this.dedicated){document.body.classList.remove('arena-connected');this.connectionStatus(message);}
   }
 }

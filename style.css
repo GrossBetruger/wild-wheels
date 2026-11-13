@@ -86,7 +86,13 @@ body.mobile-playing{overflow:hidden;overscroll-behavior:none}.race-panel.mobile-
 @keyframes ring-blue-flicker{from{filter:brightness(1);box-shadow:0 0 22px #327fff55,inset 0 -3px 14px #39b9ff66}to{filter:brightness(1.2);box-shadow:0 0 34px #338cff77,inset 0 -4px 20px #6cdbff77}}
 @media(prefers-reduced-motion:reduce){.ring-of-fire-announcement.blue-fire{animation:none}}
 /* A dedicated service offers only its shared arena, from the first paint. */
-.dedicated-server .mode-switch{display:none!important}
+.dedicated-server .mode-switch,.dedicated-server #restart,.dedicated-server #change-track{display:none!important}
+.arena-connection{display:none}
+.dedicated-server:not(.arena-connected) .viewport>*:not(.arena-connection){visibility:hidden}
+.dedicated-server:not(.arena-connected) .network-panel,.dedicated-server:not(.arena-connected) aside,.dedicated-server:not(.arena-connected) .map-switch,.dedicated-server:not(.arena-connected) .touch-controls{display:none!important}
+.dedicated-server:not(.arena-connected) .arena-connection{position:absolute;inset:0;z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;text-align:center;background:radial-gradient(ellipse at 50% 40%,#594472,#29283b 75%);color:#fff3d7}
+.arena-connection>strong{font:bold clamp(16px,3vw,28px) monospace;letter-spacing:2px}
+.arena-connection>p{max-width:420px;font:13px/1.6 monospace;margin:0;overflow-wrap:anywhere}
 .preview-ability-entry+.preview-ability-entry{margin-top:13px;padding-top:13px;border-top:1px solid #ded0ec}
 .preview-ability-entry.disabled span{background:#eadfdf;color:#7e4343}
 .photo-button{position:absolute;bottom:11px;right:61px;z-index:4;padding:12px 9px;border:1px solid #fff9;border-radius:8px;background:#322b42e8;color:#fff4d3;font:bold 10px monospace;touch-action:manipulation;cursor:pointer}.photo-button:disabled{opacity:.6;cursor:default}.photo-status{position:absolute;bottom:58px;right:64px;z-index:4;color:#fff4d3;background:#322b42aa;border-radius:5px;font:10px monospace;padding:4px;pointer-events:none}.photo-status:empty{display:none}.camera-flash{position:absolute;inset:0;z-index:8;background:#fff;opacity:0;pointer-events:none}

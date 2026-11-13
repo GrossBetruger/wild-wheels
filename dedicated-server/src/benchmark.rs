@@ -2,7 +2,7 @@ use serde_json::{json, Value};
 use std::time::Instant;
 use wild_wheels_core::{Frame, Input, Move, NativeArena};
 pub fn run() {
-    let config: Value = json!({"code":"00","maxPlayers":8,"arena":0,"bots":0,"host":0,"epoch":1,"seed":123,"players":(0..8).map(|id|json!({"id":id,"name":format!("Player {id}"),"driver":id,"role":"driver"})).collect::<Vec<_>>()});
+    let config: Value = json!({"code":"00","maxPlayers":8,"arena":0,"bots":0,"dedicated":true,"host":null,"epoch":1,"seed":123,"players":(0..8).map(|id|json!({"id":id,"name":format!("Player {id}"),"driver":id,"role":"driver"})).collect::<Vec<_>>()});
     let mut game = NativeArena::new(config).unwrap();
     game.start();
     let mut samples = Vec::new();

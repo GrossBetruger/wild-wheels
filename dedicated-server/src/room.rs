@@ -57,8 +57,6 @@ pub struct Member {
     pub driver: usize,
     pub role: String,
     pub afk: bool,
-    pub ready: bool,
-    pub refused: bool,
     pub seen: Instant,
     pub generation: u64,
     pub notify: Arc<Notify>,
@@ -95,12 +93,9 @@ impl Member {
 pub struct Room {
     pub core: NativeArena,
     pub members: [Option<Member>; CAPACITY],
-    pub host: usize,
     pub bots: usize,
     pub arena: usize,
     pub abilities: bool,
-    request: Option<(u32, Instant)>,
-    request_id: u32,
     epoch: u32,
     seed: u32,
     pub ticks: u64,
@@ -111,16 +106,13 @@ impl Room {
     pub fn new(arena: usize, bots: usize) -> Self {
         let epoch = 1;
         let seed = 1;
-        let config = json!({"maxPlayers":8,"code":"00","arena":arena,"bots":bots,"host":0,"epoch":epoch,"seed":seed,"players":[]});
+        let config = json!({"maxPlayers":8,"code":"00","arena":arena,"bots":bots,"host":null,"dedicated":true,"epoch":epoch,"seed":seed,"players":[]});
         Self {
             core: NativeArena::new(config).unwrap(),
             members: std::array::from_fn(|_| None),
-            host: 0,
             bots,
             arena,
             abilities: true,
-            request: None,
-            request_id: 0,
             epoch,
             seed,
             ticks: 0,
@@ -132,19 +124,13 @@ impl Room {
         self.members.iter().flatten().count()
     }
     pub fn config(&self) -> Value {
-        json!({"maxPlayers":8,"code":"00","arena":self.arena,"bots":self.bots,"host":self.host,"epoch":self.epoch,"seed":self.seed,"specialAbilities":self.abilities,"players":self.members.iter().enumerate().filter_map(|(id,p)|p.as_ref().map(|p|json!({"id":id,"name":p.name,"driver":p.driver,"role":p.role,"afk":p.afk,"wantsToPlay":p.ready,"playRequestRefused":p.refused}))).collect::<Vec<_>>(),"startRequest":self.request.map(|(id,deadline)|json!({"id":id,"remainingMs":deadline.saturating_duration_since(Instant::now()).as_secs_f64()*1000.0}))})
+        json!({"maxPlayers":8,"code":"00","arena":self.arena,"bots":self.bots,"host":null,"dedicated":true,"epoch":self.epoch,"seed":self.seed,"specialAbilities":self.abilities,"players":self.members.iter().enumerate().filter_map(|(id,p)|p.as_ref().map(|p|json!({"id":id,"name":p.name,"driver":p.driver,"role":p.role,"afk":p.afk}))).collect::<Vec<_>>()})
     }
     pub fn sync(&mut self) {
         self.bots = self.bots.min(CAPACITY - self.count());
         self.core
             .configure(self.config())
             .expect("validated room configuration");
-    }
-    fn waiting(&self) -> bool {
-        self.members
-            .iter()
-            .enumerate()
-            .any(|(id, m)| id != self.host && m.as_ref().is_some_and(|p| p.ready && !p.afk))
     }
     pub fn broadcast(&mut self) {
         self.sync();
@@ -217,8 +203,6 @@ impl Room {
             driver: chosen,
             role: role.into(),
             afk: false,
-            ready: false,
-            refused: false,
             seen: now,
             generation: 0,
             notify: Arc::new(Notify::new()),
@@ -238,9 +222,6 @@ impl Room {
             cue_epoch: self.core.epoch(),
         };
         p.clear(-1, -1);
-        if self.count() == 0 {
-            self.host = id;
-        }
         self.members[id] = Some(p);
         self.sync();
         let (m, a) = self.core.resume(id);
@@ -263,25 +244,8 @@ impl Room {
         p.clear(m, a);
         p.seen = Instant::now();
         p.afk = afk;
-        p.ready = false;
-        self.reassign_host();
         self.broadcast();
         self.reply(id)
-    }
-    fn reassign_host(&mut self) {
-        if self.members[self.host].as_ref().is_some_and(|p| !p.afk) {
-            return;
-        }
-        if let Some(id) = self
-            .members
-            .iter()
-            .position(|p| p.as_ref().is_some_and(|p| !p.afk))
-        {
-            self.host = id;
-        }
-        if !self.waiting() {
-            self.request = None;
-        }
     }
     pub fn disconnect(&mut self, id: usize, generation: u64) {
         let Some(p) = &mut self.members[id] else {
@@ -294,19 +258,14 @@ impl Room {
         p.afk = true;
         p.keys = 0;
         p.actions.clear();
-        p.ready = false;
-        self.reassign_host();
         self.broadcast();
     }
     fn reset(&mut self) {
-        self.request = None;
         self.epoch = self.epoch.checked_add(1).expect("epoch exhausted");
         let mut bytes = [0; 4];
         getrandom::fill(&mut bytes).unwrap();
         self.seed = u32::from_le_bytes(bytes);
         for p in self.members.iter_mut().flatten() {
-            p.ready = false;
-            p.refused = false;
             p.clear(-1, -1);
         }
         self.core = NativeArena::new(self.config()).unwrap();
@@ -332,29 +291,6 @@ impl Room {
                 }
                 self.members[id].as_mut().unwrap().driver = driver(&b["driver"])?;
             }
-            "/api/ready" => {
-                if self.host == id {
-                    return Err((403, "The host can start the match directly."));
-                }
-                if !matches!(self.core.phase(), "ready" | "finished")
-                    || self.members[id].as_ref().unwrap().afk
-                {
-                    return Err((409, "Match already running or player AFK."));
-                }
-                let ready = b["ready"]
-                    .as_bool()
-                    .ok_or((400, "Choose ready or not ready."))?;
-                let p = self.members[id].as_mut().unwrap();
-                p.ready = ready;
-                p.refused = false;
-                if ready && self.request.is_none() {
-                    self.request_id += 1;
-                    self.request = Some((self.request_id, Instant::now() + Duration::from_secs(3)));
-                }
-                if !self.waiting() {
-                    self.request = None;
-                }
-            }
             "/api/leave" => {
                 let generation = self.members[id].as_ref().unwrap().generation;
                 self.disconnect(id, generation);
@@ -364,8 +300,14 @@ impl Room {
                 return Ok(json!({"ok":true}));
             }
             "/api/control" => {
-                if id != self.host {
-                    return Err((403, "Only the room host can start or change the match."));
+                if self.members[id].as_ref().unwrap().afk {
+                    return Err((403, "Return to the arena before changing the room."));
+                }
+                if !matches!(self.core.phase(), "ready" | "finished") {
+                    return Err((
+                        409,
+                        "Change room settings or start a new match between matches.",
+                    ));
                 }
                 match b["action"].as_str().unwrap_or("") {
                     "special-abilities" => {
@@ -374,13 +316,9 @@ impl Room {
                             .ok_or((400, "Choose abilities on or off."))?
                     }
                     "start" => {
-                        if !matches!(self.core.phase(), "ready" | "finished") {
-                            return Err((409, "Match already running."));
-                        }
                         self.reset();
                         self.core.start();
                     }
-                    "reset" => self.reset(),
                     "arena" => {
                         self.arena = b["arena"]
                             .as_u64()
@@ -390,27 +328,12 @@ impl Room {
                         self.reset();
                     }
                     "bots" => {
-                        if !matches!(self.core.phase(), "ready" | "finished") {
-                            return Err((409, "Change bots before the next match."));
-                        }
                         self.bots = b["bots"]
                             .as_u64()
                             .filter(|&n| n as usize <= CAPACITY - self.count())
                             .ok_or((400, "Too many bots for this room."))?
                             as usize;
                         self.reset();
-                    }
-                    "refuse-start" => {
-                        if self.request.map(|r| r.0 as u64) != b["requestId"].as_u64()
-                            || self.request.is_none()
-                        {
-                            return Err((409, "This play request is no longer pending."));
-                        }
-                        self.request = None;
-                        for p in self.members.iter_mut().flatten() {
-                            p.refused = p.ready;
-                            p.ready = false;
-                        }
                     }
                     _ => return bad("Unknown match control."),
                 }
@@ -548,18 +471,12 @@ impl Room {
                 if !p.afk && p.seen.elapsed() > Duration::from_secs(15) {
                     p.afk = true;
                     p.keys = 0;
-                    p.ready = false;
                     changed = true;
                 }
             }
         }
         if changed {
-            self.reassign_host();
             self.sync();
-        }
-        if self.request.is_some_and(|(_, deadline)| start >= deadline) {
-            self.reset();
-            self.core.start();
         }
         let mut inputs = Vec::new();
         for (id, p) in self.members.iter_mut().enumerate() {
@@ -648,47 +565,114 @@ mod tests {
         assert!(room.find(original["token"].as_str().unwrap()).is_none());
     }
     #[test]
-    fn captain_disconnect_preserves_match_and_transfers_controls() {
-        let mut room = Room::new(0, 0);
-        room.join(&json!({"name":"Host","driver":0})).unwrap();
-        room.join(&json!({"name":"Friend","driver":1})).unwrap();
-        room.control(0, "/api/control", &json!({"action":"start"}))
+    fn any_active_player_can_configure_and_start_the_shared_room() {
+        for starter in [0, 1] {
+            let mut room = Room::new(0, 0);
+            room.join(&json!({"name":"First","driver":0})).unwrap();
+            room.join(&json!({"name":"Second","driver":1})).unwrap();
+            room.control(1, "/api/control", &json!({"action":"arena","arena":1}))
+                .unwrap();
+            room.control(0, "/api/control", &json!({"action":"bots","bots":3}))
+                .unwrap();
+            room.control(
+                1,
+                "/api/control",
+                &json!({"action":"special-abilities","enabled":false}),
+            )
             .unwrap();
+            let settings = room.reply(starter);
+            assert_eq!(settings["arena"], 1);
+            assert_eq!(settings["bots"], 3);
+            assert_eq!(settings["specialAbilities"], false);
+            assert!(settings["host"].is_null());
+            assert!(settings["world"]["host"].is_null());
+            room.control(starter, "/api/control", &json!({"action":"start"}))
+                .unwrap();
+            assert_eq!(room.core.phase(), "countdown");
+            assert!(room.reply(1)["startRequest"].is_null());
+        }
+    }
+    #[test]
+    fn shared_room_has_no_play_requests_veto_or_reset_controls() {
+        let mut room = Room::new(0, 0);
+        room.join(&json!({"name":"First","driver":0})).unwrap();
+        room.join(&json!({"name":"Second","driver":1})).unwrap();
+        for id in [0, 1] {
+            assert_eq!(
+                room.control(id, "/api/ready", &json!({"ready":true}))
+                    .unwrap_err()
+                    .0,
+                404
+            );
+            assert_eq!(
+                room.control(
+                    id,
+                    "/api/control",
+                    &json!({"action":"refuse-start","requestId":1})
+                )
+                .unwrap_err()
+                .0,
+                400
+            );
+            assert_eq!(
+                room.control(id, "/api/control", &json!({"action":"reset"}))
+                    .unwrap_err()
+                    .0,
+                400
+            );
+        }
+        assert_eq!(room.core.phase(), "ready");
+    }
+    #[test]
+    fn disconnect_and_afk_preserve_the_match_without_assigning_a_captain() {
+        let mut room = Room::new(0, 0);
+        room.join(&json!({"name":"First","driver":0})).unwrap();
+        room.join(&json!({"name":"Second","driver":1})).unwrap();
+        room.control(1, "/api/control", &json!({"action":"start"}))
+            .unwrap();
+        let epoch = room.core.epoch();
         room.disconnect(0, 0);
         for _ in 0..181 {
             room.tick();
         }
-        assert_eq!(room.reply(1)["host"], 1);
+        assert!(room.reply(1)["host"].is_null());
         assert_eq!(room.reply(1)["world"]["phase"], "racing");
+        assert_eq!(room.reply(1)["world"]["soundEpoch"], epoch);
         assert_eq!(room.reply(0)["players"][0]["afk"], true);
+        room.control(1, "/api/afk", &json!({"afk":true})).unwrap();
+        assert_eq!(room.core.phase(), "racing");
+        let returned = room.control(1, "/api/afk", &json!({"afk":false})).unwrap();
+        assert_eq!(returned["players"][1]["afk"], false);
+        assert_eq!(returned["world"]["soundEpoch"], epoch);
+        assert!(returned["host"].is_null());
+    }
+    #[test]
+    fn room_settings_cannot_reset_a_live_match_and_afk_players_cannot_start_it() {
+        let mut room = Room::new(0, 0);
+        room.join(&json!({"name":"First","driver":0})).unwrap();
+        room.join(&json!({"name":"Second","driver":1})).unwrap();
+        room.control(0, "/api/afk", &json!({"afk":true})).unwrap();
         assert_eq!(
-            room.control(0, "/api/control", &json!({"action":"reset"}))
+            room.control(0, "/api/control", &json!({"action":"start"}))
                 .unwrap_err()
                 .0,
             403
         );
-    }
-    #[test]
-    fn guest_request_starts_after_deadline_and_captain_can_refuse() {
-        let mut room = Room::new(0, 0);
-        room.join(&json!({"name":"Host","driver":0})).unwrap();
-        room.join(&json!({"name":"Friend","driver":1})).unwrap();
-        room.control(1, "/api/ready", &json!({"ready":true}))
+        room.control(1, "/api/control", &json!({"action":"start"}))
             .unwrap();
-        assert_eq!(room.reply(0)["startRequest"]["id"], 1);
-        room.control(
-            0,
-            "/api/control",
-            &json!({"action":"refuse-start","requestId":1}),
-        )
-        .unwrap();
-        assert!(room.reply(1)["startRequest"].is_null());
-        assert_eq!(room.reply(1)["players"][1]["playRequestRefused"], true);
-        room.control(1, "/api/ready", &json!({"ready":true}))
-            .unwrap();
-        room.request = Some((2, Instant::now()));
-        room.tick();
-        assert_eq!(room.core.phase(), "countdown");
+        let epoch = room.core.epoch();
+        for action in [
+            json!({"action":"start"}),
+            json!({"action":"bots","bots":1}),
+            json!({"action":"arena","arena":1}),
+            json!({"action":"special-abilities","enabled":false}),
+        ] {
+            assert_eq!(room.control(1, "/api/control", &action).unwrap_err().0, 409);
+        }
+        assert_eq!(room.core.epoch(), epoch);
+        assert_eq!(room.reply(1)["arena"], 0);
+        assert_eq!(room.reply(1)["bots"], 0);
+        assert_eq!(room.reply(1)["specialAbilities"], true);
     }
     #[test]
     fn movement_gaps_and_actions_beyond_received_movement_are_rejected() {

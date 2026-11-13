@@ -16,14 +16,19 @@ struct Request {id:u32,remaining_ms:f64}
 pub(super) struct Room {
     #[serde(default="default_capacity")]max_players:usize,
     #[serde(default="abilities_default")]special_abilities:bool,
-    code:String,host:usize,arena:usize,bots:usize,epoch:u32,players:Vec<Player>,
+    #[serde(default)]dedicated:bool,
+    code:String,host:Option<usize>,arena:usize,bots:usize,epoch:u32,players:Vec<Player>,
     #[serde(default)]start_request:Option<Request>,#[serde(default)]seed:u32,
 }
 fn default_capacity()->usize{6}
 impl Room {
     pub(super) fn valid(&self)->bool {
-        if self.code.len()!=2||!self.code.bytes().all(|b|b.is_ascii_digit())||!matches!(self.max_players,6|8)||self.host>=self.max_players||self.arena>1||self.players.len()>self.max_players||self.bots>self.max_players-self.players.len() {return false;}
-        if !self.players.is_empty()&&!self.players.iter().any(|p|p.id==self.host){return false;}
+        if self.code.len()!=2||!self.code.bytes().all(|b|b.is_ascii_digit())||!matches!(self.max_players,6|8)||self.arena>1||self.players.len()>self.max_players||self.bots>self.max_players-self.players.len() {return false;}
+        match (self.dedicated,self.host){
+            (true,None)=>{if self.start_request.is_some(){return false;}},
+            (false,Some(host))=>{if host>=self.max_players||!self.players.is_empty()&&!self.players.iter().any(|p|p.id==host){return false;}},
+            _=>return false,
+        }
         if self.start_request.as_ref().is_some_and(|r|r.id==0||!r.remaining_ms.is_finite()||!(0.0..=3000.0).contains(&r.remaining_ms)){return false;}
         let mut seen=[false;MAX_PLAYERS];
         for p in &self.players {
@@ -47,7 +52,7 @@ impl Game {
         game.configure_room(room);Ok(game)
     }
     pub(super) fn configure_room(&mut self,room:&Room){
-        self.global.host=Some(room.host);self.global.special_abilities=room.special_abilities;if !room.special_abilities{self.global.time_stop=0.0;self.global.time_owner=None;self.global.effects.retain(|f|f.kind!="yudaSmoke");for supply in &mut self.global.supplies{supply.restore_home();}for a in &mut self.actors{a.special_active=0.0;}}
+        self.global.host=room.host;self.global.special_abilities=room.special_abilities;if !room.special_abilities{self.global.time_stop=0.0;self.global.time_owner=None;self.global.effects.retain(|f|f.kind!="yudaSmoke");for supply in &mut self.global.supplies{supply.restore_home();}for a in &mut self.actors{a.special_active=0.0;}}
         let mut bots=room.bots;
         for id in 0..room.max_players {
             let person=room.players.iter().find(|p|p.id==id);
@@ -71,6 +76,7 @@ impl Game {
             }
         }
         self.room.clear();
+        if room.dedicated{self.room.insert("dedicated".into(),json!(true));}
         for (key,value) in [("maxPlayers",json!(room.max_players)),("code",json!(room.code)),("host",json!(room.host)),("arena",json!(room.arena)),("bots",json!(room.bots)),("specialAbilities",json!(room.special_abilities)),("startRequest",json!(room.start_request)),("players",json!(room.players.iter().map(|p|json!({"id":p.id,"name":p.name.trim(),"driver":p.driver,"color":self.actors[p.id].color,"role":p.role,"afk":p.afk,"wantsToPlay":p.wants_to_play,"playRequestRefused":p.play_request_refused})).collect::<Vec<_>>()))]{self.room.insert(key.into(),value);}
     }
 }

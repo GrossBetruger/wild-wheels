@@ -275,7 +275,7 @@ mod tests {
         app.room
             .lock()
             .unwrap()
-            .control(0, "/api/control", &json!({"action":"reset"}))
+            .control(0, "/api/control", &json!({"action":"start"}))
             .unwrap();
         assert_eq!(
             image(State(app.clone()), Path((2, 0)), headers(&driver))

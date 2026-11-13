@@ -23,7 +23,7 @@ PORT=5174 ./run_server.sh
 
 The command builds and starts the server detached; you can close SSH. Stop it with `./kill_server.sh`, or pull updates and restart with `./update_server.sh`. Logs are in `.wild-wheels/server.log`.
 
-Open [localhost:5174](http://localhost:5174). Everyone joins one shared arena automatically, with up to eight players. The server keeps the game running when the lobby host disconnects. After building, the executable runs independently with no Node.js dependency. See [dedicated server setup](docs/dedicated-server.md) for public hosting.
+Open [localhost:5174](http://localhost:5174). Everyone joins one shared arena automatically, with up to eight players. Anyone can start a match or change room settings between matches. The server keeps playing when someone disconnects. After building, the executable runs independently with no Node.js dependency. See [dedicated server setup](docs/dedicated-server.md) for public hosting.
 
 ## Play with friends
 
@@ -40,7 +40,7 @@ Each running server keeps one room. Refresh to reconnect; names are remembered i
 
 **Grand Prix:** race three laps against computer opponents. Collect weapons and turbo cells, drift for boosts, and use alternate routes to get ahead. This mode is solo.
 
-**Arena Battle:** fight other players and computer opponents. First to ten points wins, or the highest score after three minutes. A host tied for the highest points wins the tie. Everyone starts with ten hedgehogs. Destroyed drivers respawn; collect ammo, health, and turbos around the arena. Cuteness determines recovery speed; Intelligence determines how much ammo and how many items you can carry. Two consecutive kills unlock the rapid-fire Hedgehog Vulcan.
+**Arena Battle:** fight other players and computer opponents. First to ten points wins, or the highest score after three minutes. In player-hosted rooms, a host tied for the highest points wins the tie; the dedicated server breaks ties by fewer deaths. Everyone starts with ten hedgehogs. Destroyed drivers respawn; collect ammo, health, and turbos around the arena. Cuteness determines recovery speed; Intelligence determines how much ammo and how many items you can carry. Two consecutive kills unlock the rapid-fire Hedgehog Vulcan.
 
 ### Desktop controls
 
