@@ -2,6 +2,7 @@ mod benchmark;
 mod chat;
 mod photos;
 mod room;
+mod sessions;
 use axum::{
     body::{Body, Bytes},
     extract::{
@@ -29,6 +30,7 @@ use tokio::{
 include!(concat!(env!("OUT_DIR"), "/assets.rs"));
 #[derive(Clone)]
 struct App {
+    sessions: Arc<tokio::sync::Mutex<sessions::Sessions>>,
     photos: Arc<Mutex<photos::Album>>,
     room: Arc<Mutex<Room>>,
     limits: Arc<Mutex<HashMap<(IpAddr, String), (Instant, u32)>>>,
@@ -146,25 +148,7 @@ async fn http(
         if !b.is_object() {
             return error((400, "Use a JSON object."));
         }
-        let mut room = app.room.lock().unwrap();
-        let existing = room.find(session(&h));
-        let result = match path {
-            "/api/join" => {
-                if b["code"] != "00" {
-                    Err((404, "Room not found. Use room 00."))
-                } else {
-                    match existing {
-                        Some(id) => Ok(room.resume(id, false)),
-                        None => room.join(&b),
-                    }
-                }
-            }
-            _ => match existing {
-                Some(id) => room.control(id, path, &b),
-                None => Err((401, "Rejoin the room to reconnect.")),
-            },
-        };
-        return match result {
+        return match control(&app, path, session(&h), &b).await {
             Ok(value) => {
                 let token = value["token"].as_str().map(str::to_owned);
                 let mut r = response(200, value);
@@ -173,7 +157,7 @@ async fn http(
                         .origin
                         .as_ref()
                         .is_some_and(|s| s.starts_with("https://"));
-                    let cookie=format!("wild-wheels-session={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000{}",match secure{true=>"; Secure",false=>""});
+                    let cookie=format!("wild-wheels-session={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age={}{}",sessions::LIFETIME,match secure{true=>"; Secure",false=>""});
                     r.headers_mut()
                         .insert(header::SET_COOKIE, cookie.parse().unwrap());
                 }
@@ -212,6 +196,53 @@ async fn http(
             }
             None => error((404, "Not found.")),
         },
+    }
+}
+async fn control(app: &App, path: &str, token: &str, body: &Value) -> room::Result<Value> {
+    let persist = matches!(path, "/api/join" | "/api/session" | "/api/afk" | "/api/name" | "/api/driver");
+    let mut saved = match persist {
+        true => Some(app.sessions.lock().await),
+        false => None,
+    };
+    let at = sessions::now();
+    let (value, record) = {
+        let mut room = app.room.lock().unwrap();
+        let value = dispatch(&mut room, saved.as_deref(), path, token, body, at)?;
+        let record = saved.as_ref().map(|store| {
+            let current_token = value["token"].as_str().unwrap_or(token);
+            let id = room.find(current_token).unwrap();
+            let p = room.members[id].as_ref().unwrap();
+            let expires = match value["token"].is_string() {
+                true => at + sessions::LIFETIME,
+                false => store.find(current_token, at).map_or(at + sessions::LIFETIME, |p| p.expires),
+            };
+            sessions::Session {identity:p.identity.clone(), token:p.token.clone(), name:p.name.clone(), driver:p.driver, role:p.role.clone(), expires}
+        });
+        (value, record)
+    };
+    if let Some(record) = record {
+        saved.as_mut().unwrap().remember(record, at).await.map_err(|error| {
+            eprintln!("Unable to save player session: {error}");
+            (503, "Unable to save your session. Please retry.")
+        })?;
+    }
+    Ok(value)
+}
+fn dispatch(room: &mut Room, saved: Option<&sessions::Sessions>, path: &str, token: &str, body: &Value, at: u64) -> room::Result<Value> {
+    if path == "/api/join" && body["code"] != "00" {
+        return Err((404, "Room not found. Use room 00."));
+    }
+    let mut existing = room.find(token);
+    if existing.is_none() && matches!(path, "/api/session" | "/api/join") {
+        if let Some(profile) = saved.and_then(|store| store.find(token, at)) {
+            existing = Some(room.restore(profile)?);
+        }
+    }
+    match (path, existing) {
+        ("/api/join", Some(id)) => Ok(room.resume(id, false)),
+        ("/api/join", None) => room.join(body),
+        (_, Some(id)) => room.control(id, path, body),
+        (_, None) => Err((401, "Rejoin the room to reconnect.")),
     }
 }
 async fn upgrade(
@@ -372,6 +403,10 @@ async fn main() {
         s
     });
     let app = App {
+        sessions: Arc::new(tokio::sync::Mutex::new(sessions::Sessions::open(
+            std::env::var_os("WILD_WHEELS_SESSION_FILE").map(std::path::PathBuf::from)
+                .unwrap_or_else(|| ".wild-wheels/sessions.json".into()), sessions::now(),
+        ).expect("Unable to load player sessions"))),
         photos: Default::default(),
         room: Arc::new(Mutex::new(Room::new(arena, bots))),
         limits: Default::default(),
@@ -430,3 +465,6 @@ async fn main() {
     .await
     .unwrap();
 }
+
+#[cfg(test)]
+mod session_tests;

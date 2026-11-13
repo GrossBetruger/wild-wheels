@@ -53,7 +53,7 @@ fn keys(values: &[String], movement: bool) -> Result<u32> {
 }
 pub struct Member {
     pub token: String,
-    chat_identity: String,
+    pub identity: String,
     pub name: String,
     pub driver: usize,
     pub role: String,
@@ -202,7 +202,7 @@ impl Room {
         let now = Instant::now();
         let mut p = Member {
             token: token(),
-            chat_identity: token(),
+            identity: token(),
             name,
             driver: chosen,
             role: role.into(),
@@ -232,6 +232,15 @@ impl Room {
         self.members[id].as_mut().unwrap().clear(m, a);
         self.broadcast();
         Ok(self.reply(id))
+    }
+    pub fn restore(&mut self, saved: &crate::sessions::Session) -> Result<usize> {
+        if let Some(id) = self.members.iter().position(|p| p.as_ref().is_some_and(|p| p.identity == saved.identity)) {
+            return Ok(id);
+        }
+        let reply = self.join(&json!({"name":saved.name,"driver":saved.driver,"role":saved.role}))?;
+        let id = reply["you"].as_u64().unwrap() as usize;
+        self.members[id].as_mut().unwrap().identity = saved.identity.clone();
+        Ok(id)
     }
     pub fn reply(&self, id: usize) -> Value {
         let mut reply = self.core.snapshot(id);
@@ -277,7 +286,7 @@ impl Room {
     pub fn control(&mut self, id: usize, path: &str, b: &Value) -> Result<Value> {
         self.members[id].as_mut().unwrap().seen = Instant::now();
         if path == "/api/chat" {
-            let players = self.members.iter().enumerate().filter_map(|(id,p)|p.as_ref().map(|p|(id,p.chat_identity.clone(),p.name.clone()))).collect::<Vec<_>>();
+            let players = self.members.iter().enumerate().filter_map(|(id,p)|p.as_ref().map(|p|(id,p.identity.clone(),p.name.clone()))).collect::<Vec<_>>();
             return self.chat.exchange(id, &players, b);
         }
         match path {
@@ -537,6 +546,22 @@ impl Room {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn identical_names_have_separate_sessions_and_refresh_keeps_the_same_player() {
+        let mut room = Room::new(0, 0);
+        let first = room.join(&json!({"name":"Same name","driver":0})).unwrap();
+        let second = room.join(&json!({"name":"Same name","driver":1})).unwrap();
+        assert_eq!(first["you"], 0);
+        assert_eq!(second["you"], 1);
+        assert_ne!(first["token"], second["token"]);
+        assert_eq!(room.find(first["token"].as_str().unwrap()), Some(0));
+        assert_eq!(room.find(second["token"].as_str().unwrap()), Some(1));
+        let refreshed = room.resume(1, false);
+        assert_eq!(refreshed["you"], 1);
+        assert_eq!(refreshed["world"]["driver"], 1);
+        assert_eq!(room.find(refreshed["token"].as_str().unwrap()), Some(1));
+        assert_eq!(room.find(first["token"].as_str().unwrap()), Some(0));
+    }
     #[test]
     fn chat_controls_use_room_identity_and_preserve_private_delivery() {
         let mut room = Room::new(0, 0);

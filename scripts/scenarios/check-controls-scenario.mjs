@@ -74,14 +74,17 @@ export async function checkControls(evaluate,app,room,id,sleep,captureFlip,captu
   await evaluate(`(async()=>{
     const {somersaultPose}=await import('/gameplay/combat.js');
     const game=__game,render=game.network.render.bind(game.network),start=performance.now();let flipped=false,again=false;
-    game.flipTrace=[];game.flipDone=false;
+    game.flipTrace=[];game.flipDone=false;game.flipTimedOut=false;
     game.network.render=dt=>{
       const time=(performance.now()-start)/1000;
       if(!flipped){window.dispatchEvent(new KeyboardEvent('keydown',{key:'z'}));window.dispatchEvent(new KeyboardEvent('keyup',{key:'z'}));window.dispatchEvent(new KeyboardEvent('keydown',{key:' '}));window.dispatchEvent(new KeyboardEvent('keyup',{key:' '}));flipped=true;}
       if(!again&&time>.1){window.dispatchEvent(new KeyboardEvent('keydown',{key:'z'}));window.dispatchEvent(new KeyboardEvent('keyup',{key:'z'}));again=true;}
       const view=render(dt),jump=somersaultPose(view);
       game.flipTrace.push({time,heading:view.heading,cameraHeading:view.cameraHeading,height:jump?.height??0,pitch:jump?.pitch??0,remaining:view.somersault,shot:view.projectiles.filter(p=>p.owner===view.id).at(-1)?.heading??null,item:view.item});
-      if(time>=.8){game.flipDone=true;game.network.render=render;}
+      // Slow CI frames can leave a valid flip unfinished at 0.8 wall seconds.
+      // Keep observing until landing, but still fail a flip stuck after 2 seconds.
+      const landed=view.somersault<=0&&jump===null;
+      if((time>=.8&&landed)||time>=2){game.flipTimedOut=!landed;game.flipDone=true;game.network.render=render;}
       return view;
     };
   })()`);
@@ -93,12 +96,13 @@ export async function checkControls(evaluate,app,room,id,sleep,captureFlip,captu
     if(await evaluate('__game.flipDone'))break;await sleep(25);
   }
   const flipTrace=await evaluate('__game.flipTrace');
+  const flipTimedOut=await evaluate('__game.flipTimedOut');
   const flippedHeading=frame=>Math.abs(Math.atan2(Math.sin(frame.heading-Math.PI),Math.cos(frame.heading-Math.PI)))<.01;
   const cameraSteps=flipTrace.slice(1).map((frame,index)=>Math.atan2(Math.sin(frame.cameraHeading-flipTrace[index].cameraHeading),Math.cos(frame.cameraHeading-flipTrace[index].cameraHeading)));
   // Rendering timestamps include scheduling jitter; judge rotation against the
   // jump's simulation clock, which drives the actual camera animation.
   const cameraPass=flipTrace[0].cameraHeading<.15&&flipTrace.some(frame=>frame.cameraHeading>1.2&&frame.cameraHeading<1.9)&&Math.abs(flipTrace.at(-1).cameraHeading-Math.PI)<.02&&cameraSteps.every((step,index)=>step>=-.001&&step<=(Math.max(0,flipTrace[index].remaining-flipTrace[index+1].remaining)+.002)*Math.PI*1.5/.55+.02);
-  const flipPass=flipTrace.length>0&&flippedHeading(flipTrace[0])&&flipTrace.every(flippedHeading)&&flipTrace.some(frame=>frame.height>4)&&flipTrace.at(-1).height===0&&flipTrace[0].shot!==null&&Math.abs(flipTrace[0].shot-Math.PI)<.01&&remoteSawFlip&&cameraPass;
+  const flipPass=!flipTimedOut&&flipTrace.length>0&&flippedHeading(flipTrace[0])&&flipTrace.every(flippedHeading)&&flipTrace.some(frame=>frame.height>4)&&flipTrace.at(-1).height===0&&flipTrace[0].shot!==null&&Math.abs(flipTrace[0].shot-Math.PI)<.01&&remoteSawFlip&&cameraPass;
   const other=[room.world,...room.world.bots].find(player=>!player.inactive&&player.id!==id);
   Object.assign(actor,{wx:-65,wz:0,heading:0,motionHeading:0,cameraHeading:0,speed:0,boost:0,shield:0,chaff:2,chaffCooldown:0,ammo:5});
   Object.assign(other,{wx:-65,wz:60,heading:Math.PI,motionHeading:Math.PI,cameraHeading:Math.PI,speed:0,boost:0,destroyed:0,shield:0,fireCooldown:0,item:'missile',missiles:1,vulcan:0});
@@ -198,6 +202,6 @@ export async function checkControls(evaluate,app,room,id,sleep,captureFlip,captu
   for(let i=0;i<100;i++){if(await evaluate("document.querySelector('#match-results caption').textContent==='TIE ON POINTS · HOST WINS'"))break;await sleep(25);}
   const tiedRows=await evaluate("[...document.querySelectorAll('#match-results tbody tr')].map(row=>[...row.cells].map(cell=>cell.textContent))");
   const tiePass=tiedRows[0]?.[1]===hostActor.name+(id===room.host?' · YOU':'')&&tiedRows[0]?.[2]==='7'&&tiedRows[0]?.[3]==='9'&&tiedRows[1]?.[2]==='7'&&tiedRows[1]?.[3]==='1'&&await evaluate("document.querySelector('#match-results caption').textContent==='TIE ON POINTS · HOST WINS'");
-  return {readyPass,readyCleared,readyUI,popupPass,popup,refusalPass,autoStartPass,namePass,pickupKeptVulcan,commandPass,turboPass,flipPass,cameraPass,remoteSawFlip,flipTrace,desktopManual,warningPass,warning,chaffPass,chaffColor:ownCloud?.color,chaffSoundCount,greenNoticePass,orbitPass,orbitRotation,orbitTrace,desktopBombPass,stinkPass,stinkResult,whackPass,coWhackPass,whack,endingPass,resultsPass,leaderboard,tiePass,tiedRows,pass:readyPass&&readyCleared&&popupPass&&refusalPass&&autoStartPass&&namePass&&pickupKeptVulcan&&commandPass&&turboPass&&flipPass&&desktopManual&&warningPass&&chaffPass&&greenNoticePass&&orbitPass&&desktopBombPass&&stinkPass&&whackPass&&coWhackPass&&endingPass&&resultsPass&&tiePass,trace};
+  return {readyPass,readyCleared,readyUI,popupPass,popup,refusalPass,autoStartPass,namePass,pickupKeptVulcan,commandPass,turboPass,flipPass,flipTimedOut,cameraPass,remoteSawFlip,flipTrace,desktopManual,warningPass,warning,chaffPass,chaffColor:ownCloud?.color,chaffSoundCount,greenNoticePass,orbitPass,orbitRotation,orbitTrace,desktopBombPass,stinkPass,stinkResult,whackPass,coWhackPass,whack,endingPass,resultsPass,leaderboard,tiePass,tiedRows,pass:readyPass&&readyCleared&&popupPass&&refusalPass&&autoStartPass&&namePass&&pickupKeptVulcan&&commandPass&&turboPass&&flipPass&&desktopManual&&warningPass&&chaffPass&&greenNoticePass&&orbitPass&&desktopBombPass&&stinkPass&&whackPass&&coWhackPass&&endingPass&&resultsPass&&tiePass,trace};
   }finally{clearInterval(fixtureHeartbeat);}
 }

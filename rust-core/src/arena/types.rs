@@ -15,6 +15,7 @@ pub struct Actor {
     pub ring_blue:bool,pub ring_turn_grace:f64,pub ring_turn:f64,pub ring_heading:Option<f64>,pub ring_remaining:f64,pub ring_spent:bool,#[serde(skip)]pub ring_doses:BTreeMap<usize,f64>,
     pub bat_cooldown:f64,pub special_cooldown:f64,pub special_active:f64,
     pub id:usize,pub driver:usize,pub name:Option<String>,pub color:String,
+    pub joined_after_kill:u32,
     pub wx:f64,pub wz:f64,pub heading:f64,pub motion_heading:f64,pub camera_heading:f64,
     pub speed:f64,pub health:f64,pub kills:f64,pub deaths:u32,pub kill_streak:u32,
     pub destroyed:f64,pub shield:f64,pub hedge_shield:f64,pub tehilim:f64,pub celebrate:f64,pub fire_cooldown:f64,
@@ -69,7 +70,7 @@ pub struct Skid { pub owner:usize,pub ax:f64,pub az:f64,pub bx:f64,pub bz:f64,pu
 pub struct Particle { pub owner:usize,pub wx:f64,pub wz:f64,pub height:f64,pub vx:f64,pub vz:f64,pub vy:f64,pub age:f64,pub life:f64,pub kind:String,pub level:u32 }
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(default,rename_all="camelCase")]
-pub struct Kill { pub id:u32,pub attacker:usize,pub victim:usize,pub victim_name:String,pub victim_color:String,pub text:String,pub time:f64,pub assist:bool,pub radiation:bool }
+pub struct Kill { pub id:u32,pub attacker:usize,pub victim:usize,pub attacker_name:String,pub victim_name:String,pub victim_color:String,pub text:String,pub time:f64,pub assist:bool,pub radiation:bool }
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(default,rename_all="camelCase")]
 pub struct Globals {

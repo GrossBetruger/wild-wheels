@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
 import {createServer} from 'node:net';
-import {mkdtemp,writeFile} from 'node:fs/promises';
+import {mkdtemp,writeFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {resolve,join} from 'node:path';
 import WebSocket from 'ws';
@@ -10,7 +10,8 @@ const ringMode=process.argv.includes('--fire-ring'),cameraMode=process.argv.incl
 const binary=resolve(arg('--binary','dedicated-server/target/release/wild-wheels-server')),output=arg('--output',join(tmpdir(),'wild-wheels-dedicated-browser.json'));
 const wait=async(fn,message,ms=10000)=>{const end=performance.now()+ms;while(performance.now()<end){try{if(await fn())return;}catch{}await sleep(50);}throw new Error(message);};
 const probe=createServer();await new Promise(r=>probe.listen(0,'127.0.0.1',r));const port=probe.address().port;await new Promise(r=>probe.close(r));const origin=`http://127.0.0.1:${port}`;
-const server=spawn(binary,[],{cwd:tmpdir(),env:{...process.env,BIND:'127.0.0.1',PORT:String(port),BOTS:'0'},stdio:['ignore','pipe','pipe']});let serverLog='';server.stdout.on('data',b=>serverLog+=b);server.stderr.on('data',b=>serverLog+=b);
+const stateDirectory=await mkdtemp(join(tmpdir(),'wild-wheels-native-browser-state-'));
+const server=spawn(binary,[],{cwd:stateDirectory,env:{...process.env,WILD_WHEELS_SESSION_FILE:join(stateDirectory,'sessions.json'),BIND:'127.0.0.1',PORT:String(port),BOTS:'0'},stdio:['ignore','pipe','pipe']});let serverLog='';server.stdout.on('data',b=>serverLog+=b);server.stderr.on('data',b=>serverLog+=b);
 const profile=await mkdtemp(join(tmpdir(),'wild-wheels-dedicated-chrome-'));
 const chrome=spawn(process.env.CHROME_PATH??'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',['--headless=new','--remote-debugging-port=0',`--user-data-dir=${profile}`,'--no-first-run','--no-default-browser-check','--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-backgrounding-occluded-windows','--window-size=1100,850','about:blank'],{stdio:['ignore','ignore','pipe']});let chromeLog='',ws,id=0,slowBoot=true,failJoinOnce=true;const pending=new Map(),errors=[],contexts=[];chrome.stderr.on('data',b=>chromeLog+=b);
 function call(method,params={},sessionId){return new Promise((resolve,reject)=>{const number=++id,timer=setTimeout(()=>{pending.delete(number);reject(new Error('CDP timeout: '+method));},15000);pending.set(number,{resolve,reject,timer});ws.send(JSON.stringify({id:number,method,params,...(sessionId?{sessionId}:{})}));});}
@@ -100,4 +101,4 @@ try{
   await evaluate(host,"document.getElementById('start').click()");await wait(()=>evaluate(host,'!__game.network.afk&&__game.race.phase==="racing"'),'Returning from AFK did not resume the same match');assert.equal(await evaluate(host,'__game.race.soundEpoch'),epoch);
 
   assert.deepEqual(errors,[]);const report={pass:true,browsers:2,activeActors:ringMode||cameraMode?2:8,fireRing:ringMode,automaticJoin:true,firstPaintShowsConnection:true,failedJoinRetry:true,anyPlayerStarts:true,keyboardMovement:!cameraMode,shotAcknowledged:!cameraMode,cameraUpload:cameraMode,refreshPreservesIdentity:true,noCaptain:true,sharedControls:true,afkPreservesMatch:true,errors};await writeFile(output,JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify(report,null,2));
-}catch(e){console.error(serverLog);throw e;}finally{for(const browserContextId of contexts){try{await call('Target.disposeBrowserContext',{browserContextId});}catch{}}ws?.close();chrome.kill('SIGTERM');server.kill('SIGTERM');}
+}catch(e){console.error(serverLog);throw e;}finally{for(const browserContextId of contexts){try{await call('Target.disposeBrowserContext',{browserContextId});}catch{}}ws?.close();chrome.kill('SIGTERM');const exited=server.exitCode!==null||server.signalCode!==null?Promise.resolve():new Promise(resolve=>server.once('exit',resolve));server.kill('SIGTERM');await exited;await rm(stateDirectory,{recursive:true,force:true});}

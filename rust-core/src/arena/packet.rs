@@ -31,8 +31,15 @@ struct Layout{skids:usize,particles:usize,trails:Vec<usize>}
 struct Envelope<'a>{layout:Layout,state:State<'a>}
 impl Game{
     pub(super) fn viewer_feed(&self,viewer:usize)->Vec<Kill>{
-        let label=|id:usize|match id==viewer{true=>"YOU".into(),false=>self.actors.get(id).map(|a|a.name.clone().unwrap_or_else(||driver_name(a.driver).split(' ').next().unwrap_or("Player").into())).unwrap_or_else(||"Player".into())};
-        self.global.kill_feed.iter().map(|entry|{let mut entry=entry.clone();entry.text=format!("{} → {}",label(entry.attacker),label(entry.victim));entry}).collect()
+        let joined_after=self.actors[viewer].joined_after_kill;
+        self.global.kill_feed.iter().map(|entry|{
+            let mut entry=entry.clone();
+            // A slot's old bot/player history must not become the new occupant's history.
+            let own=entry.id>joined_after;
+            let attacker=match own&&entry.attacker==viewer{true=>"YOU",false=>&entry.attacker_name};
+            let victim=match own&&entry.victim==viewer{true=>"YOU",false=>&entry.victim_name};
+            entry.text=format!("{} → {}",attacker,victim);entry
+        }).collect()
     }
     pub(super) fn viewer_events(&self,viewer:usize)->Vec<serde_json::Value>{
         let actor=&self.actors[viewer];let g=&self.global;

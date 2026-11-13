@@ -76,8 +76,9 @@ impl Game{
         let victim_name=a.name.clone().unwrap_or_else(||driver_name(a.driver).into());let victim_color=a.color.clone();
         for scorer in credit{
             let a=&mut self.actors[scorer];a.kills+=match scorer==owner||kind=="wall"{true=>1.0,false=>0.5};a.celebrate=1.6;voice(g,a,"cheer",root_x);g.kill_sequence+=1;
-            let label=match scorer==0{true=>"YOU".into(),false=>a.name.clone().unwrap_or_else(||driver_name(a.driver).split(' ').next().unwrap_or("RIVAL").into())};
-            g.kill_feed.insert(0,Kill{id:g.kill_sequence,attacker:scorer,victim,victim_name:victim_name.clone(),victim_color:victim_color.clone(),text:format!("{} → {}",label,match victim==0{true=>"YOU",false=>&victim_name}),time:g.elapsed,assist:scorer!=owner&&kind!="wall",radiation:kind=="radiation"&&scorer==owner});g.kill_feed.truncate(16);
+            let attacker_name=a.name.clone().unwrap_or_else(||driver_name(a.driver).into());
+            let label=match scorer==0{true=>"YOU",false=>&attacker_name};
+            g.kill_feed.insert(0,Kill{id:g.kill_sequence,attacker:scorer,victim,attacker_name:attacker_name.clone(),victim_name:victim_name.clone(),victim_color:victim_color.clone(),text:format!("{} → {}",label,match victim==0{true=>"YOU",false=>&victim_name}),time:g.elapsed,assist:scorer!=owner&&kind!="wall",radiation:kind=="radiation"&&scorer==owner});g.kill_feed.truncate(16);
         }
         if let Some(a)=self.actors.get_mut(owner){if !a.bomber&&a.destroyed<=0.0{a.kill_streak+=1;if a.kill_streak%2==0{a.vulcan=15.0;a.health=a.health.max(4.0);a.item="hedgehog".into();a.fire_cooldown=0.0;effect(g,"vulcanReady",owner,a.wx,a.wz,None);a.notice="2-KILL STREAK · HEDGEHOG VULCAN!".into();a.notice_time=3.0;}}}true
     }

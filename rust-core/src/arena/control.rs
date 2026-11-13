@@ -57,8 +57,8 @@ impl Game {
         for id in 0..room.max_players {
             let person=room.players.iter().find(|p|p.id==id);
             let actor=&mut self.actors[id];let was_human=actor.human;let was_bomber=actor.bomber;
-            if person.is_some()&&!was_human&&(actor.inactive||actor.destroyed>0.0||self.global.phase=="racing"){
-                *actor=initial_actor(id,actor.skill,room.max_players);self.pending[id].clear();self.movement_ack[id]= -1;self.action_ack[id]= -1;self.accepted_action[id]= -1;
+            if person.is_some()&&!was_human{
+                *actor=initial_actor(id,actor.skill,room.max_players);actor.joined_after_kill=self.global.kill_sequence;self.pending[id].clear();self.movement_ack[id]= -1;self.action_ack[id]= -1;self.accepted_action[id]= -1;
             }
             let active=person.is_some()||bots>0;
             if person.is_none()&&active{bots-=1;}
