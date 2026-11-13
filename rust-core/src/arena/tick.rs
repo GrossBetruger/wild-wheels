@@ -40,7 +40,7 @@ impl Game{
             for timer in [&mut a.bat_cooldown,&mut a.shield,&mut a.hedge_shield,&mut a.tehilim,&mut a.celebrate,&mut a.voice_cooldown,&mut a.wall_cooldown,&mut a.vulcan]{*timer=(*timer-dt).max(0.0);}
             if !action_clock{a.fire_cooldown=(a.fire_cooldown-dt).max(0.0);a.chaff_cooldown=(a.chaff_cooldown-dt).max(0.0);}
             if a.bomber{
-                if !a.inactive&&!ending{let before=a.bomb_reload;a.bomb_reload+=dt;if before<5.0-1e-8&&a.bomb_reload>=5.0-1e-8{a.stink_ammo=(a.stink_ammo+1).min(item_capacity(a.driver,"stink"));a.bomb_reload=a.bomb_reload.max(5.0);}if a.bomb_reload>=10.0-1e-8{a.bomb_ammo=(a.bomb_ammo+1).min(item_capacity(a.driver,"abomb"));a.stink_ammo=(a.stink_ammo+1).min(item_capacity(a.driver,"stink"));a.bomb_reload=(a.bomb_reload-10.0).max(0.0);}}continue;
+                if !a.inactive&&!ending{let before=a.bomb_reload;a.bomb_reload+=dt;if before<5.0-1e-8&&a.bomb_reload>=5.0-1e-8{a.stink_ammo=(a.stink_ammo+1).min(a.item_capacity("stink"));a.bomb_reload=a.bomb_reload.max(5.0);}if a.bomb_reload>=10.0-1e-8{a.bomb_ammo=(a.bomb_ammo+1).min(a.item_capacity("abomb"));a.stink_ammo=(a.stink_ammo+1).min(a.item_capacity("stink"));a.bomb_reload=(a.bomb_reload-10.0).max(0.0);}}continue;
             }
             if a.destroyed>0.0{a.destroyed=(a.destroyed-dt).max(0.0);if a.destroyed==0.0&&!ending{self.spawn(id);}continue;}
             if !ending&&!a.inactive&&!(a.driver==12&&a.special_active>0.0)&&a.health>0.0&&a.health<max_health{
@@ -48,7 +48,7 @@ impl Game{
                 if a.heal_timer>=interval-1e-8{a.health=(a.health+1.0).min(max_health);a.heal_timer=match a.health>=max_health{true=>0.0,false=>(a.heal_timer-interval).max(0.0)};}
             }
             if a.health>=max_health{a.heal_timer=0.0;}
-            a.reload+=dt;let reload_interval=hedgehog_recovery_interval(a.driver);if a.reload>=reload_interval-1e-8{a.ammo=(a.ammo+1).min(item_capacity(a.driver,"hedgehog"));a.reload=(a.reload-reload_interval).max(0.0);}
+            a.reload+=dt;let reload_interval=hedgehog_recovery_interval(a.driver);if a.reload>=reload_interval-1e-8{a.ammo=(a.ammo+1).min(a.item_capacity("hedgehog"));a.reload=(a.reload-reload_interval).max(0.0);}
             if id==0&&!self.global.multiplayer||a.human{
                 let held=input.map_or(0,|i|i.keys);
                 match input.and_then(|i|i.moves.as_ref()){

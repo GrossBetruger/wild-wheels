@@ -1,8 +1,8 @@
-import {tickBicycles,hasBatCompanion} from './bicycle-pickup.js';
+import {tickBicycles} from './bicycle-pickup.js';
 import {tickFireRings,fireRingBlocks} from './fire-ring.js';
 import {batAim} from './bat-companion.js';
 import {botSightRadius} from './dark-humor.js';
-import {boostDuration, createRace, drivers, START_HEDGEHOGS, itemCapacity } from './engine.js';
+import {boostDuration, createRace, drivers, START_HEDGEHOGS, itemCapacity, actorIntelligence } from './engine.js';
 import {frozen,tickSpecials,useSpecial,restoreSupply} from './special-abilities.js';
 export const VULCAN_DURATION=15;
 export const HEDGEGUARD_DURATION=25;
@@ -38,7 +38,7 @@ function spawn(r,actor,initial=false){
   const choice=initial?candidates[Math.floor(actor.id*8/6)]:candidates.sort((a,b)=>Math.min(...actors.filter(k=>k!==actor&&!k.destroyed).map(k=>distance(b,k)),999)-Math.min(...actors.filter(k=>k!==actor&&!k.destroyed).map(k=>distance(a,k)),999))[0];
   actor.wx=choice.wx;actor.wz=choice.wz;actor.heading=Math.atan2(-choice.wx,-choice.wz);actor.speed=0;actor.health=3;actor.destroyed=0;actor.shield=0;actor.ammo=START_HEDGEHOGS;actor.missiles=1;actor.turbos=1;actor.item='hedgehog';actor.fireCooldown=.5;actor.vx=0;actor.boost=0;actor.path=[];
   actor.motionHeading=actor.heading;actor.cameraHeading=actor.heading;actor.drift=0;actor.wasDrifting=false;actor.driftTrail=null;actor.driftEmit=0;
-  actor.batCompanion=false;actor.owlBoosting=false;actor.killStreak=0;actor.batCooldown=0;actor.vulcan=0;actor.healTimer=0;actor.hedgeShield=0;actor.tehilim=0;
+  actor.intelligenceBonus??=0;actor.owlBoosting=false;actor.killStreak=0;actor.batCooldown=0;actor.vulcan=0;actor.healTimer=0;actor.hedgeShield=0;actor.tehilim=0;
   actor.chaff=4;actor.chaffCooldown=0;
   actor.somersault=0;actor.somersaultCooldown=0;actor.somersaultCameraStart=actor.cameraHeading;
   actor.dizzy=0;actor.stinkContributors=new Map();
@@ -128,7 +128,7 @@ export function fireBattle(r,actor=r,actionId){
   const cueKey=actionId==null?undefined:`action:${actionId}`;
   const kind=actor.item==='missile'&&actor.missiles>0?'missile':'hedgehog';
   const vulcan=kind==='hedgehog'&&actor.vulcan>0;
-  if(hasBatCompanion(actor)&&vulcan)return;
+  if(actor.driver===14&&vulcan)return;
   if(kind==='hedgehog'&&!vulcan&&actor.ammo<=0)return;
   r.projectileSequence=(r.projectileSequence??0)+1;
   const shot={...makeProjectile(r,actor),id:r.projectileSequence,...(actionId==null?{}:{actionId})};r.projectiles.push(shot);
@@ -140,19 +140,19 @@ export function fireBattle(r,actor=r,actionId){
 }
 export function applySupply(actor,kind){
   switch(kind){
-    case 'bicycle':actor.batCompanion=true;actor.notice='BATYOUDIDN’TKNOW · VULCAN UPGRADE';actor.noticeTime=3;break;
+    case 'bicycle':actor.intelligenceBonus=(actor.intelligenceBonus??0)+1;actor.notice=`+1 INTELLIGENCE · ${actorIntelligence(actor)}`;actor.noticeTime=3;break;
     case 'health':actor.health=Math.min(MAX_HEALTH,actor.health+1);actor.notice=`+1 HEART · ${actor.health} / ${MAX_HEALTH}`;actor.noticeTime=2;break;
-    case 'missile':actor.missiles=Math.min(itemCapacity(actor.driver,'missile'),actor.missiles+1);if(!(actor.vulcan>0&&actor.item==='hedgehog'))actor.item='missile';break;
-    case 'hedgehog':actor.ammo=itemCapacity(actor.driver,'hedgehog');break;
+    case 'missile':actor.missiles=Math.min(itemCapacity(actor,'missile'),actor.missiles+1);if(!(actor.vulcan>0&&actor.item==='hedgehog'))actor.item='missile';break;
+    case 'hedgehog':actor.ammo=itemCapacity(actor,'hedgehog');break;
     case 'hedgeproof':actor.hedgeShield=HEDGEGUARD_DURATION;break;
     case 'tehilim':actor.tehilim=25;break;
-    case 'boost':actor.turbos=Math.min(itemCapacity(actor.driver,'boost'),actor.turbos+1);break;
+    case 'boost':actor.turbos=Math.min(itemCapacity(actor,'boost'),actor.turbos+1);break;
   }
 }
 function collectSupplies(r,actor){
   if(actor.bomber||actor.destroyed)return;
   for(const supply of r.supplies){
-    if(supply.kind==='bicycle'&&(supply.age<1.2||hasBatCompanion(actor)))continue;
+    if(supply.kind==='bicycle'&&supply.age<1.2)continue;
     if(supply.cooldown>0||distance(actor,supply)>=4||supply.kind==='health'&&actor.health>=MAX_HEALTH)continue;
     applySupply(actor,supply.kind);restoreSupply(supply);supply.cooldown=supply.kind==='bicycle'?1e9:['hedgeproof','tehilim'].includes(supply.kind)?45:8;supply.version=(supply.version??0)+1;supply.collector=actor.id;
     if(r.multiplayer||actor===r)fx(r,'pickup',actor,`pickup:${supply.id}:${supply.version}`);
@@ -218,7 +218,7 @@ export function damageBattle(r,victim,owner,amount,kind='hedgehog'){
   }
   victim.stinkContributors=new Map();
   victim.destroyed=3;victim.speed=0;victim.boost=0;if(r.finishCountdown===null)victim.deaths++;fx(r,kind==='abomb'||kind==='radiation'?'ash':'explosion',victim);
-  victim.batCompanion=false;victim.owlBoosting=false;victim.drift=0;victim.wasDrifting=false;victim.driftTrail=null;victim.killStreak=0;victim.batCooldown=0;victim.vulcan=0;victim.hedgeShield=0;victim.tehilim=0;victim.specialActive=0;victim.somersault=0;victim.dizzy=0;
+  victim.owlBoosting=false;victim.drift=0;victim.wasDrifting=false;victim.driftTrail=null;victim.killStreak=0;victim.batCooldown=0;victim.vulcan=0;victim.hedgeShield=0;victim.tehilim=0;victim.specialActive=0;victim.somersault=0;victim.dizzy=0;
   if(r.finishCountdown!==null)return true;
   for(const scorer of credited){const full=kind==='wall'||scorer===attacker;scorer.kills+=full?1:.5;scorer.celebrate=1.6;voice(r,scorer,'cheer');r.killFeed.unshift({id:r.killSequence=(r.killSequence??0)+1,attacker:scorer.id,assist:!full,radiation:kind==='radiation'&&scorer===attacker,victim:victim.id,victimName:victim.name??drivers[victim.driver].name,victimColor:victim.color??drivers[victim.driver].color,text:`${scorer===r?'YOU':scorer.name??drivers[scorer.driver].name.split(' ')[0]} → ${victim===r?'YOU':victim.name??drivers[victim.driver].name.split(' ')[0]}`,time:r.elapsed});r.killFeed=r.killFeed.slice(0,16);}
   if(attacker&&!attacker.bomber&&!attacker.destroyed){
@@ -327,8 +327,8 @@ export function tickBattle(r,keys,dt,inputs=null){
     if(actor.bomber){
       if(!actor.inactive&&!ending){
         const before=actor.bombReload;actor.bombReload+=dt;
-        if(before<5-1e-8&&actor.bombReload>=5-1e-8){actor.stinkAmmo=Math.min(itemCapacity(actor.driver,'stink'),actor.stinkAmmo+1);actor.bombReload=Math.max(5,actor.bombReload);}
-        if(actor.bombReload>=BOMB_RECHARGE-1e-8){actor.bombAmmo=Math.min(itemCapacity(actor.driver,'abomb'),actor.bombAmmo+1);actor.stinkAmmo=Math.min(itemCapacity(actor.driver,'stink'),actor.stinkAmmo+1);actor.bombReload=Math.max(0,actor.bombReload-BOMB_RECHARGE);}
+        if(before<5-1e-8&&actor.bombReload>=5-1e-8){actor.stinkAmmo=Math.min(itemCapacity(actor,'stink'),actor.stinkAmmo+1);actor.bombReload=Math.max(5,actor.bombReload);}
+        if(actor.bombReload>=BOMB_RECHARGE-1e-8){actor.bombAmmo=Math.min(itemCapacity(actor,'abomb'),actor.bombAmmo+1);actor.stinkAmmo=Math.min(itemCapacity(actor,'stink'),actor.stinkAmmo+1);actor.bombReload=Math.max(0,actor.bombReload-BOMB_RECHARGE);}
       }
       continue;
     }
@@ -338,7 +338,7 @@ export function tickBattle(r,keys,dt,inputs=null){
       if(actor.healTimer>=interval-1e-8){actor.health=Math.min(recoveryHealth,actor.health+1);actor.healTimer=actor.health>=recoveryHealth?0:Math.max(0,actor.healTimer-interval);}
     }
     if(actor.health>=recoveryHealth)actor.healTimer=0;
-    actor.reload+=dt;const reloadInterval=hedgehogRecoveryInterval(actor.driver);if(actor.reload>=reloadInterval-1e-8){actor.ammo=Math.min(itemCapacity(actor.driver,'hedgehog'),actor.ammo+1);actor.reload=Math.max(0,actor.reload-reloadInterval);}
+    actor.reload+=dt;const reloadInterval=hedgehogRecoveryInterval(actor.driver);if(actor.reload>=reloadInterval-1e-8){actor.ammo=Math.min(itemCapacity(actor,'hedgehog'),actor.ammo+1);actor.reload=Math.max(0,actor.reload-reloadInterval);}
     if((actor===r&&!r.multiplayer)||actor.human){
       const control=inputs?.get(actor.id)??(actor===r?keys:new Set());
       const held=control.keys instanceof Set?control.keys:control;
@@ -377,7 +377,7 @@ export function tickBattle(r,keys,dt,inputs=null){
   for(const actor of actors)if(!frozen(r,actor.id))collectSupplies(r,actor);
   r.supplies=r.supplies.filter(s=>s.kind!=='bicycle'||s.cooldown<=0);
   for(const actor of actors){
-    if(!hasBatCompanion(actor)||actor.vulcan<=0||actor.batCooldown>0||actor.afk||!canAct(r,actor))continue;
+    if(actor.driver!==14||actor.vulcan<=0||actor.batCooldown>0||actor.afk||!canAct(r,actor))continue;
     const aim=batAim(r,actor,arena);if(!aim.target)continue;
     const wx=aim.origin.wx+Math.sin(aim.heading)*1.4,wz=aim.origin.wz+Math.cos(aim.heading)*1.4;if(blocked(arena,wx,wz,.3))continue;
     r.projectileSequence=(r.projectileSequence??0)+1;

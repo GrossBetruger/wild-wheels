@@ -63,7 +63,7 @@ impl Game {
             match person {
                 Some(p)=>{
                     actor.name=Some(p.name.trim().into());actor.driver=p.driver;actor.bomber=p.role=="bomber";
-                    actor.ammo=actor.ammo.min(item_capacity(p.driver,"hedgehog"));actor.missiles=actor.missiles.min(item_capacity(p.driver,"missile"));actor.turbos=actor.turbos.min(item_capacity(p.driver,"boost"));actor.bomb_ammo=actor.bomb_ammo.min(item_capacity(p.driver,"abomb"));actor.stink_ammo=actor.stink_ammo.min(item_capacity(p.driver,"stink"));
+                    actor.ammo=actor.ammo.min(actor.item_capacity("hedgehog"));actor.missiles=actor.missiles.min(actor.item_capacity("missile"));actor.turbos=actor.turbos.min(actor.item_capacity("boost"));actor.bomb_ammo=actor.bomb_ammo.min(actor.item_capacity("abomb"));actor.stink_ammo=actor.stink_ammo.min(actor.item_capacity("stink"));
                     if !was_human{actor.notice.clear();actor.notice_time=0.0;}
                     if actor.bomber&&(!was_human||!was_bomber){actor.bomb_ammo=2;actor.stink_ammo=2;actor.bomb_reload=0.0;actor.speed=0.0;actor.shield=0.0;actor.destroyed=0.0;actor.dizzy=0.0;}
                 },

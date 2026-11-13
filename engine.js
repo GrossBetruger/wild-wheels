@@ -19,8 +19,12 @@ export const drivers = [
   { name: 'KnowItOwl', emoji: '🦉', color: '#e7edf2', desc: 'Impeccable plumage. Questionable jokes. Obviously I knew that.', speed: 4, handling: 5, accel: 4, cuteness: 4, intelligence: 5, fuel: 3 },
 ];
 export function boostDuration(driver){return 2+.8*(drivers[driver].fuel-1);}
-export function itemCapacity(driver,kind){
-  const intelligence=drivers[driver].intelligence;
+export function actorIntelligence(actor){
+  if(typeof actor==='number')return drivers[actor].intelligence;
+  return drivers[actor.driver].intelligence+(actor.intelligenceBonus??0);
+}
+export function itemCapacity(actor,kind){
+  const intelligence=actorIntelligence(actor);
   switch(kind){case 'hedgehog':return 10+2*(intelligence-1);case 'missile':case 'boost':case 'abomb':case 'stink':return intelligence+1;default:return 0;}
 }
 export const tracks = [
@@ -169,7 +173,7 @@ export function tick(r, keys, dt) {
   const rowS = row * 1800 + 1000;
   if (row >= 0 && before <= rowS && r.s >= rowS && row !== r.pickup && [-.65, 0, .65].some(x => Math.abs(x - r.x) < .23)) {
     r.pickup = row; const lane=[-.65,0,.65].find(x=>Math.abs(x-r.x)<.23),kind=pickupType(row,lane);if(kind!=='boost')r.item=kind;
-    switch(kind){case 'hedgehog':r.ammo=Math.min(itemCapacity(r.driver,'hedgehog'),r.ammo+3);notify(r,'+3 HEDGEHOGS · SPACE TO FIRE');break;case 'boost':r.turbos=Math.min(itemCapacity(r.driver,'boost'),r.turbos+1);notify(r,'TURBO CELL · X TO BOOST');break;case 'missile':r.missiles=Math.min(itemCapacity(r.driver,'missile'),r.missiles+1);notify(r,'MISSILE ARMED · SPACE TO DESTROY');break;}effect(r,'pickup');
+    switch(kind){case 'hedgehog':r.ammo=Math.min(itemCapacity(r,'hedgehog'),r.ammo+3);notify(r,'+3 HEDGEHOGS · SPACE TO FIRE');break;case 'boost':r.turbos=Math.min(itemCapacity(r,'boost'),r.turbos+1);notify(r,'TURBO CELL · X TO BOOST');break;case 'missile':r.missiles=Math.min(itemCapacity(r,'missile'),r.missiles+1);notify(r,'MISSILE ARMED · SPACE TO DESTROY');break;}effect(r,'pickup');
   }
   for (const shot of r.projectiles) {
     const previous=shot.s;shot.trail.push({s:shot.s,x:shot.x,height:shot.height,route:shot.route});if(shot.trail.length>(shot.kind==='missile'?30:12))shot.trail.shift();

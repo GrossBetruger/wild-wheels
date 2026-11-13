@@ -50,7 +50,10 @@ pub const START_HEDGEHOGS:u32=10;
 pub const DIZZY_DURATION:f64=8.0;
 pub const DRIVER_FUEL:[u8;15]=[3,2,2,3,3,2,3,5,3,3,3,3,3,2,3];
 pub fn boost_duration(driver:usize)->f64{2.0+0.8*f64::from(DRIVER_FUEL[driver%DRIVER_FUEL.len()]-1)}
-pub fn item_capacity(driver:usize,kind:&str)->u32{let intelligence=DRIVER_INTELLIGENCE[driver%DRIVER_INTELLIGENCE.len()];match kind{"hedgehog"=>10+2*(intelligence-1),"missile"|"boost"|"abomb"|"stink"=>intelligence+1,_=>0}}
+impl Actor{
+    pub fn intelligence(&self)->u32{DRIVER_INTELLIGENCE[self.driver%DRIVER_INTELLIGENCE.len()].saturating_add(self.intelligence_bonus)}
+    pub fn item_capacity(&self,kind:&str)->u32{let intelligence=self.intelligence();match kind{"hedgehog"=>10u32.saturating_add(2u32.saturating_mul(intelligence-1)),"missile"|"boost"|"abomb"|"stink"=>intelligence.saturating_add(1),_=>0}}
+}
 pub fn recovery_interval(driver:usize)->f64{14.0-2.0*f64::from(DRIVER_CUTENESS[driver%DRIVER_CUTENESS.len()])}
 pub fn hedgehog_recovery_interval(driver:usize)->f64{2.25-0.25*f64::from(DRIVER_CUTENESS[driver%DRIVER_CUTENESS.len()])}
 pub const DRIVER_NAMES:[&str;15]=["Pip the Panda","Rocco the Raccoon","Felix the Fox","Benny the Bear","Ellie the Elephant","Tammy the Cricket","Elon Musk","Houston the RTPL","Avita-Jas","Pearococo","Master-Yuda","R-yeah","Catheterpillar","Fourmidable","KnowItOwl"];

@@ -11,7 +11,7 @@ pub struct Sample { pub wx:f64,pub wz:f64,pub height:f64 }
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(default, rename_all="camelCase")]
 pub struct Actor {
-    pub bat_companion:bool,pub owl_boosting:bool,
+    pub intelligence_bonus:u32,pub owl_boosting:bool,
     pub ring_blue:bool,pub ring_turn_grace:f64,pub ring_turn:f64,pub ring_heading:Option<f64>,pub ring_remaining:f64,pub ring_spent:bool,#[serde(skip)]pub ring_doses:BTreeMap<usize,f64>,
     pub bat_cooldown:f64,pub special_cooldown:f64,pub special_active:f64,
     pub id:usize,pub driver:usize,pub name:Option<String>,pub color:String,

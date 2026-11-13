@@ -18,7 +18,7 @@ function fields(Type,names,{booleans=[],nullable=[]}={}){
   }
 }
 class Actor extends Row{
-  get batCompanion(){return this.frame.text.actors[this.id]?.batCompanion??false;}
+  get intelligenceBonus(){return this.frame.text.actors[this.id]?.intelligenceBonus??0;}
   get specialCooldown(){return this.n(46);}
   get specialActive(){return this.n(47);}
   get healTimer(){return this.n(43);}

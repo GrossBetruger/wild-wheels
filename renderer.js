@@ -1,6 +1,6 @@
 import {darkBombLights,lightUniforms} from './dark-bomb-light.js';
 import {drawFireRing,drawFireRingOut} from './fire-ring-visual.js';
-import {bicyclePose,hasBatCompanion} from './bicycle-pickup.js';
+import {bicyclePose} from './bicycle-pickup.js';
 import {arrivalScale,departurePose,drawTeleportHaze} from './cricket-teleport.js';
 import {batAim,drawBat} from './bat-companion.js';
 import {OwlFlight,drawBicycle} from './knowitowl.js';
@@ -647,7 +647,7 @@ export class Renderer {
       const arrival=actor.driver===5&&actor.id!==r.id?r.effects.find(e=>e.type==='teleportIn'&&e.owner===actor.id&&e.age<.52):null;
       if(arrival)this.teleportKart(pose,actor.color??drivers[5].color,actor.heading,arrivalScale(arrival.age),jump?.height??0,jump?.pitch??0);
       if(!arrival)this.kart(m,pose,actor.color??drivers[actor.driver].color,actor.driver,0,0,actor.boost>0,time,actor.celebrate,jump,actor.driver!==7||actor.vulcan<=0);
-      if(hasBatCompanion(actor))this.batBuddy(pose,actor,r,time,jump);
+      if(actor.driver===14)this.batBuddy(pose,actor,r,time,jump);
       const parts=this.instances.slice(bodyStart);this.rememberBody(actor,parts,parts.length?[]:m.data.slice(dataStart));
       if(r.specialAbilities!==false&&[r,...r.bots].some(a=>a.id!==actor.id&&a.driver===13&&a.specialActive>0)){
         const facing=actor.cameraHeading??actor.heading,phase=Math.floor(time*8)%8;
@@ -667,8 +667,8 @@ export class Renderer {
 
       if(actor.tehilim>0)this.tehilimAura(pose,time,actor.tehilim,jump);
       if(actor.dizzy>0)for(let i=0;i<6;i++){const angle=time*(actor.boost>0?9:5)+i*Math.PI/3;m.at(pose.x+Math.sin(angle)*3.2,6.8+Math.sin(angle*2)*.5,pose.z+Math.cos(angle)*3.2,angle);m.box(0,0,0,1.2,.22,.3,'#fff08b');m.box(0,0,0,.3,.22,1.2,'#fff08b');this.glow.at(m.origin[0],m.origin[1],m.origin[2]);this.glow.particle(0,0,0,.8,[.7,.6,.05]);}
-      if(actor.vulcan>0&&actor.driver===10&&!actor.batCompanion)this.laserMount(m,pose,actor,time,jump);
-      if(actor.vulcan>0&&actor.driver!==10&&actor.driver!==14&&!actor.batCompanion){
+      if(actor.vulcan>0&&actor.driver===10)this.laserMount(m,pose,actor,time,jump);
+      if(actor.vulcan>0&&actor.driver!==10&&actor.driver!==14){
         const pulse=.8+.2*Math.sin(time*4);this.glow.at(pose.x,.15,pose.z);
         for(let i=0;i<32;i++){const a=i/32*Math.PI*2,b=(i+1)/32*Math.PI*2;this.glow.quad([Math.cos(a)*3.3,0,Math.sin(a)*3.3],[Math.cos(b)*3.3,0,Math.sin(b)*3.3],[Math.cos(b)*3.65,0,Math.sin(b)*3.65],[Math.cos(a)*3.65,0,Math.sin(a)*3.65],[.55*pulse,.23*pulse,.02]);}
         for(let i=0;i<8;i++){const a=time*1.5+i*Math.PI/4;this.glow.particle(Math.cos(a)*3.5,.3+Math.sin(a*2)*.12,Math.sin(a)*3.5,.8,[.8*pulse,.35*pulse,.03]);}

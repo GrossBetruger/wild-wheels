@@ -6,10 +6,10 @@ use super::*;
 pub(super) struct LocalShot{pub id:u32,pub born:f64,pub updated:f64,pub model:Shot,pub error:[f64;2]}
 pub(super) struct PendingSound{pub kind:String,pub time:f64,pub key:Option<String>}
 fn grant(a:&mut Actor,kind:&str){match kind{
-    "bicycle"=>{a.bat_companion=true;a.notice="BATYOUDIDN’TKNOW · VULCAN UPGRADE".into();a.notice_time=3.0;},
+    "bicycle"=>{a.intelligence_bonus=a.intelligence_bonus.saturating_add(1);a.notice=format!("+1 INTELLIGENCE · {}",a.intelligence());a.notice_time=3.0;},
     "health"=>{a.health=(a.health+1.0).min(6.0);a.notice=format!("+1 HEART · {} / 6",a.health);a.notice_time=2.0;},
-    "missile"=>{a.missiles=(a.missiles+1).min(item_capacity(a.driver,"missile"));if !(a.vulcan>0.0&&a.item=="hedgehog"){a.item="missile".into();}},
-    "hedgeproof"=>a.hedge_shield=25.0,"tehilim"=>a.tehilim=25.0,"hedgehog"=>a.ammo=item_capacity(a.driver,"hedgehog"),"boost"=>a.turbos=(a.turbos+1).min(item_capacity(a.driver,"boost")),_=>{}
+    "missile"=>{a.missiles=(a.missiles+1).min(a.item_capacity("missile"));if !(a.vulcan>0.0&&a.item=="hedgehog"){a.item="missile".into();}},
+    "hedgeproof"=>a.hedge_shield=25.0,"tehilim"=>a.tehilim=25.0,"hedgehog"=>a.ammo=a.item_capacity("hedgehog"),"boost"=>a.turbos=(a.turbos+1).min(a.item_capacity("boost")),_=>{}
 }}
 fn select(a:&mut Actor,item:&str){if match item{"hedgehog"=>a.vulcan>0.0||a.ammo>0,"missile"=>a.missiles>0,_=>false}{a.item=item.into();}}
 fn spend(a:&mut Actor,resource:&str){let value=match resource{"ammo"=>&mut a.ammo,"missiles"=>&mut a.missiles,"turbos"=>&mut a.turbos,"chaff"=>&mut a.chaff,"bombAmmo"=>&mut a.bomb_ammo,"stinkAmmo"=>&mut a.stink_ammo,_=>return};*value=value.saturating_sub(1);}
@@ -85,7 +85,7 @@ impl Client{
             "turbo"=>{if actor.turbos==0||actor.boost>0.0||pending("turbo"){return false;}if action.after_move<self.next_sequence{self.pred.actors[self.viewer].boost=boost_duration(actor.driver);}self.emit("boost",now,Some(format!("action:{}",id)),true);(String::new(),"turbos".into(),0)},
             "chaff"=>{if sequence<self.chaff_tick||actor.chaff==0{return false;}self.chaff_tick=after+39;self.emit("chaff",now,None,true);(String::new(),"chaff".into(),self.chaff_tick)},
             "fire"=>{
-                if sequence<self.fire_tick{return false;}let missile=actor.item=="missile"&&actor.missiles>0;let vulcan=!missile&&actor.vulcan>0.0;if (actor.driver==14||actor.bat_companion)&&vulcan{return false;}let resource=match(missile,vulcan){(true,_)=>"missiles",(_,true)=>"",_=>"ammo"};if resource=="ammo"&&actor.ammo==0{return false;}
+                if sequence<self.fire_tick{return false;}let missile=actor.item=="missile"&&actor.missiles>0;let vulcan=!missile&&actor.vulcan>0.0;if actor.driver==14&&vulcan{return false;}let resource=match(missile,vulcan){(true,_)=>"missiles",(_,true)=>"",_=>"ammo"};if resource=="ammo"&&actor.ammo==0{return false;}
                 let kind=match missile{true=>"missile",false=>"hedgehog"};let cooldown=match(missile,vulcan){(true,_)=>0.9,(_,true)=>0.075,_=>0.225};self.fire_tick=after+(cooldown*60.0-1e-8_f64).ceil()as i64;
                 let game=&self.frames.back().unwrap().game;
                 let target=game.actors.iter().filter(|b|b.id!=self.viewer&&!b.bomber&&!b.inactive&&b.destroyed<=0.0&&b.shield<=0.0&&distance(actor.wx,actor.wz,b.wx,b.wz)<100.0&&angle((b.wx-actor.wx).atan2(b.wz-actor.wz),actor.heading).abs()<0.65&&clear(game.global.arena,actor.wx,actor.wz,b.wx,b.wz)).min_by(|a,b|distance(actor.wx,actor.wz,a.wx,a.wz).total_cmp(&distance(actor.wx,actor.wz,b.wx,b.wz))).map(|a|a.id);
@@ -117,12 +117,12 @@ impl Client{
             for s in supplies{
                 let key=format!("pickup:{}:{}",s.id,s.version+1);
                 if distance(actor.wx,actor.wz,s.wx,s.wz)>=4.0{self.rejected.remove(&key);continue;}
-                if s.kind=="bicycle"&&(s.age<1.2||actor.bat_companion||actor.driver==14){continue;}
+                if s.kind=="bicycle"&&(s.age<1.2){continue;}
                 if s.cooldown>0.0||self.rejected.contains(&key)||self.ops.iter().any(|op|matches!(op,Op::Pickup{key:k,..}if *k==key))||s.kind=="health"&&actor.health>=6.0{continue;}
                 self.ops.push(Op::Pickup{id:s.id,version:s.version,key:key.clone(),kind:s.kind.clone(),after:sequence+1});grant(&mut actor,&s.kind);self.emit("pickup",now,Some(key),false);
             }
         }
-        let a=&mut self.display.actors[id];a.bat_companion=actor.bat_companion;a.ammo=actor.ammo;a.missiles=actor.missiles;a.turbos=actor.turbos;a.health=actor.health;a.hedge_shield=actor.hedge_shield;a.tehilim=actor.tehilim;a.chaff=actor.chaff;a.item=actor.item;a.notice=actor.notice;a.notice_time=actor.notice_time;a.fire_cooldown=((self.fire_tick-sequence)as f64/60.0).max(0.0);
+        let a=&mut self.display.actors[id];a.intelligence_bonus=actor.intelligence_bonus;a.ammo=actor.ammo;a.missiles=actor.missiles;a.turbos=actor.turbos;a.health=actor.health;a.hedge_shield=actor.hedge_shield;a.tehilim=actor.tehilim;a.chaff=actor.chaff;a.item=actor.item;a.notice=actor.notice;a.notice_time=actor.notice_time;a.fire_cooldown=((self.fire_tick-sequence)as f64/60.0).max(0.0);
         for supply in &mut self.display.global.supplies{if let Some(actual)=self.frames.back().unwrap().game.global.supplies.iter().find(|s|s.id==supply.id){supply.cooldown=actual.cooldown;}if self.ops.iter().any(|op|matches!(op,Op::Pickup{id,..}if *id==supply.id)){supply.cooldown=match supply.kind.as_str(){"hedgeproof"|"tehilim"=>45.0,_=>8.0};}}
         self.display.global.projectiles.retain(|s|s.owner!=id||s.action_id.is_none_or(|id|!self.local_shots.iter().any(|entry|entry.id==id)));
         let mut models=Vec::new();for entry in &mut self.local_shots{
