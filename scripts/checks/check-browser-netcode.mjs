@@ -118,7 +118,13 @@ try{
       await call('Target.closeTarget',{targetId});continue;
     }
     if(profile.guest){const room={code:'07',arena:0,botCount:0,host:0,members:new Map()};app.multiplayer.makeWorld(room);app.multiplayer.rooms.set('07',room);app.multiplayer.join(room,{name:'Host',driver:1});}
-    const identity=await evaluate(`(async()=>{__game.network.botCount.value='0';__game.network.invitation='07';await __game.network.connect('${profile.guest?'/api/join':'/api/rooms'}');return {code:__game.network.state.code,you:__game.network.state.you};})()`);
+    const identity=await evaluate(`(async()=>{
+      const network=__game.network,input=network.nameFields?.find(input=>input.getClientRects().length)??network.name;
+      input.value='${profile.guest?'Browser Guest':'Browser Host'}';input.dispatchEvent(new Event('input',{bubbles:true}));
+      network.botCount.value='0';network.invitation='07';await network.connect('${profile.guest?'/api/join':'/api/rooms'}');
+      if(!network.active||!network.state)throw new Error('Browser could not join: '+network.status.textContent);
+      return {code:network.state.code,you:network.state.you};
+    })()`);
     const room=app.multiplayer.rooms.get(identity.code);
     if(process.argv.includes('--room')){
       const reload=async()=>{await evaluate('__game.reloadMarker=true');await call('Page.reload',{},session);for(let attempt=0;attempt<120;attempt++){try{if(await evaluate('Boolean(globalThis.__game)&&!__game.reloadMarker&&__game.network.active'))return;}catch{}await sleep(50);}throw new Error('Room did not restore after refresh');};

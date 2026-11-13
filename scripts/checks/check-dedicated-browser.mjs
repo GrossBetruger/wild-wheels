@@ -29,11 +29,16 @@ try{
     if(index===0){
       await wait(()=>evaluate(sessionId,"Boolean(document.getElementById('arena-connection'))&&getComputedStyle(document.getElementById('arena-connection')).display==='flex'&&getComputedStyle(document.getElementById('start')).visibility==='hidden'"),'First paint exposed the inactive game instead of the connection screen');
       const loading=await call('Page.captureScreenshot',{format:'png'},sessionId);await writeFile(output+'.loading.png',Buffer.from(loading.data,'base64'));
+    }
+    await wait(()=>evaluate(sessionId,"Boolean(globalThis.__game?.network.nameFields.some(input=>input.getClientRects().length))"),'New player did not see name entry');
+    assert.equal(await evaluate(sessionId,"document.querySelector('#arena-connection button').disabled"),true);
+    await evaluate(sessionId,`{const input=__game.network.nameFields.find(input=>input.getClientRects().length);input.value='${index===0?'Ubuntu Pilot':'Guest Pilot'}';input.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('#arena-connection button').click();}`);
+    if(index===0){
       await wait(()=>evaluate(sessionId,"document.querySelector('#arena-connection p').textContent==='Temporary test connection failure'&&!document.querySelector('#arena-connection button').classList.contains('hidden')"),'Failed join did not show a retry action');
       assert.equal(await evaluate(sessionId,"getComputedStyle(document.getElementById('start')).visibility"),'hidden');
       await evaluate(sessionId,"document.querySelector('#arena-connection button').click()");
     }
-    await wait(()=>evaluate(sessionId,'Boolean(globalThis.__game?.network.active&&__game.network.state)'),`Browser ${index} failed to auto-join`);
+    await wait(()=>evaluate(sessionId,'Boolean(globalThis.__game?.network.active&&__game.network.state)'),`Browser ${index} failed to join after entering a name`);
     await wait(()=>evaluate(sessionId,"document.body.classList.contains('arena-connected')&&getComputedStyle(document.getElementById('arena-connection')).display==='none'"),'Connected arena did not replace the connection screen');
   }
   const [host,guest]=sessions;await wait(()=>evaluate(host,'__game.network.state.players.length===2'),'Roster did not update');

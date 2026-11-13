@@ -31,6 +31,10 @@ try{
     await call('Runtime.enable',{},sessionId);await call('Page.enable',{},sessionId);await call('Fetch.enable',{patterns:[{urlPattern:'*/game.js',requestStage:'Response'}]},sessionId);if(index===0)await call('Network.setCookie',{name:'wild-wheels-session',value:created.token,url:origin},sessionId);
     if(index===1){await call('Emulation.setDeviceMetricsOverride',{width:430,height:900,deviceScaleFactor:1,mobile:true},sessionId);await call('Emulation.setTouchEmulationEnabled',{enabled:true,maxTouchPoints:5},sessionId);}
     await call('Page.navigate',{url:origin+'/?room='+created.code},sessionId);
+    if(index===1){
+      await wait(()=>evaluate(sessionId,'Boolean(globalThis.__game?.network.nameFields.some(input=>input.getClientRects().length))'),'New bomber did not see name entry');
+      await evaluate(sessionId,"(async()=>{const n=__game.network,input=n.nameFields.find(input=>input.getClientRects().length);input.value='BomberCam';input.dispatchEvent(new Event('input',{bubbles:true}));await n.connect('/api/join');if(!n.state)throw new Error('Bomber could not join: '+n.status.textContent);})()");
+    }
     await wait(()=>evaluate(sessionId,'Boolean(globalThis.__game?.network.active&&__game.network.state)'),`Browser ${index} failed to auto-join`);
   }
   const [host,guest]=sessions;
