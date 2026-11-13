@@ -100,7 +100,7 @@ body.mobile-playing{overflow:hidden;overscroll-behavior:none}.race-panel.mobile-
 @media(max-width:500px){.photo-slideshow{padding:9px;gap:7px;inset:4% 3%}.photo-slideshow>strong{font-size:11px}.photo-slideshow img{border-width:4px}.photo-slideshow p{font-size:9px}.photo-slideshow button{font-size:9px;padding:8px}.photo-button{right:58px}}
 
 /* Keep chat next to the game vertically, independent of the sidebar height. */
-.game-column{min-width:0;align-self:start;display:flex;flex-direction:column;gap:16px}
+.game-column{min-width:0;align-self:start;display:flex;flex-direction:column;gap:16px}.game-column>.race-panel{align-self:stretch;width:100%;min-width:0}
 .chat-panel{padding:20px;border:1px solid var(--line);border-radius:14px;background:#fffdf7;color:var(--ink);min-width:0}
 .chat-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}.chat-heading h2{margin:0;font-size:21px;letter-spacing:-.5px}.chat-room{font:9px monospace;letter-spacing:1px;color:#796b94;background:#eee8f8;padding:6px 9px;border-radius:20px}
 .chat-recipient{display:flex;flex-direction:column;align-items:flex-start;gap:7px}.chat-recipient>span{font:9px monospace;letter-spacing:1px;color:#81788d}.chat-recipient select{font:600 13px Arial;max-width:100%;min-width:180px;padding:9px 32px 9px 12px;border:1px solid #d9cee9;border-radius:9px;background:#f5f0fd;color:#594078}
