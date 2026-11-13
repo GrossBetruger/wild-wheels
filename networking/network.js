@@ -47,10 +47,14 @@ export class NetworkGame {
     this.share=document.createElement('input');this.share.className='hidden';this.share.setAttribute('aria-label','Room invitation link');this.share.addEventListener('input',()=>{this.shareEdited=true;});
     this.internetButton=this.button('START INTERNET LINK',()=>this.startInternetLink());this.internetButton.classList.add('hidden');
     this.copyButton=this.button('COPY INVITE',async()=>{try{await navigator.clipboard.writeText(this.share.value);this.status.textContent='Invitation copied.';}catch{this.share.focus();this.share.select();this.status.textContent='Copy the selected invitation link.';}});this.copyButton.classList.add('hidden');
+    this.checkUpdatesButton=this.button('CHECK FOR UPDATES',()=>this.checkServerUpdates());
+    this.updateServerButton=this.button('UPDATE SERVER',()=>this.updateServer());this.updateServerButton.classList.add('hidden');
+    this.updateStatus=document.createElement('span');this.updateStatus.setAttribute('role','status');
+    const updates=document.createElement('div');updates.className=this.dedicated?'network-controls':'network-controls hidden';updates.append(this.checkUpdatesButton,this.updateServerButton,this.updateStatus);
     const row=document.createElement('div');row.className='network-controls';row.append(this.abilities,this.nameFeedback,this.animalChoice,this.botCount,this.hostButton,this.leaveButton);
     const invite=document.createElement('div');invite.className='network-invite';invite.append(this.share,this.internetButton,this.copyButton);
     this.help=document.createElement('p');this.help.className='network-help hidden';
-    this.panel.append(title,row,this.status,this.players,invite,this.help);anchor.before(this.panel);
+    this.panel.append(title,row,this.status,this.players,invite,this.help,updates);anchor.before(this.panel);
     if(this.connection){const field=this.createNameField();this.connection.querySelector('button').before(field);}
     if(!this.dedicated){
     this.readyDialog=document.createElement('dialog');this.readyDialog.id='play-request-popup';this.readyDialog.className='play-request-popup';this.readyDialog.setAttribute('aria-labelledby','play-request-title');
@@ -141,6 +145,33 @@ export class NetworkGame {
     try{if(!await this.saveName())return;await this.request('/api/ready',{ready:true});}catch(error){this.status.textContent=error.message;}finally{this.readyPending=false;}
   }
   button(label,action){const button=document.createElement('button');button.type='button';button.textContent=label;button.onclick=action;return button;}
+  async checkServerUpdates(){
+    if(this.updating)return;
+    this.checkUpdatesButton.disabled=true;this.updateServerButton.classList.add('hidden');this.updateStatus.textContent='Checking GitHub…';
+    try{
+      const response=await fetch('/api/updates/check',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${this.token}`},body:'{}',signal:AbortSignal.timeout(30000)});
+      const result=await response.json();if(!response.ok)throw new Error(result.error);
+      this.serverUpdate=result;this.updateServerButton.classList.toggle('hidden',!result.available);
+      this.updateStatus.textContent=result.available?`Available: ${result.description}`:'Server is up to date.';
+    }catch(error){this.serverUpdate=null;this.updateStatus.textContent=error.message;}
+    finally{this.checkUpdatesButton.disabled=false;}
+  }
+  async updateServer(){
+    if(this.updating||!this.serverUpdate?.available)return;
+    this.updateServerButton.disabled=true;this.checkUpdatesButton.disabled=true;
+    try{
+      await this.request('/api/updates/install',{});this.updating=true;this.keys.clear();this.updateStatus.textContent='Updating server… Reconnecting automatically.';
+      const deadline=Date.now()+600000;
+      while(Date.now()<deadline){
+        await new Promise(resolve=>setTimeout(resolve,1500));
+        try{
+          const response=await fetch('/build.json',{signal:AbortSignal.timeout(3000)}),build=await response.json();
+          if(response.ok&&build.revision&&build.revision!==this.serverUpdate.current){location.reload();return;}
+        }catch{}
+      }
+      throw new Error('Update is taking longer than expected. Check .wild-wheels/update.log on the server.');
+    }catch(error){this.updating=false;this.updateStatus.textContent=error.message;this.updateServerButton.disabled=false;this.checkUpdatesButton.disabled=false;}
+  }
   rememberName(){const name=this.name.value.trim();if(!name||name.length>24)return;document.cookie=`wild-wheels-name=${encodeURIComponent(name)}; Path=/; SameSite=Lax; Max-Age=31536000${location.protocol==='https:'?'; Secure':''}`;}
   adopt(reply){
     const draft=this.nameDirty?this.name.value:null;

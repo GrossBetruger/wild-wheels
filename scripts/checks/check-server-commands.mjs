@@ -24,7 +24,17 @@ try{
   git('init','--initial-branch=main');git('add','.');git('commit','-m','Initial launcher');git('init','--bare',join(root,'remote.git'));git('remote','add','origin',join(root,'remote.git'));git('push','origin','main');
   git('clone','--branch','main',join(root,'remote.git'),join(root,'publisher'));await writeFile(join(root,'publisher','release-marker'),'updated\n');
   execFileSync('git',['-C',join(root,'publisher'),'add','release-marker'],{env});execFileSync('git',['-C',join(root,'publisher'),'commit','-m','New release'],{env});execFileSync('git',['-C',join(root,'publisher'),'push','origin','main'],{env});
-  assert.match(shell('update_server.sh'),/Installing [a-f0-9]+ — New release/);assert.equal(await readFile(join(repo,'release-marker'),'utf8'),'updated\n');assert.equal(await health(),true,'Update must restart native service');
+  const post=async(path,token,extra={})=>{const response=await fetch(`http://127.0.0.1:${port}`+path,{method:'POST',headers:{'content-type':'application/json',...(token?{authorization:`Bearer ${token}`}:{}) ,...extra},body:path==='/api/join'?JSON.stringify({code:'00',name:'Updater',driver:0}):'{}',signal:AbortSignal.timeout(30000)});return {status:response.status,value:await response.json(),cookie:response.headers.get('set-cookie')};};
+  assert.equal((await post('/api/updates/check')).status,401);
+  const player=await post('/api/join');assert.equal(player.status,200);
+  assert.equal((await post('/api/updates/check',player.value.token,{origin:'https://evil.invalid'})).status,403);
+  assert.equal((await post('/api/updates/install',player.value.token)).status,409,'An update must be checked before installing');
+  const update=await post('/api/updates/check',player.value.token);assert.equal(update.status,200);assert.equal(update.value.available,true);assert.match(update.value.description,/New release/);
+  const started=await post('/api/updates/install',player.value.token);assert.equal(started.status,200);assert.equal(started.value.updating,true);
+  let restarted=false;for(let tries=0;tries<100;tries++){await new Promise(r=>setTimeout(r,100));try{if(await readFile(join(state,'server.pid'),'utf8')!==first&&await health()){restarted=true;break;}}catch{}}
+  assert.equal(restarted,true,'Web update must restart the managed native service');
+  assert.match(await readFile(join(state,'update.log'),'utf8'),/Installing [a-f0-9]+ — New release/);assert.equal(await readFile(join(repo,'release-marker'),'utf8'),'updated\n');
+  const restored=await post('/api/session',null,{cookie:player.cookie.split(';')[0]});assert.equal(restored.status,200);assert.equal(restored.value.world.name,'Updater');
   shell('kill_server.sh');assert.equal(await health(),false);assert.match(shell('kill_server.sh'),/No managed server/);
   unrelated=spawn('sleep',['30']);await new Promise(r=>unrelated.once('spawn',r));await writeFile(join(state,'server.pid'),`${unrelated.pid}\n${join(target,'release/wild-wheels-server')}\n`);
   shell('kill_server.sh');assert.equal(unrelated.exitCode,null,'A stale PID must not kill an unrelated process');

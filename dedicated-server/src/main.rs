@@ -3,6 +3,7 @@ mod chat;
 mod photos;
 mod room;
 mod sessions;
+mod updates;
 use axum::{
     body::{Body, Bytes},
     extract::{
@@ -30,6 +31,7 @@ use tokio::{
 include!(concat!(env!("OUT_DIR"), "/assets.rs"));
 #[derive(Clone)]
 struct App {
+    updates: Arc<tokio::sync::Mutex<updates::Updates>>,
     sessions: Arc<tokio::sync::Mutex<sessions::Sessions>>,
     photos: Arc<Mutex<photos::Album>>,
     room: Arc<Mutex<Room>>,
@@ -88,7 +90,8 @@ fn limit(app: &App, ip: IpAddr, path: &str, max: u32, period: Duration) -> bool 
     record.1 <= max
 }
 async fn headers(request: axum::extract::Request, next: axum::middleware::Next) -> Response {
-    let mut r = match timeout(Duration::from_secs(10), next.run(request)).await {
+    let seconds = match request.uri().path() {"/api/updates/check" => 30, _ => 10};
+    let mut r = match timeout(Duration::from_secs(seconds), next.run(request)).await {
         Ok(r) => r,
         Err(_) => return error((408, "Request timed out.")),
     };
@@ -148,6 +151,19 @@ async fn http(
         if !b.is_object() {
             return error((400, "Use a JSON object."));
         }
+        if matches!(path, "/api/updates/check" | "/api/updates/install") {
+            {
+                let room = app.room.lock().unwrap();
+                let Some(id) = room.find(session(&h)) else {return error((401, "Join the room before managing updates."));};
+                if path.ends_with("/install") && (room.members[id].as_ref().unwrap().afk || !matches!(room.core.phase(), "ready" | "finished")) {
+                    return error((409, "Update the server between matches, while you are active."));
+                }
+            }
+            if !limit(&app, addr.ip(), path, 2, Duration::from_secs(60)) {return error((429, "Please wait before checking again."));}
+            let Ok(mut updates) = app.updates.try_lock() else {return error((409, "Another update check is running."));};
+            let result = match path {"/api/updates/check" => updates.check().await, _ => updates.start().await};
+            return match result {Ok(value) => response(200, value), Err(e) => error(e)};
+        }
         return match control(&app, path, session(&h), &b).await {
             Ok(value) => {
                 let token = value["token"].as_str().map(str::to_owned);
@@ -170,7 +186,7 @@ async fn http(
         return error((405, "Use GET."));
     }
     match path {
-        "/build.json" => response(200, json!({"build":BUILD})),
+        "/build.json" => response(200, json!({"build":BUILD,"revision":REVISION})),
         "/healthz" => {
             let room = app.room.lock().unwrap();
             let mut timings = room.tick_us.clone();
@@ -403,6 +419,7 @@ async fn main() {
         s
     });
     let app = App {
+        updates: Arc::new(tokio::sync::Mutex::new(updates::Updates::discover())),
         sessions: Arc::new(tokio::sync::Mutex::new(sessions::Sessions::open(
             std::env::var_os("WILD_WHEELS_SESSION_FILE").map(std::path::PathBuf::from)
                 .unwrap_or_else(|| ".wild-wheels/sessions.json".into()), sessions::now(),

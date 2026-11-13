@@ -75,6 +75,13 @@ fn main() {
         "];\npub const BUILD:&str={:?};",
         format!("{:X}", hash.finalize())[..10].to_owned()
     );
+    let git = |args: &[&str]| std::process::Command::new("git").args(args).current_dir(&root).output().ok().filter(|out|out.status.success()).map(|out|String::from_utf8_lossy(&out.stdout).trim().to_owned()).unwrap_or_default();
+    let revision = git(&["rev-parse", "HEAD"]);
+    for target in ["HEAD", "refs/heads/main"] {
+        let path = git(&["rev-parse", "--git-path", target]);
+        if !path.is_empty() {println!("cargo:rerun-if-changed={}", root.join(path).display());}
+    }
+    code += &format!("\npub const REVISION:&str={revision:?};");
     fs::write(
         PathBuf::from(env::var("OUT_DIR").unwrap()).join("assets.rs"),
         code,
