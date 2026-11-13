@@ -156,8 +156,12 @@ export async function checkControls(evaluate,app,room,id,sleep,captureFlip,captu
   const dizzySeen=actor.dizzy>0&&await evaluate("document.getElementById('dizzy-notice').textContent.includes('DIZZY')");
   const stinkSpent=bomberActor.stinkAmmo===0;
   if(captureStink)await captureStink();
-  for(let i=0;i<900;i++){if(actor.dizzy===0&&await evaluate("document.getElementById('dizzy-notice').classList.contains('hidden')"))break;await sleep(10);}
-  const stinkPass=dizzySeen&&actor.dizzy===0&&actor.health===healthBefore&&stinkSpent;
+  // Staying inside gas refreshes dizziness: five seconds of gas plus eight
+  // seconds of dizziness can outlast the old nine-second observation window.
+  const stinkDeadline=performance.now()+20000;
+  while(performance.now()<stinkDeadline){if(actor.dizzy===0&&await evaluate("document.getElementById('dizzy-notice').classList.contains('hidden')"))break;await sleep(25);}
+  const stinkResult={dizzySeen,stinkSpent,dizzyRemaining:actor.dizzy,healthBefore,healthAfter:actor.health,gasRemaining:Math.max(0,...room.world.stinkClouds.map(c=>c.life-c.age))};
+  const stinkPass=dizzySeen&&stinkResult.dizzyRemaining===0&&stinkResult.healthAfter===healthBefore&&stinkSpent;
   app.remove(bomber);
   await evaluate(`fetch('/api/name',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer ${shooter.token}'},body:JSON.stringify({name:'Rival <img>'})})`);
   room.world.projectiles=[];Object.assign(other,{health:3,shield:0,destroyed:0});damageBattle(room.world,other,id,3);
@@ -194,6 +198,6 @@ export async function checkControls(evaluate,app,room,id,sleep,captureFlip,captu
   for(let i=0;i<100;i++){if(await evaluate("document.querySelector('#match-results caption').textContent==='TIE ON POINTS · HOST WINS'"))break;await sleep(25);}
   const tiedRows=await evaluate("[...document.querySelectorAll('#match-results tbody tr')].map(row=>[...row.cells].map(cell=>cell.textContent))");
   const tiePass=tiedRows[0]?.[1]===hostActor.name+(id===room.host?' · YOU':'')&&tiedRows[0]?.[2]==='7'&&tiedRows[0]?.[3]==='9'&&tiedRows[1]?.[2]==='7'&&tiedRows[1]?.[3]==='1'&&await evaluate("document.querySelector('#match-results caption').textContent==='TIE ON POINTS · HOST WINS'");
-  return {readyPass,readyCleared,readyUI,popupPass,popup,refusalPass,autoStartPass,namePass,pickupKeptVulcan,commandPass,turboPass,flipPass,cameraPass,remoteSawFlip,flipTrace,desktopManual,warningPass,warning,chaffPass,chaffColor:ownCloud?.color,chaffSoundCount,greenNoticePass,orbitPass,orbitRotation,orbitTrace,desktopBombPass,stinkPass,whackPass,coWhackPass,whack,endingPass,resultsPass,leaderboard,tiePass,tiedRows,pass:readyPass&&readyCleared&&popupPass&&refusalPass&&autoStartPass&&namePass&&pickupKeptVulcan&&commandPass&&turboPass&&flipPass&&desktopManual&&warningPass&&chaffPass&&greenNoticePass&&orbitPass&&desktopBombPass&&stinkPass&&whackPass&&coWhackPass&&endingPass&&resultsPass&&tiePass,trace};
+  return {readyPass,readyCleared,readyUI,popupPass,popup,refusalPass,autoStartPass,namePass,pickupKeptVulcan,commandPass,turboPass,flipPass,cameraPass,remoteSawFlip,flipTrace,desktopManual,warningPass,warning,chaffPass,chaffColor:ownCloud?.color,chaffSoundCount,greenNoticePass,orbitPass,orbitRotation,orbitTrace,desktopBombPass,stinkPass,stinkResult,whackPass,coWhackPass,whack,endingPass,resultsPass,leaderboard,tiePass,tiedRows,pass:readyPass&&readyCleared&&popupPass&&refusalPass&&autoStartPass&&namePass&&pickupKeptVulcan&&commandPass&&turboPass&&flipPass&&desktopManual&&warningPass&&chaffPass&&greenNoticePass&&orbitPass&&desktopBombPass&&stinkPass&&whackPass&&coWhackPass&&endingPass&&resultsPass&&tiePass,trace};
   }finally{clearInterval(fixtureHeartbeat);}
 }

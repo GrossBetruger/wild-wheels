@@ -22,7 +22,28 @@ export async function checkYuda(evaluate,app,room,id,observer,wait,sleep,capture
   const remoteWheelie=await wait(()=>evaluate(`__game.renderer.yudaStunts.riders.get(${observer.id})?.wheelie>.9`));await capture('yuda-remote-wheelie');
   peer.boost=0;peer.celebrate=1.6;app.broadcast(room);
   const remoteLounge=await wait(()=>evaluate(`__game.renderer.yudaStunts.riders.get(${observer.id})?.lounge>.9`));await capture('yuda-remote-la-vie');
-  const smokeLingers=await wait(()=>evaluate(`__game.race.boost===0&&__game.renderer.yudaExhaust.clouds.some(c=>c.owner===${id}&&__game.renderer.yudaExhaust.time-c.born>1)&&__game.renderer.smoke.sprites.some((v,i)=>i%7===3&&v>4)`));await capture('yuda-lingering-smoke');
+  // Give smoke its own boost and observe actual rendered frames. The earlier
+  // trail may legitimately expire while remote gestures/screenshots run.
+  await evaluate(`{
+    const renderer=__game.renderer,draw=renderer.drawBattle;
+    const state=__game.yudaSmokeCheck={startedAt:renderer.yudaExhaust.time,boosted:false,stoppedAt:null,lingered:false,cloudAge:null,afterStop:null};
+    renderer.drawBattle=function(...args){
+      const result=draw.apply(this,args),world=args[0],time=renderer.yudaExhaust.time;if(state.lingered)return result;
+      if(world.boost>0)state.boosted=true;
+      if(state.boosted&&world.boost===0){
+        state.stoppedAt??=time;state.afterStop=time-state.stoppedAt;
+        const cloud=renderer.yudaExhaust.clouds.find(c=>c.owner===${id}&&c.born>state.startedAt&&time-c.born>1);
+        state.cloudAge=cloud?time-cloud.born:null;
+        if(state.afterStop>=1&&cloud&&renderer.smoke.sprites.some((v,i)=>i%7===3&&v>4))state.lingered=true;
+      }
+      return result;
+    };
+    __game.restoreYudaSmokeCheck=()=>{renderer.drawBattle=draw;};
+  }`);
+  Object.assign(own,{wx:-65,wz:0,heading:0,motionHeading:0,cameraHeading:0,speed:0,boost:.6,somersault:0,celebrate:0});app.broadcast(room);
+  const smokeLingers=await wait(()=>evaluate('__game.yudaSmokeCheck.lingered'));
+  const smokeResult=await evaluate('({...__game.yudaSmokeCheck})');
+  await evaluate('__game.restoreYudaSmokeCheck()');await capture('yuda-lingering-smoke');
   peer.destroyed=999;
   Object.assign(own,{wx:-65,wz:0,heading:0,motionHeading:0,cameraHeading:0,speed:0,boost:0,somersault:0,celebrate:0,vulcan:8,item:'hedgehog',fireCooldown:0});app.broadcast(room);
   await wait(()=>evaluate('__game.race.vulcan>0&&__game.race.somersault===0&&__game.race.fireCooldown===0'));
@@ -35,5 +56,5 @@ export async function checkYuda(evaluate,app,room,id,observer,wait,sleep,capture
   await wait(()=>evaluate(`__game.race.vulcan===0&&__game.race.bots.some(actor=>actor.id===${observer.id}&&actor.driver===10&&actor.destroyed===0)`));await evaluate('__game.laserDraws=0');
   app.controls(observer,{sequence:0,keys:[],actions:[{type:'fire',id:0,afterMove:-1}],epoch:room.world.soundEpoch});
   const remoteLaser=await wait(()=>evaluate(`__game.laserDraws>0&&__game.race.projectiles.some(shot=>shot.owner===${observer.id}&&shot.vulcan)`));await capture('yuda-remote-laser');
-  return {smokeLingers,wheelie,remoteWheelie,remoteLounge,jacketFlight,remoteJacket,vulcanBare,redressed,salute,boost,flip,remoteFlip,laser,replicated,remoteLaser,pass:smokeLingers&&wheelie&&remoteWheelie&&remoteLounge&&jacketFlight&&remoteJacket&&vulcanBare&&redressed&&salute&&boost&&flip&&remoteFlip&&laser&&replicated&&remoteLaser};
+  return {smokeLingers,smokeResult,wheelie,remoteWheelie,remoteLounge,jacketFlight,remoteJacket,vulcanBare,redressed,salute,boost,flip,remoteFlip,laser,replicated,remoteLaser,pass:smokeLingers&&wheelie&&remoteWheelie&&remoteLounge&&jacketFlight&&remoteJacket&&vulcanBare&&redressed&&salute&&boost&&flip&&remoteFlip&&laser&&replicated&&remoteLaser};
 }
