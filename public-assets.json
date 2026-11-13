@@ -43,5 +43,6 @@
   "fire-ring.js",
   "fire-ring-visual.js",
   "photography.js",
-  "photo-protocol.js"
+  "photo-protocol.js",
+  "dark-bomb-light.js"
 ]

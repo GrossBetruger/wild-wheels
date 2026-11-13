@@ -9,7 +9,7 @@ export async function cameraJpeg(image){
 }
 const dataUrl=blob=>new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(blob);});
 export class BomberPhotography{
-  identity=null;local=[];photos=[];requested=false;busy=false;cooldown=0;count=0;closed=false;visible=false;pollAt=0;polling=false;offset=null;lastSlide=null;serverOffset=0;anchor=0;
+  identity=null;local=[];photos=[];requested=false;busy=false;cooldown=0;count=0;closed=false;visible=false;pollAt=0;polling=false;offset=null;manualAt=0;lastSlide=null;serverOffset=0;anchor=0;
   constructor({canvas,viewport,network,sound,unlock}){
     Object.assign(this,{canvas,viewport,network,sound,unlock});
     this.button=document.createElement('button');this.button.type='button';this.button.id='take-photo';this.button.className='photo-button hidden';this.button.textContent='📸 PHOTO ∞';this.button.onclick=()=>this.request();this.button.title='Take a photograph · unlimited shots';
@@ -35,7 +35,7 @@ export class BomberPhotography{
     const restarted=this.elapsed!==undefined&&world.elapsed<this.elapsed;this.elapsed=world.elapsed;this.world=world;const identity=[world.mode,world.arena,world.soundEpoch??0].join(':');
     if(identity!==this.identity||restarted){this.identity=identity;this.local=[];this.photos=[];this.count=0;this.closed=false;this.lastSlide=null;this.offset=null;this.pollAt=0;this.anchor=0;this.serverOffset=0;this.gallery.classList.add('hidden');this.status.textContent='';this.requested=false;}
     this.button.classList.toggle('hidden',!world.bomber||world.mode!=='combat');this.button.disabled=this.busy||world.phase!=='racing'||performance.now()<this.cooldown;
-    this.button.textContent=this.busy?'📸 SAVING…':`📸 PHOTO ∞${this.count?` · ${this.count}`:''}`;
+    const label=this.busy?'📸 SAVING…':`📸 PHOTO ∞${this.count?` · ${this.count}`:''}`;if(this.button.textContent!==label)this.button.textContent=label;
     const finished=world.mode==='combat'&&world.phase==='finished';
     if(!finished){this.gallery.classList.add('hidden');this.reopen.classList.add('hidden');return;}
     if(this.network.active&&performance.now()>=this.pollAt&&!this.polling)this.loadAlbum();
@@ -60,11 +60,12 @@ export class BomberPhotography{
       this.photos=album.photos;this.serverOffset=Math.max(0,album.serverTime-album.startAt)+(performance.now()-started)/2;this.anchor=performance.now();
     }catch{}finally{this.polling=false;}
   }
+  currentSlide(now=performance.now()){return photoIndex(this.offset===null?this.serverOffset+now-this.anchor:now-this.manualAt,this.photos.length,this.offset??0);}
   slide(){
-    const index=this.offset===null?photoIndex(this.serverOffset+performance.now()-this.anchor,this.photos.length):((this.offset%this.photos.length)+this.photos.length)%this.photos.length;
+    const index=this.currentSlide();
     const photo=this.photos[index],key=`${this.identity}:${photo.id}`;if(key===this.lastSlide)return;this.lastSlide=key;
     this.image.src=photo.url;const seconds=Math.max(0,Math.floor(photo.elapsed));this.image.alt=`Photograph by ${photo.name} at ${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`;this.caption.textContent=`${index+1} / ${this.photos.length} · ${this.image.alt}`;
     this.image.animate([{opacity:0,transform:'translateX(18px) rotate(-2deg)'},{opacity:1,transform:'translateX(0) rotate(-1deg)'}],{duration:450,easing:'ease-out'});this.sound('photoSlide');
   }
-  advance(direction){if(!this.photos.length)return;const current=this.offset??photoIndex(this.serverOffset+performance.now()-this.anchor,this.photos.length);this.offset=current+direction;this.lastSlide=null;}
+  advance(direction){if(!this.photos.length)return;const now=performance.now(),current=this.currentSlide(now);this.offset=current+direction;this.manualAt=now;this.lastSlide=null;}
 }

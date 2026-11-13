@@ -12,4 +12,4 @@ export function validPhoto(bytes){
     at+=length;
   }return false;
 }
-export function photoIndex(elapsedMs,count){return count?Math.floor(Math.max(0,elapsedMs)/PHOTO_SLIDE_MS)%count:0;}
+export function photoIndex(elapsedMs,count,offset=0){return count?((Math.floor(Math.max(0,elapsedMs)/PHOTO_SLIDE_MS)+offset)%count+count)%count:0;}

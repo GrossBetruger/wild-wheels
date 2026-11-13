@@ -1,3 +1,4 @@
+import {fogCamera,lightUniforms} from './dark-bomb-light.js';
 export function darkHumorState(world){
   if(world.specialAbilities===false||world.phase!=='racing')return {strength:0,xray:false};
   const active=[world,...world.bots].filter(a=>a.driver===14&&a.specialActive>0&&!a.destroyed&&!a.inactive&&!a.afk&&!a.bomber);
@@ -11,6 +12,7 @@ export class DarkFog{
     gl.attachShader(this.program,compile(gl,gl.VERTEX_SHADER,'attribute vec2 position;varying vec2 uv;void main(){uv=position*.5+.5;gl_Position=vec4(position,0.,1.);}'));
     gl.attachShader(this.program,compile(gl,gl.FRAGMENT_SHADER,`precision mediump float;
       varying vec2 uv;uniform float clock;uniform float strength;uniform float aspect;
+      uniform vec4 bombLights[4];uniform vec3 cameraEye;uniform vec3 rayRight;uniform vec3 rayUp;uniform vec3 rayForward;uniform float orthographic;
       float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
       float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}
       float fbm(vec2 p){float n=0.,w=.5;for(int i=0;i<4;i++){n+=noise(p)*w;p=mat2(1.6,1.2,-1.2,1.6)*p;w*=.5;}return n;}
@@ -23,16 +25,25 @@ export class DarkFog{
         vec3 color=vec3(.008,.004,.022)+vec3(.09,.015,.18)*clouds+vec3(.035,.12,.13)*tendrils*pulse;
         float vignette=smoothstep(.1,1.2,length((uv-.5)*vec2(1.1,1.4)));
         color*=1.-vignette*.65;
-        gl_FragColor=vec4(color,strength*(.90+.025*clouds));
+        vec2 ndc=uv*2.-1.;vec3 ray=rayForward+rayRight*ndc.x+rayUp*ndc.y;
+        vec3 fogPoint=cameraEye+ray/max(.0001,length(ray))*160.;
+        if(orthographic>.5){fogPoint=cameraEye+rayRight*ndc.x+rayUp*ndc.y;fogPoint.y=0.;}
+        else if(ray.y<-.001){fogPoint=cameraEye+ray*min(400.,cameraEye.y/max(.02,-ray.y));}
+        float illumination=0.;for(int i=0;i<4;i++){if(bombLights[i].w>0.)illumination+=bombLights[i].w/sqrt(max(1.,distance(fogPoint,bombLights[i].xyz)));}
+        float warm=illumination/(1.+illumination);
+        color+=vec3(.58,.38,.055)*(.65*warm)*(.45+clouds*.6);
+        gl_FragColor=vec4(color,strength*(.90+.025*clouds)*(1.-.2*warm));
       }`));
     gl.linkProgram(this.program);if(!gl.getProgramParameter(this.program,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(this.program));
     this.position=gl.getAttribLocation(this.program,'position');this.clock=gl.getUniformLocation(this.program,'clock');this.strength=gl.getUniformLocation(this.program,'strength');this.aspect=gl.getUniformLocation(this.program,'aspect');
+    this.bombLights=gl.getUniformLocation(this.program,'bombLights[0]');this.cameraEye=gl.getUniformLocation(this.program,'cameraEye');this.rayRight=gl.getUniformLocation(this.program,'rayRight');this.rayUp=gl.getUniformLocation(this.program,'rayUp');this.rayForward=gl.getUniformLocation(this.program,'rayForward');this.orthographic=gl.getUniformLocation(this.program,'orthographic');
     this.buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,this.buffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]),gl.STATIC_DRAW);
   }
-  draw(renderer,time,strength){
+  draw(renderer,time,strength,lights,matrix,eye){
     const gl=this.gl;for(const a of renderer.attributes)gl.disableVertexAttribArray(a);
     gl.useProgram(this.program);gl.disable(gl.DEPTH_TEST);gl.depthMask(false);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
     gl.bindBuffer(gl.ARRAY_BUFFER,this.buffer);gl.enableVertexAttribArray(this.position);gl.vertexAttribPointer(this.position,2,gl.FLOAT,false,0,0);
+    const camera=fogCamera(matrix,eye);gl.uniform4fv(this.bombLights,lightUniforms(lights));gl.uniform3fv(this.cameraEye,camera.eye);gl.uniform3fv(this.rayRight,camera.right);gl.uniform3fv(this.rayUp,camera.up);gl.uniform3fv(this.rayForward,camera.forward);gl.uniform1f(this.orthographic,camera.orthographic?1:0);
     gl.uniform1f(this.clock,time);gl.uniform1f(this.strength,strength);gl.uniform1f(this.aspect,gl.drawingBufferWidth/gl.drawingBufferHeight);gl.drawArrays(gl.TRIANGLES,0,6);
     gl.disableVertexAttribArray(this.position);gl.disable(gl.BLEND);gl.depthMask(true);gl.enable(gl.DEPTH_TEST);gl.useProgram(renderer.program);
   }

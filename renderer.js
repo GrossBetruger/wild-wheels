@@ -1,3 +1,4 @@
+import {darkBombLights,lightUniforms} from './dark-bomb-light.js';
 import {drawFireRing,drawFireRingOut} from './fire-ring-visual.js';
 import {arrivalScale,departurePose,drawTeleportHaze} from './cricket-teleport.js';
 import {batAim,drawBat} from './bat-companion.js';
@@ -61,7 +62,7 @@ export class Renderer {
       uniform mat4 matrix;uniform vec3 eye;uniform vec3 origin;
       uniform vec2 rotation;uniform vec2 pitch;uniform vec2 roll;uniform vec4 plumage;
       uniform float emission;uniform float fogScale;uniform float xray;
-      varying vec3 shade;varying float distanceToEye;
+      varying vec3 shade;varying float distanceToEye;varying vec3 worldPosition;
       vec3 tilt(vec3 v){return vec3(v.x,v.y*pitch.x-v.z*pitch.y,v.y*pitch.y+v.z*pitch.x);}
       void main(){
         vec3 local=position,localNormal=normal,tint=color;
@@ -105,16 +106,16 @@ export class Renderer {
           light=.62+.38*abs(dot(n,lamp));
         }
         if(xray>0.){float rim=pow(1.-abs(dot(normalize(n),normalize(eye-p))),2.);tint=vec3(.12,.6,.7)+vec3(.4,.4,.25)*rim;}
-        gl_Position=matrix*vec4(p,1.0);shade=tint*mix(light,1.,emission);distanceToEye=length(p-eye)*fogScale;
+        gl_Position=matrix*vec4(p,1.0);worldPosition=p;shade=tint*mix(light,1.,emission);distanceToEye=length(p-eye)*fogScale;
       }
     `));
-    gl.attachShader(this.program,shader(gl,gl.FRAGMENT_SHADER,`precision mediump float;varying vec3 shade;varying float distanceToEye;uniform vec3 fog;uniform float darkness;void main(){float amount=smoothstep(130.,950.,distanceToEye);float nearby=mix(1.,.12,smoothstep(20.,85.,distanceToEye));gl_FragColor=vec4(mix(shade,fog,amount*.92)*mix(1.,nearby,darkness),1.);}`));
+    gl.attachShader(this.program,shader(gl,gl.FRAGMENT_SHADER,`precision mediump float;varying vec3 shade;varying float distanceToEye;varying vec3 worldPosition;uniform vec3 fog;uniform float darkness;uniform vec4 bombLights[4];void main(){float amount=smoothstep(130.,950.,distanceToEye);float nearby=mix(1.,.12,smoothstep(20.,85.,distanceToEye));vec3 lit=mix(shade,fog,amount*.92)*mix(1.,nearby,darkness);float illumination=0.;if(darkness>0.){for(int i=0;i<4;i++){if(bombLights[i].w>0.)illumination+=bombLights[i].w/sqrt(max(1.,distance(worldPosition,bombLights[i].xyz)));}}lit+=vec3(1.,.75,.18)*(.12+shade*.7)*(.9*illumination/(1.+illumination))*darkness;gl_FragColor=vec4(lit,1.);}`));
     gl.linkProgram(this.program);if(!gl.getProgramParameter(this.program,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(this.program));gl.useProgram(this.program);
     this.attributes=['position','normal','color'].map(n=>gl.getAttribLocation(this.program,n));this.matrix=gl.getUniformLocation(this.program,'matrix');this.eyeUniform=gl.getUniformLocation(this.program,'eye');this.fog=gl.getUniformLocation(this.program,'fog');this.emission=gl.getUniformLocation(this.program,'emission');this.xray=gl.getUniformLocation(this.program,'xray');this.staticBuffer=gl.createBuffer();this.dynamicBuffer=gl.createBuffer();this.glowBuffer=gl.createBuffer();gl.enable(gl.DEPTH_TEST);this.track=-1;this.eye=null;
     this.originUniform=gl.getUniformLocation(this.program,'origin');this.rotationUniform=gl.getUniformLocation(this.program,'rotation');gl.uniform3f(this.originUniform,0,0,0);gl.uniform2f(this.rotationUniform,1,0);
     this.pitchUniform=gl.getUniformLocation(this.program,'pitch');gl.uniform2f(this.pitchUniform,1,0);
     this.rollUniform=gl.getUniformLocation(this.program,'roll');gl.uniform2f(this.rollUniform,1,0);
-    this.fogScale=gl.getUniformLocation(this.program,'fogScale');this.darknessUniform=gl.getUniformLocation(this.program,'darkness');
+    this.fogScale=gl.getUniformLocation(this.program,'fogScale');this.darknessUniform=gl.getUniformLocation(this.program,'darkness');this.bombLightsUniform=gl.getUniformLocation(this.program,'bombLights[0]');
     this.plumageUniform=gl.getUniformLocation(this.program,'plumage');gl.uniform4f(this.plumageUniform,0,0,0,0);
     this.particleProgram=gl.createProgram();
     gl.attachShader(this.particleProgram,shader(gl,gl.VERTEX_SHADER,`attribute vec3 position;attribute float size;attribute vec3 color;uniform mat4 matrix;uniform float height;varying vec3 tint;void main(){gl_Position=matrix*vec4(position,1.);gl_PointSize=clamp(size*height/max(.1,gl_Position.w),1.,180.);tint=color;}`));
@@ -602,7 +603,7 @@ export class Renderer {
     const wobble=r.dizzy>0&&!matchMedia('(prefers-reduced-motion: reduce)').matches?Math.sin((DIZZY_DURATION-r.dizzy)*(r.boost>0?14:10))*(r.boost>0?.24:.14):0;
     const p=combatPose(r),cx=Math.sin(r.cameraHeading+wobble),cz=Math.cos(r.cameraHeading+wobble),overview=r.bomber?bomberCamera(width,height,arenas[r.arena].size,this.bomberView??'3d',this.bomberFocus,this.bomberZoom??1):null,eye=overview?.eye??[p.x-cx*17,10+(r.destroyed?5:0),p.z-cz*17],view=overview?.matrix??cameraMatrix(eye,[p.x+cx*18,1.5,p.z+cz*18],width/height,r.boost>0?1.2:r.wasDrifting?1.13:1.07);
     this.bomberMatrix=overview?.matrix??null;
-    gl.uniform1f(this.fogScale,overview?.fogScale??1);gl.uniform1f(this.darknessUniform,darkHumorState(r).strength);
+    gl.uniform1f(this.fogScale,overview?.fogScale??1);const dark=darkHumorState(r),bombLights=darkBombLights(r,dark.strength);gl.uniform1f(this.darknessUniform,dark.strength);gl.uniform4fv(this.bombLightsUniform,lightUniforms(bombLights));
     this.nameplates=kartNameplates(r,view,eye);
     gl.uniformMatrix4fv(this.matrix,false,view);gl.uniform3fv(this.eyeUniform,eye);gl.uniform3fv(this.fog,sky);gl.uniform1f(this.emission,0);this.drawBuffer(this.staticBuffer,this.staticCount);
     const m=new Mesh();this.glow=new Mesh();this.smoke=new Mesh();
@@ -731,9 +732,9 @@ export class Renderer {
     this.bikerSparks();this.yudaExhaust.draw(this.smoke,time);
     if(r.wasDrifting&&r.driver!==10){this.glow.at(p.x,.25,p.z,r.heading);const color=r.drift>=.85?[.5,.08,.9]:r.drift>=.45?[0,.4,.9]:[.6,.2,.02];for(const side of [-1,1])this.glow.particle(side*1.65,0,-1.4,1,color);}
     this.owlFlight.trail(m);this.flush(m,view,overview?.halfHeight?height/(2*overview.halfHeight):height);
-    const dark=darkHumorState(r);this.darkState=dark;
+    this.darkState=dark;
     if(dark.strength>0){
-      this.darkFog??=new DarkFog(gl);this.darkFog.draw(this,time,dark.strength);
+      this.darkFog??=new DarkFog(gl);this.darkFog.draw(this,time,dark.strength,bombLights,view,eye);
       this.nameplates=[];
       if(dark.xray){
         gl.disable(gl.DEPTH_TEST);gl.uniform1f(this.emission,1);gl.uniform1f(this.fogScale,0);

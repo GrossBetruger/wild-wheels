@@ -58,6 +58,8 @@ try{
   await wait(()=>evaluate(host,`document.querySelector('#photo-slideshow img').src!==${JSON.stringify(first)}`),'Photo reel did not advance',6000);
   assert.equal(await evaluate(guest,"__game.photoSounds.filter(k=>k==='cameraShutter').length"),3);
   for(const session of sessions)assert.ok(await evaluate(session,"__game.photoSounds.filter(k=>k==='photoSlide').length>=2"));
+  await evaluate(host,"__game.photography.advance(1)");await sleep(100);const manual=await evaluate(host,"document.querySelector('#photo-slideshow img').src");await wait(()=>evaluate(host,`document.querySelector('#photo-slideshow img').src!==${JSON.stringify(manual)}`),'Slideshow stopped after manual browsing',6000);
+  await evaluate(host,"document.getElementById('photo-slideshow').scrollIntoView({block:'center'})");
   const screenshot=await call('Page.captureScreenshot',{format:'png'},host);await writeFile(output+'.png',Buffer.from(screenshot.data,'base64'));
   await evaluate(host,"__game.network.control('reset')");await wait(()=>evaluate(guest,"document.getElementById('photo-slideshow').classList.contains('hidden')&&__game.photography.photos.length===0"),'Next match retained the old gallery');
   assert.deepEqual(errors,[]);const report={pass:true,photos:3,nonblankCapture:true,threeDAndMap:true,ammoUnchanged:true,sharedSlideshow:true,slideshowAdvances:true,shutterAndSlideSounds:true,nextMatchClearsAlbum:true,errors};await writeFile(output,JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify(report,null,2));

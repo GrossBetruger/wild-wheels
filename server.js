@@ -7,7 +7,7 @@ import { createTunnelControl } from './tunnel-control.js';
 const files=new Map(JSON.parse(readFileSync(new URL('./public-assets.json',import.meta.url))).map(name=>[name==='index.html'?'/':'/'+name,[name,({'html':'text/html','css':'text/css','wasm':'application/wasm','ogg':'audio/ogg','flac':'audio/flac'})[name.split('.').at(-1)]??'text/javascript']]));
 export function createGameServer(options={}){
 const multiplayer=new Multiplayer(options);
-const runtimeHash=createHash('sha256');for(const name of ['server.js','multiplayer.js','ngrok.js','tunnel-control.js','combat.js','arena-core.js','core-view.js','rust-core.wasm','engine.js','track.js','package-lock.json'])runtimeHash.update(name).update(readFileSync(new URL(name,import.meta.url)));const runtimeBuild=runtimeHash.digest('hex');
+const runtimeHash=createHash('sha256');for(const name of ['server.js','multiplayer.js','photo-album.js','ngrok.js','tunnel-control.js','combat.js','arena-core.js','core-view.js','rust-core.wasm','engine.js','track.js','package-lock.json'])runtimeHash.update(name).update(readFileSync(new URL(name,import.meta.url)));const runtimeBuild=runtimeHash.digest('hex');
 const server=createServer(async (req, res) => {
   if((req.url??'').split('?')[0]==='/build.json'){
     try{

@@ -48,6 +48,16 @@ export class RaceAudio {
     g.gain.setValueAtTime(.001,t);g.gain.linearRampToValueAtTime(volume,t+.006);g.gain.exponentialRampToValueAtTime(.001,t+duration);
     s.connect(f).connect(g).connect(this.effects);s.start(t);s.stop(t+duration+.01);s.onended=()=>{s.disconnect();f.disconnect();g.disconnect();};
   }
+  mechanicalClick(duration,frequency,volume,delay,type){
+    if(!this.context||!this.enabled)return;const c=this.context,t=c.currentTime+delay,source=c.createBufferSource(),filter=c.createBiquadFilter(),gain=c.createGain();
+    source.buffer=this.noise;filter.type=type;filter.frequency.value=frequency;filter.Q.value=.55;
+    gain.gain.setValueAtTime(.0001,t);gain.gain.linearRampToValueAtTime(volume,t+.0006);gain.gain.exponentialRampToValueAtTime(.0001,t+duration);
+    source.connect(filter).connect(gain).connect(this.effects);source.start(t,Math.random()*.4);source.stop(t+duration+.005);source.onended=()=>{source.disconnect();filter.disconnect();gain.disconnect();};
+  }
+  projectorSlide(){
+    // Shutter latch, tray ratchet, then the slide seating with a dry ka-chunk.
+    for(const [duration,frequency,volume,delay,type]of [[.012,2600,.3,0,'highpass'],[.032,550,.36,.01,'lowpass'],[.007,1800,.12,.043,'bandpass'],[.009,2200,.11,.063,'highpass'],[.022,1450,.42,.095,'bandpass'],[.018,420,.32,.102,'lowpass']])this.mechanicalClick(duration,frequency,volume,delay,type);
+  }
   fanfare(){
     for(const [delay,pitch] of [[0,392],[.16,523.25],[.32,659.25],[.55,783.99]]){
       this.note(pitch,.38,{delay,volume:.28});this.note(pitch/2,.4,{delay,volume:.12,type:'sine'});
@@ -85,8 +95,8 @@ export class RaceAudio {
   event(type){switch(type){
     case 'teleportOut':this.burst(.25,900,.2,0,4200);this.note(220,.28,{type:'sine',end:880,volume:.14});break;
     case 'teleportIn':this.burst(.22,3600,.13,0,800);for(const [i,f]of [880,1174.66,1567.98].entries())this.note(f,.18,{type:'sine',delay:i*.045,volume:.06});break;
-    case 'cameraShutter':this.burst(.055,4200,.5,0,1100);this.note(650,.045,{type:'square',end:180,volume:.12});this.burst(.08,1800,.2,.075,500);break;
-    case 'photoSlide':this.burst(.11,1700,.2,0,400);this.note(320,.075,{type:'triangle',end:160,volume:.1,delay:.04});break;
+    case 'cameraShutter':this.mechanicalClick(.018,3200,.42,0,'highpass');this.mechanicalClick(.027,1150,.4,.065,'bandpass');this.mechanicalClick(.018,420,.2,.07,'lowpass');break;
+    case 'photoSlide':this.projectorSlide();break;
     case 'fireRingOut':this.burst(.6,2300,.22,0,180);this.note(90,.35,{type:'sine',end:35,volume:.12});break;
     case 'chaff':this.note(110,.15,{type:'sine',end:45,volume:.4});this.burst(.8,5500,.45,0,900);this.note(880,.2,{type:'sine',end:330,volume:.12,delay:.08});break;
     case 'chaffDivert':this.note(1200,.22,{type:'triangle',end:160,volume:.18});this.burst(.22,3000,.24,0,500);this.note(660,.12,{type:'sine',end:990,volume:.2,delay:.1});this.note(990,.2,{type:'sine',end:1320,volume:.16,delay:.19});break;
