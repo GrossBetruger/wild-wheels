@@ -23,6 +23,8 @@ export async function checkSpecials(evaluate,app,room,id,sleep,capture){
   const audioResolved=await wait(()=>evaluate('__game.audio.warpMusic===null'));
   const movesAgain=await wait(()=>app.snapshot(room,peer).world.wz>stoppedAt+.05);
   const cooldown=await evaluate("__game.race.specialCooldown>15&&__game.network.action('special')!==true");
+  // Model an opponent's actual Avita activation, including its cooldown edge.
+  peer.driver=8;Object.assign(other,{driver:8,specialCooldown:20});
   Object.assign(room.world,{timeStop:2.5,timeOwner:peer.id});app.broadcast(room);
   const frozenClient=await wait(()=>evaluate("__game.race.timeStop>1&&document.querySelector('.special-status').textContent.includes('TIME DILATION')"));
   const heldAt=await evaluate('__game.race.wz');await evaluate("__game.keys.add('arrowup')");await sleep(400);
@@ -98,7 +100,7 @@ export async function checkSpecials(evaluate,app,room,id,sleep,capture){
   Object.assign(own,{ammo:18,missiles:6,turbos:6,vulcan:2,item:'hedgehog'});room.world.supplies=[{id:9000,kind:'bicycle',owner:peer.id,wx:own.wx,wz:own.wz,age:1.2,cooldown:0,version:0},...['hedgehog','missile','missile','boost','boost'].map((kind,id)=>({id,kind,wx:own.wx,wz:own.wz,cooldown:0,version:0}))];app.broadcast(room);
   const increasedCapacity=await wait(()=>evaluate("__game.race.intelligenceBonus===2&&__game.race.ammo===22&&__game.race.missiles===8&&__game.race.turbos===8&&document.querySelector('.intelligence-status').textContent.includes('INTELLIGENCE 7')&&document.getElementById('item-name').textContent.includes('HOLD SPACE')"));await capture('bicycle-intelligence-capacity');
   await evaluate("__game.bicycleFrames=[];__game.recordBicycles=true");
-  room.world.supplies=[{id:9001,kind:'bicycle',owner:peer.id,wx:65,wz:60,dropWx:65,dropWz:53,heading:0,age:4.35,cooldown:0,version:0}];app.broadcast(room);
+  room.world.supplies=[{id:9001,kind:'bicycle',owner:peer.id,wx:own.wx+5,wz:own.wz+8,dropWx:own.wx+5,dropWz:own.wz+1,heading:0,age:4.35,cooldown:0,version:0}];app.broadcast(room);
   const expiryVisible=await wait(()=>evaluate("__game.race.supplies.some(s=>s.id===9001)"));
   const bicycleFaded=await wait(()=>evaluate("__game.bicycleFrames.some(f=>f.count===1&&f.opacity>0&&f.opacity<.8)"));await capture("bicycle-fading");
   const bicycleExpired=bicycleFaded&&expiryVisible&&await wait(()=>evaluate("!__game.race.supplies.some(s=>s.id===9001)"))&&!room.world.supplies.some(s=>s.id===9001);
