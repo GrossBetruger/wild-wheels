@@ -8,7 +8,7 @@ export class RewardQueue {
   }
   sample(now){
     if(this.active&&now>=this.active.until)this.active=null;
-    if(!this.active&&this.pending.length)this.active={...this.pending.shift(),started:now,until:now+3};
+    if(!this.active&&this.pending.length){const event=this.pending.shift();this.active={...event,started:now,until:now+(event.duration??3)};}
     return this.active;
   }
   reset(){this.pending=[];this.seen.clear();this.active=null;}
@@ -35,7 +35,7 @@ export class RewardNotice extends RewardQueue {
     const event=this.sample(now);this.node.classList.toggle('hidden',!event);
     if(!event){this.rendered=null;return;}
     if(this.rendered===event.id)return;
-    this.rendered=event.id;this.node.style.setProperty('--reward-color',event.color??'#d5b4ff');
+    this.rendered=event.id;this.node.dataset.theme=event.theme??'';this.node.style.setProperty('--reward-color',event.color??'#d5b4ff');
     const card=document.createElement('div');card.className='reward-card';
     const icon=document.createElement('span'),title=document.createElement('strong'),detail=document.createElement('small');
     icon.className='reward-icon';icon.textContent=event.icon??'✦';title.textContent=event.title;detail.textContent=event.detail??'';

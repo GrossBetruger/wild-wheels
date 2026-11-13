@@ -52,3 +52,12 @@ test('Tammy can activate Low-Cost Locust through the actual client command proto
   client.accept(server.packet(),.02);client.frame(0,[],.02);
   assert.equal(client.action('special',undefined,.02),false);
 });
+test('Tammy deploys Low-Cost Locust when every opponent is a server-controlled bot',()=>{
+  const server=ArenaCore.room({code:'00',maxPlayers:8,dedicated:true,host:null,arena:0,bots:3,epoch:1,players:[{id:0,name:'Tammy',driver:5,role:'driver'}]});
+  server.start();for(let i=0;i<181;i++)server.step(1/60);
+  assert.equal(server.snapshot().bots.filter(a=>!a.human).length,3);
+  const client=new ArenaClient();client.accept(server.packet(),0);client.frame(0,[],0);
+  assert.equal(client.action('special',undefined,0),true);server.step(.01,[{actor:0,...client.outbound([])}]);
+  assert.equal(server.snapshot().locusts.length,6);
+  client.accept(server.packet(),.02);client.frame(0,[],.02);assert.equal(client.present().locusts.length,6);
+});

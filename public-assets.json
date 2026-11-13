@@ -1,5 +1,6 @@
 [
   "index.html",
+  "ui/ability-announcements.js",
   "gameplay/locusts.js",
   "characters/tammy/locusts.js",
   "ui/reward-notice.js",
