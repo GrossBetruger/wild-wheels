@@ -1,7 +1,7 @@
 import {damageBattle,navigate,arenas} from './combat.js';
 const eligible=a=>a.driver!==5&&!a.inactive&&!a.afk&&!a.bomber;
-const blocked=(arena,x,z)=>Math.abs(x)>95.5||Math.abs(z)>95.5||arena.blocks.some(([bx,bz,w,d])=>Math.abs(x-bx)<w/2+.5&&Math.abs(z-bz)<d/2+.5);
-const clear=(arena,a,b)=>{const d=Math.hypot(a.wx-b.wx,a.wz-b.wz);for(let t=3;t<d;t+=3)if(blocked(arena,a.wx+(b.wx-a.wx)*t/d,a.wz+(b.wz-a.wz)*t/d))return false;return true;};
+const blocked=(arena,x,z,padding=.5)=>Math.abs(x)>96-padding||Math.abs(z)>96-padding||arena.blocks.some(([bx,bz,w,d])=>Math.abs(x-bx)<w/2+padding&&Math.abs(z-bz)<d/2+padding);
+const clear=(arena,a,b)=>{const d=Math.hypot(a.wx-b.wx,a.wz-b.wz);for(let t=3;t<d;t+=3)if(blocked(arena,a.wx+(b.wx-a.wx)*t/d,a.wz+(b.wz-a.wz)*t/d,.4))return false;return true;};
 export function spawnLocusts(world,owner){
   world.locusts??=[];world.locustSequence??=0;
   const count=[world,...world.bots].filter(eligible).length*2,centers=[[-65,-65],[65,65],[-65,65],[65,-65],[0,78],[78,0],[0,-78],[-78,0]],offset=Math.floor(world.locustSequence/4);

@@ -41,3 +41,14 @@ for(const engine of ['JavaScript','Rust']){
 test('Tammy’s preview explains Low-Cost Locust and Cricket’s Jump separately',()=>{
   assert.deepEqual(characterAbilities(5).map(a=>a.title),['LOW-COST LOCUST','CRICKET’S JUMP']);
 });
+test('Tammy can activate Low-Cost Locust through the actual client command protocol',()=>{
+  const world=createBattle(5);Object.assign(world,{phase:'racing',human:true,supplies:[]});
+  world.bots.forEach((a,i)=>Object.assign(a,{human:true,inactive:i>0,destroyed:i>0?999:0}));
+  const server=new ArenaCore(world),client=new ArenaClient();client.accept(server.packet(),0);client.frame(0,[],0);
+  assert.equal(client.action('special',undefined,0),true);
+  assert.equal(client.action('special',undefined,0),false);
+  server.step(0,[{actor:0,...client.outbound([])}]);
+  assert.equal(server.snapshot().locusts.length,2);
+  client.accept(server.packet(),.02);client.frame(0,[],.02);
+  assert.equal(client.action('special',undefined,.02),false);
+});
