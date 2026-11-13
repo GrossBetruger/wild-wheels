@@ -85,6 +85,10 @@ impl Client{
             }
         }
         let id=self.viewer;pose_copy(&mut self.display.actors[id],&self.pred.actors[id]);
+        for bug in &mut self.display.global.locusts{
+            let old=before.game.global.locusts.iter().find(|a|a.id==bug.id);let new=after.game.global.locusts.iter().find(|a|a.id==bug.id);
+            if let (Some(a),Some(b))=(old,new){bug.wx=a.wx+(b.wx-a.wx)*fraction;bug.wz=a.wz+(b.wz-a.wz)*fraction;bug.age=a.age+(b.age-a.age)*fraction;bug.heading=a.heading+angle(b.heading,a.heading)*fraction;bug.jump=a.jump+(b.jump-a.jump)*fraction;}
+        }
         if fresh&&self.accumulator>1e-8&&!self.pred.actors[id].bomber{
             // Preview inside Wasm. No temporary JS actors or boundary round trips.
             let command=Move{sequence:self.next_sequence,keys:keys&31,steer};let old=self.pred.actors[id].clone();

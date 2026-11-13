@@ -1,4 +1,5 @@
 import { tickBicycles } from './bicycle-pickup.js';
+import {tickLocusts} from './locusts.js';
 import { tickFireRings, fireRingBlocks } from '../characters/master-yuda/fire-ring.js';
 import { batAim } from '../characters/knowitowl/bat-companion.js';
 import { botSightRadius } from '../characters/knowitowl/dark-humor.js';
@@ -228,7 +229,7 @@ export function damageBattle(r, victim, owner, amount, kind = 'hedgehog') {
   }
   return true;
 }
-function navigate(arena, actor, target) {
+export function navigate(arena, actor, target) {
   const size = 18, cell = 10, toCell = value => clamp(Math.floor((value + 90) / cell), 0, size - 1), start = toCell(actor.wx) + toCell(actor.wz) * size, goal = toCell(target.wx) + toCell(target.wz) * size;
   const queue = [start], prev = new Map([[start, -1]]);
   for (let i = 0; i < queue.length && !prev.has(goal); i++) {
@@ -309,7 +310,7 @@ function advanceKartMovement(world, actor, keys, dt) {
 export function tickBattle(r, keys, dt, inputs = null) {
   dt = clamp(dt, 0, .05); if (!['racing', 'countdown'].includes(r.phase)) return;
   if (r.phase === 'countdown') { r.countdown -= dt; if (r.countdown <= 0) { r.phase = 'racing'; r.notice = 'BATTLE ON! · FIRST TO 10 KILLS'; r.noticeTime = 3; } return; }
-  tickSpecials(r, dt); const worldDt = r.timeStop > 0 ? 0 : dt;
+  tickSpecials(r, dt);tickLocusts(r,dt); const worldDt = r.timeStop > 0 ? 0 : dt;
   const ending = r.finishCountdown !== null; if (ending) dt = Math.min(dt, r.finishCountdown);
   r.elapsed += dt; r.noticeTime = Math.max(0, r.noticeTime - dt); r.shake = Math.max(0, r.shake - dt * 2);
   for (const supply of r.supplies) supply.cooldown = Math.max(0, supply.cooldown - worldDt);

@@ -94,7 +94,7 @@ export class RaceAudio {
   }
   event(type){switch(type){
     case 'teleportOut':this.burst(.25,900,.2,0,4200);this.note(220,.28,{type:'sine',end:880,volume:.14});break;
-    case 'teleportIn':this.burst(.22,3600,.13,0,800);for(const [i,f]of [880,1174.66,1567.98].entries())this.note(f,.18,{type:'sine',delay:i*.045,volume:.06});break;
+    case 'locustSwarm':this.burst(.4,2800,.12);this.note(880,.18,{volume:.08});break;case 'locustPop':this.burst(.12,1800,.15);this.note(440,.1,{end:100,volume:.1});break;case 'teleportIn':this.burst(.22,3600,.13,0,800);for(const [i,f]of [880,1174.66,1567.98].entries())this.note(f,.18,{type:'sine',delay:i*.045,volume:.06});break;
     case 'cameraShutter':this.mechanicalClick(.018,3200,.42,0,'highpass');this.mechanicalClick(.027,1150,.4,.065,'bandpass');this.mechanicalClick(.018,420,.2,.07,'lowpass');break;
     case 'photoSlide':this.projectorSlide();break;
     case 'fireRingOut':this.burst(.6,2300,.22,0,180);this.note(90,.35,{type:'sine',end:35,volume:.12});break;

@@ -74,6 +74,7 @@ pub struct Kill { pub id:u32,pub attacker:usize,pub victim:usize,pub attacker_na
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(default,rename_all="camelCase")]
 pub struct Globals {
+    pub locusts:Vec<Locust>,pub locust_sequence:u32,
     pub bicycle_sequence:u32,
     #[serde(default="abilities_default")]pub special_abilities:bool,
     pub time_stop:f64,pub time_owner:Option<usize>,
@@ -85,6 +86,9 @@ pub struct Globals {
     pub effects:Vec<Effect>,pub skids:Vec<Skid>,pub drift_particles:Vec<Particle>,pub kill_feed:Vec<Kill>,pub events:Vec<Value>,pub voices:Vec<Value>,
 }
 pub fn abilities_default()->bool{true}
+#[derive(Clone, Default, Deserialize, Serialize)]
+#[serde(default,rename_all="camelCase")]
+pub struct Locust {pub id:u32,pub owner:usize,pub wx:f64,pub wz:f64,pub heading:f64,pub age:f64,pub jump:f64,#[serde(skip)]pub brain:f64,#[serde(skip)]pub path:Vec<Point>}
 #[derive(Deserialize)]
 pub struct Seed { #[serde(flatten)]pub global:Globals,#[serde(flatten)]pub player:Actor,pub bots:Vec<Actor> }
 #[derive(Clone, Default, Deserialize)]

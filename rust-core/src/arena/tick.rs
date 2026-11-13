@@ -24,6 +24,7 @@ impl Game{
             if self.global.countdown<=0.0{self.global.phase="racing".into();self.actors[0].notice="BATTLE ON! · FIRST TO 10 KILLS".into();self.actors[0].notice_time=3.0;}return;
         }
         self.special_tick(frame.dt);
+        self.locust_tick(frame.dt);
         let ending=self.global.finish_countdown.is_some();if let Some(left)=self.global.finish_countdown{dt=dt.min(left);}
         let world_dt=match self.global.time_stop>0.0{true=>0.0,false=>dt};
         let g=&mut self.global;g.elapsed+=dt;g.shake=(g.shake-dt*2.0).max(0.0);

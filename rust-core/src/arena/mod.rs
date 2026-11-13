@@ -5,6 +5,7 @@ mod bat;
 mod bicycles;
 mod tick;
 mod specials;
+mod locusts;
 mod fire_ring;
 mod packet;
 mod client;

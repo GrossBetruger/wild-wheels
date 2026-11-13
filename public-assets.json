@@ -1,5 +1,7 @@
 [
   "index.html",
+  "gameplay/locusts.js",
+  "characters/tammy/locusts.js",
   "ui/reward-notice.js",
   "style.css",
   "rust-core.wasm",

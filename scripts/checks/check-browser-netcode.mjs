@@ -15,6 +15,7 @@ import {checkTehilim} from '../scenarios/check-tehilim-scenario.mjs';
 import {checkCharacters} from '../scenarios/check-characters-scenario.mjs';
 import {checkRoom} from '../scenarios/check-room-scenario.mjs';
 import {checkRewards} from '../scenarios/check-rewards-scenario.mjs';
+import {checkLocusts} from '../scenarios/check-locusts-scenario.mjs';
 import { profilePerformance } from '../profiling/profile-performance.mjs';
 import { compareEncodingBrowser } from '../encoding-lab/browser.mjs';
 import { compareOwnedStateBrowser } from '../owned-state-lab/browser.mjs';
@@ -127,6 +128,11 @@ try{
       return {code:network.state.code,you:network.state.you};
     })()`);
     const room=app.multiplayer.rooms.get(identity.code);
+    if(process.argv.includes('--locusts')){
+      const capture=async()=>{const screenshot=await call('Page.captureScreenshot',{format:'png'},session);await writeFile(`${output}.${profile.run}.${profile.name}.locusts.png`,Buffer.from(screenshot.data,'base64'));};
+      const result={profile:profile.name,run:profile.run,...await checkLocusts(evaluate,app.multiplayer,room,identity.you,sleep,capture)};results.push(result);console.log(JSON.stringify(result));
+      await evaluate('__game.network.leave()');await call('Target.closeTarget',{targetId});for(const member of [...room.members.values()])app.multiplayer.remove(member);continue;
+    }
     if(process.argv.includes('--rewards')){
       const capture=async()=>{const screenshot=await call('Page.captureScreenshot',{format:'png'},session);await writeFile(`${output}.${profile.run}.${profile.name}.reward.png`,Buffer.from(screenshot.data,'base64'));};
       const result={profile:profile.name,run:profile.run,...await checkRewards(evaluate,app.multiplayer,room,identity.you,sleep,capture)};results.push(result);console.log(JSON.stringify(result));
