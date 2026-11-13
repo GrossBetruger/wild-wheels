@@ -78,6 +78,8 @@ try{
     activeProfile=`${profile.run}:${profile.name}`;
     const {targetId}=await call('Target.createTarget',{url:'about:blank'});({sessionId:session}=await call('Target.attachToTarget',{targetId,flatten:true}));
     await call('Page.enable',{},session);await call('Runtime.enable',{},session);
+    // Animation scenarios must not inherit the runner's accessibility settings.
+    await call('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'no-preference'}]},session);
     if(process.argv.includes('--profile'))await call('Page.addScriptToEvaluateOnNewDocument',{source:`{
       globalThis.__perf={enabled:false,render:[],network:[],frame:[],intervals:[],last:null};
       const request=window.requestAnimationFrame.bind(window);

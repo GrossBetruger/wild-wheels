@@ -95,7 +95,9 @@ export async function checkControls(evaluate,app,room,id,sleep,captureFlip,captu
   const flipTrace=await evaluate('__game.flipTrace');
   const flippedHeading=frame=>Math.abs(Math.atan2(Math.sin(frame.heading-Math.PI),Math.cos(frame.heading-Math.PI)))<.01;
   const cameraSteps=flipTrace.slice(1).map((frame,index)=>Math.atan2(Math.sin(frame.cameraHeading-flipTrace[index].cameraHeading),Math.cos(frame.cameraHeading-flipTrace[index].cameraHeading)));
-  const cameraPass=flipTrace[0].cameraHeading<.15&&flipTrace.some(frame=>frame.cameraHeading>1.2&&frame.cameraHeading<1.9)&&Math.abs(flipTrace.at(-1).cameraHeading-Math.PI)<.02&&cameraSteps.every((step,index)=>step>=-.001&&step<=(flipTrace[index+1].time-flipTrace[index].time+.002)*Math.PI*1.5/.55+.02);
+  // Rendering timestamps include scheduling jitter; judge rotation against the
+  // jump's simulation clock, which drives the actual camera animation.
+  const cameraPass=flipTrace[0].cameraHeading<.15&&flipTrace.some(frame=>frame.cameraHeading>1.2&&frame.cameraHeading<1.9)&&Math.abs(flipTrace.at(-1).cameraHeading-Math.PI)<.02&&cameraSteps.every((step,index)=>step>=-.001&&step<=(Math.max(0,flipTrace[index].remaining-flipTrace[index+1].remaining)+.002)*Math.PI*1.5/.55+.02);
   const flipPass=flipTrace.length>0&&flippedHeading(flipTrace[0])&&flipTrace.every(flippedHeading)&&flipTrace.some(frame=>frame.height>4)&&flipTrace.at(-1).height===0&&flipTrace[0].shot!==null&&Math.abs(flipTrace[0].shot-Math.PI)<.01&&remoteSawFlip&&cameraPass;
   const other=[room.world,...room.world.bots].find(player=>!player.inactive&&player.id!==id);
   Object.assign(actor,{wx:-65,wz:0,heading:0,motionHeading:0,cameraHeading:0,speed:0,boost:0,shield:0,chaff:2,chaffCooldown:0,ammo:5});

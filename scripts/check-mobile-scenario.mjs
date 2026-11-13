@@ -82,8 +82,14 @@ export async function checkMobile(evaluate,app,room,id,sleep,capture,rotate,tap,
   const stinkWorks=other.dizzy>0&&other.health===3&&actor.kills===2&&room.world.stinkClouds.length>0;
   const stinkFeedback=await evaluate('__game.lastTapFrames[0]??null'),stinkImmediate=Boolean(stinkFeedback&&stinkFeedback.ammo===0&&stinkFeedback.stinkAmmo===2&&stinkFeedback.bombs.some(bomb=>bomb.kind==='stink'));
   if(capture)await capture('stink-cloud');
-  for(let i=0;i<1000;i++){if(actor.bombAmmo===1&&other.dizzy===0)break;await sleep(10);}
-  const refillAt=room.world.elapsed,refill=actor.bombAmmo===1&&actor.stinkAmmo===3&&refillAt>=9.999,dizzyExpired=other.dizzy===0&&other.health===3;
+  for(let i=0;i<1000;i++){if(other.dizzy===0)break;await sleep(10);}
+  const dizzyExpired=other.dizzy===0&&other.health===3;
+  // Check one ten-second refill independently of the eight-second dizziness
+  // wait, which can cross another legitimate five-second stink refill.
+  Object.assign(actor,{bombAmmo:0,stinkAmmo:2,bombReload:9.9});
+  const refillStarted=room.world.elapsed;
+  for(let i=0;i<200;i++){if(actor.bombAmmo>0)break;await sleep(10);}
+  const refillAt=room.world.elapsed,refill=actor.bombAmmo===1&&actor.stinkAmmo===3&&refillAt-refillStarted>=.099;
   await evaluate("document.getElementById('bomber-weapon-abomb').click()");
   const margin=await evaluate("(()=>{const r=document.getElementById('game').getBoundingClientRect();return {x:r.left+2,y:r.top+2};})()");
   const before=room.world.bombSequence;await tap(margin.x,margin.y);await sleep(200);
