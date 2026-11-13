@@ -1,4 +1,5 @@
 import {PhotoAlbum} from './photo-album.js';
+import {RoomChat} from './chat.js';
 import { randomBytes, randomInt } from 'node:crypto';
 import { networkInterfaces } from 'node:os';
 import { WebSocketServer } from 'ws';
@@ -238,6 +239,12 @@ export class Multiplayer {
       }
       const member=this.members.get(sessionToken(req));if(!member)throw problem(401,'Rejoin the room to reconnect.');
       member.lastSeen=Date.now();const room=member.room;
+      if(path==='/api/chat'){
+        if(req.method!=='POST')throw problem(405,'Use POST.');
+        this.limit(req,'chat',20);
+        const body=await this.body(req);
+        json(200,(room.chat??=new RoomChat()).exchange(member,room.members,body));return true;
+      }
       if(path==='/api/photos'||path.startsWith('/api/photos/')){
         const album=room.photoAlbum??=new PhotoAlbum();album.ensure(room.core.status.soundEpoch);
         if(req.method==='GET'&&path==='/api/photos'){this.limit(req,'photos-list',20);json(200,album.manifest(room.core.status.phase==='finished'));return true;}

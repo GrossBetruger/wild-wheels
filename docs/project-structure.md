@@ -64,6 +64,8 @@ Each `*.test.js` file checks the feature named in its filename. Character folder
 
 | File in `ui/` | Purpose |
 | --- | --- |
+| `chat.js` | Room chat UI, separate conversation views and drafts, message bubbles, polling, and input isolation. |
+| `match-layout.js` | Moves chat to the sidebar and the live map into the game during a match; restores the lobby layout afterward. |
 | `mobile.js` | Touch device detection, bomber camera calculations, aiming, and panning helpers. |
 | `feedback.js` | Immediate local visual feedback for actions before server confirmation. |
 | `drift-feedback.js` | Local drift charge and related presentation. |
@@ -88,6 +90,7 @@ Each `*.test.js` file checks the feature named in its filename. Character folder
 | `networking/network.js` | Browser connection, rooms, lobby actions, and network updates. |
 | `networking/wire.js` | Snapshot serialization and reconstruction helpers. |
 | `networking/binary-wire.js` | Binary snapshot encoding and decoding. |
+| `server/chat.js` | Bounded room chat history, validation, rate limits, and private message filtering. |
 | `server/multiplayer.js` | Node multiplayer rooms, sessions, requests, sockets, and simulation scheduling. |
 | `server/photo-album.js` | Node server storage and retrieval of match photos. |
 | `server/ngrok.js` | Finds the public tunnel URL for the local game server. |
@@ -110,9 +113,9 @@ The files in `tests/` are automated checks, not game entry points. `npm test` di
 | `tests/combat/` | `combat`: general combat. `combat-hazards`: bombs, dizziness, and wall crashes. `ending-combat`: combat during match ending. `bomber`: bomber rules. `stinkbomb`: gas effects and scoring. `radiation`: lingering radioactive damage. `hedgeguard`: protective pickup. `spawn-vulnerability`: unprotected spawns. `incoming`: missile warnings. `special-abilities`: shared abilities. `bot-visibility`: bot visibility rules. |
 | `tests/gameplay/` | `engine`: core race rules. `movement`: driving. `somersault`: flips. `fuel`: boost duration. `intelligence`: capacity rules. `recovery`: replenishment. `bicycle-pickup`: dropped bicycles and upgrades. |
 | `tests/networking/` | `wire`, `binary-wire`: snapshot formats. `netcode`: synchronization and delayed network updates. |
-| `tests/multiplayer/` | `multiplayer`: HTTP and socket integration. `auto-start`: countdown behavior. `play-request`: requests to start. `host-tie`: host and tie behavior. |
+| `tests/multiplayer/` | `chat`: authenticated public and private messages, session isolation, limits, and history. `multiplayer`: HTTP and socket integration. `auto-start`: countdown behavior. `play-request`: requests to start. `host-tie`: host and tie behavior. |
 | `tests/client/` | `prediction`: local movement reconciliation. `playback`: snapshot presentation. `preview-pose`: preview gestures. `benchmark`: validation of projectile motion measurements. |
-| `tests/ui/` | `feedback`, `drift-feedback`, `chaff-feedback`, `kill-feedback`: action presentation. `nameplates`: racer labels. `mobile`: touch and bomber controls. `results`: results ordering and labels. |
+| `tests/ui/` | `chat`: separation of Everyone and individual private conversations.  `feedback`, `drift-feedback`, `chaff-feedback`, `kill-feedback`: action presentation. `nameplates`: racer labels. `mobile`: touch and bomber controls. `results`: results ordering and labels. |
 | `tests/server/` | `ngrok`: tunnel URL selection. `tunnel-control`: local tunnel control restrictions and lifecycle. |
 | `tests/audio/` | `action-audio`: immediate sounds and duplicate prevention. |
 | `tests/photos/` | `photography`: photo encoding, validation, storage, and slideshow behavior. |
@@ -126,7 +129,7 @@ Scripts are development tools. Run their commands from the project root. The exi
 | Folder | Files and purpose |
 | --- | --- |
 | `scripts/build/` | `build-rust-core.mjs`: compiles Rust into the root `rust-core.wasm` artifact. |
-| `scripts/checks/` | `check-netcode.mjs`: network simulation checks. `check-browser-netcode.mjs`: browser runner with latency profiles and selectable scenarios. `check-regressions.mjs`: runs automated and browser scenario checks together. `check-photo-browser.mjs`: photo workflow in browsers. `check-dedicated-server.mjs`: native server integration. `check-dedicated-browser.mjs`: browser clients against the native server. `check-server-commands.mjs`: launcher, stop, and update integration. `check-ubuntu-install.sh`: install and startup verification in a disposable Ubuntu environment. |
+| `scripts/checks/` | `check-chat-browser.mjs`: public and private chat in three browsers, typing isolation, and mobile layout. `check-netcode.mjs`: network simulation checks. `check-browser-netcode.mjs`: browser runner with latency profiles and selectable scenarios. `check-regressions.mjs`: runs automated and browser scenario checks together. `check-photo-browser.mjs`: photo workflow in browsers. `check-dedicated-server.mjs`: native server integration. `check-dedicated-browser.mjs`: browser clients against the native server. `check-server-commands.mjs`: launcher, stop, and update integration. `check-ubuntu-install.sh`: install and startup verification in a disposable Ubuntu environment. |
 | `scripts/scenarios/` | `check-controls-scenario.mjs`: player controls. `check-characters-scenario.mjs`: character selection and behavior. `check-preview-scenario.mjs`: previews. `check-tehilim-scenario.mjs`: protective books. `check-pearococo-scenario.mjs`: Pearococo. `check-drift-scenario.mjs`: drifting. `check-specials-scenario.mjs`: abilities. `check-feedback-scenario.mjs`: action feedback and motion measurements. `check-yuda-scenario.mjs`: Master-Yuda. `check-r-yeah-scenario.mjs`: R-yeah. `check-room-scenario.mjs`: rooms and rejoining. `check-mobile-scenario.mjs`: mobile controls. These modules are used by the browser runners. |
 | `scripts/profiling/` | `profile-network.mjs`: network measurements. `profile-performance.mjs`: simulation and encoding measurements. `benchmark-dedicated.mjs`: native server benchmark. `compare-encoding.mjs`: snapshot encoding comparisons. `compare-owned-state.mjs`: state ownership experiment measurements. |
 | `scripts/reports/` | `report-drift.mjs`, `report-feedback.mjs`, `report-netcode.mjs`: turn recorded diagnostics into HTML reports. `summarize-core-profile.mjs`: combines profiling and regression measurements into a summary. |
@@ -166,6 +169,7 @@ Use `npm run test:netcode` for the network checks, `npm run build:core` to rebui
 | `Cargo.toml`, `Cargo.lock` | Server package configuration and pinned dependencies. |
 | `build.rs` | Embeds the public files listed in `public-assets.json` during compilation. |
 | `src/main.rs` | Native server startup, HTTP and socket handling, and routing. |
+| `src/chat.rs` | Native chat history, validation, send limits, and private session filtering. |
 | `src/room.rs` | Native multiplayer room and session behavior. |
 | `src/photos.rs` | Native photo storage and endpoints. |
 | `src/benchmark.rs` | Native performance benchmark implementation. |
