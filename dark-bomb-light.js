@@ -1,6 +1,6 @@
 export function darkBombLights(world,strength){
   if(!(strength>0))return [];
-  return [...(world.effects??[])].filter(f=>f.type==='abomb'&&f.age>=0&&f.age<1).sort((a,b)=>a.age-b.age).slice(0,4).map(f=>[f.wx,4,f.wz,4*(1-f.age)**2]);
+  return [...(world.effects??[])].filter(f=>f.type==='abomb'&&f.age>=0&&f.age<1).sort((a,b)=>a.age-b.age).slice(0,4).map(f=>[f.wx,4,f.wz,16*(1-f.age)**2]);
 }
 export function bombIllumination(lights,point){return lights.reduce((sum,[x,y,z,power])=>sum+power/Math.sqrt(Math.max(1,Math.hypot(point[0]-x,point[1]-y,point[2]-z))),0);}
 export function lightUniforms(lights){const data=new Float32Array(16);lights.forEach((light,i)=>data.set(light,i*4));return data;}

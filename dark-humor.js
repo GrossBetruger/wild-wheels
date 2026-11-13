@@ -31,8 +31,8 @@ export class DarkFog{
         else if(ray.y<-.001){fogPoint=cameraEye+ray*min(400.,cameraEye.y/max(.02,-ray.y));}
         float illumination=0.;for(int i=0;i<4;i++){if(bombLights[i].w>0.)illumination+=bombLights[i].w/sqrt(max(1.,distance(fogPoint,bombLights[i].xyz)));}
         float warm=illumination/(1.+illumination);
-        color+=vec3(.58,.38,.055)*(.65*warm)*(.45+clouds*.6);
-        gl_FragColor=vec4(color,strength*(.90+.025*clouds)*(1.-.2*warm));
+        color+=vec3(.8,.57,.12)*warm*(.45+clouds*.6);
+        gl_FragColor=vec4(color,strength*(.90+.025*clouds)*(1.-.35*warm));
       }`));
     gl.linkProgram(this.program);if(!gl.getProgramParameter(this.program,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(this.program));
     this.position=gl.getAttribLocation(this.program,'position');this.clock=gl.getUniformLocation(this.program,'clock');this.strength=gl.getUniformLocation(this.program,'strength');this.aspect=gl.getUniformLocation(this.program,'aspect');
