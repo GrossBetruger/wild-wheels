@@ -23,12 +23,9 @@ export async function checkSpecials(evaluate,app,room,id,sleep,capture){
   const audioResolved=await wait(()=>evaluate('__game.audio.warpMusic===null'));
   const movesAgain=await wait(()=>app.snapshot(room,peer).world.wz>stoppedAt+.05);
   const cooldown=await evaluate("__game.race.specialCooldown>15&&__game.network.action('special')!==true");
-  // Establish Avita before activating: changing character is not an ability use.
-  peer.driver=8;Object.assign(other,{driver:8,specialCooldown:0});app.broadcast(room);
-  await wait(()=>evaluate(`__game.race.bots.some(a=>a.id===${peer.id}&&a.driver===8&&a.specialCooldown===0)`));
-  other.specialCooldown=20;
   Object.assign(room.world,{timeStop:2.5,timeOwner:peer.id});app.broadcast(room);
-  const frozenClient=await wait(()=>evaluate("__game.race.timeStop>1&&document.querySelector('.special-status').textContent.includes('TIME DILATION')"));
+  // This injects the effect, not an activation event; verify its visual state.
+  const frozenClient=await wait(()=>evaluate("__game.race.timeStop>1&&__game.race.timeOwner!==__game.race.id&&document.querySelector('.viewport').classList.contains('time-stopped')"));
   const heldAt=await evaluate('__game.race.wz');await evaluate("__game.keys.add('arrowup')");await sleep(400);
   const clientStaysStill=await evaluate(`Math.abs(__game.race.wz-${heldAt})<1&&__game.network.action('fire')!==true`);await capture('frozen-opponent');
   await evaluate('__game.keys.clear()');Object.assign(room.world,{timeStop:0,timeOwner:null});app.broadcast(room);
