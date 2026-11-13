@@ -5,13 +5,19 @@ import {ArenaCore,ArenaClient} from './arena-core.js';
 import {bicyclePose,bicycleLanding} from './bicycle-pickup.js';
 
 for(const engine of ['JavaScript','Rust']){
-  test(`${engine}: each owl takeoff leaves one persistent bicycle and a later takeoff leaves another`,()=>{
+  test(`${engine}: each owl takeoff leaves one bicycle and a later takeoff leaves another`,()=>{
     const w=createBattle(14);Object.assign(w,{phase:'racing',human:true,wx:65,wz:0,heading:0,boost:3,supplies:[]});for(const a of w.bots)Object.assign(a,{inactive:true,destroyed:999});
     let core=engine==='Rust'?new ArenaCore(w):null;const step=dt=>core?core.step(dt):tickBattle(w,new Set(),dt),read=()=>core?core.snapshot():w;
     step(0);const bike=read().supplies[0];assert.equal(read().supplies.length,1);assert.equal(bike.kind,'bicycle');assert.equal(bike.owner,0);assert.equal(bike.dropWx,65);assert.equal(bike.dropWz,0);assert.equal(bike.wx,65);assert.equal(bike.wz,7);
     for(let i=0;i<80;i++)step(.05);assert.equal(read().supplies.length,1);assert.ok(read().supplies[0].age>3);assert.equal(read().supplies[0].cooldown,0);
     if(core){const next=core.snapshot();next.bots=w.bots.map(a=>next.bots.find(b=>b.id===a.id)??a);next.boost=2;core=new ArenaCore(next);}if(!core)w.boost=2;
     step(0);assert.equal(read().supplies.length,2);assert.equal(new Set(read().supplies.map(s=>s.id)).size,2);
+  });
+  test(`${engine}: an uncollected bicycle expires after three seconds on the floor`,()=>{
+    const w=createBattle(0);Object.assign(w,{phase:'racing',human:true,wx:65,wz:-30,supplies:[{id:1001,kind:'bicycle',owner:1,heading:0,dropWx:65,dropWz:-7,wx:65,wz:0,age:1.2,cooldown:0,version:0}]});for(const a of w.bots)Object.assign(a,{inactive:true,destroyed:999});
+    const core=engine==='Rust'?new ArenaCore(w):null,step=dt=>core?core.step(dt):tickBattle(w,new Set(),dt),read=()=>core?core.snapshot():w;
+    for(let i=0;i<59;i++)step(.05);assert.equal(read().supplies.length,1);assert.equal(read().batCompanion,false);
+    step(.05);assert.equal(read().supplies.length,0);assert.equal(read().batCompanion,false);
   });
   test(`${engine}: a bicycle can only be collected after landing, grants a per-life upgrade, and never respawns`,()=>{
     const w=createBattle(0);Object.assign(w,{phase:'racing',human:true,wx:65,wz:0,heading:0,vulcan:0,supplies:[{id:1001,kind:'bicycle',owner:1,heading:0,dropWx:65,dropWz:-7,wx:65,wz:0,age:1.1,cooldown:0,version:0}]});for(const a of w.bots)Object.assign(a,{inactive:true,destroyed:999});

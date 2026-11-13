@@ -80,7 +80,7 @@ impl Client{
         for supply in &mut self.display.global.supplies{
             if supply.kind!="bicycle"{continue;}
             if let Some(actual)=latest.game.global.supplies.iter().find(|s|s.id==supply.id){
-                let scale=match latest.game.global.time_stop>0.0{true=>0.025,false=>1.0};
+                let scale=match latest.game.global.time_stop>0.0{true=>0.0,false=>1.0};
                 supply.age=(actual.age-(latest.game.global.elapsed-self.display.global.elapsed)*scale).max(0.0);
             }
         }

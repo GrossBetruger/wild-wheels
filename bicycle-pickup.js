@@ -1,4 +1,5 @@
 export const BICYCLE_LANDING=1.2;
+export const BICYCLE_LIFETIME=BICYCLE_LANDING+3;
 export const hasBatCompanion=actor=>actor.driver===14||actor.batCompanion===true;
 export function bicycleLanding(arena,x,z,heading){
   const blocked=(x,z)=>Math.abs(x)>arena.size-1||Math.abs(z)>arena.size-1||arena.blocks.some(([bx,bz,w,d])=>Math.abs(x-bx)<w/2+1&&Math.abs(z-bz)<d/2+1);
@@ -11,6 +12,7 @@ export function bicyclePose(supply){
 }
 export function tickBicycles(world,dt,arena){
   for(const supply of world.supplies)if(supply.kind==='bicycle')supply.age+=dt;
+  world.supplies=world.supplies.filter(s=>s.kind!=='bicycle'||s.age<BICYCLE_LIFETIME-1e-8);
   for(const actor of [world,...world.bots]){
     if(world.specialAbilities!==false&&world.timeStop>0&&world.timeOwner!==actor.id)continue;
     const boosting=actor.driver===14&&actor.boost>0&&!actor.destroyed&&!actor.inactive&&!actor.afk&&!actor.bomber,drop=boosting&&!actor.owlBoosting;actor.owlBoosting=boosting;if(!drop)continue;

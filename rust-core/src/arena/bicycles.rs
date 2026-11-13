@@ -1,8 +1,10 @@
 use super::*;
 pub(super) const BICYCLE_LANDING:f64=1.2;
+pub(super) const BICYCLE_LIFETIME:f64=BICYCLE_LANDING+3.0;
 impl Game{
     pub(super) fn bicycle_tick(&mut self,dt:f64){
         for supply in &mut self.global.supplies{if supply.kind=="bicycle"{supply.age+=dt;}}
+        self.global.supplies.retain(|s|s.kind!="bicycle"||s.age<BICYCLE_LIFETIME-1e-8);
         for id in 0..self.actors.len(){
             if self.frozen(id){continue;}
             let a=&mut self.actors[id];let boosting=a.driver==14&&a.boost>0.0&&a.destroyed<=0.0&&!a.inactive&&!a.afk&&!a.bomber;
