@@ -1,6 +1,6 @@
 use super::*;
 pub(super) const BICYCLE_LANDING:f64=1.2;
-pub(super) const BICYCLE_LIFETIME:f64=BICYCLE_LANDING+3.0;
+pub(super) const BICYCLE_LIFETIME:f64=BICYCLE_LANDING+4.0;
 impl Game{
     pub(super) fn bicycle_tick(&mut self,dt:f64){
         for supply in &mut self.global.supplies{if supply.kind=="bicycle"{supply.age+=dt;}}

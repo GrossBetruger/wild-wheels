@@ -21,10 +21,10 @@ for(const engine of ['JavaScript','Rust']){
     if(core){const next=core.snapshot();next.bots=w.bots.map(a=>next.bots.find(b=>b.id===a.id)??a);next.boost=2;core=new ArenaCore(next);}if(!core)w.boost=2;
     step(0);assert.equal(read().supplies.length,2);assert.equal(new Set(read().supplies.map(s=>s.id)).size,2);
   });
-  test(`${engine}: an uncollected bicycle expires after three seconds on the floor`,()=>{
+  test(`${engine}: an uncollected bicycle expires after four seconds on the floor`,()=>{
     const w=createBattle(0);Object.assign(w,{phase:'racing',human:true,wx:65,wz:-30,supplies:[{id:1001,kind:'bicycle',owner:1,heading:0,dropWx:65,dropWz:-7,wx:65,wz:0,age:1.2,cooldown:0,version:0}]});for(const a of w.bots)Object.assign(a,{inactive:true,destroyed:999});
     const core=engine==='Rust'?new ArenaCore(w):null,step=dt=>core?core.step(dt):tickBattle(w,new Set(),dt),read=()=>core?core.snapshot():w;
-    for(let i=0;i<59;i++)step(.05);assert.equal(read().supplies.length,1);assert.equal(read().intelligenceBonus,0);
+    for(let i=0;i<79;i++)step(.05);assert.equal(read().supplies.length,1);assert.equal(read().intelligenceBonus,0);
     step(.05);assert.equal(read().supplies.length,0);assert.equal(read().intelligenceBonus,0);
   });
   test(`${engine}: a bicycle grants one intelligence after landing and never respawns`,()=>{
@@ -53,10 +53,18 @@ for(const engine of ['JavaScript','Rust']){
 
 test('the bicycle eases into its exact floor pose without a position or velocity jump',()=>{
   const bike={age:0,dropWx:65,dropWz:0,dropHeight:0,wx:65,wz:7,heading:0};
-  const start=bicyclePose(bike),air=bicyclePose({...bike,age:.6}),before=bicyclePose({...bike,age:1.199}),landed=bicyclePose({...bike,age:1.2}),rest=bicyclePose({...bike,age:10});
+  const start=bicyclePose(bike),air=bicyclePose({...bike,age:.6}),before=bicyclePose({...bike,age:1.199}),landed=bicyclePose({...bike,age:1.2}),rest=bicyclePose({...bike,age:4.4});
   assert.equal(start.x,65);assert.equal(start.z,0);assert.equal(start.height,0);assert.ok(air.height>2);assert.ok(air.z>0&&air.z<7);
   assert.equal(landed.z,7);assert.equal(landed.height,.2);assert.equal(landed.roll,1.35);assert.equal(landed.glow,1);assert.deepEqual(rest,landed);
   assert.ok(Math.abs(before.z-landed.z)<.00001);assert.ok(Math.abs(before.height-landed.height)<.0001);assert.ok(Math.abs(before.roll-landed.roll)<.0001);
+});
+
+test('bicycle and halo fade together during the final 0.8 seconds without moving',()=>{
+  const bike={dropWx:65,dropWz:0,dropHeight:0,wx:65,wz:7,heading:0};
+  const solid=bicyclePose({...bike,age:4.4}),half=bicyclePose({...bike,age:4.8}),gone=bicyclePose({...bike,age:5.2});
+  assert.equal(solid.opacity,1);assert.ok(Math.abs(half.opacity-.5)<1e-12);assert.equal(gone.opacity,0);
+  assert.equal(half.glow,half.opacity);assert.equal(gone.glow,0);
+  for(const pose of [solid,half,gone]){assert.equal(pose.z,7);assert.equal(pose.height,.2);assert.equal(pose.roll,1.35);}
 });
 
 test('the bicycle stops before an arena wall instead of landing inside it',()=>{

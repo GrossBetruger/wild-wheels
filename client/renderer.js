@@ -111,13 +111,14 @@ export class Renderer {
         gl_Position=matrix*vec4(p,1.0);worldPosition=p;shade=tint*mix(light,1.,emission);distanceToEye=length(p-eye)*fogScale;
       }
     `));
-    gl.attachShader(this.program,shader(gl,gl.FRAGMENT_SHADER,`precision mediump float;varying vec3 shade;varying float distanceToEye;varying vec3 worldPosition;uniform vec3 fog;uniform float darkness;uniform vec4 bombLights[4];void main(){float amount=smoothstep(130.,950.,distanceToEye);float nearby=mix(1.,.12,smoothstep(20.,85.,distanceToEye));vec3 lit=mix(shade,fog,amount*.92)*mix(1.,nearby,darkness);float illumination=0.;if(darkness>0.){for(int i=0;i<4;i++){if(bombLights[i].w>0.)illumination+=bombLights[i].w/sqrt(max(1.,distance(worldPosition,bombLights[i].xyz)));}}lit+=vec3(1.,.75,.18)*(.12+shade*.7)*(1.65*illumination/(1.+illumination))*darkness;gl_FragColor=vec4(lit,1.);}`));
+    gl.attachShader(this.program,shader(gl,gl.FRAGMENT_SHADER,`precision mediump float;varying vec3 shade;varying float distanceToEye;varying vec3 worldPosition;uniform vec3 fog;uniform float opacity;uniform float darkness;uniform vec4 bombLights[4];void main(){float amount=smoothstep(130.,950.,distanceToEye);float nearby=mix(1.,.12,smoothstep(20.,85.,distanceToEye));vec3 lit=mix(shade,fog,amount*.92)*mix(1.,nearby,darkness);float illumination=0.;if(darkness>0.){for(int i=0;i<4;i++){if(bombLights[i].w>0.)illumination+=bombLights[i].w/sqrt(max(1.,distance(worldPosition,bombLights[i].xyz)));}}lit+=vec3(1.,.75,.18)*(.12+shade*.7)*(1.65*illumination/(1.+illumination))*darkness;gl_FragColor=vec4(lit,opacity);}`));
     gl.linkProgram(this.program);if(!gl.getProgramParameter(this.program,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(this.program));gl.useProgram(this.program);
     this.attributes=['position','normal','color'].map(n=>gl.getAttribLocation(this.program,n));this.matrix=gl.getUniformLocation(this.program,'matrix');this.eyeUniform=gl.getUniformLocation(this.program,'eye');this.fog=gl.getUniformLocation(this.program,'fog');this.emission=gl.getUniformLocation(this.program,'emission');this.xray=gl.getUniformLocation(this.program,'xray');this.staticBuffer=gl.createBuffer();this.dynamicBuffer=gl.createBuffer();this.glowBuffer=gl.createBuffer();gl.enable(gl.DEPTH_TEST);this.track=-1;this.eye=null;
     this.originUniform=gl.getUniformLocation(this.program,'origin');this.rotationUniform=gl.getUniformLocation(this.program,'rotation');gl.uniform3f(this.originUniform,0,0,0);gl.uniform2f(this.rotationUniform,1,0);
     this.pitchUniform=gl.getUniformLocation(this.program,'pitch');gl.uniform2f(this.pitchUniform,1,0);
     this.rollUniform=gl.getUniformLocation(this.program,'roll');gl.uniform2f(this.rollUniform,1,0);
     this.fogScale=gl.getUniformLocation(this.program,'fogScale');this.darknessUniform=gl.getUniformLocation(this.program,'darkness');this.bombLightsUniform=gl.getUniformLocation(this.program,'bombLights[0]');
+    this.opacityUniform=gl.getUniformLocation(this.program,"opacity");gl.uniform1f(this.opacityUniform,1);
     this.plumageUniform=gl.getUniformLocation(this.program,'plumage');gl.uniform4f(this.plumageUniform,0,0,0,0);
     this.particleProgram=gl.createProgram();
     gl.attachShader(this.particleProgram,shader(gl,gl.VERTEX_SHADER,`attribute vec3 position;attribute float size;attribute vec3 color;uniform mat4 matrix;uniform float height;varying vec3 tint;void main(){gl_Position=matrix*vec4(position,1.);gl_PointSize=clamp(size*height/max(.1,gl_Position.w),1.,180.);tint=color;}`));
@@ -277,6 +278,7 @@ export class Renderer {
   bicycleDrop(supply,time,pose=bicyclePose(supply)){
     const t=Math.max(0,Math.min(1,supply.age/1.2)),phase=Math.floor(32*(1-(1-t)**3))%16;
     this.model('owl:bicycle-pickup:'+phase,pose.x,pose.height,pose.z,pose.angle,mesh=>drawBicycle(mesh,phase*Math.PI/8),pose.pitch,null,pose.roll);
+    this.instances.at(-1).opacity=pose.opacity;
     if(pose.glow>0){this.glow.at(pose.x,.12,pose.z);const glow=pose.glow*(.8+.2*Math.sin(time*3));for(let i=0;i<32;i++){const a=i*Math.PI/16,b=(i+1)*Math.PI/16;this.glow.quad([Math.sin(a)*2.7,0,Math.cos(a)*2.7],[Math.sin(b)*2.7,0,Math.cos(b)*2.7],[Math.sin(b)*2.85,0,Math.cos(b)*2.85],[Math.sin(a)*2.85,0,Math.cos(a)*2.85],[.3*glow,.12*glow,.65*glow]);}for(let i=0;i<10;i++){const t=(time*.5+i/10)%1,a=i*2.4;this.glow.particle(Math.sin(a)*2,t*3,Math.cos(a)*2,.12*(1-t),[.35*glow,.16*glow,.6*glow]);}}
   }
   batBuddy(p,actor,world,time,jump){
@@ -865,10 +867,18 @@ export class Renderer {
   }
   flush(m,view,height){
     const gl=this.gl;
-    for(const instance of this.instances){gl.uniform3f(this.originUniform,instance.x,instance.y,instance.z);gl.uniform2f(this.rotationUniform,Math.cos(instance.angle),Math.sin(instance.angle));gl.uniform2f(this.pitchUniform,Math.cos(instance.pitch),Math.sin(instance.pitch));gl.uniform2f(this.rollUniform,Math.cos(instance.roll),Math.sin(instance.roll));gl.uniform4f(this.plumageUniform,instance.plumage===null?0:1,instance.plumage?.clock??0,instance.plumage?.fold??0,instance.plumage?.angle??0);this.drawBuffer(instance.buffer,instance.count);}
+    const drawInstance=instance=>{gl.uniform1f(this.opacityUniform,instance.opacity??1);gl.uniform3f(this.originUniform,instance.x,instance.y,instance.z);gl.uniform2f(this.rotationUniform,Math.cos(instance.angle),Math.sin(instance.angle));gl.uniform2f(this.pitchUniform,Math.cos(instance.pitch),Math.sin(instance.pitch));gl.uniform2f(this.rollUniform,Math.cos(instance.roll),Math.sin(instance.roll));gl.uniform4f(this.plumageUniform,instance.plumage===null?0:1,instance.plumage?.clock??0,instance.plumage?.fold??0,instance.plumage?.angle??0);this.drawBuffer(instance.buffer,instance.count);};
+    const faded=this.instances.filter(instance=>(instance.opacity??1)<1);
+    for(const instance of this.instances)if((instance.opacity??1)>=1)drawInstance(instance);
     gl.uniform3f(this.originUniform,0,0,0);gl.uniform2f(this.rotationUniform,1,0);gl.uniform2f(this.pitchUniform,1,0);gl.uniform2f(this.rollUniform,1,0);gl.uniform4f(this.plumageUniform,0,0,0,0);
     gl.bindBuffer(gl.ARRAY_BUFFER,this.dynamicBuffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(m.data),gl.DYNAMIC_DRAW);this.drawBuffer(this.dynamicBuffer,m.data.length/9);
     gl.enable(gl.BLEND);gl.depthMask(false);
+    if(faded.length){
+      gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+      const depth=part=>view[3]*part.x+view[7]*part.y+view[11]*part.z+view[15];
+      for(const instance of faded.sort((a,b)=>depth(b)-depth(a)))if(instance.opacity>0)drawInstance(instance);
+      gl.uniform1f(this.opacityUniform,1);gl.uniform3f(this.originUniform,0,0,0);gl.uniform2f(this.rotationUniform,1,0);gl.uniform2f(this.pitchUniform,1,0);gl.uniform2f(this.rollUniform,1,0);gl.uniform4f(this.plumageUniform,0,0,0,0);
+    }
     if(this.smoke.sprites.length){gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);this.drawParticles(this.smoke.sprites,view,height,true);}
     gl.blendFunc(gl.ONE,gl.ONE);gl.uniform1f(this.emission,1);
     gl.bindBuffer(gl.ARRAY_BUFFER,this.glowBuffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(this.glow.data),gl.DYNAMIC_DRAW);this.drawBuffer(this.glowBuffer,this.glow.data.length/9);
