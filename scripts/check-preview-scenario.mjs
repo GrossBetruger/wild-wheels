@@ -1,10 +1,13 @@
 export async function checkPreview(evaluate,app,room,id,sleep,capture){
   const wait=async predicate=>{for(let i=0;i<120;i++){if(await predicate())return true;await sleep(25);}return false;};
   await evaluate("document.querySelector('.character-preview').scrollIntoView({block:'center'})");
-  const available=await wait(()=>evaluate('Boolean(__game.preview.renderer&&__game.preview.presentation)'));
+  // Start this scenario from its own animation clock. A presentation left over
+  // from page startup can precede the observer callback or a driver/color reset.
+  await evaluate("{const p=__game.preview;if(p.paused)p.button.click();p.clock=0;p.last=null;p.presentation=null;p.dirty=true;}");
+  const available=await wait(()=>evaluate('Boolean(__game.preview.renderer&&__game.preview.presentation&&__game.preview.inView&&__game.preview.driver===__game.race.driver&&__game.preview.color===__game.race.color)'));
   if(!available)return {available:false,pass:false};
-  const before=await evaluate('__game.preview.presentation.cameraAngle');await sleep(400);
-  const orbit=await evaluate(`__game.preview.presentation.cameraAngle>${before}+.05`);
+  const before=await evaluate('__game.preview.presentation.cameraAngle');
+  const orbit=await wait(()=>evaluate(`__game.preview.presentation.cameraAngle>${before}+.05`));
   await evaluate("{if(!__game.preview.paused)document.querySelector('.character-preview button').click();}");
   const frozen=await evaluate('__game.preview.clock');await sleep(150);
   const pause=await evaluate(`__game.preview.clock===${frozen}`);
