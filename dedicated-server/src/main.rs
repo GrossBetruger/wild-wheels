@@ -1,5 +1,6 @@
 mod benchmark;
 mod room;
+mod photos;
 use axum::{
     body::{Body, Bytes},
     extract::{
@@ -27,6 +28,7 @@ use tokio::{
 include!(concat!(env!("OUT_DIR"), "/assets.rs"));
 #[derive(Clone)]
 struct App {
+    photos:Arc<Mutex<photos::Album>>,
     room: Arc<Mutex<Room>>,
     limits: Arc<Mutex<HashMap<(IpAddr, String), (Instant, u32)>>>,
     sockets: Arc<Semaphore>,
@@ -369,6 +371,7 @@ async fn main() {
         s
     });
     let app = App {
+        photos:Default::default(),
         room: Arc::new(Mutex::new(Room::new(arena, bots))),
         limits: Default::default(),
         sockets: Arc::new(Semaphore::new(32)),
@@ -389,6 +392,8 @@ async fn main() {
     });
     let router = Router::new()
         .route("/api/socket", get(upgrade))
+        .route("/api/photos",get(photos::list).post(photos::upload).layer(DefaultBodyLimit::max(65536)))
+        .route("/api/photos/{epoch}/{id}",get(photos::image))
         .fallback(http)
         .layer(DefaultBodyLimit::max(2048))
         .layer(axum::middleware::from_fn(headers))

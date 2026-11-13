@@ -60,7 +60,7 @@ You can also click the ammo cards to select weapons. Watch for the incoming miss
 
 ### Mobile bombers
 
-Tap the arena to drop the selected bomb. Drag to pan, use **+ / −** to zoom, and **⌖** to recenter. Switch between **3D VIEW** and **2D MAP** at any time. **Let’s Bomb / Let’s Play** opens the game in fullscreen.
+Tap the arena to drop the selected bomb. Drag to pan, use **+ / −** to zoom, and **⌖** to recenter. Switch between **3D VIEW** and **2D MAP** at any time. Use **PHOTO ∞** to take unlimited photographs without spending bombs; everyone gets a shared photo slideshow after the match. **Let’s Bomb / Let’s Play** opens the game in fullscreen.
 
 Start with two A-bombs and two stinkbombs. A-bombs refill every ten seconds; stinkbombs refill every five seconds. Select **A-BOMBS** for explosions or **STINK** to make drivers dizzy. If an affected driver dies, the killer earns one point and each contributing bomber earns half a point. Bombers cannot be hit by drivers.
 

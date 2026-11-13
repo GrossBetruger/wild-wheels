@@ -1,3 +1,4 @@
+import {BomberPhotography} from './photography.js';
 import {darkHumorState} from './dark-humor.js';
 import { LENGTH, drivers, tracks, createRace, tick, useItem, useTurbo, selectItem, cycleItem, itemCapacity, boostDuration } from './engine.js';
 import { Renderer } from './renderer.js';
@@ -107,6 +108,7 @@ const network=new NetworkGame({anchor:modeSwitch,keys,role:mobile?'bomber':'driv
   document.querySelector('.race-meta').textContent=`10 KILLS · 3 MIN · ${network.state.players.length+network.state.bots} FIGHTERS`;
   if(changed||driverChanged)showDriver(world.driver);
 },onLeave:()=>{race=newGame();lastPhase='';keys.clear();updateMapLabels();}});
+const photography=new BomberPhotography({canvas,viewport:document.querySelector('.viewport'),network,sound:type=>audio.event(type),unlock:()=>audio.unlock()});
 const leaderboard=document.createElement('section');leaderboard.className='leaderboard hidden';document.querySelector('aside').append(leaderboard);
 const finalResults=document.createElement('section');finalResults.id='match-results';finalResults.className='match-results hidden';finalResults.setAttribute('aria-label','Final leaderboard');$('start').before(finalResults);let resultsKey='';
 function showResults(){
@@ -180,6 +182,7 @@ function timeLabel(t){return `${String(Math.floor(t/60)).padStart(2,'0')}:${(t%6
 let scoreboardKey='';
 function put(id,value){const node=$(id);if(node.textContent!==String(value))node.textContent=value;}
 function hud(){
+  photography.update(race);
   document.querySelector('.viewport').classList.toggle('bomber-view',Boolean(race.bomber));
   if(race.bomber){
     bombCount.title=race.bombAmmo+' / '+itemCapacity(race.driver,'abomb')+' held';stinkCount.title=race.stinkAmmo+' / '+itemCapacity(race.driver,'stink')+' held';
@@ -328,4 +331,4 @@ for(const event of ['pointerdown','keydown'])window.addEventListener(event,()=>{
 document.querySelectorAll('[data-key]').forEach(b=>{b.addEventListener('pointerdown',e=>{e.preventDefault();b.setPointerCapture(e.pointerId);keys.add(b.dataset.key);if(b.dataset.key===' ')useWeapon();if(network.active)network.input();});for(const name of ['pointerup','pointercancel','lostpointercapture'])b.addEventListener(name,()=>{keys.delete(b.dataset.key);if(network.active)network.input();});});
 selectDriver(0);updateMapLabels();
 let nextVisualFrame=0;
-function frame(t){if(t+1<nextVisualFrame){requestAnimationFrame(frame);return;}nextVisualFrame=Math.max(nextVisualFrame+1000/60,t+1);const dt=lastTime?Math.min((t-lastTime)/1000,.05):0;lastTime=t;renderer.recordFrame(t);const performanceText=`${renderer.fps||'…'} FPS · ${renderer.pixelRatio().toFixed(2)}×${network.active?` · ${network.rtt?Math.round(network.rtt*1000):'…'} ms ping`:''}`;if(fpsMeter.textContent!==performanceText)fpsMeter.textContent=performanceText;if(network.active){race=network.render(dt)??race;}if(!network.active&&mode==='combat')tickBattle(race,keys,dt);if(!network.active&&mode==='race')tick(race,keys,dt);for(const event of race.events){audio.event(event);if(event==='victory'||event==='finish')announceFinish();}race.events.length=0;const priority={win:5,lap:4,cheer:3,hurt:2,pass:1};race.voices.sort((a,b)=>priority[b.cue]-priority[a.cue]);for(const call of race.voices)audio.voice(call);race.voices.length=0;audio.update(race);draw();hud();requestAnimationFrame(frame);}requestAnimationFrame(frame);
+function frame(t){if(t+1<nextVisualFrame){requestAnimationFrame(frame);return;}nextVisualFrame=Math.max(nextVisualFrame+1000/60,t+1);const dt=lastTime?Math.min((t-lastTime)/1000,.05):0;lastTime=t;renderer.recordFrame(t);const performanceText=`${renderer.fps||'…'} FPS · ${renderer.pixelRatio().toFixed(2)}×${network.active?` · ${network.rtt?Math.round(network.rtt*1000):'…'} ms ping`:''}`;if(fpsMeter.textContent!==performanceText)fpsMeter.textContent=performanceText;if(network.active){race=network.render(dt)??race;}if(!network.active&&mode==='combat')tickBattle(race,keys,dt);if(!network.active&&mode==='race')tick(race,keys,dt);for(const event of race.events){audio.event(event);if(event==='victory'||event==='finish')announceFinish();}race.events.length=0;const priority={win:5,lap:4,cheer:3,hurt:2,pass:1};race.voices.sort((a,b)=>priority[b.cue]-priority[a.cue]);for(const call of race.voices)audio.voice(call);race.voices.length=0;audio.update(race);draw();photography.afterDraw();hud();requestAnimationFrame(frame);}requestAnimationFrame(frame);

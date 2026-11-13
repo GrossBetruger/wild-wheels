@@ -41,5 +41,7 @@
   "nameplates.js",
   "mobile.js",
   "fire-ring.js",
-  "fire-ring-visual.js"
+  "fire-ring-visual.js",
+  "photography.js",
+  "photo-protocol.js"
 ]

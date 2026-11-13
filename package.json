@@ -15,7 +15,8 @@
     "test:dedicated": "node scripts/check-dedicated-server.mjs",
     "benchmark:dedicated": "node scripts/benchmark-dedicated.mjs",
     "test:dedicated-browser": "node scripts/check-dedicated-browser.mjs",
-    "test:server-commands": "node scripts/check-server-commands.mjs"
+    "test:server-commands": "node scripts/check-server-commands.mjs",
+    "test:photos": "node scripts/check-photo-browser.mjs"
   },
   "dependencies": {
     "ws": "8.22.2"

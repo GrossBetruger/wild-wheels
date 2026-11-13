@@ -42,6 +42,7 @@ impl NativeArena {
     pub fn phase(&self) -> &str {
         &self.game.global.phase
     }
+    pub fn elapsed(&self)->f64{self.game.global.elapsed}
     pub fn epoch(&self) -> u64 {
         self.game.global.sound_epoch
     }

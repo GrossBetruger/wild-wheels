@@ -1,3 +1,4 @@
+import {PhotoAlbum} from './photo-album.js';
 import { randomBytes, randomInt } from 'node:crypto';
 import { networkInterfaces } from 'node:os';
 import { WebSocketServer } from 'ws';
@@ -79,7 +80,7 @@ export class Multiplayer {
   roomConfig(room){return {code:room.code,arena:room.arena,bots:room.botCount,specialAbilities:room.specialAbilities!==false,host:room.host,epoch:room.soundEpoch,seed:room.seed??0,players:[...room.members.values()].map(p=>({id:p.id,name:p.name,driver:p.driver,role:p.role,afk:Boolean(p.afk),wantsToPlay:Boolean(p.wantsToPlay),playRequestRefused:Boolean(p.playRequestRefused)})),startRequest:room.startRequest?{id:room.startRequest.id,remainingMs:Math.max(0,room.startRequest.deadline-this.startNow())}:null};}
   syncRoom(room){const config=this.roomConfig(room),text=JSON.stringify(config);if(text===room.configText)return;room.core.configure(config);room.configText=text;}
   makeWorld(room){
-    room.startRequest=null;room.soundEpoch=(room.soundEpoch??0)+1;room.seed=randomInt(0x100000000);room.botCount=Math.min(room.botCount,6-room.members.size);
+    room.photoAlbum=new PhotoAlbum();room.startRequest=null;room.soundEpoch=(room.soundEpoch??0)+1;room.seed=randomInt(0x100000000);room.botCount=Math.min(room.botCount,6-room.members.size);
     for(const member of room.members.values()){member.wantsToPlay=false;member.playRequestRefused=false;this.assign(room,member);}
     const config=this.roomConfig(room);room.core=ArenaCore.room(config);room.configText=JSON.stringify(config);this.fixtureWorld?.(room);
   }
@@ -237,6 +238,20 @@ export class Multiplayer {
       }
       const member=this.members.get(sessionToken(req));if(!member)throw problem(401,'Rejoin the room to reconnect.');
       member.lastSeen=Date.now();const room=member.room;
+      if(path==='/api/photos'||path.startsWith('/api/photos/')){
+        const album=room.photoAlbum??=new PhotoAlbum();album.ensure(room.core.status.soundEpoch);
+        if(req.method==='GET'&&path==='/api/photos'){this.limit(req,'photos-list',20);json(200,album.manifest(room.core.status.phase==='finished'));return true;}
+        if(req.method==='GET'){
+          const match=path.match(/^\/api\/photos\/(\d+)\/(\d+)$/);const photo=match&&Number(match[1])===album.epoch&&room.core.status.phase==='finished'?album.photos[Number(match[2])]:null;
+          if(!photo)throw problem(404,'Photo unavailable.');res.writeHead(200,{'Content-Type':'image/jpeg','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(photo.bytes);return true;
+        }
+        if(req.method!=='POST'||path!=='/api/photos')throw problem(405,'Use GET or POST.');
+        if(member.role!=='bomber'||member.afk)throw problem(403,'Only active bombers can take photos.');
+        if(room.core.status.phase!=='racing'||Number(req.headers['x-wild-wheels-epoch'])!==album.epoch)throw problem(409,'This match has ended.');
+        if(req.headers['content-type']!=='image/jpeg')throw problem(415,'Use a camera JPEG.');
+        let size=0;const chunks=[];for await(const chunk of req){size+=chunk.length;if(size>65536)throw problem(413,'Camera image too large.');chunks.push(chunk);}
+        const id=album.add(Buffer.concat(chunks),member,room.core.status.elapsed);json(200,{ok:true,id});return true;
+      }
       if(path==='/api/events'&&req.method==='GET'){
         this.limit(req,'stream',12);member.stream?.end();res.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-cache, no-transform','Connection':'keep-alive','X-Accel-Buffering':'no'});res.flushHeaders();member.stream=res;this.send(member,this.snapshot(room,member));req.on('close',()=>{if(member.stream===res){member.stream=null;member.keys.clear();}});return true;
       }
