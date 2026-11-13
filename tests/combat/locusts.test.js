@@ -5,6 +5,12 @@ import {useSpecial,characterAbilities} from '../../gameplay/special-abilities.js
 import {ArenaCore,ArenaClient} from '../../gameplay/arena-core.js';
 
 for(const engine of ['JavaScript','Rust']){
+  for(const owner of [0,1])test(`${engine}: a lethal locust credits Tammy in slot ${owner}`,()=>{
+    const world=createBattle(owner===0?5:0);Object.assign(world,{phase:'racing',human:true,wx:65,wz:0,health:1,supplies:[],locusts:[{id:1,owner,wx:65,wz:0,age:1,jump:.7}]});
+    world.bots.forEach((a,i)=>Object.assign(a,{human:true,driver:owner===1&&i===0?5:0,inactive:i>0,destroyed:i>0?999:0,wx:65,wz:1,health:1,shield:0}));
+    const core=engine==='Rust'?new ArenaCore(world):null;if(core)core.step(.01);else tickBattle(world,new Set(),.01);
+    const state=core?core.snapshot():world,actors=[state,...state.bots];assert.equal(actors.find(a=>a.id===owner).kills,1);assert.equal(actors.find(a=>a.id===1-owner).deaths,1);assert.equal(state.killFeed[0].attacker,owner);
+  });
   test(`${engine}: a locust navigates across the arena around walls before hitting`,()=>{
     const world=createBattle(5);Object.assign(world,{phase:'racing',human:true,wx:-65,wz:-60,supplies:[],locusts:[{id:1,owner:0,wx:-65,wz:0,age:1,jump:0,heading:0}]});
     world.bots.forEach((a,i)=>Object.assign(a,{human:true,inactive:i>0,destroyed:i>0?999:0,wx:65,wz:0,health:3,shield:0}));
@@ -60,4 +66,15 @@ test('Tammy deploys Low-Cost Locust when every opponent is a server-controlled b
   assert.equal(client.action('special',undefined,0),true);server.step(.01,[{actor:0,...client.outbound([])}]);
   assert.equal(server.snapshot().locusts.length,6);
   client.accept(server.packet(),.02);client.frame(0,[],.02);assert.equal(client.present().locusts.length,6);
+});
+test('Low-Cost Locust recharges in twenty seconds even while surviving locusts keep hunting',()=>{
+  const config={code:'00',maxPlayers:8,dedicated:true,host:null,arena:0,bots:3,epoch:1,players:[{id:0,name:'Tammy',driver:5,role:'driver'}]};
+  const server=ArenaCore.room(config);server.start();for(let i=0;i<181;i++)server.step(1/60);
+  server.step(0,[{actor:0,actions:[{type:'special'}]}]);assert.equal(server.snapshot().specialCooldown,20);
+  server.configure({...config,bots:0});for(let i=0;i<60;i++)server.step(1/60);
+  assert.ok(Math.abs(server.snapshot().specialCooldown-19)<1e-7);assert.equal(server.snapshot().locusts.length,6);
+  const client=new ArenaClient();client.accept(server.packet(),1);client.frame(0,[],1);assert.equal(client.action('special',undefined,1),false);
+  for(let i=0;i<1141;i++)server.step(1/60);
+  assert.equal(server.snapshot().specialCooldown,0);assert.equal(server.snapshot().locusts.length,6);
+  client.accept(server.packet(),21);client.frame(0,[],21);assert.equal(client.action('special',undefined,21),true);
 });

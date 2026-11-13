@@ -8,6 +8,7 @@ export async function checkLocusts(evaluate,app,room,id,sleep,capture){
     Object.assign(actor,{wx,wz,health:6,shield:0,speed:0,heading:Math.PI,motionHeading:Math.PI,cameraHeading:Math.PI,specialCooldown:0});
   }
   app.broadcast(room);await wait(()=>evaluate('__game.race.phase==="racing"'),'Battle did not start');
+  [room.world,...room.world.bots].find(a=>!a.inactive&&a.id!==id&&a.wx===-65).health=4;
   if(!await evaluate('document.querySelector(".special-status").classList.contains("hidden")'))throw new Error('An idle ability announcement is stuck on screen');
   await evaluate('document.querySelector(".viewport").scrollIntoView({block:"center"});__game.network.action("special")');
   try{await wait(()=>evaluate('__game.race.locusts.length===6'),'Multiplayer swarm did not contain six locusts');}
@@ -16,8 +17,10 @@ export async function checkLocusts(evaluate,app,room,id,sleep,capture){
   if(!await evaluate('document.querySelector(".special-status").textContent.includes("LOW-COST LOCUST")&&document.querySelector(".special-status").dataset.theme==="locust"'))throw new Error('Tammy did not receive her custom ability card');
   await wait(()=>room.world.locusts.length===0,'Locusts did not reach their targets');
   const actors=[room.world,...room.world.bots].filter(a=>!a.inactive),owner=actors.find(a=>a.id===id),rivals=actors.filter(a=>a.id!==id);
-  if(owner.health!==6||rivals.reduce((sum,a)=>sum+a.health,0)!==12)throw new Error('Swarm damage was not exactly six hearts with Tammy immune');
+  if(owner.health!==6||rivals.reduce((sum,a)=>sum+a.health,0)!==10)throw new Error('Swarm damage was not exactly six hearts with Tammy immune');
+  if(owner.kills!==1)throw new Error('The lethal locust did not credit Tammy with a kill');
+  await wait(()=>evaluate('__game.race.kills===1&&__game.race.specialCooldown>0&&document.getElementById("special-ability").textContent.includes("RECHARGE")'),'Kill score or recharge did not reach the player');
   if(await evaluate('__game.renderer.gl.getError()')!==0)throw new Error('Locust rendering produced a WebGL error');
   await wait(()=>evaluate('document.querySelector(".special-status").classList.contains("hidden")'),'Ability announcement did not dismiss');
-  return {pass:true,locusts:6,clusters:2,totalDamage:6,tammyImmune:true,webgl:true,themedCard:true,announcementDismissed:true};
+  return {pass:true,locusts:6,clusters:2,totalDamage:6,tammyImmune:true,kills:1,recharging:true,webgl:true,themedCard:true,announcementDismissed:true};
 }
