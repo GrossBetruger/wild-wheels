@@ -94,7 +94,7 @@ npm run test:browser-netcode
 To validate installation and launching on clean Ubuntu without Node:
 
 ```sh
-docker run --rm --mount type=bind,source="$PWD",target=/game,readonly --workdir /game ubuntu:24.04 bash scripts/check-ubuntu-install.sh
+docker run --rm --mount type=bind,source="$PWD",target=/game,readonly --workdir /game ubuntu:24.04 bash scripts/checks/check-ubuntu-install.sh
 ```
 
 The existing Chrome netcode suite continues to protect prediction and feedback under host, guest, latency and jitter profiles. See [testing](testing.md) for the broader suites.

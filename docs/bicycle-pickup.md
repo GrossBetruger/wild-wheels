@@ -14,4 +14,4 @@ Regression criteria:
 - Continuous floor position and zero landing velocity; presentation preserves source pose, ownership, age, and acquired upgrades.
 - Real Chrome renders exactly one thrown/pickup bicycle through landing, with no frame-to-frame step of 2 units or more when frames are less than 100 ms apart; then verifies numeric intelligence HUD and increased inventory above the base carrying limits.
 
-Run `node --test bicycle-pickup.test.js` or `npm test` before pushing. After pushing, run `npm run test:browser-netcode -- --specials --profile --output /private/tmp/wild-wheels-bicycles.json` for the Chrome checks and screenshots.
+Run `node --test tests/gameplay/bicycle-pickup.test.js` or `npm test` before pushing. After pushing, run `npm run test:browser-netcode -- --specials --profile --output /private/tmp/wild-wheels-bicycles.json` for the Chrome checks and screenshots.

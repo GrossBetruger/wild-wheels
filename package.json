@@ -7,16 +7,16 @@
     "start": "node server.js",
     "dev": "node server.js",
     "test": "node --test",
-    "test:netcode": "node scripts/check-netcode.mjs",
-    "test:browser-netcode": "node scripts/check-browser-netcode.mjs",
-    "profile:network": "node scripts/profile-network.mjs",
-    "test:regression": "node scripts/check-regressions.mjs",
-    "build:core": "node scripts/build-rust-core.mjs",
-    "test:dedicated": "node scripts/check-dedicated-server.mjs",
-    "benchmark:dedicated": "node scripts/benchmark-dedicated.mjs",
-    "test:dedicated-browser": "node scripts/check-dedicated-browser.mjs",
-    "test:server-commands": "node scripts/check-server-commands.mjs",
-    "test:photos": "node scripts/check-photo-browser.mjs"
+    "test:netcode": "node scripts/checks/check-netcode.mjs",
+    "test:browser-netcode": "node scripts/checks/check-browser-netcode.mjs",
+    "profile:network": "node scripts/profiling/profile-network.mjs",
+    "test:regression": "node scripts/checks/check-regressions.mjs",
+    "build:core": "node scripts/build/build-rust-core.mjs",
+    "test:dedicated": "node scripts/checks/check-dedicated-server.mjs",
+    "benchmark:dedicated": "node scripts/profiling/benchmark-dedicated.mjs",
+    "test:dedicated-browser": "node scripts/checks/check-dedicated-browser.mjs",
+    "test:server-commands": "node scripts/checks/check-server-commands.mjs",
+    "test:photos": "node scripts/checks/check-photo-browser.mjs"
   },
   "dependencies": {
     "ws": "8.22.2"

@@ -1,4 +1,4 @@
-import { encodeSnapshot, decodeSnapshot } from '../../wire.js';
+import { encodeSnapshot, decodeSnapshot } from '../../networking/wire.js';
 
 const CAPACITY=262144,encoder=new TextEncoder(),decoder=new TextDecoder();
 const skidScales=[100,100,100,100,1000,1],particleScales=[100,100,100,100,100,100,1000,1000,1,1,1];
