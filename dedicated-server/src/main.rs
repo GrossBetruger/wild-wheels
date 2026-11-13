@@ -1,4 +1,5 @@
 mod benchmark;
+mod chat;
 mod photos;
 mod room;
 mod sessions;

@@ -2,6 +2,8 @@ import { drivers } from '../gameplay/engine.js';
 import {ArenaClient} from '../gameplay/arena-core.js';
 import {createBinaryEncoder} from './binary-wire.js';
 const bootstrapPacket=createBinaryEncoder();
+export const validPlayerName=value=>typeof value==='string'&&value.trim().length>0&&value.length<=24;
+
 export function savedPlayerName(cookies){
   const value=cookies.split(';').map(part=>part.trim()).find(part=>part.startsWith('wild-wheels-name='))?.slice(17);
   try{const name=decodeURIComponent(value??'').trim();return name&&name.length<=24?name:'Player';}catch{return 'Player';}
@@ -27,10 +29,11 @@ export class NetworkGame {
     Object.assign(this,{keys,driver,arena,onState,onLeave,unlock,sound,role});this.dedicated=document.body.classList.contains('dedicated-server');
     this.panel=document.createElement('section');this.panel.className='network-panel';this.panel.setAttribute('aria-label','Multiplayer arena lobby');
     const title=this.title=document.createElement('strong');title.textContent='PLAY TOGETHER · UP TO 6 PLAYERS';
-    this.name=document.createElement('input');this.name.placeholder='Your name';this.name.value=savedPlayerName(document.cookie);this.name.maxLength=24;this.name.setAttribute('aria-label','Player name');
+    this.name=document.createElement('input');this.name.placeholder='Your name';this.name.value=savedPlayerName(document.cookie);if(this.name.value==='Player')this.name.value='';this.name.maxLength=24;this.name.setAttribute('aria-label','Player name');
     this.nameDirty=document.cookie.split(';').some(part=>part.trim().startsWith('wild-wheels-name='));
     this.nameFeedback=document.createElement('span');this.nameFeedback.className='network-name-status';this.nameFeedback.setAttribute('role','status');
-    this.name.oninput=()=>{this.rememberName();this.nameDirty=this.name.value.trim()!==this.state?.world.name;this.nameFeedback.textContent='';};
+    this.nameFields=[];
+    this.name.oninput=()=>{for(const input of this.nameFields)if(input.value!==this.name.value)input.value=this.name.value;this.hostButton.disabled=!this.hasName||this.connecting||this.active&&!this.isHost;if(this.connection&&!this.active)this.connectionStatus();this.rememberName();this.nameDirty=this.name.value.trim()!==this.state?.world.name;this.nameFeedback.textContent='';};
     this.invitation=new URL(location.href).searchParams.get('room')??(this.dedicated?'00':'');
     this.connection=document.getElementById('arena-connection');
     if(this.connection)this.connection.querySelector('button').onclick=()=>this.restore();
@@ -44,10 +47,11 @@ export class NetworkGame {
     this.share=document.createElement('input');this.share.className='hidden';this.share.setAttribute('aria-label','Room invitation link');this.share.addEventListener('input',()=>{this.shareEdited=true;});
     this.internetButton=this.button('START INTERNET LINK',()=>this.startInternetLink());this.internetButton.classList.add('hidden');
     this.copyButton=this.button('COPY INVITE',async()=>{try{await navigator.clipboard.writeText(this.share.value);this.status.textContent='Invitation copied.';}catch{this.share.focus();this.share.select();this.status.textContent='Copy the selected invitation link.';}});this.copyButton.classList.add('hidden');
-    const row=document.createElement('div');row.className='network-controls';row.append(this.abilities,this.name,this.nameFeedback,this.animalChoice,this.botCount,this.hostButton,this.leaveButton);
+    const row=document.createElement('div');row.className='network-controls';row.append(this.abilities,this.nameFeedback,this.animalChoice,this.botCount,this.hostButton,this.leaveButton);
     const invite=document.createElement('div');invite.className='network-invite';invite.append(this.share,this.internetButton,this.copyButton);
     this.help=document.createElement('p');this.help.className='network-help hidden';
     this.panel.append(title,row,this.status,this.players,invite,this.help);anchor.before(this.panel);
+    if(this.connection){const field=this.createNameField();this.connection.querySelector('button').before(field);}
     if(!this.dedicated){
     this.readyDialog=document.createElement('dialog');this.readyDialog.id='play-request-popup';this.readyDialog.className='play-request-popup';this.readyDialog.setAttribute('aria-labelledby','play-request-title');
     const art=document.createElement('div');art.className='play-request-art';art.textContent='🏁';art.setAttribute('aria-hidden','true');
@@ -74,6 +78,15 @@ export class NetworkGame {
     this.timer=setInterval(()=>this.input(),1000/30);
     this.hostButton.disabled=true;queueMicrotask(()=>this.restore());
   }
+  get hasName(){return validPlayerName(this.name.value);}
+  createNameField(){
+    const label=document.createElement('label');label.className='start-name';
+    const input=document.createElement('input');input.type='text';input.placeholder='Enter your name to play';input.maxLength=24;input.required=true;input.autocomplete='nickname';input.value=this.name.value;input.setAttribute('aria-label','Your name before playing');
+    input.oninput=()=>{this.name.value=input.value;this.name.oninput();};
+    input.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();if(!this.active&&this.connection){if(this.hasName)this.restore();}else document.getElementById('start').click();}});
+    this.nameFields.push(input);label.append(input);return label;
+  }
+  focusName(){const input=this.nameFields.find(input=>input.getClientRects().length)||this.name;input.focus();}
   get active(){return Boolean(this.token);}
   get afk(){return Boolean(this.state?.players.find(player=>player.id===this.state.you)?.afk);}
   get isHost(){return Number.isInteger(this.state?.host)&&this.state.host===this.state.you;}
@@ -109,6 +122,7 @@ export class NetworkGame {
   }
   saveName(){
     if(this.namePromise)return this.namePromise;
+    if(!this.hasName){this.nameFeedback.textContent='Enter your name before playing.';this.focusName();return Promise.resolve(false);}
     if(!this.active||!this.nameDirty)return Promise.resolve(true);
     const name=this.name.value.trim();if(!name){this.nameFeedback.textContent='Enter your name before playing.';return Promise.resolve(false);}
     const token=this.token;this.namePending=true;
@@ -187,6 +201,7 @@ export class NetworkGame {
     const value=await response.json();if(!response.ok)throw Object.assign(new Error(value.error??'Connection failed.'),{status:response.status});return value;
   }
   async connect(path){
+    if(!this.hasName){this.connectionStatus();this.status.textContent='Enter your name before joining.';this.hostButton.disabled=true;this.focusName();return;}
     if(this.connecting||this.active&&(path!=='/api/rooms'||!this.isHost))return;
     this.connecting=true;
     this.connectionStatus();
@@ -199,6 +214,13 @@ export class NetworkGame {
   }
   connectionStatus(error=''){
     if(!this.connection)return;
+    const button=this.connection.querySelector('button');
+    if(!this.active&&!this.connecting){
+      this.connection.querySelector('strong').textContent='WHAT SHOULD WE CALL YOU?';
+      this.connection.querySelector('p').textContent=error||'Enter your name before joining the battle.';
+      button.textContent='LET’S BATTLE ↗';button.disabled=!this.hasName;button.classList.remove('hidden');return;
+    }
+    button.disabled=false;button.textContent='RETRY CONNECTION';
     this.connection.querySelector('strong').textContent=error?'COULDN’T JOIN THE ARENA':'JOINING THE ARENA…';
     this.connection.querySelector('p').textContent=error||'Connecting to the shared game.';
     this.connection.querySelector('button').classList.toggle('hidden',!error);
@@ -213,6 +235,7 @@ export class NetworkGame {
     if(this.dedicated)this.hostButton.classList.add('hidden');
     this.leaveButton.textContent=this.afk?'BACK TO ARENA':'AFK';this.hostButton.disabled=this.connecting||!this.isHost;
     if(!this.nameDirty&&!this.namePending&&this.name.value!==state.world.name)this.name.value=state.world.name;
+    if(!this.nameDirty)for(const input of this.nameFields)if(input.value!==this.name.value)input.value=this.name.value;
     if(this.nameDirty&&!this.namePending&&this.name.value.trim()&&['countdown','racing'].includes(state.world.phase))this.saveName();
     this.updateShare();
     this.abilities.textContent=state.specialAbilities===false?'SPECIAL ABILITIES · OFF':'SPECIAL ABILITIES · ON';this.abilities.disabled=!this.canConfigure;this.abilities.setAttribute('aria-pressed',String(state.specialAbilities!==false));

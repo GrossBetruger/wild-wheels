@@ -1,3 +1,5 @@
+import {MatchLayout} from '../ui/match-layout.js';
+import {GameChat} from '../ui/chat.js';
 import {BomberPhotography} from '../photos/photography.js';
 import {darkHumorState} from '../characters/knowitowl/dark-humor.js';
 import { LENGTH, drivers, tracks, createRace, tick, useItem, useTurbo, selectItem, cycleItem, itemCapacity, actorIntelligence, boostDuration } from '../gameplay/engine.js';
@@ -108,9 +110,13 @@ const network=new NetworkGame({anchor:modeSwitch,keys,role:mobile?'bomber':'driv
   document.querySelector('.race-meta').textContent=`10 KILLS · 3 MIN · ${network.state.players.length+network.state.bots} FIGHTERS`;
   if(changed||driverChanged)showDriver(world.driver);
 },onLeave:()=>{race=newGame();lastPhase='';keys.clear();updateMapLabels();}});
+const startRow=document.createElement('div');startRow.className='start-row';$('start').before(startRow);startRow.append(network.createNameField(),$('start'));
 const photography=new BomberPhotography({canvas,viewport:document.querySelector('.viewport'),network,sound:type=>audio.event(type),unlock:()=>audio.unlock()});
+const gameColumn=document.createElement('div');gameColumn.className='game-column';racePanel.before(gameColumn);gameColumn.append(racePanel);
+const chat=new GameChat({network,keys,anchor:racePanel});
+const matchLayout=new MatchLayout({layout:document.querySelector('.game-layout'),sidebar:document.querySelector('aside'),chat:chat.panel,map:$('map'),playground:document.querySelector('.track-panel'),viewport:document.querySelector('.viewport')});
 const leaderboard=document.createElement('section');leaderboard.className='leaderboard hidden';document.querySelector('aside').append(leaderboard);
-const finalResults=document.createElement('section');finalResults.id='match-results';finalResults.className='match-results hidden';finalResults.setAttribute('aria-label','Final leaderboard');$('start').before(finalResults);let resultsKey='';
+const finalResults=document.createElement('section');finalResults.id='match-results';finalResults.className='match-results hidden';finalResults.setAttribute('aria-label','Final leaderboard');startRow.before(finalResults);let resultsKey='';
 function showResults(){
   const visible=race.phase==='finished';finalResults.classList.toggle('hidden',!visible);$('message').classList.toggle('results-visible',visible);
   if(!visible){resultsKey='';return;}
@@ -183,6 +189,7 @@ function timeLabel(t){return `${String(Math.floor(t/60)).padStart(2,'0')}:${(t%6
 let scoreboardKey='';
 function put(id,value){const node=$(id);if(node.textContent!==String(value))node.textContent=value;}
 function hud(){
+  matchLayout.update(race.phase,mode);
   photography.update(race);
   document.querySelector('.viewport').classList.toggle('bomber-view',Boolean(race.bomber));
   if(race.bomber){
@@ -232,6 +239,7 @@ function hud(){
   document.querySelector('.racer-panel').classList.toggle('hidden',(guest||dedicated)&&race.bomber);
   $('start').disabled=dedicated&&!network.active||network.active&&!network.canControl&&race.phase!=='paused'&&(network.wantsToPlay||network.readyPending||!['ready','finished'].includes(race.phase));
   if(dedicated)$('start').disabled=!network.active||network.awayPending||!network.afk&&!['ready','finished','paused'].includes(race.phase);
+  $('start').disabled=$('start').disabled||!network.hasName;
   if(!dedicated&&network.active&&!network.canControl&&['ready','finished'].includes(race.phase)){
     const seconds=Math.ceil((network.state.startRequest?.remainingMs??0)/1000);
     $('start').textContent=network.wantsToPlay?`STARTING IN ${seconds}…`:network.readyPending?'SENDING…':network.playRequestRefused?'REQUEST AGAIN ↗':'LET’S PLAY ↗';
@@ -297,7 +305,7 @@ function hud(){
   if(['ready','countdown','finished','paused'].includes(race.phase))finishFlash.classList.add('hidden');
   if(race.phase==='racing'&&race.finishRank!==null)finishFlash.classList.remove('hidden');
   $('message').classList.toggle('hidden',race.phase==='racing');
-  const button=$('start'),message=$('message');button.classList.toggle('hidden',race.phase==='countdown');
+  const button=$('start'),message=$('message');button.classList.toggle('hidden',race.phase==='countdown');startRow.classList.toggle('hidden',race.phase==='countdown');
   $('pause').textContent=dedicated?(network.afk?'BACK':'AFK'):race.phase==='paused'?'▶':'Ⅱ';$('pause').setAttribute('aria-label',dedicated?(network.afk?'Return to the arena':'Go AFK'):'Pause race');
   switch(race.phase){
     case 'ready':message.querySelector('.pill').textContent=race.bomber?'YOU HAVE AIR SUPPORT':mode==='combat'?'EVERY KART FOR ITSELF':'THE GRID IS WAITING';message.querySelector('h2').textContent=race.bomber?'Trouble from above.':mode==='combat'?'Small karts. Big trouble.':'Born to be wild.';message.querySelector('p').textContent=race.bomber?'Start with 2 of each bomb · Stink every 5s · A-bomb every 10s':mode==='combat'?'First to 10 kills · 3 minutes · Hold Space to fire':'Six racers. Three laps. Two alternate routes.';message.querySelector('small').textContent=`${mode==='combat'?arenas[track].name:tracks[track].name} · ${race.bomber?'Tap to bomb · Drag to explore':'Press Enter to start'}`;button.textContent=race.bomber?'LET’S BOMB ↗':mode==='combat'?'LET’S BATTLE ↗':'LET’S RACE ↗';$('status').textContent='READY WHEN YOU ARE';break;
@@ -310,7 +318,7 @@ function hud(){
 function showDriver(index){selected=index;[...$('drivers').children].forEach((b,i)=>{b.classList.toggle('selected',i===index);b.setAttribute('aria-pressed',String(i===index));});const d=drivers[index];$('driver-name').textContent=d.name;$('driver-desc').textContent=d.desc;$('intelligence-stat').parentElement.title='Carrying limits: '+itemCapacity(index,'hedgehog')+' hedgehogs, '+itemCapacity(index,'missile')+' missiles, '+itemCapacity(index,'boost')+' turbos, '+itemCapacity(index,'abomb')+' of each bomb.';$('cuteness-stat').parentElement.title='Arena: recovers one heart every '+recoveryInterval(index)+' seconds without taking damage, up to 3 hearts. Replenishes one hedgehog every '+hedgehogRecoveryInterval(index)+' seconds.';$('fuel-stat').parentElement.title='Each turbo lasts '+boostDuration(index)+' seconds.';$('driver-number').textContent=String(index+1).padStart(2,'0');for(const [id,value] of [['fuel-stat',d.fuel],['speed-stat',d.speed],['handling-stat',d.handling],['accel-stat',d.accel],['cuteness-stat',d.cuteness],['intelligence-stat',d.intelligence]]){$(id).replaceChildren(...Array.from({length:5},(_,i)=>Object.assign(document.createElement('i'),{className:i<value?'on':''})));}}
 function selectDriver(index){if(network.active){network.chooseDriver(index);return;}showDriver(index);race=newGame();lastPhase='';}
 drivers.forEach((d,i)=>{const b=document.createElement('button');b.className='driver';b.textContent=d.emoji;b.title=d.name;b.setAttribute('aria-label',d.name);b.onclick=()=>selectDriver(i);$('drivers').append(b);});
-function start(){if(dedicated&&!network.active)return;if(mobile)enterMobileFullscreen();audio.unlock().catch(()=>{$('sound').textContent='CLICK FOR SOUND';});if(network.active){if(network.paused){network.pause();return;}if(network.canControl){network.control('start');return;}network.requestPlay();return;}if(race.phase==='paused'){race.phase=race.resumePhase||'racing';return;}if(race.phase==='racing'||race.phase==='countdown')return;race=newGame();race.phase='countdown';lastCount=-1;tone(400);}
+async function start(){if(!network.hasName){network.focusName();return;}if(!network.active&&network.invitation){await network.connect('/api/join');if(!network.active)return;}if(dedicated&&!network.active)return;if(mobile)enterMobileFullscreen();audio.unlock().catch(()=>{$('sound').textContent='CLICK FOR SOUND';});if(network.active){if(network.paused){network.pause();return;}if(network.canControl){network.control('start');return;}network.requestPlay();return;}if(race.phase==='paused'){race.phase=race.resumePhase||'racing';return;}if(race.phase==='racing'||race.phase==='countdown')return;race=newGame();race.name=network.name.value.trim();network.rememberName();race.phase='countdown';lastCount=-1;tone(400);}
 function pause(){if(network.active){network.pause();return;}if(race.phase==='paused'){race.phase=race.resumePhase;return;}if(!['racing','countdown'].includes(race.phase))return;race.resumePhase=race.phase;race.phase='paused';keys.clear();}
 $('start').onclick=start;$('pause').onclick=pause;$('restart').onclick=()=>{if(dedicated)return;if(network.active){network.control('reset');return;}race=newGame();lastPhase='';keys.clear();};
 $('change-track').onclick=()=>chooseMap((track+1)%mapButtons.length);

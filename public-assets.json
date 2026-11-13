@@ -35,6 +35,8 @@
   "networking/wire.js",
   "networking/binary-wire.js",
   "ui/feedback.js",
+  "ui/chat.js",
+  "ui/match-layout.js",
   "ui/drift-feedback.js",
   "ui/results.js",
   "ui/combat-notices.js",

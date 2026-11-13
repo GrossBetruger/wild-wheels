@@ -7,6 +7,8 @@
     "start": "node server.js",
     "dev": "node server.js",
     "test": "node --test",
+    "test:chat": "node --test tests/multiplayer/chat.test.js",
+    "test:chat-browser": "node scripts/checks/check-chat-browser.mjs",
     "test:netcode": "node scripts/checks/check-netcode.mjs",
     "test:browser-netcode": "node scripts/checks/check-browser-netcode.mjs",
     "profile:network": "node scripts/profiling/profile-network.mjs",

@@ -92,6 +92,7 @@ impl Member {
     }
 }
 pub struct Room {
+    chat: crate::chat::Chat,
     pub core: NativeArena,
     pub members: [Option<Member>; CAPACITY],
     pub bots: usize,
@@ -109,6 +110,7 @@ impl Room {
         let seed = 1;
         let config = json!({"maxPlayers":8,"code":"00","arena":arena,"bots":bots,"host":null,"dedicated":true,"epoch":epoch,"seed":seed,"players":[]});
         Self {
+            chat: crate::chat::Chat::default(),
             core: NativeArena::new(config).unwrap(),
             members: std::array::from_fn(|_| None),
             bots,
@@ -283,6 +285,10 @@ impl Room {
     }
     pub fn control(&mut self, id: usize, path: &str, b: &Value) -> Result<Value> {
         self.members[id].as_mut().unwrap().seen = Instant::now();
+        if path == "/api/chat" {
+            let players = self.members.iter().enumerate().filter_map(|(id,p)|p.as_ref().map(|p|(id,p.identity.clone(),p.name.clone()))).collect::<Vec<_>>();
+            return self.chat.exchange(id, &players, b);
+        }
         match path {
             "/api/session" => return Ok(self.resume(id, false)),
             "/api/afk" => {
@@ -555,6 +561,30 @@ mod tests {
         assert_eq!(refreshed["world"]["driver"], 1);
         assert_eq!(room.find(refreshed["token"].as_str().unwrap()), Some(1));
         assert_eq!(room.find(first["token"].as_str().unwrap()), Some(0));
+    }
+    #[test]
+    fn chat_controls_use_room_identity_and_preserve_private_delivery() {
+        let mut room = Room::new(0, 0);
+        for name in ["Alice", "Bob", "Eve"] {
+            room.join(&json!({"name":name,"driver":null})).unwrap();
+        }
+        let sent=room.control(0,"/api/chat",&json!({"text":"Private hello","to":1,"name":"Forged"})).unwrap();
+        assert_eq!(sent["messages"][0]["name"],"Alice");
+        assert_eq!(room.control(1,"/api/chat",&json!({})).unwrap()["messages"][0]["text"],"Private hello");
+        assert!(room.control(2,"/api/chat",&json!({})).unwrap()["messages"].as_array().unwrap().is_empty());
+        room.control(1,"/api/chat",&json!({"text":"Public hello"})).unwrap();
+        assert_eq!(room.control(2,"/api/chat",&json!({})).unwrap()["messages"][0]["text"],"Public hello");
+    }
+    #[test]
+    fn private_chat_survives_reconnects_and_afk_token_rotation() {
+        let mut room=Room::new(0,0);
+        room.join(&json!({"name":"Alice","driver":0})).unwrap();
+        room.join(&json!({"name":"Bob","driver":1})).unwrap();
+        room.control(0,"/api/chat",&json!({"text":"Keep this private","to":1})).unwrap();
+        let old_token=room.members[1].as_ref().unwrap().token.clone();
+        room.resume(1,true);room.resume(1,false);room.resume(0,false);
+        assert_ne!(old_token,room.members[1].as_ref().unwrap().token);
+        for id in [0,1]{assert_eq!(room.control(id,"/api/chat",&json!({})).unwrap()["messages"][0]["text"],"Keep this private");}
     }
     #[test]
     fn eight_people_can_join_and_the_ninth_is_rejected() {
