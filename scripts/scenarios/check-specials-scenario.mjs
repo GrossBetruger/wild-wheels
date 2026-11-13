@@ -23,8 +23,10 @@ export async function checkSpecials(evaluate,app,room,id,sleep,capture){
   const audioResolved=await wait(()=>evaluate('__game.audio.warpMusic===null'));
   const movesAgain=await wait(()=>app.snapshot(room,peer).world.wz>stoppedAt+.05);
   const cooldown=await evaluate("__game.race.specialCooldown>15&&__game.network.action('special')!==true");
-  // Model an opponent's actual Avita activation, including its cooldown edge.
-  peer.driver=8;Object.assign(other,{driver:8,specialCooldown:20});
+  // Establish Avita before activating: changing character is not an ability use.
+  peer.driver=8;Object.assign(other,{driver:8,specialCooldown:0});app.broadcast(room);
+  await wait(()=>evaluate(`__game.race.bots.some(a=>a.id===${peer.id}&&a.driver===8&&a.specialCooldown===0)`));
+  other.specialCooldown=20;
   Object.assign(room.world,{timeStop:2.5,timeOwner:peer.id});app.broadcast(room);
   const frozenClient=await wait(()=>evaluate("__game.race.timeStop>1&&document.querySelector('.special-status').textContent.includes('TIME DILATION')"));
   const heldAt=await evaluate('__game.race.wz');await evaluate("__game.keys.add('arrowup')");await sleep(400);
