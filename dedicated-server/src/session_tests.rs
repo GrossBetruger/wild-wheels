@@ -14,6 +14,18 @@ fn server(path: std::path::PathBuf) -> App {
     }
 }
 
+#[tokio::test(flavor = "current_thread")]
+async fn checking_updates_does_not_consume_the_install_rate_limit() {
+    let directory = std::env::temp_dir().join(format!("wild-wheels-update-limit-{}", room::token()));
+    let app = server(directory.join("sessions.json"));
+    let (_, cookie, _) = post(&app, "/api/join", "", json!({"code":"00","name":"Updater","driver":0})).await;
+    assert_eq!(post(&app, "/api/updates/install", &cookie, json!({})).await.0, StatusCode::CONFLICT);
+    assert_eq!(post(&app, "/api/updates/check", &cookie, json!({})).await.0, StatusCode::CONFLICT);
+    assert_eq!(post(&app, "/api/updates/install", &cookie, json!({})).await.0, StatusCode::CONFLICT);
+    assert_eq!(post(&app, "/api/updates/install", &cookie, json!({})).await.0, StatusCode::TOO_MANY_REQUESTS);
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
 async fn post(app: &App, path: &str, cookie: &str, body: Value) -> (StatusCode, String, Value) {
     let mut h = HeaderMap::new();
     h.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());

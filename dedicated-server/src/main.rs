@@ -159,7 +159,8 @@ async fn http(
                     return error((409, "Update the server between matches, while you are active."));
                 }
             }
-            if !limit(&app, addr.ip(), path, 2, Duration::from_secs(60)) {return error((429, "Please wait before checking again."));}
+            let bucket = match path {"/api/updates/check" => "update-check", _ => "update-install"};
+            if !limit(&app, addr.ip(), bucket, 2, Duration::from_secs(60)) {return error((429, "Please wait before checking again."));}
             let Ok(mut updates) = app.updates.try_lock() else {return error((409, "Another update check is running."));};
             let result = match path {"/api/updates/check" => updates.check().await, _ => updates.start().await};
             return match result {Ok(value) => response(200, value), Err(e) => error(e)};
