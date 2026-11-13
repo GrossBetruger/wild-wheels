@@ -1,3 +1,5 @@
+import {bicyclePose,bicycleLanding} from './bicycle-pickup.js';
+import {arenas} from './combat.js';
 const white='#f5f4ec',ivory='#e2e4dc',edge='#c1cbd4',gold='#d3ab58',navy='#273b4c';
 function rod(m,a,b,r,color){const d=a.map((v,i)=>b[i]-v),l=Math.hypot(...d),n=Math.max(2,Math.ceil(l/.18));for(let i=0;i<=n;i++)m.ball(...a.map((v,j)=>v+d[j]*i/n),r,r,r,color,6,4);}
 export function drawBicycle(m,phase){
@@ -60,11 +62,22 @@ export class OwlFlight{
   riders=new Map();feathers=[];
   draw(renderer,m,p,color,yaw,spin,boost,time,celebrate,jump,gesture){
     const id=p.id??'preview';let s=this.riders.get(id);if(!s||time<s.time||time-s.time>1){s={time,amount:boost?1:0,drop:boost?time-2:-99,last:0,boost};this.riders.set(id,s);}
-    const dt=Math.min(.05,Math.max(0,time-s.time));s.time=time;if(boost&&!s.boost){s.drop=time;s.bike={x:p.x,z:p.z,angle:Math.atan2(p.tx,p.tz)-yaw+spin,height:jump?.height??0};}s.boost=boost;s.amount+=(Number(boost)-s.amount)*(1-Math.exp(-dt*8));
+    const dt=Math.min(.05,Math.max(0,time-s.time));s.time=time;if(boost&&!s.boost){s.drop=time;s.handoff=null;s.bike={x:p.x,z:p.z,angle:Math.atan2(p.tx,p.tz)-yaw+spin,height:jump?.height??0};}s.boost=boost;s.amount+=(Number(boost)-s.amount)*(1-Math.exp(-dt*8));
     const a=s.amount,angle=Math.atan2(p.tx,p.tz)-yaw+spin,height=(jump?.height??0)+a*(2.4+Math.sin(time*5)*.15),phase=Math.floor(time*(boost?18:7))%16;
-    const elapsed=time-s.drop,bikeScale=boost?Math.max(0,1-Math.max(0,elapsed-.65)*2):1;
-    const abandoned=boost?s.bike:null,slide=1.3*(1-Math.exp(-Math.max(0,elapsed)*3));
-    if(bikeScale>0)renderer.model('owl:bike:'+phase+':'+Math.round(bikeScale*12),abandoned?abandoned.x+Math.sin(abandoned.angle)*slide:p.x,abandoned?Math.max(0,abandoned.height-elapsed*elapsed*5):height*(1-a),abandoned?abandoned.z+Math.cos(abandoned.angle)*slide:p.z,abandoned?.angle??angle,mesh=>{const point=mesh.point;mesh.point=function(v){return point.call(this,v.map(n=>n*bikeScale));};drawBicycle(mesh,phase*Math.PI/8);},jump?.pitch??0,null,boost?Math.min(1.4,elapsed*2):0);
+    const elapsed=time-s.drop;
+    if(!boost)renderer.model('owl:bike:'+phase,p.x,height*(1-a),p.z,angle,mesh=>drawBicycle(mesh,phase*Math.PI/8),jump?.pitch??0);
+    if(boost&&id==='preview'&&s.bike&&elapsed<1.2){const ghost={id:-1,age:elapsed,heading:s.bike.angle,dropWx:s.bike.x,dropWz:s.bike.z,dropHeight:s.bike.height,wx:s.bike.x+Math.sin(s.bike.angle)*7,wz:s.bike.z+Math.cos(s.bike.angle)*7};renderer.bicycleDrop(ghost,time);}
+    if(id!=='preview'&&s.bike&&elapsed<1.5){
+      const end=bicycleLanding(arenas[renderer.activeArena??0],s.bike.x,s.bike.z,s.bike.angle),ghost={id:-1,age:elapsed,heading:s.bike.angle,dropWx:s.bike.x,dropWz:s.bike.z,dropHeight:s.bike.height,...end};
+      const candidate=renderer.bicycleDrops?.get(id),actual=candidate&&Math.abs(candidate.age-elapsed)<.8?candidate:null;
+      if(!actual&&!s.handoff&&elapsed<1.2)renderer.bicycleDrop(ghost,time);
+      if(actual){
+        const predicted=bicyclePose(ghost),authoritative=bicyclePose(actual),fields=['x','z','height','pitch','roll','glow'];if(s.handoff?.id!==actual.id)s.handoff={id:actual.id,time,angle:Math.atan2(Math.sin(predicted.angle-authoritative.angle),Math.cos(predicted.angle-authoritative.angle)),error:Object.fromEntries(fields.map(key=>[key,predicted[key]-authoritative[key]]))};
+        const t=Math.max(0,Math.min(1,(time-s.handoff.time)/.18)),blend=t*t*(3-2*t),pose={...authoritative};for(const key of fields)pose[key]+=s.handoff.error[key]*(1-blend);
+        pose.angle+=s.handoff.angle*(1-blend);
+        renderer.bicycleDrop(actual,time,pose);renderer.drawnBicycles.add(actual.id);
+      }
+    }
     const pose=p.specialActive>0?6:celebrate>0?1+Math.floor(time*1.3)%6:gesture?.id==='monocle'?5:gesture?.id==='xray'?6:gesture?.id==='hello'?1:gesture?.id==='cheer'?2:gesture?.id==='look'?3:0;
     renderer.model('owl:body:'+phase+':'+Math.round(a*20)+':'+pose,p.x,height+(gesture?.bounce??0),p.z,angle+(gesture?.yaw??0)+(pose===4?Math.sin(time*4)*.45:0),mesh=>drawOwl(mesh,phase,a,pose),(jump?.pitch??0)+(pose===2?.15:0));
     if(pose>=5){

@@ -1,8 +1,9 @@
 import {darkBombLights,lightUniforms} from './dark-bomb-light.js';
 import {drawFireRing,drawFireRingOut} from './fire-ring-visual.js';
+import {bicyclePose,hasBatCompanion} from './bicycle-pickup.js';
 import {arrivalScale,departurePose,drawTeleportHaze} from './cricket-teleport.js';
 import {batAim,drawBat} from './bat-companion.js';
-import {OwlFlight} from './knowitowl.js';
+import {OwlFlight,drawBicycle} from './knowitowl.js';
 import {DarkFog,darkHumorState,drawXrayArena} from './dark-humor.js';
 import {drawCalculator,drawAnt,drawTaxAudit,ReceiptRolls,drawXylophone} from './fourmidable.js';
 import { sampleTrack, branches } from './track.js';
@@ -271,6 +272,11 @@ export class Renderer {
     this.glow.at(x,8,z);
     for(let i=0;i<44;i++){const a=i*2.399,r=.3+t*(3+i%5),y=Math.sin(i*3.1)*t*3;this.glow.particle(Math.cos(a)*r,y,Math.sin(a)*r,(.25+(i%3)*.08)*fade,i%3?[.85*fade,.12*fade,.4*fade]:[.8*fade,.55*fade,.1*fade]);}
     this.glow.particle(0,0,0,Math.max(0,1-t/.25)*3,[.9,.65,.35]);
+  }
+  bicycleDrop(supply,time,pose=bicyclePose(supply)){
+    const t=Math.max(0,Math.min(1,supply.age/1.2)),phase=Math.floor(32*(1-(1-t)**3))%16;
+    this.model('owl:bicycle-pickup:'+phase,pose.x,pose.height,pose.z,pose.angle,mesh=>drawBicycle(mesh,phase*Math.PI/8),pose.pitch,null,pose.roll);
+    if(pose.glow>0){this.glow.at(pose.x,.12,pose.z);const glow=pose.glow*(.8+.2*Math.sin(time*3));for(let i=0;i<32;i++){const a=i*Math.PI/16,b=(i+1)*Math.PI/16;this.glow.quad([Math.sin(a)*2.7,0,Math.cos(a)*2.7],[Math.sin(b)*2.7,0,Math.cos(b)*2.7],[Math.sin(b)*2.85,0,Math.cos(b)*2.85],[Math.sin(a)*2.85,0,Math.cos(a)*2.85],[.3*glow,.12*glow,.65*glow]);}for(let i=0;i<10;i++){const t=(time*.5+i/10)%1,a=i*2.4;this.glow.particle(Math.sin(a)*2,t*3,Math.cos(a)*2,.12*(1-t),[.35*glow,.16*glow,.6*glow]);}}
   }
   batBuddy(p,actor,world,time,jump){
     let state=this.batSummons.get(actor.id);if(!state||time<state.time){state={time,amount:0};this.batSummons.set(actor.id,state);}
@@ -587,7 +593,7 @@ export class Renderer {
     m.at(0,0,0);this.gl.bindBuffer(this.gl.ARRAY_BUFFER,this.staticBuffer);this.gl.bufferData(this.gl.ARRAY_BUFFER,new Float32Array(m.data),this.gl.STATIC_DRAW);this.staticCount=m.data.length/9;this.track=`arena-${index}`;
   }
   drawBattle(r,time){
-    this.arenaExhaust=true;this.yudaExhaust.update(`${r.arena}:${r.soundEpoch}:${r.id}`,time);
+    this.activeArena=r.arena;this.arenaExhaust=true;this.yudaExhaust.update(`${r.arena}:${r.soundEpoch}:${r.id}`,time);
     this.yudaDrift.update(r,time);
     const helmetScene=`${r.arena}:${r.soundEpoch}:${r.id}`;
     if(this.helmetScene!==helmetScene||time<(this.helmetTime??0)){this.helmetScene=helmetScene;this.helmetFlights=new Map();this.tailFolds.clear();this.receiptRolls.rolls.clear();this.owlFlight.riders.clear();this.batSummons.clear();this.owlFlight.feathers=[];this.yudaJackets.riders.clear();this.yudaStunts.riders.clear();this.lastBodies.clear();this.ashBodies.clear();}this.helmetTime=time;
@@ -602,6 +608,7 @@ export class Renderer {
     }
     const wobble=r.dizzy>0&&!matchMedia('(prefers-reduced-motion: reduce)').matches?Math.sin((DIZZY_DURATION-r.dizzy)*(r.boost>0?14:10))*(r.boost>0?.24:.14):0;
     const p=combatPose(r),cx=Math.sin(r.cameraHeading+wobble),cz=Math.cos(r.cameraHeading+wobble),overview=r.bomber?bomberCamera(width,height,arenas[r.arena].size,this.bomberView??'3d',this.bomberFocus,this.bomberZoom??1):null,eye=overview?.eye??[p.x-cx*17,10+(r.destroyed?5:0),p.z-cz*17],view=overview?.matrix??cameraMatrix(eye,[p.x+cx*18,1.5,p.z+cz*18],width/height,r.boost>0?1.2:r.wasDrifting?1.13:1.07);
+    this.bicycleDrops=new Map();this.drawnBicycles=new Set();for(const s of r.supplies)if(s.kind==='bicycle'&&s.cooldown<=0&&s.age<2)this.bicycleDrops.set(s.owner,s);
     this.bomberMatrix=overview?.matrix??null;
     gl.uniform1f(this.fogScale,overview?.fogScale??1);const dark=darkHumorState(r),bombLights=darkBombLights(r,dark.strength);gl.uniform1f(this.darknessUniform,dark.strength);gl.uniform4fv(this.bombLightsUniform,lightUniforms(bombLights));
     this.nameplates=kartNameplates(r,view,eye);
@@ -640,7 +647,7 @@ export class Renderer {
       const arrival=actor.driver===5&&actor.id!==r.id?r.effects.find(e=>e.type==='teleportIn'&&e.owner===actor.id&&e.age<.52):null;
       if(arrival)this.teleportKart(pose,actor.color??drivers[5].color,actor.heading,arrivalScale(arrival.age),jump?.height??0,jump?.pitch??0);
       if(!arrival)this.kart(m,pose,actor.color??drivers[actor.driver].color,actor.driver,0,0,actor.boost>0,time,actor.celebrate,jump,actor.driver!==7||actor.vulcan<=0);
-      if(actor.driver===14)this.batBuddy(pose,actor,r,time,jump);
+      if(hasBatCompanion(actor))this.batBuddy(pose,actor,r,time,jump);
       const parts=this.instances.slice(bodyStart);this.rememberBody(actor,parts,parts.length?[]:m.data.slice(dataStart));
       if(r.specialAbilities!==false&&[r,...r.bots].some(a=>a.id!==actor.id&&a.driver===13&&a.specialActive>0)){
         const facing=actor.cameraHeading??actor.heading,phase=Math.floor(time*8)%8;
@@ -660,8 +667,8 @@ export class Renderer {
 
       if(actor.tehilim>0)this.tehilimAura(pose,time,actor.tehilim,jump);
       if(actor.dizzy>0)for(let i=0;i<6;i++){const angle=time*(actor.boost>0?9:5)+i*Math.PI/3;m.at(pose.x+Math.sin(angle)*3.2,6.8+Math.sin(angle*2)*.5,pose.z+Math.cos(angle)*3.2,angle);m.box(0,0,0,1.2,.22,.3,'#fff08b');m.box(0,0,0,.3,.22,1.2,'#fff08b');this.glow.at(m.origin[0],m.origin[1],m.origin[2]);this.glow.particle(0,0,0,.8,[.7,.6,.05]);}
-      if(actor.vulcan>0&&actor.driver===10)this.laserMount(m,pose,actor,time,jump);
-      if(actor.vulcan>0&&actor.driver!==10&&actor.driver!==14){
+      if(actor.vulcan>0&&actor.driver===10&&!actor.batCompanion)this.laserMount(m,pose,actor,time,jump);
+      if(actor.vulcan>0&&actor.driver!==10&&actor.driver!==14&&!actor.batCompanion){
         const pulse=.8+.2*Math.sin(time*4);this.glow.at(pose.x,.15,pose.z);
         for(let i=0;i<32;i++){const a=i/32*Math.PI*2,b=(i+1)/32*Math.PI*2;this.glow.quad([Math.cos(a)*3.3,0,Math.sin(a)*3.3],[Math.cos(b)*3.3,0,Math.sin(b)*3.3],[Math.cos(b)*3.65,0,Math.sin(b)*3.65],[Math.cos(a)*3.65,0,Math.sin(a)*3.65],[.55*pulse,.23*pulse,.02]);}
         for(let i=0;i<8;i++){const a=time*1.5+i*Math.PI/4;this.glow.particle(Math.cos(a)*3.5,.3+Math.sin(a*2)*.12,Math.sin(a)*3.5,.8,[.8*pulse,.35*pulse,.03]);}
@@ -678,7 +685,7 @@ export class Renderer {
       if(actor.shield>0&&actor.driver===10)this.bikerAura(m,pose,actor.heading,time,jump,Math.min(1,actor.shield));
       if(actor.shield>0&&actor.driver!==9&&actor.driver!==10){this.glow.at(pose.x,.12,pose.z);for(let i=0;i<18;i++){const a=i/18*Math.PI*2+time;this.glow.particle(Math.cos(a)*3,1,Math.sin(a)*3,.4,[.05,.25,.4]);}}
     }
-    for(const supply of r.supplies){if(supply.cooldown>0)continue;const pose={x:supply.wx,z:supply.wz,tx:0,tz:1},bob=Math.sin(time*2)*.3;m.at(pose.x,.1,pose.z);m.disc(0,0,0,3,3,{missile:'#c65d51',hedgehog:'#bb9c68',boost:'#d4bc55',health:'#78b88c',hedgeproof:'#52c9bc',tehilim:'#6388cf'}[supply.kind]);switch(supply.kind){case 'tehilim':this.tehilimBook(pose.x,2+bob,pose.z,time);this.glow.at(pose.x,2,pose.z);this.glow.particle(0,0,0,2.5,[.08,.15,.4]);break;case 'hedgeproof':this.hedgeguardIcon(pose.x,2+bob,pose.z,time);this.glow.at(pose.x,1.8+bob,pose.z);this.glow.particle(0,0,0,2.8,[.08,.45,.38]);break;case 'missile':this.missile(m,pose,2+bob,time,1.5);break;case 'hedgehog':this.hedgehog(m,pose.x,1.5+bob,pose.z,1.1,time);break;case 'boost':m.at(pose.x,1+bob,pose.z,time);m.box(0,0,0,1.2,2,.8,'#f1cc62');break;case 'health':m.at(pose.x,1+bob,pose.z,time);m.box(0,.7,0,2.4,.7,.5,'#d6f4c6');m.box(0,0,0,.7,2.4,.5,'#d6f4c6');break;}}
+    for(const supply of r.supplies){if(supply.cooldown>0)continue;if(supply.kind==='bicycle'){if(!this.drawnBicycles.has(supply.id))this.bicycleDrop(supply,time);continue;}const pose={x:supply.wx,z:supply.wz,tx:0,tz:1},bob=Math.sin(time*2)*.3;m.at(pose.x,.1,pose.z);m.disc(0,0,0,3,3,{missile:'#c65d51',hedgehog:'#bb9c68',boost:'#d4bc55',health:'#78b88c',hedgeproof:'#52c9bc',tehilim:'#6388cf'}[supply.kind]);switch(supply.kind){case 'tehilim':this.tehilimBook(pose.x,2+bob,pose.z,time);this.glow.at(pose.x,2,pose.z);this.glow.particle(0,0,0,2.5,[.08,.15,.4]);break;case 'hedgeproof':this.hedgeguardIcon(pose.x,2+bob,pose.z,time);this.glow.at(pose.x,1.8+bob,pose.z);this.glow.particle(0,0,0,2.8,[.08,.45,.38]);break;case 'missile':this.missile(m,pose,2+bob,time,1.5);break;case 'hedgehog':this.hedgehog(m,pose.x,1.5+bob,pose.z,1.1,time);break;case 'boost':m.at(pose.x,1+bob,pose.z,time);m.box(0,0,0,1.2,2,.8,'#f1cc62');break;case 'health':m.at(pose.x,1+bob,pose.z,time);m.box(0,.7,0,2.4,.7,.5,'#d6f4c6');m.box(0,0,0,.7,2.4,.5,'#d6f4c6');break;}}
     for(const shot of r.projectiles){
       const pose={x:shot.wx,z:shot.wz,tx:Math.sin(shot.heading),tz:Math.cos(shot.heading)},owner=shot.vulcan?(shot.owner===r.id?r:r.bots.find(actor=>actor.id===shot.owner)):null,cricket=shot.kind==='hedgehog'&&owner?.driver===5,dollars=shot.kind==='hedgehog'&&owner?.driver===6,electrons=shot.kind==='hedgehog'&&owner?.driver===8,pumps=shot.kind==='hedgehog'&&owner?.driver===9,laser=shot.kind==='hedgehog'&&owner?.driver===10;
       if(shot.kind==='missile'){this.missile(m,pose,shot.height);this.glow.at(shot.wx,shot.height,shot.wz,shot.heading);this.glow.flame(0,0,-1,.25,2,[.5,.17,.03],time);}

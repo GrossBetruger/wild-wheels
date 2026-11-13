@@ -1,3 +1,4 @@
+import {hasBatCompanion} from './bicycle-pickup.js';
 import {BomberPhotography} from './photography.js';
 import {darkHumorState} from './dark-humor.js';
 import { LENGTH, drivers, tracks, createRace, tick, useItem, useTurbo, selectItem, cycleItem, itemCapacity, boostDuration } from './engine.js';
@@ -123,6 +124,7 @@ function showResults(){
 }
 const hedgeguardStatus=document.createElement('div');hedgeguardStatus.className='hedgeguard-status hidden';hedgeguardStatus.setAttribute('role','status');document.querySelector('.item-box').prepend(hedgeguardStatus);
 const tehilimStatus=document.createElement('div');tehilimStatus.className='tehilim-status hidden';tehilimStatus.setAttribute('role','status');document.querySelector('.item-box').prepend(tehilimStatus);
+const batStatus=document.createElement('div');batStatus.className='bat-status hidden';batStatus.setAttribute('role','status');document.querySelector('.item-box').prepend(batStatus);
 const routeHint=document.createElement('div');routeHint.className='route-hint';document.querySelector('.viewport').append(routeHint);
 const nameplateLayer=document.createElement('div');nameplateLayer.className='kart-nameplates';nameplateLayer.setAttribute('aria-hidden','true');document.querySelector('.viewport').append(nameplateLayer);const nameplateNodes=new Map();
 const dizzyNotice=document.createElement('div');dizzyNotice.id='dizzy-notice';dizzyNotice.className='dizzy-notice hidden';dizzyNotice.setAttribute('role','status');document.querySelector('.viewport').append(dizzyNotice);
@@ -254,6 +256,8 @@ function hud(){
   hedgeguardStatus.classList.toggle('hidden',!guarded);hedgeguardStatus.textContent=guarded?`HEDGEGUARD · ${race.hedgeShield.toFixed(1)}s · ${race.tehilim>0?'HEDGEHOGS + BOMBS BLOCKED':'MISSILES STILL HURT'}`:'';
   const books=mode==='combat'&&race.tehilim>0&&race.phase==='racing'&&!race.destroyed&&!race.bomber;
   tehilimStatus.classList.toggle('hidden',!books);tehilimStatus.textContent=books?`TEHILIM VS TILIM · ${race.tehilim.toFixed(1)}s · MISSILE REPULSION`:'';
+  const bat=mode==='combat'&&race.batCompanion&&race.phase==='racing'&&!race.destroyed&&!race.bomber;
+  batStatus.classList.toggle('hidden',!bat);batStatus.textContent=bat?'🦇 BATYOUDIDN’TKNOW · VULCAN UPGRADE':'';
   routeHint.textContent='';
   driftMeter.classList.toggle('hidden',mode!=='combat'||!race.wasDrifting||race.phase!=='racing');driftCharge.value=race.drift;driftLabel.textContent=race.drift>=.85?'SUPER BOOST READY':race.drift>=.45?'BOOST READY':'DRIFT CHARGING';driftMeter.classList.toggle('charged',race.drift>=.45);driftMeter.classList.toggle('super',race.drift>=.85);
   if(mode==='combat'){
@@ -275,11 +279,11 @@ function hud(){
   const vulcan=mode==='combat'&&race.vulcan>0;
   const vulcanVisible=vulcan&&battleActive(race);
   document.querySelector('.viewport').classList.toggle('vulcan-active',vulcanVisible);routeHint.classList.toggle('vulcan-banner',vulcanVisible);routeHint.classList.toggle('vulcan-ending',vulcanVisible&&race.vulcan<=3);
-  const vulcanWeapon=race.driver===14?'UZI':'VULCAN';
+  const vulcanWeapon=hasBatCompanion(race)?'UZI':'VULCAN';
   if(vulcanVisible)routeHint.textContent=`${vulcanWeapon} ${race.vulcan<=3?'ENDING':'ACTIVE'} · ${race.vulcan.toFixed(1)}s`;
-  const vulcanAnimal=race.driver===5?'CRICKET':race.driver===6?'DOLLAR':race.driver===8?'ELECTRON':race.driver===9?'BALLET':race.driver===10?'LASER':race.driver===14?"BATYOUDIDN'TKNOW":'HEDGEHOG';
+  const vulcanAnimal=hasBatCompanion(race)?"BATYOUDIDN'TKNOW":race.driver===5?'CRICKET':race.driver===6?'DOLLAR':race.driver===8?'ELECTRON':race.driver===9?'BALLET':race.driver===10?'LASER':'HEDGEHOG';
   vulcanStatus.classList.toggle('hidden',!vulcan||race.phase!=='racing');vulcanTitle.textContent=`${vulcanAnimal} ${vulcanWeapon} · ${(race.vulcan??0).toFixed(1)}s`;vulcanTime.setAttribute('aria-label',`${vulcanAnimal.toLowerCase()} ${vulcanWeapon.toLowerCase()} seconds remaining`);vulcanTime.value=race.vulcan??0;
-  if(vulcan&&race.item==='hedgehog'){$('item-name').textContent=race.driver===14?'BAT COMPANION · AUTO UZI':'VULCAN · HOLD SPACE TO SPRAY';if(race.driver===14)$('item').textContent='🦇';if(race.driver===5)$('item').textContent='🦗';if(race.driver===6)$('item').textContent='💵';if(race.driver===8)$('item').textContent='⚛';if(race.driver===9)$('item').textContent='🩰';}
+  if(vulcan&&race.item==='hedgehog'){$('item-name').textContent=hasBatCompanion(race)?'BAT COMPANION · AUTO UZI':'VULCAN · HOLD SPACE TO SPRAY';const icon=hasBatCompanion(race)?'🦇':({5:'🦗',6:'💵',8:'⚛',9:'🩰'})[race.driver];if(icon)$('item').textContent=icon;}
   for(const [type,card] of ammoCards){const count={hedgehog:race.ammo,missile:race.missiles,boost:race.turbos}[type],powered=vulcan&&type==='hedgehog',boost=type==='boost';card.count.textContent=powered?'∞':count;card.button.title=count+' / '+itemCapacity(race.driver,type)+' held';card.name.textContent=powered?vulcanWeapon:boost?'X · TURBO':card.label;card.button.disabled=(!powered&&count===0)||race.phase==='finished'||boost&&(race.phase!=='racing'||race.destroyed>0||mode!=='combat'&&race.finishCountdown!==null||race.boost>0);card.button.classList.toggle('selected',!boost&&race.item===type);card.button.classList.toggle('vulcan',powered);card.button.setAttribute('aria-pressed',String(!boost&&race.item===type));card.button.setAttribute('aria-label',boost?`Use turbo, ${count} charges remaining. Keyboard X.`:`${powered?`Unlimited ${vulcanWeapon.toLowerCase()} hedgehogs`:`${count} ${card.label.toLowerCase()}`}${race.item===type?', selected':''}`);}
   if(race.phase==='countdown'){const n=Math.ceil(race.countdown);if(n!==lastCount){tone(300+n*100);lastCount=n;}$('message').querySelector('h2').textContent=n;}
   if(lastPhase===race.phase)return;lastPhase=race.phase;

@@ -75,6 +75,15 @@ impl Client{
             if let(Some(a),Some(b))=(a,b){shot.wx=a.wx+(b.wx-a.wx)*fraction;shot.wz=a.wz+(b.wz-a.wz)*fraction;shot.height=a.height+(b.height-a.height)*fraction;shot.heading=a.heading+angle(b.heading,a.heading)*fraction;}
         }
         self.display.global.elapsed=match latest.game.global.phase.as_str(){"racing"=>(latest.game.global.elapsed-(latest.time-self.presented).max(0.0)).max(0.0),_=>latest.game.global.elapsed};
+        // Follow the same delayed simulation clock as the arena, at render cadence.
+        // Reading snapshot age directly makes a thrown bike stutter at packet rate.
+        for supply in &mut self.display.global.supplies{
+            if supply.kind!="bicycle"{continue;}
+            if let Some(actual)=latest.game.global.supplies.iter().find(|s|s.id==supply.id){
+                let scale=match latest.game.global.time_stop>0.0{true=>0.025,false=>1.0};
+                supply.age=(actual.age-(latest.game.global.elapsed-self.display.global.elapsed)*scale).max(0.0);
+            }
+        }
         let id=self.viewer;pose_copy(&mut self.display.actors[id],&self.pred.actors[id]);
         if fresh&&self.accumulator>1e-8&&!self.pred.actors[id].bomber{
             // Preview inside Wasm. No temporary JS actors or boundary round trips.

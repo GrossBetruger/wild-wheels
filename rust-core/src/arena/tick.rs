@@ -80,6 +80,7 @@ impl Game{
             if visible&&aim.abs()<0.18+(1.0-a.skill)*0.12&&distance(a.wx,a.wz,target_x,target_z)<85.0{self.actors[id].item=match(self.actors[id].vulcan>0.0,self.actors[id].missiles>0){(true,_)=>"hedgehog",(_,true)=>"missile",_=>"hedgehog"}.into();self.fire(id,None);}
         }
         for input in &frame.inputs{if let Some(last)=input.moves.as_ref().and_then(|moves|moves.last()){self.movement_ack[input.actor]=last.sequence;}}
+        self.bicycle_tick(world_dt);
         self.ring_tick(dt);
         for i in 0..self.actors.len(){for j in i+1..self.actors.len(){
             if self.frozen(i)||self.frozen(j){continue;}
@@ -92,6 +93,7 @@ impl Game{
             if (i==0||j==0)&&self.actors[0].wall_cooldown<=0.0{let a=&mut self.actors[0];effect(&mut self.global,"crash",0,a.wx,a.wz,None);a.wall_cooldown=0.6;voice(&mut self.global,a,"hurt",a.wx);}
         }}
         for id in 0..self.actors.len(){if !self.frozen(id){self.collect(id);}}
+        self.global.supplies.retain(|s|s.kind!="bicycle"||s.cooldown<=0.0);
         for id in 0..self.actors.len(){self.bat_fire(id);}
         self.divert_all();
         let shots=std::mem::take(&mut self.global.projectiles);

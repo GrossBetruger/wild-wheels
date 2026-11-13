@@ -7,7 +7,7 @@ impl Game{
     pub(super) fn fire(&mut self,id:usize,action_id:Option<u32>){
         if !self.active(id)||self.actors[id].fire_cooldown>0.0{return;}
         let target=self.target(id);let root_x=self.actors[0].wx;let root_z=self.actors[0].wz;
-        let a=&mut self.actors[id];let missile=a.item=="missile"&&a.missiles>0;let vulcan=!missile&&a.vulcan>0.0;if a.driver==14&&vulcan{return;}
+        let a=&mut self.actors[id];let missile=a.item=="missile"&&a.missiles>0;let vulcan=!missile&&a.vulcan>0.0;if (a.driver==14||a.bat_companion)&&vulcan{return;}
         if !missile&&!vulcan&&a.ammo==0{return;}
         let kind=match missile{true=>"missile",false=>"hedgehog"};let g=&mut self.global;g.projectile_sequence+=1;
         g.projectiles.push(Shot{id:g.projectile_sequence,owner:id,kind:kind.into(),vulcan,target,wx:a.wx+a.heading.sin()*3.5,wz:a.wz+a.heading.cos()*3.5,heading:a.heading,speed:match(missile,vulcan){(true,_)=>70.0,(_,true)=>125.0,_=>90.0},height:1.3,vy:3.0,life:match(missile,vulcan){(true,_)=>3.0,(_,true)=>1.3,_=>2.5},action_id,..Shot::default()});
@@ -71,7 +71,7 @@ impl Game{
         let mut credit=Vec::new();if owner<self.actors.len(){credit.push(owner);}
         let a=&self.actors[victim];
         if a.dizzy>0.0{for(&id,&expires)in &a.credits{if expires>g.elapsed+1e-8&&self.actors.get(id).is_some_and(|b|b.bomber&&!b.inactive)&&id!=victim&&!credit.contains(&id){credit.push(id);}}}
-        let a=&mut self.actors[victim];a.credits.clear();a.destroyed=3.0;a.speed=0.0;a.boost=0.0;if !unscored{a.deaths+=1;}effect(g,match kind{"abomb"|"radiation"=>"ash",_=>"explosion"},victim,a.wx,a.wz,None);a.drift=0.0;a.was_drifting=false;a.drift_trail=None;a.kill_streak=0;a.bat_cooldown=0.0;a.vulcan=0.0;a.hedge_shield=0.0;a.tehilim=0.0;a.special_active=0.0;a.somersault=0.0;a.dizzy=0.0;
+        let a=&mut self.actors[victim];a.credits.clear();a.bat_companion=false;a.owl_boosting=false;a.destroyed=3.0;a.speed=0.0;a.boost=0.0;if !unscored{a.deaths+=1;}effect(g,match kind{"abomb"|"radiation"=>"ash",_=>"explosion"},victim,a.wx,a.wz,None);a.drift=0.0;a.was_drifting=false;a.drift_trail=None;a.kill_streak=0;a.bat_cooldown=0.0;a.vulcan=0.0;a.hedge_shield=0.0;a.tehilim=0.0;a.special_active=0.0;a.somersault=0.0;a.dizzy=0.0;
         if unscored{return true;}
         let victim_name=a.name.clone().unwrap_or_else(||driver_name(a.driver).into());let victim_color=a.color.clone();
         for scorer in credit{

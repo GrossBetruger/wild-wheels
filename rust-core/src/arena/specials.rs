@@ -20,7 +20,7 @@ impl Game{
         if self.global.time_stop<=0.0{self.global.time_owner=None;}
         for a in &mut self.actors{if self.global.time_stop<=0.0||self.global.time_owner==Some(a.id){a.special_cooldown=(a.special_cooldown-dt).max(0.0);let before=a.special_active;a.special_active=(before-dt).max(0.0);if a.driver==12&&before>0.0{if a.health>=6.0||a.destroyed>0.0||a.inactive||a.afk||a.bomber{a.special_active=0.0;continue;}if ((6.0-before+1e-8).floor())<((6.0-a.special_active+1e-8).floor()){a.health=(a.health+1.0).min(6.0);a.heal_timer=0.0;self.global.effects.push(Effect{kind:"heartbeat".into(),owner:Some(a.id),wx:a.wx,wz:a.wz,life:0.7,..Effect::default()});if a.health>=6.0{a.special_active=0.0;}}}}}
         if self.global.time_stop<=0.0{for supply in &mut self.global.supplies{
-            if supply.cooldown>0.0{continue;}
+            if supply.cooldown>0.0||supply.kind=="bicycle"&&supply.age<1.2{continue;}
             let owner=self.actors.iter().filter(|a|a.driver==7&&a.special_active>0.0&&!a.bomber&&!a.afk&&!a.inactive&&a.destroyed<=0.0&&distance(a.wx,a.wz,supply.wx,supply.wz)<=80.0).min_by(|a,b|distance(a.wx,a.wz,supply.wx,supply.wz).total_cmp(&distance(b.wx,b.wz,supply.wx,supply.wz)).then(a.id.cmp(&b.id)));
             let Some(a)=owner else{supply.restore_home();continue;};supply.home_wx.get_or_insert(supply.wx);supply.home_wz.get_or_insert(supply.wz);let d=distance(a.wx,a.wz,supply.wx,supply.wz);let fraction=match d>0.0{true=>(55.0*dt/d).min(1.0),false=>0.0};supply.wx+=(a.wx-supply.wx)*fraction;supply.wz+=(a.wz-supply.wz)*fraction;
         }}

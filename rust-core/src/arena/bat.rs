@@ -6,7 +6,7 @@ fn origin(a:&Actor,arena:usize)->(f64,f64){
 fn line(arena:usize,x:f64,z:f64,xx:f64,zz:f64)->bool{let d=distance(x,z,xx,zz);let mut t=0.0;while t<=d{if blocked(arena,x+(xx-x)*t/d.max(1e-9),z+(zz-z)*t/d.max(1e-9),0.4){return false;}t+=1.0;}true}
 impl Game{
     pub(super) fn bat_fire(&mut self,id:usize){
-        let a=&self.actors[id];if a.driver!=14||a.vulcan<=0.0||a.bat_cooldown>0.0||self.frozen(id)||!self.combat_active()||a.destroyed>0.0||a.bomber||a.inactive||a.afk||self.global.finish_countdown.is_some()&&!self.human_controlled(id){return;}
+        let a=&self.actors[id];if (a.driver!=14&&!a.bat_companion)||a.vulcan<=0.0||a.bat_cooldown>0.0||self.frozen(id)||!self.combat_active()||a.destroyed>0.0||a.bomber||a.inactive||a.afk||self.global.finish_countdown.is_some()&&!self.human_controlled(id){return;}
         let (x,z)=origin(a,self.global.arena);let radius=self.bot_sight_radius(id).min(100.0);
         let target=self.actors.iter().filter(|b|b.id!=id&&!b.bomber&&!b.inactive&&!b.afk&&b.destroyed<=0.0&&b.shield<=0.0&&b.hedge_shield<=0.0&&distance(a.wx,a.wz,b.wx,b.wz)<=radius&&line(self.global.arena,x,z,b.wx,b.wz)).min_by(|a,b|distance(x,z,a.wx,a.wz).total_cmp(&distance(x,z,b.wx,b.wz)).then(a.id.cmp(&b.id)));
         let Some(target)=target else{return;};let lead=(distance(x,z,target.wx,target.wz)/125.0).min(0.8);let speed=target.speed*0.085;let heading=(target.wx+target.motion_heading.sin()*speed*lead-x).atan2(target.wz+target.motion_heading.cos()*speed*lead-z);

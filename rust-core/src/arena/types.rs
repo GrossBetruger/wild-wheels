@@ -11,6 +11,7 @@ pub struct Sample { pub wx:f64,pub wz:f64,pub height:f64 }
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(default, rename_all="camelCase")]
 pub struct Actor {
+    pub bat_companion:bool,pub owl_boosting:bool,
     pub ring_blue:bool,pub ring_turn_grace:f64,pub ring_turn:f64,pub ring_heading:Option<f64>,pub ring_remaining:f64,pub ring_spent:bool,#[serde(skip)]pub ring_doses:BTreeMap<usize,f64>,
     pub bat_cooldown:f64,pub special_cooldown:f64,pub special_active:f64,
     pub id:usize,pub driver:usize,pub name:Option<String>,pub color:String,
@@ -55,7 +56,7 @@ pub struct Chaff {
 pub struct Stink { pub id:u32,pub owner:usize,pub wx:f64,pub wz:f64,pub age:f64,pub life:f64,pub hits:Vec<usize> }
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(default,rename_all="camelCase")]
-pub struct Supply { pub id:u32,pub wx:f64,pub wz:f64,pub kind:String,pub cooldown:f64,pub version:u32,pub collector:Option<usize>,#[serde(skip_serializing_if="Option::is_none")]pub home_wx:Option<f64>,#[serde(skip_serializing_if="Option::is_none")]pub home_wz:Option<f64> }
+pub struct Supply { pub age:f64,pub heading:f64,pub owner:Option<usize>,pub drop_wx:f64,pub drop_wz:f64,pub drop_height:f64, pub id:u32,pub wx:f64,pub wz:f64,pub kind:String,pub cooldown:f64,pub version:u32,pub collector:Option<usize>,#[serde(skip_serializing_if="Option::is_none")]pub home_wx:Option<f64>,#[serde(skip_serializing_if="Option::is_none")]pub home_wz:Option<f64> }
 impl Supply{pub fn restore_home(&mut self){if let Some(x)=self.home_wx.take(){self.wx=x;}if let Some(z)=self.home_wz.take(){self.wz=z;}}}
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(default,rename_all="camelCase")]
@@ -72,6 +73,7 @@ pub struct Kill { pub id:u32,pub attacker:usize,pub victim:usize,pub victim_name
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(default,rename_all="camelCase")]
 pub struct Globals {
+    pub bicycle_sequence:u32,
     #[serde(default="abilities_default")]pub special_abilities:bool,
     pub time_stop:f64,pub time_owner:Option<usize>,
     pub mode:String,pub phase:String,pub arena:usize,pub elapsed:f64,pub countdown:f64,pub duration:f64,pub target_score:f64,

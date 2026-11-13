@@ -1,8 +1,9 @@
+import {hasBatCompanion} from './bicycle-pickup.js';
 import { applySupply, makeProjectile, advanceProjectile, MOVEMENT_DT, MAX_HEALTH, validBombTarget } from './combat.js';
 import { selectItem, cycleItem } from './engine.js';
 
 const poseFields=['wx','wz','heading','motionHeading','cameraHeading','speed','drift','wasDrifting','boost','yaw','somersault','somersaultCooldown','dizzy'];
-const resources=['ammo','missiles','turbos','health','hedgeShield','tehilim','chaff','item','notice','noticeTime'];
+const resources=['batCompanion','ammo','missiles','turbos','health','hedgeShield','tehilim','chaff','item','notice','noticeTime'];
 const pick=(object,fields)=>Object.fromEntries(fields.filter(field=>object[field]!==undefined).map(field=>[field,object[field]]));
 const copyShot=shot=>({...shot,trail:shot.trail.map(point=>({...point}))});
 function advance(world,shot,seconds){
@@ -100,7 +101,7 @@ export class LocalFeedback {
     }
     if(type!=='fire'||sequence<this.fireTick)return false;
     const kind=actor.item==='missile'&&actor.missiles>0?'missile':'hedgehog';
-    const vulcan=kind==='hedgehog'&&actor.vulcan>0;if(actor.driver===14&&vulcan)return false;const resource=kind==='missile'?'missiles':vulcan?null:'ammo';
+    const vulcan=kind==='hedgehog'&&actor.vulcan>0;if(hasBatCompanion(actor)&&vulcan)return false;const resource=kind==='missile'?'missiles':vulcan?null:'ammo';
     if(resource&&actor[resource]<=0)return false;
     const cooldown=kind==='missile'?.9:vulcan?.075:.225,id=this.nextId++;
     this.fireTick=afterMove+Math.ceil(cooldown/MOVEMENT_DT-1e-8);
@@ -116,6 +117,7 @@ export class LocalFeedback {
       for(const [index,supply] of this.world.supplies.entries()){
         const supplyId=supply.id??index,version=supply.version??0,key=`pickup:${supplyId}:${version+1}`,distance=Math.hypot(actor.wx-supply.wx,actor.wz-supply.wz);
         if(distance>=4){this.rejected.delete(key);continue;}
+        if(supply.kind==='bicycle'&&(supply.age<1.2||hasBatCompanion(actor)))continue;
         if(supply.cooldown>0||this.rejected.has(key)||this.operations.some(op=>op.type==='pickup'&&op.key===key)||supply.kind==='health'&&actor.health>=MAX_HEALTH)continue;
         this.operations.push({type:'pickup',supplyId,version,key,kind:supply.kind,afterMove:sequence+1});applySupply(actor,supply.kind);this.emit('pickup',key);
       }

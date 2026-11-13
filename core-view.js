@@ -18,6 +18,7 @@ function fields(Type,names,{booleans=[],nullable=[]}={}){
   }
 }
 class Actor extends Row{
+  get batCompanion(){return this.frame.text.actors[this.id]?.batCompanion??false;}
   get specialCooldown(){return this.n(46);}
   get specialActive(){return this.n(47);}
   get healTimer(){return this.n(43);}
@@ -40,7 +41,7 @@ class Shot extends Row{
   get orbitAge(){return this.n(15)<0?undefined:this.n(15);}
 }
 fields(Shot,['id','owner',null,'wx','wz','heading','speed','height','vy','life','age','vulcan','actionId','target','decoy',null,'orbitAngle','orbitRadius','orbitHeight','chaffed',null,'orbitDirection'],{booleans:['vulcan','chaffed'],nullable:['actionId','target','decoy']});
-class Supply extends Row{get kind(){return ['hedgehog','missile','boost','health','hedgeproof','tehilim'][this.n(3)];}}
+class Supply extends Row{get age(){return this.n(7);}get heading(){return this.details.heading??0;}get owner(){return this.details.owner;}get dropWx(){return this.details.dropWx??this.wx;}get dropWz(){return this.details.dropWz??this.wz;}get dropHeight(){return this.details.dropHeight??0;}get details(){return this.frame.text.supplyDetails?.[this.id]??{};}get kind(){return ['hedgehog','missile','boost','health','hedgeproof','tehilim','bicycle'][this.n(3)];}}
 fields(Supply,['id','wx','wz',null,'cooldown','version','collector'],{nullable:['collector']});
 class Bomb extends Row{get kind(){return this.n(2)===1?'stink':'abomb';}get color(){return color(this.n(7));}}
 fields(Bomb,['id','owner',null,'wx','wz','age','actionId'],{nullable:['actionId']});

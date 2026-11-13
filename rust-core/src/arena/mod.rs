@@ -2,6 +2,7 @@ mod types;
 mod movement;
 mod weapons;
 mod bat;
+mod bicycles;
 mod tick;
 mod specials;
 mod fire_ring;
