@@ -53,6 +53,7 @@ fn keys(values: &[String], movement: bool) -> Result<u32> {
 }
 pub struct Member {
     pub token: String,
+    pub identity: String,
     pub name: String,
     pub driver: usize,
     pub role: String,
@@ -199,6 +200,7 @@ impl Room {
         let now = Instant::now();
         let mut p = Member {
             token: token(),
+            identity: token(),
             name,
             driver: chosen,
             role: role.into(),
@@ -228,6 +230,15 @@ impl Room {
         self.members[id].as_mut().unwrap().clear(m, a);
         self.broadcast();
         Ok(self.reply(id))
+    }
+    pub fn restore(&mut self, saved: &crate::sessions::Session) -> Result<usize> {
+        if let Some(id) = self.members.iter().position(|p| p.as_ref().is_some_and(|p| p.identity == saved.identity)) {
+            return Ok(id);
+        }
+        let reply = self.join(&json!({"name":saved.name,"driver":saved.driver,"role":saved.role}))?;
+        let id = reply["you"].as_u64().unwrap() as usize;
+        self.members[id].as_mut().unwrap().identity = saved.identity.clone();
+        Ok(id)
     }
     pub fn reply(&self, id: usize) -> Value {
         let mut reply = self.core.snapshot(id);

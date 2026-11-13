@@ -198,6 +198,9 @@ mod tests {
         }
         assert_eq!(room.core.phase(), "racing");
         let app = App {
+            sessions: Arc::new(tokio::sync::Mutex::new(crate::sessions::Sessions::open(
+                std::env::temp_dir().join(format!("wild-wheels-photo-sessions-{}", crate::room::token())), crate::sessions::now(),
+            ).unwrap())),
             room: Arc::new(Mutex::new(room)),
             photos: Default::default(),
             limits: Default::default(),

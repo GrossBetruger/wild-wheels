@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
 import {createServer} from 'node:net';
-import {readFile,writeFile} from 'node:fs/promises';
-import {resolve} from 'node:path';
+import {mkdtemp,readFile,writeFile,rm} from 'node:fs/promises';
+import {resolve,join} from 'node:path';
 import {tmpdir} from 'node:os';
 import WebSocket from 'ws';
 import {ArenaClient} from '../../gameplay/arena-core.js';
@@ -11,7 +11,11 @@ const binary=resolve(arg('--binary','dedicated-server/target/release/wild-wheels
 assert.ok(Number.isFinite(duration)&&duration>=5&&duration<=300);
 const sleep=ms=>new Promise(r=>setTimeout(r,ms)),quantile=(a,p)=>[...a].sort((x,y)=>x-y)[Math.min(a.length-1,Math.floor(a.length*p))]??0;
 const probe=createServer();await new Promise(r=>probe.listen(0,'127.0.0.1',r));const port=probe.address().port;await new Promise(r=>probe.close(r));
-const origin=`http://127.0.0.1:${port}`,child=spawn(binary,[],{cwd:tmpdir(),env:{...process.env,BIND:'127.0.0.1',PORT:String(port),BOTS:'0'},stdio:['ignore','pipe','pipe']});let logs='';child.stdout.on('data',b=>logs+=b);child.stderr.on('data',b=>logs+=b);const peers=[],errors=[];let timer,frameTimer;
+const stateDirectory=await mkdtemp(join(tmpdir(),'wild-wheels-native-state-'));
+const origin=`http://127.0.0.1:${port}`;let logs='';
+const start=()=>{const server=spawn(binary,[],{cwd:stateDirectory,env:{...process.env,WILD_WHEELS_SESSION_FILE:join(stateDirectory,'sessions.json'),BIND:'127.0.0.1',PORT:String(port),BOTS:'0'},stdio:['ignore','pipe','pipe']});server.stdout.on('data',b=>logs+=b);server.stderr.on('data',b=>logs+=b);return server;};
+const stop=async server=>{if(server.exitCode!==null||server.signalCode!==null)return;const exited=new Promise(resolve=>server.once('exit',resolve));server.kill('SIGTERM');await exited;};
+let child=start();const peers=[],errors=[];let timer,frameTimer;
 const request=async(path,body,token,extra={})=>{const response=await fetch(origin+path,{method:body===undefined?'GET':'POST',headers:{'content-type':'application/json',...(token?{authorization:`Bearer ${token}`}:{}) ,...extra},body:body===undefined?undefined:JSON.stringify(body)});return {status:response.status,value:await response.text().then(text=>{try{return JSON.parse(text);}catch{return text;}}),headers:response.headers};};
 const wait=async(predicate,message,ms=5000)=>{const end=performance.now()+ms;while(performance.now()<end){if(await predicate())return;await sleep(20);}throw new Error(message);};
 async function connect(peer){
@@ -49,5 +53,14 @@ try{
   peers[0].socket.close();await wait(()=>peers[1].state.players.find(p=>p.id===0)?.afk,'Disconnected player did not become AFK');assert.ok(peers.every(p=>p.state.host===null));const epoch=peers[1].state.epoch;const old=peers[0].token;
   const refreshed=await request('/api/session',{},old);assert.equal(refreshed.status,200);assert.equal(refreshed.value.you,0);assert.equal(refreshed.value.world.name,'Friend 0');assert.equal(refreshed.value.world.soundEpoch,epoch);assert.ok(refreshed.value.movementSequence>0);peers[0].token=refreshed.value.token;peers[0].state=null;await connect(peers[0]);
   assert.equal((await request('/api/session',{},old)).status,401);
-  const health=(await request('/healthz')).value;const report={pass:true,durationSeconds:duration,health,peers:peers.map((p,id)=>({id,packetsPerSecond:p.packets/duration,p99SnapshotGapMs:quantile(p.intervals,.99),p95RttMs:quantile(p.rtts,.95),bytesPerSecond:p.bytes/duration,movementAck:p.state.movement})),errors};await writeFile(output,JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify(report,null,2));
-}catch(e){console.error(logs);throw e;}finally{clearInterval(timer);clearInterval(frameTimer);for(const p of peers)p.socket?.terminate();child.kill('SIGTERM');}
+  const health=(await request('/healthz')).value;
+  for(const peer of peers)peer.socket.terminate();await stop(child);child=start();
+  await wait(async()=>{try{return(await request('/healthz')).status===200;}catch{return false;}},'Rust server failed to restart');
+  assert.equal((await request('/healthz')).value.players,0,'Saved identities must not reserve active game slots');
+  const previousCookie=`wild-wheels-session=${peers[7].token}`;
+  const restored=await request('/api/session',{},null,{cookie:previousCookie});
+  assert.equal(restored.status,200);assert.equal(restored.value.you,0);assert.equal(restored.value.world.name,'Friend 7');assert.equal(restored.value.world.driver,7);assert.equal(restored.value.world.phase,'ready');assert.equal(restored.value.world.kills,0);
+  assert.equal((await request('/api/session',{},null,{cookie:previousCookie})).status,401);
+  assert.equal((await request('/api/session',{},null,{cookie:restored.headers.get('set-cookie').split(';')[0]})).status,200);
+  const report={pass:true,durationSeconds:duration,restartPreservesSession:true,health,peers:peers.map((p,id)=>({id,packetsPerSecond:p.packets/duration,p99SnapshotGapMs:quantile(p.intervals,.99),p95RttMs:quantile(p.rtts,.95),bytesPerSecond:p.bytes/duration,movementAck:p.state.movement})),errors};await writeFile(output,JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify(report,null,2));
+}catch(e){console.error(logs);throw e;}finally{clearInterval(timer);clearInterval(frameTimer);for(const p of peers)p.socket?.terminate();await stop(child);await rm(stateDirectory,{recursive:true,force:true});}

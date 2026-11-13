@@ -50,12 +50,15 @@ Configuration is through environment variables:
 | `PUBLIC_ORIGIN` | unset | Public HTTP(S) origin, without a path |
 | `ARENA` | `0` | Initial arena, 0 or 1 |
 | `BOTS` | `1` | Initial bots, 0–7; humans replace bot slots |
+| `WILD_WHEELS_SESSION_FILE` | `.wild-wheels/sessions.json` | Private saved sessions; the launcher puts it in its state directory |
 
 `/healthz` reports occupancy, ticks, recent simulation tick p99 and missed tick deadlines. `/build.json` identifies embedded assets and native source. Rebuild the server after changing assets. When changing core code, first rebuild browser Wasm with `npm run build:core`.
 
 ## Arena and connection lifecycle
 
-One shared arena uses invitation `?room=00`, with eight combined human/bot slots. The page displays a connection screen until the first shared-arena frame is ready, with a retry action if joining fails. There is no host or captain: every active player has the same room controls, and no browser drives the simulation. Refresh preserves your identity, character, scores and acknowledged movement while rotating your session token. Disconnected places expire after 15 minutes. A connected AFK player retains their place. Room state is in memory and ends when the process stops.
+One shared arena uses invitation `?room=00`, with eight combined human/bot slots. The page displays a connection screen until the first shared-arena frame is ready, with a retry action if joining fails. There is no host or captain: every active player has the same room controls, and no browser drives the simulation. Refresh preserves your identity, character, scores and acknowledged movement while rotating your session token. Disconnected places expire after 15 minutes. A connected AFK player retains their place.
+
+Session cookies and their saved server records last 30 days from issuance. Sessions use random tokens, independently of player names. The server saves identity, name, character and driver/bomber role in a private file with atomic replacement before issuing a new cookie. Disk writes run outside the simulation thread. Restarting or updating the server keeps those saved sessions; returning players reclaim an available slot with their saved choices. Saved sessions do not reserve the eight active slots. Current matches, scores and inventory remain in memory and start fresh after a restart or released slot. Keep the session file on persistent storage when using a container; deleting it or clearing browser cookies loses the saved association.
 
 Any active player can choose the arena, bots and special abilities between matches, or start the normal three-second countdown directly. There are no play requests, vetoes, host tie advantages, or controls that reset a running match. AFK preserves the player’s place while the match continues; returning resumes the same identity. The arena code stays the same across matches.
 
