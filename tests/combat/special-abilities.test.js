@@ -5,6 +5,21 @@ import {ArenaCore,ArenaClient} from '../../gameplay/arena-core.js';
 import {useSpecial} from '../../gameplay/special-abilities.js';
 import {decodeBinarySnapshot} from '../../networking/binary-wire.js';
 
+for(const engine of ['JavaScript','Rust'])test(`${engine}: Houston's gravity well lasts fourteen seconds and recharges twenty-five seconds from activation`,()=>{
+  const world=createBattle(7);Object.assign(world,{phase:'racing',human:true,wx:-65,wz:0,supplies:[]});
+  for(const actor of world.bots)Object.assign(actor,{inactive:true,destroyed:999});
+  const core=engine==='Rust'?new ArenaCore(world):null;
+  const read=()=>core?core.snapshot():world;
+  const activate=()=>core?core.step(0,[{actor:0,actions:[{type:'special'}]}]):useSpecial(world);
+  const step=()=>core?core.step(.05):tickBattle(world,new Set(),.05);
+  activate();assert.equal(read().specialActive,14);assert.equal(read().specialCooldown,25);
+  for(let i=0;i<279;i++)step();assert.ok(read().specialActive>0);
+  for(let i=0;i<2;i++)step();assert.equal(read().specialActive,0);
+  activate();assert.equal(read().specialActive,0);
+  for(let i=0;i<220;i++)step();assert.equal(read().specialCooldown,0);
+  activate();assert.equal(read().specialActive,14);assert.equal(read().specialCooldown,25);
+});
+
 for(const engine of ['JavaScript','Rust'])test(`${engine}: healing starts at t=0, repeats every second and stops at six hearts`,()=>{
   const world=createBattle(12);Object.assign(world,{phase:'racing',human:true,wx:-65,wz:0,health:3,supplies:[]});for(const a of world.bots)Object.assign(a,{inactive:true,destroyed:999});
   const core=engine==='Rust'?new ArenaCore(world):null,read=()=>core?core.snapshot():world,step=()=>core?core.step(.05):tickBattle(world,new Set(),.05);
@@ -29,10 +44,10 @@ for(const engine of ['JavaScript','Rust'])for(const driver of [11,12])test(`${en
   const core=engine==='Rust'?new ArenaCore(world):null,read=()=>core?core.snapshot():world;
   const step=dt=>core?core.step(dt):tickBattle(world,new Set(),dt),activate=()=>core?core.step(0,[{actor:0,actions:[{type:'special'}]}]):useSpecial(world);
   step(.05);assert.equal(read().specialActive??0,0);assert.equal(read().health,3);
-  activate();assert.equal(read().specialCooldown,20);assert.equal(read().specialActive,driver===11?8:5);assert.equal(read().health,driver===12?4:3);
-  for(let i=0;i<200;i++)step(.05);assert.equal(read().specialActive,0);assert.ok(read().specialCooldown>9.9);activate();assert.equal(read().specialActive,0);
-  for(let i=0;i<201;i++)step(.05);assert.equal(read().specialCooldown,0);
-  if(driver===11){activate();assert.equal(read().specialActive,8);}
+  activate();assert.equal(read().specialCooldown,20);assert.equal(read().specialActive,driver===11?12:5);assert.equal(read().health,driver===12?4:3);
+  for(let i=0;i<280;i++)step(.05);assert.equal(read().specialActive,0);assert.ok(read().specialCooldown>5.9);activate();assert.equal(read().specialActive,0);
+  for(let i=0;i<121;i++)step(.05);assert.equal(read().specialCooldown,0);
+  if(driver===11){activate();assert.equal(read().specialActive,12);}
 });
 
 for(const engine of ['JavaScript','Rust']){

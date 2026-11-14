@@ -299,7 +299,7 @@ export class Renderer {
     },pitch);
   }
   holyArchangels(p,actor,time,jump){
-    const age=Math.max(0,8-actor.specialActive),presence=Math.min(1,age/.65,actor.specialActive/.7),smooth=presence*presence*(3-2*presence),stage=Math.round(smooth*12)/12,angle=Math.atan2(p.tx,p.tz),phase=Math.floor(time*8)%8;
+    const age=Math.max(0,12-actor.specialActive),presence=Math.min(1,age/.65,actor.specialActive/.7),smooth=presence*presence*(3-2*presence),stage=Math.round(smooth*12)/12,angle=Math.atan2(p.tx,p.tz),phase=Math.floor(time*8)%8;
     for(const side of [-1,1]){
       const x=p.x+Math.cos(angle)*side*4.5,z=p.z-Math.sin(angle)*side*4.5,height=(jump?.height??0)+1.3+Math.sin(time*2+side)*.16+(1-smooth)*2.5;
       const role=side<0?'michael':'gabriel';
