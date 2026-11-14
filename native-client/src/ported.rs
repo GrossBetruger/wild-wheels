@@ -922,6 +922,8 @@ mod tests {
             "pickup:bicycle",
             "health:3",
             "effect:reverseShockwave",
+            "overlay:reversePsychology",
+            "overlay:reversePsychology:end",
             "effect:explosion",
             "effect:default",
             "effect:fireRing:blue",

@@ -34,6 +34,7 @@ Run the port by hand with `npm run port:graphics -- /tmp/graphics.wwgp`.
 | `overlay:11:special:start`, `overlay:11:special:end` | R-yeah's archangels descending and rising |
 | `overlay:<n>:<state>` | What `shield`, `hedge`, `tehilim`, `dizzy`, `vulcan` and `special` add to a racer |
 | `overlay:xylophone`, `timestop` | Fourmidable's and the time-stop special, shown at other racers or the caster |
+| `overlay:reversePsychology`, `overlay:reversePsychology:end` | A cricket marionette above affected racers, with tugging strings, a wooden control cross and a fade at the end of reversed controls |
 | `shot:missile`, `shot:hedgehog`, `shot:vulcan:<n>` | Projectiles, including each racer's rapid-fire variant |
 | `trail:missile`, `trail:hedgehog`, `trail:vulcan:<n>`, `skid:<arena>` | One projectile trail puff, scaled along the trail, and a unit-length skid mark fading over six seconds |
 | `pickup:<kind>` | Supply pads and their bobbing, spinning items, including the bicycle |

@@ -295,6 +295,11 @@ export function buildGraphicsPack({only=[...drivers.keys()]}={}){
   record('pickup:bicycle',{...turn,setup:r=>{hidden(r);r.supplies=[{id:1000,version:0,owner:99,kind:'bicycle',cooldown:0,age:5,heading:0,wx:0,wz:0,dropWx:0,dropWz:0,dropHeight:0}];}});
   const bare=draw(renderer(),world(0),LOOP*2,HOME);
   for(let health=1;health<=6;health++)pack.clip(`health:${health}`,FPS,[pack.overlay(bare,draw(renderer(),Object.assign(world(0),{health}),LOOP*2,HOME))]);
+  const puppetBase=capture({frames:OVERLAY_LOOP*FPS});
+  const puppet=capture({frames:OVERLAY_LOOP*FPS,setup:r=>{r.reverseControls=5;}});
+  pack.clip('overlay:reversePsychology',FPS,puppet.map((shot,i)=>pack.overlay(puppetBase[i],shot)));
+  const puppetEnd=capture({frames:Math.ceil(.4*FPS)+1,each:(r,t)=>{r.reverseControls=Math.max(.001,.4-t);}});
+  pack.clip('overlay:reversePsychology:end',FPS,puppetEnd.map((shot,i)=>pack.overlay(puppetBase[i],shot)),ONCE);
 
   // World effects play once, frame by frame of their age.
   const effect=(type,life,extra={})=>(r,t)=>{r.effects=[{type,owner:r.id,wx:0,wz:0,age:Math.max(0,t),life,...extra}];};

@@ -62,6 +62,7 @@ enum Role {
     Health,
     Overlay(usize),
     Nightmare,
+    CricketPuppet,
     Xylophone,
     /// A racer's silhouette seen through Dark Humor.
     Ghost,
@@ -541,6 +542,17 @@ fn racers(stage: &mut Stage, view: &ClientView, dt: f32, now: f32, xray: bool) {
             stage.show(Role::Nightmare, a.id, nightmare, body);
         }
         // Health pips face along the viewer's heading, as in the browser.
+        if view.special_abilities && a.reverse_controls > 0.0 {
+            let puppet = match a.reverse_controls < 0.4 {
+                true => stage.aged("overlay:reversePsychology:end", 0.4 - a.reverse_controls),
+                false => stage.clip("overlay:reversePsychology"),
+            };
+            let height = match a.driver {
+                11 => 3.0,
+                _ => 0.0,
+            };
+            stage.show(Role::CricketPuppet, a.id, puppet, at(a.wx, height, a.wz, a.heading));
+        }
         let pips = stage.clip(&format!("health:{}", (a.health.max(0.0) as usize).min(6)));
         stage.show(
             Role::Health,

@@ -1,4 +1,4 @@
-import {drawReverseShockwave} from '../characters/tammy/reverse-psychology.js';
+import {drawReverseShockwave,drawCricketPuppet} from '../characters/tammy/reverse-psychology.js';
 import {drawNightmareFuel} from '../characters/houston/nightmare-fuel.js';
 import {darkBombLights,lightUniforms} from '../characters/knowitowl/dark-bomb-light.js';
 import {drawFireRing,drawFireRingOut} from '../characters/master-yuda/fire-ring-visual.js';
@@ -661,6 +661,7 @@ export class Renderer {
       if(!arrival)this.kart(m,pose,actor.color??drivers[actor.driver].color,actor.driver,0,0,actor.boost>0,time,actor.celebrate,jump,actor.driver!==7||actor.vulcan<=0);
       if(actor.driver===14)this.batBuddy(pose,actor,r,time,jump);
       const parts=this.instances.slice(bodyStart);this.rememberBody(actor,parts,parts.length?[]:m.data.slice(dataStart));
+      if(r.specialAbilities!==false&&actor.reverseControls>0)drawCricketPuppet(m,this.glow,pose,time,actor.reverseControls,actor.heading,actor.driver===11?11:8);
       if(r.specialAbilities!==false&&[r,...r.bots].some(a=>a.id!==actor.id&&a.driver===13&&a.specialActive>0)){
         const facing=actor.cameraHeading??actor.heading,phase=Math.floor(time*8)%8;
         this.model('xylophone:'+phase,pose.x+Math.sin(facing)*5,0,pose.z+Math.cos(facing)*5,facing,mesh=>drawXylophone(mesh,phase));
