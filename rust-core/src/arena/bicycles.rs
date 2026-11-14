@@ -7,7 +7,7 @@ impl Game{
         self.global.supplies.retain(|s|s.kind!="bicycle"||s.age<BICYCLE_LIFETIME-1e-8);
         for id in 0..self.actors.len(){
             if self.frozen(id){continue;}
-            let a=&mut self.actors[id];let boosting=a.driver==14&&a.boost>0.0&&a.destroyed<=0.0&&!a.inactive&&!a.afk&&!a.bomber;
+            let a=&mut self.actors[id];let boosting=a.driver==14&&ability_on(id,1)&&a.boost>0.0&&a.destroyed<=0.0&&!a.inactive&&!a.afk&&!a.bomber;
             let drop=boosting&&!a.owl_boosting;a.owl_boosting=boosting;if !drop{continue;}
             let heading=a.heading-a.yaw+a.spin;let mut end=(a.wx,a.wz);
             for reach in [7.0,5.0,3.0,0.0]{let x=a.wx+heading.sin()*reach;let z=a.wz+heading.cos()*reach;if !blocked(self.global.arena,x,z,1.0){end=(x,z);break;}}
