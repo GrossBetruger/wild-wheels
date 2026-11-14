@@ -3,6 +3,14 @@ import assert from 'node:assert/strict';
 import { createBattle, damageBattle, equipBomber, tickBattle } from '../../gameplay/combat.js';
 import { KillCelebration, ChaffNotice } from '../../ui/combat-notices.js';
 
+test('Pearococo keeps ordinary weapon kills free of the Fashion Statement quote',()=>{
+  const world=createBattle(9);Object.assign(world,{phase:'racing'});
+  const victim=world.bots[0];Object.assign(victim,{driver:0,health:1,shield:0});
+  const feedback=new KillCelebration();feedback.sample(world,0);
+  damageBattle(world,victim,world.id,1,'hedgehog');
+  assert.equal(feedback.sample(world,.1).subtitle,'');
+});
+
 test('whacking Master-Yuda names the player and adds his unimpressed reaction regardless of their name',()=>{
   for(const [driver,name,subtitle]of [[10,'Oren',"he's unimpressed..."],[10,'Master-Yuda',"he's unimpressed..."],[0,'Master-Yuda','']]){
     const world=createBattle();Object.assign(world,{phase:'racing',elapsed:1});

@@ -3,7 +3,7 @@ export const abilityCards={
   5:{title:'LOW-COST LOCUST',icon:'🦗',color:'#b7f35b',theme:'locust',detail:'THE SWARM IS HUNGRY'},
   7:{title:'REINE DE LA PARESSE',icon:'✺',color:'#ccb5ff',theme:'gravity',detail:'EVERYTHING GRAVITATES TO HER'},
   8:{title:'SPECIAL RELATIVITY',icon:'⏱',color:'#9ffaff',theme:'relativity',detail:'TIME IS A MATTER OF PERSPECTIVE'},
-  9:{title:'FASHION-STATEMENT',icon:'🫰',color:'#ffd59d',theme:'fashion',detail:'ABSOLUTELY DEVASTATING TASTE'},
+  9:{title:'FASHION-STATEMENT',icon:'🫰',color:'#ffd59d',theme:'fashion',detail:'FLORALS? FOR SPRING? GROUNDBREAKING.'},
   10:{title:'REEFER MADNESS',icon:'☁',color:'#c0f1ac',theme:'reefer',detail:'LA VIE C’EST LA VIE'},
   11:{title:'PROVIDENCE',icon:'✧',color:'#ffebac',theme:'providence',detail:'MICHAEL & GABRIEL HAVE ARRIVED'},
   12:{title:'SIX-HEART RECOVERY',icon:'♥',color:'#ffb5c6',theme:'heartbeat',detail:'EVERY HEARTBEAT COUNTS'},

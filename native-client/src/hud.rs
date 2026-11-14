@@ -192,10 +192,18 @@ impl Notices {
                     _ => "\u{2726} YOU WHACKED \u{2726}",
                 }
                 .into(),
-                detail: match victim.is_some_and(|v| v.driver == 10) {
-                    true => format!("\u{201c}{}\u{201d}\nhe's unimpressed...", kill.victim_name),
-                    false => format!("\u{201c}{}\u{201d}", kill.victim_name),
-                },
+                detail: format!(
+                    "\u{201c}{}\u{201d}{}{}",
+                    kill.victim_name,
+                    match kill.kind.as_str() {
+                        "fashion" if !kill.assist => "\nThat's all.",
+                        _ => "",
+                    },
+                    match victim.is_some_and(|v| v.driver == 10) {
+                        true => "\nhe's unimpressed...",
+                        false => "",
+                    },
+                ),
                 color: None,
                 until: 0.0,
             });

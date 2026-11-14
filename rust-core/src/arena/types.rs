@@ -70,7 +70,7 @@ pub struct Skid { pub owner:usize,pub ax:f64,pub az:f64,pub bx:f64,pub bz:f64,pu
 pub struct Particle { pub owner:usize,pub wx:f64,pub wz:f64,pub height:f64,pub vx:f64,pub vz:f64,pub vy:f64,pub age:f64,pub life:f64,pub kind:String,pub level:u32 }
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(default,rename_all="camelCase")]
-pub struct Kill { pub id:u32,pub attacker:usize,pub victim:usize,pub attacker_name:String,pub victim_name:String,pub victim_color:String,pub text:String,pub time:f64,pub assist:bool,pub radiation:bool }
+pub struct Kill { pub id:u32,pub attacker:usize,pub victim:usize,pub attacker_name:String,pub victim_name:String,pub victim_color:String,pub kind:String,pub text:String,pub time:f64,pub assist:bool,pub radiation:bool }
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(default,rename_all="camelCase")]
 pub struct Globals {
