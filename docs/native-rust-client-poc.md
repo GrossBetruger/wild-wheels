@@ -1,7 +1,7 @@
 # Native Rust client proof of concept
 
 Build one complete slice of a native Rust multiplayer client
-to measure the work needed for feature parity with the browser client. This is
+to measure the work needed for feature parity with the browser client.
 Initial skeleton implementation started on 2026-11-14. Target macOS Apple Silicon,
 Bevy presentation, Pip the Panda, and Scrapyard, against the dedicated Rust server
 only. Launch from the CLI and retain native session identity across app restarts.
@@ -27,11 +27,13 @@ which need redesign.
 
 Deliver a playable demo, a list of remaining presentation and platform work,
 and a revised estimate for full multiplayer feature parity based on the measured
-porting speed. Choose the target desktop platform and graphics stack when starting
-the experiment. Grand Prix and mobile feature parity are outside this first slice.
+porting speed. Grand Prix and mobile feature parity are outside this first slice.
 
 Other racers may use placeholder models. Gameplay for every character still comes
 from the shared core and dedicated server; unported ability visuals and audio may
 be omitted entirely, with no fallback overlays required. Native bomber play,
 bomber controls/cameras, and photography are excluded. Server-side bombers can
 still damage or affect the native racer.
+
+See [POC results](native-client-poc-results.md) for verification, measurements,
+and the remaining work.

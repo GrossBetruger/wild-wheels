@@ -44,6 +44,9 @@ jobs:
       - run: shellcheck install_ubuntu.sh run_server.sh run_client.sh kill_server.sh update_server.sh scripts/server/server-process.sh scripts/checks/check-ubuntu-install.sh
       - run: npm ci --ignore-scripts
       - run: cargo +1.90.0 test --locked --manifest-path dedicated-server/Cargo.toml
+      - run: cargo +1.90.0 test --locked --manifest-path rust-core/Cargo.toml arena::client::native
+      - run: cargo +1.90.0 build --locked --manifest-path rust-core/Cargo.toml --example replay_native_client
+      - run: npm run test:native-parity
       - run: cargo +1.90.0 build --release --locked --manifest-path dedicated-server/Cargo.toml
       - run: npm run test:server-commands
       - run: npm run test:dedicated -- --seconds 10

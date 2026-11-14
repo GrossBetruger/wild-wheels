@@ -19,6 +19,7 @@ pub struct GameSession {
     last_send: f64,
     away: bool,
     observed: Option<(u32, u64)>,
+    metrics: crate::metrics::Metrics,
 }
 impl GameSession {
     fn new(config: Config) -> Self {
@@ -31,6 +32,7 @@ impl GameSession {
             last_send: 0.0,
             away: false,
             observed: None,
+            metrics: Default::default(),
         }
     }
     fn receive(&mut self, now: f64) {
@@ -40,6 +42,7 @@ impl GameSession {
                     self.status = status;
                 }
                 Event::Connected => {
+                    self.metrics.connected();
                     self.client = None;
                     self.status = "Connected | Enter to start".into();
                 }
@@ -62,6 +65,10 @@ impl GameSession {
         }
         if let Some(client) = self.client.as_ref() {
             let view = client.view();
+            if view.phase != "racing" || view.player.destroyed > 0.0 || view.player.afk {
+                self.metrics.inactive();
+            }
+            self.metrics.acknowledged(view.movement_ack, now);
             let state = (view.player.deaths, view.player.health.to_bits());
             if self.observed != Some(state) {
                 println!(
@@ -81,7 +88,10 @@ impl GameSession {
         };
         match client.outbound(input) {
             Ok(bytes) => match self.transport.commands.try_send(Command::Input(bytes)) {
-                Ok(()) => self.last_send = now,
+                Ok(()) => {
+                    self.last_send = now;
+                    self.metrics.sent(client.last_sent_movement(), now);
+                }
                 Err(_) => self.status = "Network worker stopped".into(),
             },
             Err(error) => self.status = error.to_string(),
@@ -111,7 +121,14 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         ))
         .add_systems(
             Update,
-            (drive, crate::scene::sync, crate::sound::play).chain(),
+            (
+                drive,
+                crate::scene::sync,
+                crate::scene::sync_pickups,
+                crate::scene::animate_wheels,
+                crate::sound::play,
+            )
+                .chain(),
         )
         .run();
     Ok(())
@@ -206,6 +223,7 @@ fn headless(config: Config) -> Result<(), Box<dyn Error>> {
     let mut shots = 0;
     let mut last_shot = 0.0;
     let mut initial_kills = None;
+    let mut deaths = 0;
     while start.elapsed().as_secs_f64() < seconds {
         let now = start.elapsed().as_secs_f64();
         session.receive(now);
@@ -219,12 +237,17 @@ fn headless(config: Config) -> Result<(), Box<dyn Error>> {
                     steer: None,
                 },
             };
+            let cost = Instant::now();
             client.advance(dt, input, now)?;
+            session
+                .metrics
+                .frame(cost.elapsed().as_secs_f64() * 1e6, now);
             if !sparring && now - last_shot > 0.5 && client.action(ClientAction::Fire, now)? {
                 shots += 1;
                 last_shot = now;
             }
             let view = client.view();
+            deaths = view.player.deaths;
             let initial = *initial_kills.get_or_insert(view.player.kills);
             if sparring && view.player.kills >= initial + 2.0 {
                 println!(
@@ -246,7 +269,7 @@ fn headless(config: Config) -> Result<(), Box<dyn Error>> {
     let pass = frames > 0 && ack >= 0 && action_ack >= 0 && max_distance > 1.0 && shots > 0;
     println!(
         "{}",
-        serde_json::json!({"pass":pass,"frames":frames,"movementAck":ack,"actionAck":action_ack,"distance":max_distance,"shotsRequested":shots,"status":session.status})
+        serde_json::json!({"pass":pass,"frames":frames,"movementAck":ack,"actionAck":action_ack,"distance":max_distance,"shotsRequested":shots,"deaths":deaths,"status":session.status,"metrics":session.metrics.report()})
     );
     if !pass {
         return Err(

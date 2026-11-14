@@ -104,3 +104,92 @@ impl Store {
 fn valid_token(token: &str) -> bool {
     token.len() == 64 && token.bytes().all(|b| b.is_ascii_hexdigit())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn path() -> PathBuf {
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir()
+            .join(format!(
+                "wild-wheels-identity-{}-{stamp}",
+                std::process::id()
+            ))
+            .join("sessions.json")
+    }
+    #[test]
+    fn restarting_restores_each_servers_identity_and_keeps_rotated_tokens() {
+        let path = path();
+        let mut store = Store::at(path.clone()).unwrap();
+        store
+            .remember(
+                "http://localhost:5173/",
+                Identity {
+                    token: "a".repeat(64),
+                    expires: now() + 3600,
+                },
+            )
+            .unwrap();
+        store
+            .remember(
+                "https://example.com/",
+                Identity {
+                    token: "b".repeat(64),
+                    expires: now() + 3600,
+                },
+            )
+            .unwrap();
+        store
+            .remember(
+                "http://localhost:5173/",
+                Identity {
+                    token: "c".repeat(64),
+                    expires: now() + 3600,
+                },
+            )
+            .unwrap();
+        let restored = Store::at(path.clone()).unwrap();
+        assert_eq!(
+            restored.get("http://localhost:5173/").unwrap().token,
+            "c".repeat(64)
+        );
+        assert_eq!(
+            restored.get("https://example.com/").unwrap().token,
+            "b".repeat(64)
+        );
+        assert!(restored.get("http://localhost:5189/").is_none());
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+                0o600
+            );
+        }
+        fs::remove_dir_all(path.parent().unwrap()).unwrap();
+    }
+    #[test]
+    fn expired_sessions_are_not_restored() {
+        let path = path();
+        let mut store = Store::at(path.clone()).unwrap();
+        store
+            .remember(
+                "http://localhost:5173/",
+                Identity {
+                    token: "a".repeat(64),
+                    expires: now() - 1,
+                },
+            )
+            .unwrap();
+        assert!(
+            Store::at(path.clone())
+                .unwrap()
+                .get("http://localhost:5173/")
+                .is_none()
+        );
+        fs::remove_dir_all(path.parent().unwrap()).unwrap();
+    }
+}

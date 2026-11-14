@@ -47,6 +47,7 @@ fn capture(
 pub struct SceneCache {
     actors: HashMap<usize, (Entity, usize)>,
     shots: HashMap<u32, Entity>,
+    supplies: HashMap<u32, Entity>,
     built: bool,
 }
 #[derive(Resource)]
@@ -58,11 +59,18 @@ pub struct Geometry {
     black: Handle<StandardMaterial>,
     purple: Handle<StandardMaterial>,
     gold: Handle<StandardMaterial>,
+    pickups: HashMap<&'static str, Handle<StandardMaterial>>,
 }
 #[derive(Component)]
 pub struct FollowCamera;
 #[derive(Component)]
 pub struct Hud;
+#[derive(Component)]
+pub struct Wheel {
+    actor: usize,
+    front: bool,
+    angle: f32,
+}
 
 fn setup(
     mut commands: Commands,
@@ -76,6 +84,16 @@ fn setup(
     let black = materials.add(Color::srgb(0.07, 0.07, 0.10));
     let purple = materials.add(Color::srgb(0.52, 0.34, 0.81));
     let gold = materials.add(Color::srgb(0.95, 0.78, 0.25));
+    let pickups = [
+        ("hedgehog", Color::srgb(0.65, 0.42, 0.23)),
+        ("missile", Color::srgb(0.95, 0.30, 0.20)),
+        ("boost", Color::srgb(0.95, 0.80, 0.15)),
+        ("health", Color::srgb(0.25, 0.90, 0.4)),
+        ("other", Color::srgb(0.55, 0.35, 0.95)),
+    ]
+    .into_iter()
+    .map(|(kind, color)| (kind, materials.add(color)))
+    .collect();
     commands.insert_resource(Geometry {
         cube,
         ball,
@@ -84,6 +102,7 @@ fn setup(
         black,
         purple,
         gold,
+        pickups,
     });
     commands.insert_resource(GlobalAmbientLight {
         brightness: 350.0,
@@ -126,23 +145,26 @@ fn part(
     position: Vec3,
     scale: Vec3,
     rotation: Quat,
-) {
-    commands.spawn((
-        Mesh3d(mesh.clone()),
-        MeshMaterial3d(material.clone()),
-        Transform {
-            translation: position,
-            scale,
-            rotation,
-        },
-        ChildOf(parent),
-    ));
+) -> Entity {
+    commands
+        .spawn((
+            Mesh3d(mesh.clone()),
+            MeshMaterial3d(material.clone()),
+            Transform {
+                translation: position,
+                scale,
+                rotation,
+            },
+            ChildOf(parent),
+        ))
+        .id()
 }
 fn kart(
     commands: &mut Commands,
     g: &Geometry,
     driver: usize,
     color: Handle<StandardMaterial>,
+    actor: usize,
 ) -> Entity {
     let root = commands
         .spawn((Transform::default(), Visibility::default()))
@@ -167,7 +189,7 @@ fn kart(
     );
     for x in [-1.4, 1.4] {
         for z in [-1.1, 1.1] {
-            part(
+            let entity = part(
                 commands,
                 root,
                 &g.wheel,
@@ -176,6 +198,11 @@ fn kart(
                 Vec3::new(0.6, 0.4, 0.6),
                 Quat::from_rotation_z(std::f32::consts::FRAC_PI_2),
             );
+            commands.entity(entity).insert(Wheel {
+                actor,
+                front: z > 0.0,
+                angle: 0.0,
+            });
         }
     }
     match driver {
@@ -246,15 +273,17 @@ fn kart(
                 Quat::IDENTITY,
             );
         }
-        _ => part(
-            commands,
-            root,
-            &g.ball,
-            &color,
-            Vec3::new(0.0, 2.5, 0.0),
-            Vec3::new(0.8, 1.1, 0.8),
-            Quat::IDENTITY,
-        ),
+        _ => {
+            part(
+                commands,
+                root,
+                &g.ball,
+                &color,
+                Vec3::new(0.0, 2.5, 0.0),
+                Vec3::new(0.8, 1.1, 0.8),
+                Quat::IDENTITY,
+            );
+        }
     }
     root
 }
@@ -285,6 +314,9 @@ pub fn sync(
     };
     let view = client.view();
     if view.arena != 0 {
+        for mut text in &mut hud {
+            text.0 = "POC supports Scrapyard only. Select it in the browser lobby.".into();
+        }
         return;
     }
     if !cache.built {
@@ -345,7 +377,7 @@ pub fn sync(
                         ((a.id * 29 + 120) % 200 + 40) as u8,
                     )),
                 };
-                let entity = kart(&mut commands, &g, a.driver, color);
+                let entity = kart(&mut commands, &g, a.driver, color, a.id);
                 cache.actors.insert(a.id, (entity, a.driver));
                 entity
             }
@@ -421,5 +453,86 @@ pub fn sync(
                 _ => String::new(),
             }
         );
+    }
+}
+
+pub fn animate_wheels(
+    session: Res<GameSession>,
+    time: Res<Time>,
+    mut wheels: Query<(&mut Transform, &mut Wheel)>,
+) {
+    let Some(client) = session.client.as_ref() else {
+        return;
+    };
+    let view = client.view();
+    for (mut transform, mut wheel) in &mut wheels {
+        let Some(actor) = view.actors.get(wheel.actor) else {
+            continue;
+        };
+        if actor.destroyed > 0.0 {
+            continue;
+        }
+        wheel.angle = (wheel.angle + actor.speed as f32 * time.delta_secs().min(0.05) / 0.6)
+            .rem_euclid(std::f32::consts::TAU);
+        let steering = match wheel.front {
+            true => actor.yaw as f32 * 3.0,
+            false => 0.0,
+        };
+        transform.rotation = Quat::from_rotation_y(steering)
+            * Quat::from_rotation_z(std::f32::consts::FRAC_PI_2)
+            * Quat::from_rotation_y(wheel.angle);
+    }
+}
+
+pub fn sync_pickups(
+    mut commands: Commands,
+    session: Res<GameSession>,
+    g: Res<Geometry>,
+    mut cache: ResMut<SceneCache>,
+    mut transforms: Query<&mut Transform>,
+) {
+    let Some(client) = session.client.as_ref() else {
+        return;
+    };
+    let view = client.view();
+    if view.arena != 0 {
+        return;
+    }
+    let visible: HashSet<_> = view
+        .supplies
+        .iter()
+        .filter(|s| s.cooldown <= 0.0)
+        .map(|s| s.id)
+        .collect();
+    cache.supplies.retain(|id, entity| {
+        if visible.contains(id) {
+            return true;
+        }
+        commands.entity(*entity).despawn();
+        false
+    });
+    for supply in view.supplies.iter().filter(|s| visible.contains(&s.id)) {
+        let entity = *cache.supplies.entry(supply.id).or_insert_with(|| {
+            let material = g
+                .pickups
+                .get(supply.kind.as_str())
+                .unwrap_or(&g.pickups["other"]);
+            commands
+                .spawn((
+                    Mesh3d(g.cube.clone()),
+                    MeshMaterial3d(material.clone()),
+                    Transform::default(),
+                ))
+                .id()
+        });
+        if let Ok(mut transform) = transforms.get_mut(entity) {
+            *transform = Transform::from_xyz(
+                supply.wx as f32,
+                1.2 + (view.elapsed as f32 * 3.0 + supply.id as f32).sin() * 0.2,
+                supply.wz as f32,
+            )
+            .with_scale(Vec3::splat(1.2))
+            .with_rotation(Quat::from_rotation_y(view.elapsed as f32));
+        }
     }
 }

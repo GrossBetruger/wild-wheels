@@ -59,6 +59,7 @@ pub struct ClientView<'a> {
 }
 pub struct NativeClient {
     inner: Client,
+    input: ClientInput,
 }
 impl NativeClient {
     /// Navigation for developer-controlled native sparring; no authority changes.
@@ -87,6 +88,7 @@ impl NativeClient {
             super::super::packet::decode_packet(packet).map_err(|_| ClientError::InvalidPacket)?;
         Ok(Self {
             inner: Client::new(game, viewer, now),
+            input: ClientInput::default(),
         })
     }
     pub fn accept(&mut self, packet: &[u8], now: f64) -> Result<(), ClientError> {
@@ -109,6 +111,7 @@ impl NativeClient {
             .lock()
             .map_err(|_| ClientError::KernelUnavailable)?;
         self.inner.frame(dt, input.keys, input.steer, now);
+        self.input = input;
         Ok(())
     }
     pub fn action(&mut self, action: ClientAction, now: f64) -> Result<bool, ClientError> {
@@ -125,13 +128,21 @@ impl NativeClient {
             ClientAction::Chaff => "chaff",
             ClientAction::Somersault => "somersault",
         };
-        Ok(self.inner.do_action(
+        let accepted = self.inner.do_action(
             Action {
                 kind: kind.into(),
                 ..Action::default()
             },
             now,
-        ))
+        );
+        if accepted {
+            self.inner
+                .frame(0.0, self.input.keys, self.input.steer, now);
+        }
+        Ok(accepted)
+    }
+    pub fn last_sent_movement(&self) -> i64 {
+        self.inner.last_sent
     }
     /// Call only after reserving transport capacity: this advances send cursors.
     pub fn outbound(&mut self, input: ClientInput) -> Result<Vec<u8>, ClientError> {
@@ -216,6 +227,11 @@ mod tests {
         );
         assert_eq!(peer.view().movement_ack, -1);
         assert!(native.action(ClientAction::Fire, 0.34).unwrap());
+        assert_eq!(
+            native.view().projectiles.len(),
+            1,
+            "A local shot must be visible immediately, before another frame or server response"
+        );
         let outbound: Value = serde_json::from_slice(
             &native
                 .outbound(ClientInput {

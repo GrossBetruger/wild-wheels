@@ -1,4 +1,4 @@
-# Wild Wheels native client skeleton
+# Wild Wheels native client POC
 
 macOS Apple Silicon developer POC. Arena racers against the dedicated Rust
 server only; no Grand Prix, bomber client, or mobile controls.
@@ -37,11 +37,39 @@ An automated 10-second dedicated-server test observed 69 units of movement,
 In a zero-bot manual test, a browser player whacked the native Panda three times;
 native telemetry confirmed all three deaths and full-health respawns.
 
-The native Metal window now visibly renders Scrapyard, Pip's kart/panda model,
-and the HUD. The earlier black screenshots came from capturing an occluded window,
-not from the camera or scene failing to render. Foreground capture was visually
-checked. The engine loop, richer visuals, broader graphical/audio parity checks,
-and browser/Wasm adapter remain future work.
+The native Metal window renders Scrapyard, Pip's kart/panda model, animated wheels,
+pickups, projectiles, and a chase camera/HUD. Procedural engine audio changes pitch
+with speed; firing, missiles, hits, explosions, pickups and boost have sound cues.
+Other racers use placeholder models. This is the playable slice, not full browser
+visual or audio parity. See [results and remaining work](../docs/native-client-poc-results.md).
+
+## Repeatable checks
+
+Use the native toolchain pinned in this directory:
+
+```sh
+cargo +1.97.1 test --locked --manifest-path native-client/Cargo.toml
+cargo +1.97.1 clippy --locked --manifest-path native-client/Cargo.toml --all-targets -- -D warnings
+cargo build --locked --manifest-path rust-core/Cargo.toml --example replay_native_client
+npm run test:native-parity
+```
+
+The replay compares 600 frames per profile against the browser/Wasm adapter for
+local, 160 ms round trip, and jittered snapshots, including predicted shots and
+audio cues. It runs in CI. It does not launch a graphical browser or measure GPU time.
+
+For a real Chrome/native transport check, build both binaries first, then run:
+
+```sh
+cargo build --release --locked --manifest-path dedicated-server/Cargo.toml
+cargo +1.97.1 build --locked --manifest-path native-client/Cargo.toml
+npm run test:native-multiplayer
+```
+
+The mixed-client test starts fresh isolated zero-bot dedicated servers and headless
+Chrome contexts for three latency profiles. It leaves an existing game server alone.
+`CHROME_PATH` selects Chrome; `--server-binary`, `--client-binary` and `--output`
+can override paths. Reports default to the OS temporary directory.
 
 ## Boundaries
 
