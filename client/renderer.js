@@ -617,7 +617,7 @@ export class Renderer {
     // Pull behind the entire 29-unit flame and frame the ground it can hit.
     const nightmare=!r.bomber&&r.driver===7&&r.nightmareActive>0&&r.boost>0&&!r.destroyed?1:0;
     this.nightmareZoom??=0;this.nightmareZoom+=(nightmare-this.nightmareZoom)*(1-Math.exp(-cameraDt*5));
-    const zoom=this.nightmareZoom,distance=17+35*zoom,cameraHeight=10+22*zoom+(r.destroyed?5:0),ahead=18-24*zoom;
+    const zoom=this.nightmareZoom,distance=17+25*zoom,cameraHeight=10+16*zoom+(r.destroyed?5:0),ahead=18-32*zoom;
     const p=combatPose(r),cx=Math.sin(r.cameraHeading+wobble),cz=Math.cos(r.cameraHeading+wobble),overview=r.bomber?bomberCamera(width,height,arenas[r.arena].size,this.bomberView??'3d',this.bomberFocus,this.bomberZoom??1):null,eye=overview?.eye??[p.x-cx*distance,cameraHeight,p.z-cz*distance],view=overview?.matrix??cameraMatrix(eye,[p.x+cx*ahead,1.5,p.z+cz*ahead],width/height,r.boost>0?1.2:r.wasDrifting?1.13:1.07);
     this.bicycleDrops=new Map();this.drawnBicycles=new Set();for(const s of r.supplies)if(s.kind==='bicycle'&&s.cooldown<=0&&s.age<2)this.bicycleDrops.set(s.owner,s);
     this.bomberMatrix=overview?.matrix??null;

@@ -885,15 +885,15 @@ pub fn sync(
     cache.nightmare_zoom +=
         (nightmare - cache.nightmare_zoom) * (1.0 - (-time.delta_secs().min(0.1) * 5.0).exp());
     let zoom = cache.nightmare_zoom;
-    let distance = 17.0 + 35.0 * zoom;
-    let ahead = 18.0 - 24.0 * zoom;
+    let distance = 17.0 + 25.0 * zoom;
+    let ahead = 18.0 - 32.0 * zoom;
     let facing = Vec3::new(
         p.camera_heading.sin() as f32,
         0.0,
         p.camera_heading.cos() as f32,
     );
     let center = Vec3::new(p.wx as f32, 0.0, p.wz as f32);
-    let height = 22.0 * zoom
+    let height = 16.0 * zoom
         + match p.destroyed > 0.0 {
             true => 15.0,
             false => 10.0,
