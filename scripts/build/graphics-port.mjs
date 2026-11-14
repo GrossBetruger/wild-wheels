@@ -209,6 +209,9 @@ export function buildGraphicsPack({only=[...drivers.keys()]}={}){
     // Boosting racers are recorded while driving so that trails stream behind them.
     tinted(`driver:${driver}:boost`,base,{driver,frames:LOOP*FPS,warmup:WARMUP,speed:BOOST_SPEED,mark,setup:r=>{r.boost=1;}});
     tinted(`driver:${driver}:celebrate`,base,{driver,fps:SLOW_FPS,frames:Math.ceil(1.6*SLOW_FPS),mark,each:(r,t)=>{r.celebrate=Math.max(.001,1.6-t);}},ONCE);
+    // One trail puff of this racer's rapid fire: the shot drawn with and without it.
+    const rapid=trail=>capture({driver,setup:r=>{hidden(r);r.projectiles=[{id:1,owner:r.id,kind:'hedgehog',vulcan:true,wx:0,wz:0,heading:0,height:0,age:1,trail}];}})[0];
+    pack.clip(`trail:vulcan:${driver}`,FPS,[pack.overlay(rapid([]),rapid([{wx:0,wz:0,height:0}]))]);
     record(`shot:vulcan:${driver}`,{driver,frames:FPS,setup:r=>{hidden(r);r.projectiles=[{id:1,owner:r.id,kind:'hedgehog',vulcan:true,wx:0,wz:0,heading:0,height:0,age:1,trail:[]}];}});
     // States layered over the racer. KnowItOwl's special is a full-screen shader effect.
     const states={shield:r=>{r.shield=1;},hedge:r=>{r.hedgeShield=2;},tehilim:r=>{r.tehilim=2;},dizzy:r=>{r.dizzy=1;},vulcan:r=>{r.vulcan=3;r.fireCooldown=0;},...(driver===14?{}:{special:r=>{r.specialActive=4;}})};
@@ -224,6 +227,17 @@ export function buildGraphicsPack({only=[...drivers.keys()]}={}){
   const shot=(kind,vulcan=false)=>r=>{hidden(r);r.projectiles=[{id:1,owner:r.id,kind,vulcan,wx:0,wz:0,heading:0,height:0,age:1,trail:[]}];};
   record('shot:hedgehog',{frames:FPS,setup:shot('hedgehog')});
   record('shot:missile',{frames:FPS,setup:shot('missile')});
+  // A trail puff at its largest; the native client shrinks it along the trail.
+  for(const kind of ['hedgehog','missile']){
+    const single=trail=>capture({setup:r=>{shot(kind)(r);r.projectiles[0].trail=trail;}})[0];
+    pack.clip(`trail:${kind}`,FPS,[pack.overlay(single([]),single([{wx:0,wz:0,height:0}]))]);
+  }
+  // A unit-length skid mark fading into each arena's ground over six seconds.
+  for(const arena of arenas.keys()){
+    const view=renderer(),r=Object.assign(world(0,arena),{afk:true}),frames=[];
+    for(let i=0;i<=24;i++){r.elapsed=100+i/4;r.skids=[{owner:99,ax:0,az:-.5,bx:0,bz:.5,time:100}];frames.push(pack.frame(draw(view,r,LOOP*2)));}
+    pack.clip(`skid:${arena}`,4,frames,ONCE);
+  }
   // Pickups bob with sin(2t) and spin with t, so one loop lasts 2π seconds.
   const turn={frames:150,fps:150/(2*Math.PI)};
   for(const kind of ['missile','hedgehog','boost','health','hedgeproof','tehilim'])record(`pickup:${kind}`,{...turn,setup:r=>{hidden(r);r.supplies=[{id:0,version:0,wx:0,wz:0,kind,cooldown:0}];}});

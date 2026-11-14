@@ -582,6 +582,11 @@ mod tests {
             "locust:jump",
             "timestop",
             "overlay:xylophone",
+            "trail:missile",
+            "trail:hedgehog",
+            "trail:vulcan:5",
+            "skid:0",
+            "skid:1",
             "overlay:7:special",
             "overlay:11:special",
         ] {

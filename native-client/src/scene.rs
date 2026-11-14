@@ -54,6 +54,8 @@ enum Role {
     Overlay(usize),
     Xylophone,
     Shot,
+    Trail,
+    Skid,
     Supply,
     Effect,
     Bomb,
@@ -499,6 +501,41 @@ pub fn sync(
             play,
             at(p.wx, p.height, p.wz, p.heading),
         );
+    }
+    for p in view.projectiles {
+        // Every third sample leaves a puff that shrinks towards the tail, as in the browser.
+        let owner = view.actors.get(p.owner).map_or(0, |a| a.driver);
+        let name = match (p.vulcan, p.kind.as_str()) {
+            (true, _) => format!("trail:vulcan:{owner}"),
+            (false, "missile") => "trail:missile".into(),
+            _ => "trail:hedgehog".into(),
+        };
+        for (index, sample) in p.trail.iter().enumerate().step_by(3).take(16) {
+            let size = match p.vulcan {
+                true => 1.0,
+                false => (0.12 + (1.0 - index as f32 / p.trail.len() as f32) * 0.5) / 0.62,
+            };
+            let play = stage.clip(&name);
+            let key = p.id as usize * 16 + index / 3;
+            let puff = at(sample.wx, sample.height, sample.wz, 0.0).with_scale(Vec3::splat(size));
+            stage.show(Role::Trail, key, play, puff);
+        }
+    }
+    for (index, skid) in view.skids.iter().enumerate() {
+        let (dx, dz) = (skid.bx - skid.ax, skid.bz - skid.az);
+        let length = dx.hypot(dz);
+        if length < 0.01 {
+            continue;
+        }
+        let play = stage.aged(&format!("skid:{}", view.arena), view.elapsed - skid.time);
+        let mark = at(
+            (skid.ax + skid.bx) / 2.0,
+            0.0,
+            (skid.az + skid.bz) / 2.0,
+            dx.atan2(dz),
+        )
+        .with_scale(Vec3::new(1.0, 1.0, length as f32));
+        stage.show(Role::Skid, index, play, mark);
     }
     for supply in view.supplies.iter().filter(|s| s.cooldown <= 0.0) {
         let play = stage.clip(&format!("pickup:{}", supply.kind));

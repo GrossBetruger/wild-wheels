@@ -31,6 +31,7 @@ Run the port by hand with `npm run port:graphics -- /tmp/graphics.wwgp`.
 | `overlay:<n>:<state>` | What `shield`, `hedge`, `tehilim`, `dizzy`, `vulcan` and `special` add to a racer |
 | `overlay:xylophone`, `timestop` | Fourmidable's and the time-stop special, shown at other racers or the caster |
 | `shot:missile`, `shot:hedgehog`, `shot:vulcan:<n>` | Projectiles, including each racer's rapid-fire variant |
+| `trail:missile`, `trail:hedgehog`, `trail:vulcan:<n>`, `skid:<arena>` | One projectile trail puff, scaled along the trail, and a unit-length skid mark fading over six seconds |
 | `pickup:<kind>` | Supply pads and their bobbing, spinning items, including the bicycle |
 | `wreck`, `health:<1-6>` | The destroyed-racer marker and the health pips above a racer |
 | `effect:<type>`, `effect:ash:<n>`, `effect:default` | Explosions, ashes of each racer, atomic blasts, radiation, teleports, fire rings and the other world effects, played by age |
@@ -62,7 +63,7 @@ clip name in `scene.rs`.
   distance fog, and KnowItOwl's Dark Humor darkness and X-ray.
 - Recorded states do not fade in or out, and combine by layering only. A boost
   trail is the one recorded while driving straight.
-- Not recorded: projectile trails, skid marks, Master-Yuda's drift sparks,
+- Not recorded: Master-Yuda's drift sparks,
   Houston's flying helmet, muzzle flashes, Tammy's arrival scale-up, the dizzy
   camera wobble and the bomber views.
 - Master-Yuda's drift lean is the one piece ported by hand, in `scene.rs`.
