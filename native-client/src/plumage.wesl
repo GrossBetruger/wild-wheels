@@ -8,7 +8,8 @@
 // The rest is native only and is marked as such: flutter at the tips, the tail
 // swinging behind her turns and pressed back by speed, barbs along each blade
 // that each sit at their own point on the iridescent palette, glints, bronze and
-// green rings around the eyes, and gleaming gold. None of it cycles hue with
+// green rings around the eyes, gleaming gold, and the gold beads along each shaft
+// cut as jewels that mirror the sky and flash under the lamp. None of it cycles hue with
 // time, in keeping with the browser's rule; the shimmer comes from motion.
 
 import bevy_pbr::render::{
@@ -179,6 +180,25 @@ fn fragment(in: Plume) -> @location(0) vec4<f32> {
         let facet = normalize(surface + scatter * 0.8);
         let glint = pow(abs(dot(facet, halfway)), 120.0) * fine;
         tint += vec3(1.0, 0.97, 0.82) * glint * 0.9;
+    } else if abs(across) < 0.07 && length(in.feather.zw / vec2(0.28, 0.4)) > 1.5 {
+        // Native only: the beads along the shaft are jewels. Each facet mirrors a
+        // pale sky above and warm ground below, turns from gold to rose to mint
+        // towards its rim, and flashes when it reflects a lamp, so the beads
+        // twinkle one facet at a time as the tail sways.
+        normal = normal * select(-1.0, 1.0, dot(normal, sight) >= 0.0);
+        let mirrored = reflect(-sight, normal);
+        let rim = pow(1.0 - max(dot(normal, sight), 0.0), 2.5);
+        let sky = mix(vec3(0.9, 0.66, 0.38), vec3(1.0, 0.98, 1.0), smoothstep(-0.6, 0.5, mirrored.y));
+        var film = mix(vec3(1.0, 0.8, 0.42), vec3(1.0, 0.62, 0.74), smoothstep(0.15, 0.6, rim));
+        film = mix(film, vec3(0.62, 0.96, 0.82), smoothstep(0.55, 0.95, rim));
+        tint = mix(in.color * film * 1.12, sky * film, 0.35 + 0.4 * rim);
+        // The lamp, and a second light over the viewer's shoulder so beads also
+        // flash when the tail is seen from behind, away from the lamp.
+        let shoulder = normalize(sight * 0.55 + vec3(0.0, 0.8, 0.0) + cross(sight, vec3(0.0, 1.0, 0.0)) * 0.3);
+        let flash = pow(max(dot(mirrored, LAMP), 0.0), 18.0);
+        let wink = pow(max(dot(mirrored, shoulder), 0.0), 14.0);
+        tint += vec3(1.0, 0.98, 0.88) * (flash * 1.4 + wink * 1.1);
+        light = 0.8 + 0.2 * max(0.0, dot(normal, LAMP));
     } else {
         // Native only: gold shafts, eyes and pearls gleam under the lamp.
         let gleam = pow(max(dot(normal, halfway), 0.0), 36.0);
