@@ -1,5 +1,6 @@
 [
   "index.html",
+  "assets/favicon.svg",
   "ui/ability-announcements.js",
   "gameplay/locusts.js",
   "characters/tammy/locusts.js",

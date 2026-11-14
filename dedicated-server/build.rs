@@ -42,6 +42,7 @@ fn main() {
         let mime = match name.rsplit('.').next().unwrap() {
             "html" => "text/html; charset=utf-8",
             "css" => "text/css; charset=utf-8",
+            "svg" => "image/svg+xml",
             "wasm" => "application/wasm",
             "ogg" => "audio/ogg",
             "flac" => "audio/flac",
