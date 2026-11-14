@@ -28,6 +28,7 @@ Run the port by hand with `npm run port:sounds -- /tmp/sounds.wwsp`.
 | `voice:<n>:<cue>` | Each racer's `pass`, `hurt`, `cheer`, `lap` and `win` calls |
 | `cue:countdown:<1-3>`, `cue:go` | The tones the browser HUD plays before a match |
 | `cue:xylophone:<0-7>`, `cue:heartbeat`, `cue:fashion`, `cue:timeWarp`, `cue:timeWarpEnd` | Sounds `RaceAudio.update` starts from game state |
+| `cue:darkLaughter` | The recorded crowd and solo laughter of Dark Humor, mixed as `RecordedLaughter` schedules it |
 | `loop:engine`, `loop:skid`, `loop:jet`, `loop:vulcan`, `loop:vulcan:firing` | The continuous layers, each two seconds long and looped |
 
 Sounds started by game state are isolated by rendering two worlds that differ
@@ -37,7 +38,10 @@ speed, as the browser raises the oscillator frequency.
 
 ## Limits
 
-- The Dark Humor laughter uses recorded audio files and is not played natively.
+- Dark Humor's laughter mixes recorded clips, which the exporter decodes with
+  macOS's `afconvert`. Where that tool is missing the laughter is left out.
+  The native client starts the mix when the arena goes dark and does not join
+  it partway through.
 - Reverb and the output limiter are not rendered. Samples are clipped at full scale.
 - Sound is mono: the browser's stereo panning of other racers' voices is dropped.
 - Band-limited oscillators are approximated by plain waveforms, so bright

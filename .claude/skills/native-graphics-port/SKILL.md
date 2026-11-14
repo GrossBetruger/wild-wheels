@@ -71,7 +71,8 @@ Sounds are ported the same way; read `docs/native-sound-port.md`.
   `native-client/src/sound.rs`, which mirrors the browser's timing rules by hand.
 - If the audio code uses a Web Audio node or automation method the offline
   renderer lacks, add it to `sound-port.mjs`; do not change `audio/audio.js`.
-- Recorded audio files are not ported.
+- Recorded audio files are fetched and decoded at build time with macOS's
+  `afconvert`; a new recording needs its own cue in `buildSoundPack`.
 
 ## Checking a change
 

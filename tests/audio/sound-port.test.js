@@ -24,6 +24,8 @@ test('the browser audio engine ports to a native sound pack',async()=>{
   for(const name of ['event:fire','event:explosion','event:pickup','event:victory','voice:0:win','cue:countdown:3','cue:go','cue:xylophone:7','cue:heartbeat','cue:timeWarp','loop:engine','loop:skid','loop:jet','loop:vulcan','loop:vulcan:firing']){
     assert.ok(sounds.has(name),name);assert.ok(peak(sounds.get(name))>.01,name);
   }
+  // Dark Humor's recorded laughter is mixed where the system can decode it.
+  if(process.platform==='darwin'){assert.ok(peak(sounds.get('cue:darkLaughter'))>.05);assert.ok(sounds.get('cue:darkLaughter').length>6*SAMPLE_RATE);}
   // An explosion is louder and longer than a rapid-fire shot, as in the browser.
   assert.ok(peak(sounds.get('event:explosion'))>peak(sounds.get('event:vulcanFire'))*3);
   assert.ok(sounds.get('event:explosion').length>sounds.get('event:vulcanFire').length*5);

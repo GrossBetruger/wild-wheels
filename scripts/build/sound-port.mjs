@@ -3,13 +3,18 @@
 // The unmodified `RaceAudio` runs in Node against a small offline Web Audio
 // implementation, and every cue it schedules is rendered to PCM for the native
 // client to play back. See docs/native-sound-port.md for the format and its limits.
+import {execFileSync} from 'node:child_process';
+import {mkdtempSync,readFileSync,rmSync,writeFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {RaceAudio} from '../../audio/audio.js';
 import {createBattle} from '../../gameplay/combat.js';
 import {drivers} from '../../gameplay/engine.js';
 
 export const SOUND_PACK_VERSION=1;
 export const SAMPLE_RATE=32000;
-const TAIL=.25,LOOP=2,SETTLE=4;
+const TAIL=.25,LOOP=2,SETTLE=1;
 
 // Automation of one audio parameter, as much of the Web Audio rules as the game uses.
 class Param {
@@ -55,7 +60,11 @@ class Node {
 }
 class Gain extends Node {
   gain=new Param(1);
-  process(n,time){return this.input(n)*this.gain.at(time,n);}
+  process(n,time){
+    // A layer that is switched off and never automated is not worth evaluating.
+    if(this.gain.default===0&&!this.gain.events.length&&!this.gain.inputs.length)return 0;
+    return this.input(n)*this.gain.at(time,n);
+  }
 }
 class Scheduled extends Node {
   from=Infinity;until=Infinity;
@@ -78,10 +87,10 @@ class Oscillator extends Scheduled {
   }
 }
 class BufferSource extends Scheduled {
-  buffer=null;loop=false;
+  buffer=null;loop=false;playbackRate=new Param(1);
   process(n,time){
     if(!this.playing(time)||!this.buffer)return 0;
-    const data=this.buffer.getChannelData(0),index=Math.floor((time-this.from+(this.offset??0))*this.context.sampleRate);
+    const data=this.buffer.getChannelData(0),index=Math.floor(((time-this.from)*this.playbackRate.value+(this.offset??0))*this.context.sampleRate);
     return this.loop?data[index%data.length]:data[index]??0;
   }
 }
@@ -130,7 +139,18 @@ class OfflineContext {
   createStereoPanner(){return new Panner(this);}
   createDynamicsCompressor(){return new Compressor(this);}
   createConvolver(){return new Convolver(this);}
-  createBuffer(channels,length){const data=Array.from({length:channels},()=>new Float32Array(Math.floor(length)));return{length:Math.floor(length),getChannelData:channel=>data[channel]};}
+  createBuffer(channels,length){const data=Array.from({length:channels},()=>new Float32Array(Math.floor(length)));return{length:Math.floor(length),duration:Math.floor(length)/this.sampleRate,getChannelData:channel=>data[channel]};}
+  // Recorded clips are decoded to mono at the pack's rate by the system converter.
+  async decodeAudioData(bytes){
+    const directory=mkdtempSync(join(tmpdir(),'wild-wheels-sound-'));
+    try{
+      const source=join(directory,'clip'),decoded=join(directory,'clip.wav');writeFileSync(source,Buffer.from(bytes));
+      execFileSync('afconvert',['-f','WAVE','-d',`LEI16@${this.sampleRate}`,'-c','1',source,decoded],{stdio:'ignore'});
+      const wav=readFileSync(decoded),at=wav.indexOf('data')+8,buffer=this.createBuffer(1,(wav.length-at)/2),samples=buffer.getChannelData(0);
+      for(let i=0;i<samples.length;i++)samples[i]=wav.readInt16LE(at+i*2)/32768;
+      return buffer;
+    }finally{rmSync(directory,{recursive:true,force:true});}
+  }
   async resume(){}
   // Renders [from, from+seconds) of everything scheduled so far.
   render(from,seconds){
@@ -151,6 +171,12 @@ async function studio(){
   await audio.unlock();
   return audio;
 }
+// The game fetches its recorded clips by URL; here they are read from the repository.
+async function localFetch(url){
+  if(new URL(url).protocol!=='file:')throw new Error(`Unexpected request while porting sounds: ${url}`);
+  const bytes=readFileSync(fileURLToPath(url));
+  return {ok:true,arrayBuffer:async()=>bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength)};
+}
 function world(change={}){
   const r=createBattle(0,0,()=>.5);
   Object.assign(r,{phase:'racing',elapsed:0,speed:0,finishCountdown:null,...change});
@@ -163,8 +189,8 @@ const scheduled=context=>Math.max(0,...context.nodes.filter(node=>node instanceo
 
 // `only` limits the racers whose voices are ported; tests use it to stay fast.
 export async function buildSoundPack({only=[...drivers.keys()]}={}){
-  const random=Math.random,Context=globalThis.AudioContext,sounds=new Map();
-  globalThis.AudioContext=OfflineContext;Math.random=seeded();
+  const random=Math.random,Context=globalThis.AudioContext,request=globalThis.fetch,sounds=new Map();
+  globalThis.AudioContext=OfflineContext;globalThis.fetch=localFetch;Math.random=seeded();
   try{
     // A one-shot: whatever `play` schedules, rendered until its last note ends.
     const cue=async(name,play)=>{
@@ -197,7 +223,12 @@ export async function buildSoundPack({only=[...drivers.keys()]}={}){
     sounds.set('cue:fashion',trimmed(await difference(world(),special(9),0)));
     sounds.set('cue:timeWarp',trimmed(await difference(world(),world({timeStop:2.5}),0)));
     sounds.set('cue:timeWarpEnd',trimmed(await difference(world(),world(),0,null,(audio,changed)=>{if(changed)audio.previousWarp=1;})));
-  }finally{globalThis.AudioContext=Context;Math.random=random;}
+    // Dark Humor's laughter mixes recorded clips. It needs macOS's afconvert to
+    // decode them and is left out of the pack where that is missing.
+    const laughing=await studio();await laughing.laughter.loading;
+    laughing.laughter.update(7,true);
+    if(scheduled(laughing.context)>0)sounds.set('cue:darkLaughter',trimmed(laughing.context.render(0,scheduled(laughing.context)+TAIL)));
+  }finally{globalThis.AudioContext=Context;globalThis.fetch=request;Math.random=random;}
 
   const names=[...sounds.keys()].sort(),u32=value=>{const b=Buffer.alloc(4);b.writeUInt32LE(value);return b;};
   return Buffer.concat([Buffer.from('WWSP'),u32(SOUND_PACK_VERSION),u32(SAMPLE_RATE),u32(names.length),...names.flatMap(name=>{

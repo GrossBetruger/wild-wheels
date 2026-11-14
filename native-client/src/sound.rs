@@ -27,9 +27,12 @@ impl Plugin for GameAudioPlugin {
 pub struct Sounds(HashMap<String, Handle<AudioSource>>);
 #[derive(Component)]
 pub struct Layer(usize);
-/// The time-stop music, cut short when time resumes.
-#[derive(Component)]
-pub struct Warp;
+/// Music that is cut short when the state behind it ends: time stop and Dark Humor.
+#[derive(Component, Clone, Copy, PartialEq, Eq)]
+pub enum Score {
+    Warp,
+    Laughter,
+}
 /// What has already been announced, so each state change sounds once.
 #[derive(Resource, Default)]
 pub struct Heard {
@@ -39,6 +42,7 @@ pub struct Heard {
     hearts: HashSet<usize>,
     fashion: HashMap<usize, f64>,
     warp: f64,
+    laughter: f64,
     vulcan: f64,
     warning: i64,
     voice_until: f32,
@@ -115,7 +119,7 @@ pub fn play(
     time: Res<Time>,
     mut heard: ResMut<Heard>,
     mut layers: Query<(&mut AudioSink, &Layer)>,
-    warps: Query<Entity, With<Warp>>,
+    scores: Query<(Entity, &Score)>,
 ) {
     let mut cues: Vec<(String, f32)> = session
         .sounds
@@ -137,7 +141,7 @@ pub fn play(
     }
     let mut levels = [0.0; LAYERS.len()];
     let mut pitch = 1.0;
-    let mut stop_warp = false;
+    let mut stopped = Vec::new();
     match session.client.as_ref() {
         None => *heard = Heard::default(),
         Some(client) => {
@@ -192,16 +196,36 @@ pub fn play(
                 false => 0.0,
             };
             if warp > 0.0 && (heard.warp <= 0.0 || warp > heard.warp + 0.3) {
-                stop_warp = true;
+                stopped.push(Score::Warp);
                 cues.push(("cue:timeWarp".into(), 1.0));
             }
             if warp <= 0.0 && heard.warp > 0.0 {
-                stop_warp = true;
+                stopped.push(Score::Warp);
                 if active {
                     cues.push(("cue:timeWarpEnd".into(), 1.0));
                 }
             }
             heard.warp = warp;
+            // Dark Humor's crowd laughs for as long as any KnowItOwl keeps the arena dark.
+            let dark = racers()
+                .filter(|a| {
+                    active
+                        && view.special_abilities
+                        && a.driver == 14
+                        && a.destroyed <= 0.0
+                        && !a.afk
+                        && !a.bomber
+                })
+                .map(|a| a.special_active)
+                .fold(0.0, f64::max);
+            if dark > heard.laughter + 0.4 {
+                stopped.push(Score::Laughter);
+                cues.push(("cue:darkLaughter".into(), 1.0));
+            }
+            if dark <= 0.0 && heard.laughter > 0.0 {
+                stopped.push(Score::Laughter);
+            }
+            heard.laughter = dark;
             let powered =
                 active && p.vulcan > 0.0 && p.destroyed <= 0.0 && view.finish_countdown.is_none();
             let warning = p.vulcan.ceil() as i64;
@@ -244,8 +268,8 @@ pub fn play(
             sink.set_speed(pitch.clamp(0.5, 4.0));
         }
     }
-    if stop_warp {
-        for entity in &warps {
+    for (entity, score) in &scores {
+        if stopped.contains(score) {
             commands.entity(entity).despawn();
         }
     }
@@ -257,9 +281,11 @@ pub fn play(
             AudioPlayer::new(source.clone()),
             PlaybackSettings::DESPAWN.with_volume(Volume::Linear(volume)),
         ));
-        if name == "cue:timeWarp" {
-            player.insert(Warp);
-        }
+        match name.as_str() {
+            "cue:timeWarp" => player.insert(Score::Warp),
+            "cue:darkLaughter" => player.insert(Score::Laughter),
+            _ => &mut player,
+        };
     }
 }
 
