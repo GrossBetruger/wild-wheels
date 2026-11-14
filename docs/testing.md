@@ -126,6 +126,15 @@ seats each, in matches that run until a racer has `--target` kills. Every kill i
 credited to what dealt it, and the table ranks the abilities by their kills. It
 plays the real rules and bot AI with no rendering, in about a second.
 
+`npm run scenario:ability-importance -- [--matches 40] [--minutes 4] [--out FILE]`
+plays every racer with abilities (as `gameplay/special-abilities.js` lists them)
+with each subset of its abilities switched on, against racers with none, on the
+same seeds for every subset. Its Markdown report, in `.wild-wheels/reports/` by
+default, ranks each ability by its Shapley contribution to kills minus deaths
+per match, with a 95% confidence interval, and flags abilities bots never
+trigger. The switches are `ability_on` in `rust-core/src/arena/abilities.rs`;
+outside tests every ability is always on.
+
 The room size is set in one place, `MAX_PLAYERS` in `rust-core/src/arena/mod.rs`
 (8 by default); the server, native client and browser follow it. A build can
 override it without editing code with `WILD_WHEELS_MAX_PLAYERS=16`, and
