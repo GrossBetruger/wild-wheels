@@ -38,7 +38,7 @@ Run the port by hand with `npm run port:graphics -- /tmp/graphics.wwgp`.
 | `trail:missile`, `trail:hedgehog`, `trail:vulcan:<n>`, `skid:<arena>` | One projectile trail puff, scaled along the trail, and a unit-length skid mark fading over six seconds |
 | `pickup:<kind>` | Supply pads and their bobbing, spinning items, including the bicycle |
 | `wreck`, `health:<1-6>` | The destroyed-racer marker and the health pips above a racer |
-| `effect:<type>`, `effect:ash:<n>`, `effect:default` | Explosions, ashes of each racer, atomic blasts, radiation, teleports, fire rings and the other world effects, played by age |
+| `effect:<type>`, `effect:ash:<n>`, `effect:default` | Explosions, ashes of each racer, atomic blasts, radiation, teleports, fire rings, Reverse Psychology’s 85-unit green haze shockwave and the other world effects, played by age |
 | `bomb:<kind>`, `cloud:chaff`, `cloud:chaff:fairy`, `cloud:stink` | Falling bombs and lingering clouds, played by age |
 | `particle:smoke`, `particle:spark:<level>` | One drift particle over its life |
 | `locust`, `locust:jump` | Tammy's locusts |

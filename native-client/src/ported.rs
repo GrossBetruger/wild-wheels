@@ -921,6 +921,7 @@ mod tests {
             "pickup:health",
             "pickup:bicycle",
             "health:3",
+            "effect:reverseShockwave",
             "effect:explosion",
             "effect:default",
             "effect:fireRing:blue",

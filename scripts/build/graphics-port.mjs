@@ -298,7 +298,7 @@ export function buildGraphicsPack({only=[...drivers.keys()]}={}){
 
   // World effects play once, frame by frame of their age.
   const effect=(type,life,extra={})=>(r,t)=>{r.effects=[{type,owner:r.id,wx:0,wz:0,age:Math.max(0,t),life,...extra}];};
-  for(const [type,life] of [['explosion',2.5],['abomb',3],['radiation',RADIATION_DURATION],['fashionSnap',1.2],['heartbeat',.7],['taxAudit',2.5],['teleportOut',1.35],['teleportIn',1.35],['locustSpawn',1.2],['locustBurst',.7]])once(`effect:${type}`,life,null,effect(type,life,{heading:0}));
+  for(const [type,life] of [['reverseShockwave',2.2],['explosion',2.5],['abomb',3],['radiation',RADIATION_DURATION],['fashionSnap',1.2],['heartbeat',.7],['taxAudit',2.5],['teleportOut',1.35],['teleportIn',1.35],['locustSpawn',1.2],['locustBurst',.7]])once(`effect:${type}`,life,null,effect(type,life,{heading:0}));
   once('effect:default',.65,null,effect('pickup',.65));
   once('effect:fireRingOut',2.4,null,effect('fireRingOut',2.4,{radius:FIRE_RING_RADIUS,color:'#ff631c'}));
   for(const [name,color] of [['orange','#ff631c'],['blue','#4abaff']])record(`effect:fireRing:${name}`,{fps:SLOW_FPS,frames:OVERLAY_LOOP*SLOW_FPS,setup:hidden,each:effect('fireRing',.1,{radius:FIRE_RING_RADIUS,color})});

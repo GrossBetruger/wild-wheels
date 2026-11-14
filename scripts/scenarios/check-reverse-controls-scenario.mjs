@@ -5,7 +5,7 @@ export async function checkReverseControls(evaluate,app,room,id,sleep,capture){
   for(const member of room.members.values())member.driver=5;
   app.syncRoom(room);
   Object.assign(room.world,{phase:'racing',duration:3600,supplies:[],locusts:[]});
-  for(const actor of [room.world,...room.world.bots].filter(a=>!a.inactive))Object.assign(actor,{wx:actor.id===id?65:-65,wz:0,health:6,speed:0,heading:0,motionHeading:0,cameraHeading:0,specialCooldown:0,reverseControls:0});
+  for(const actor of [room.world,...room.world.bots].filter(a=>!a.inactive))Object.assign(actor,{wx:65,wz:actor.id===id?0:40,health:6,speed:0,heading:0,motionHeading:0,cameraHeading:0,specialCooldown:0,reverseControls:0});
   app.broadcast(room);await wait(()=>evaluate('__game.race.phase==="racing"'),'Battle did not start');
   await evaluate('__game.network.action("special")');
   await wait(()=>evaluate('__game.race.specialCooldown>19&&__game.race.bots.filter(a=>!a.inactive).every(a=>a.reverseControls>4)'),'Reversed controls did not reach opponents');

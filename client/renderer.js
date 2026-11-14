@@ -1,3 +1,4 @@
+import {drawReverseShockwave} from '../characters/tammy/reverse-psychology.js';
 import {drawNightmareFuel} from '../characters/houston/nightmare-fuel.js';
 import {darkBombLights,lightUniforms} from '../characters/knowitowl/dark-bomb-light.js';
 import {drawFireRing,drawFireRingOut} from '../characters/master-yuda/fire-ring-visual.js';
@@ -721,7 +722,7 @@ export class Renderer {
       m.at(bomb.wx,height,bomb.wz,bomb.age*3);m.ball(0,0,0,2.2*scale,3.4*scale,2.2*scale,'#39334e',10,6);m.box(0,2.3*scale,0,5*scale,.5,.7*scale,'#ffdb69');m.box(0,2.3*scale,0,.7*scale,.5,5*scale,'#ffdb69');
       this.glow.at(bomb.wx,height+3,bomb.wz);this.glow.particle(0,0,0,3,[.8,.35,.03]);
     }
-    for(const effect of r.effects){if(effect.type==='locustSpawn'||effect.type==='locustBurst')continue;if(effect.type==='teleportOut'||effect.type==='teleportIn'){
+    for(const effect of r.effects){if(effect.type==='reverseShockwave'){drawReverseShockwave(this.glow,this.smoke,effect);continue;}if(effect.type==='locustSpawn'||effect.type==='locustBurst')continue;if(effect.type==='teleportOut'||effect.type==='teleportIn'){
       if(effect.type==='teleportOut'){const pose=departurePose(effect.age);this.teleportKart({x:effect.wx,z:effect.wz},effect.color??drivers[5].color,effect.heading??0,pose.scale,pose.height,pose.pitch);}
       drawTeleportHaze(this,effect,time);continue;
     }if(effect.type==='taxAudit'){drawTaxAudit(m,effect,r.cameraHeading);continue;}if(effect.type==='heartbeat'){const actor=[r,...r.bots].find(a=>a.id===effect.owner),x=actor?.wx??effect.wx,z=actor?.wz??effect.wz,t=effect.age,fade=1-t/effect.life,size=(1+.35*Math.exp(-t*18)+.3*Math.exp(-(((t-.18)*20)**2)))*fade;m.at(x,7+t*.6,z,r.cameraHeading);m.ball(-.28*size,.18*size,0,.38*size,.38*size,.24*size,'#ff779d',10,6);m.ball(.28*size,.18*size,0,.38*size,.38*size,.24*size,'#ff779d',10,6);m.cone(0,.1*size,0,.6*size,-.85*size,'#e94c7f',12);this.glow.at(x,7,z);this.glow.particle(0,0,0,size*1.4,[.5*fade,.08*fade,.17*fade]);continue;}if(effect.type==='fashionSnap'){this.fashionSnap(m,effect,time);continue;}if(effect.type==='fireRingOut'){drawFireRingOut(m,this.glow,this.smoke,effect,time);continue;}if(effect.type==='fireRing'){drawFireRing(m,this.glow,effect,time);continue;}if(effect.type==='yudaSmoke')continue;if(effect.type==='radiation'){this.radiationZone(m,effect,time);continue;}if(effect.type==='ash'){this.ashRemains(m,effect);continue;}if(effect.type==='abomb'){this.atomicExplosion(m,effect);continue;}if(effect.type==='explosion'){this.explosion(m,effect);continue;}for(let i=0;i<10;i++){const a=i*2.4,t=effect.age;m.at(effect.wx+Math.cos(a)*t*8,1+t*4,effect.wz+Math.sin(a)*t*8);m.ball(0,0,0,.12,.12,.12,'#f4dc8b',5,3);}}
