@@ -28,6 +28,10 @@ for(const engine of ['JavaScript','Rust']){
     assert.equal(after.bots[0].destroyed,3);assert.equal(after.bots[0].health,0);
     assert.deepEqual(after.bots.slice(1,4).map(a=>a.health),[6,6,6]);
     assert.equal(after.health,3);assert.equal(after.kills,1);assert.equal(after.killFeed[0].kind,'nightmare');
+    const ashes=after.effects.filter(effect=>effect.type==='ash');
+    assert.equal(ashes.length,1);assert.equal(ashes[0].wx,65);assert.equal(ashes[0].wz,50);assert.equal(ashes[0].life,4.3);
+    assert.equal(after.effects.some(effect=>effect.type==='explosion'),false);
+    if(core){const client=new ArenaClient();client.accept(core.packet(1),0);client.frame(0,[],0);assert.ok(client.present().effects.some(effect=>effect.type==='ash'));}
     assert.equal(after.nightmareActive,12);assert.equal(after.boost,12);assert.equal(after.nightmareCooldown,30);
   });
   test(`${engine}: Nightmare Fuel ends after twelve seconds and recharges thirty seconds from activation independently of the gravity well`,()=>{
