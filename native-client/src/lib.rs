@@ -1,5 +1,6 @@
 mod app;
 mod bench;
+mod chat;
 mod config;
 mod feedback;
 mod gui;

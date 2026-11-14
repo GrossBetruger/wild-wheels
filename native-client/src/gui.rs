@@ -158,7 +158,7 @@ impl Menu {
 }
 
 /// The system clipboard, for pasting a server address.
-fn clipboard() -> Option<String> {
+pub(crate) fn clipboard() -> Option<String> {
     let output = std::process::Command::new("pbpaste").output().ok()?;
     let text = String::from_utf8(output.stdout).ok()?;
     Some(text.lines().next()?.trim().to_owned())
@@ -176,6 +176,7 @@ pub fn setup(mut commands: Commands) {
 #[allow(clippy::too_many_arguments)]
 pub fn control(
     mut menu: ResMut<Menu>,
+    chat: Res<crate::chat::ChatPanel>,
     mut session: ResMut<GameSession>,
     graphics: Res<Graphics>,
     mut typed: MessageReader<KeyboardInput>,
@@ -184,6 +185,10 @@ pub fn control(
     buttons: Query<(&RelativeCursorPosition, &Act)>,
     mut exit: MessageWriter<AppExit>,
 ) {
+    if chat.capture_frame {
+        typed.clear();
+        return;
+    }
     let screen = menu.screen(&session);
     let mut acts = Vec::new();
     if mouse.just_pressed(MouseButton::Left) {

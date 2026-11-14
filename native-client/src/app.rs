@@ -11,6 +11,7 @@ use wild_wheels_core::{ClientAction, ClientInput, NativeClient};
 
 #[derive(Resource)]
 pub struct GameSession {
+    pub chat: crate::chat::Chat,
     pub client: Option<NativeClient>,
     pub status: String,
     pub sounds: Vec<String>,
@@ -24,8 +25,9 @@ pub struct GameSession {
     metrics: crate::metrics::Metrics,
 }
 impl GameSession {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
+            chat: Default::default(),
             client: None,
             status: String::new(),
             sounds: vec![],
@@ -49,6 +51,7 @@ impl GameSession {
     }
     /// Gives up the seat in the room and returns to the menu.
     pub fn leave(&mut self) {
+        self.chat.clear();
         if let Some(transport) = self.transport.take() {
             let _ = transport.commands.try_send(Command::Leave);
         }
@@ -75,6 +78,7 @@ impl GameSession {
         };
         while let Ok(event) = transport.events.try_recv() {
             match event {
+                Event::Session { origin, token } => self.chat.connect(origin, token),
                 Event::Status(status) => {
                     self.status = status;
                 }
@@ -219,12 +223,14 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
             crate::feedback::FeedbackPlugin,
         ))
         .init_resource::<crate::hud::Notices>()
+        .init_resource::<crate::chat::ChatPanel>()
         .add_systems(Startup, (crate::gui::setup, crate::hud::setup))
         .add_systems(
             Update,
             (
                 (
                     crate::bench::begin,
+                    crate::chat::control,
                     crate::gui::control,
                     mark(0),
                     drive,
@@ -246,6 +252,8 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
                     crate::gui::hover,
                     mark(7),
                     crate::hud::update,
+                    crate::chat::draw,
+                    crate::chat::scroll,
                     mark(8),
                     crate::bench::finish,
                 )
@@ -256,9 +264,10 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         .run();
     Ok(())
 }
-fn drive(
+pub(crate) fn drive(
     mut session: ResMut<GameSession>,
     menu: Res<crate::gui::Menu>,
+    chat: Res<crate::chat::ChatPanel>,
     keys: Res<ButtonInput<KeyCode>>,
     windows: Query<&Window>,
     time: Res<Time>,
@@ -266,7 +275,7 @@ fn drive(
     let now = session.epoch.elapsed().as_secs_f64();
     session.receive(now);
     // Keys pressed while the menu is open belong to the menu.
-    let focused = windows.iter().any(|w| w.focused) && !menu.open;
+    let focused = windows.iter().any(|w| w.focused) && !menu.open && !chat.capture_frame;
     let held = |codes: &[KeyCode]| focused && codes.iter().any(|key| keys.pressed(*key));
     let input = ClientInput {
         keys: u32::from(held(&[KeyCode::ArrowUp, KeyCode::KeyW]))
