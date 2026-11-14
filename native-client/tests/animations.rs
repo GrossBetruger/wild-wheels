@@ -1,6 +1,6 @@
 //! Watches every ported animation transition play live, in isolation, and checks
 //! that each one really runs. `cargo test` builds the client and opens a showcase
-//! window for each, one at a time; the whole file takes about 17 minutes. Run part
+//! window for each, one at a time; the whole file takes about 14 minutes. Run part
 //! of it by name, such as `cargo test --test animations boost_` or `fade_hedge_`.
 //!
 //! The showcase cycles a racer through a state change with no server and saves
@@ -173,23 +173,12 @@ animations! {
     rapid_fire_12_catheterpillar: "rapid-fire:12", false;
     rapid_fire_13_fourmidable: "rapid-fire:13", false;
     rapid_fire_14_knowitowl: "rapid-fire:14", true;
-    // Timed states fading as they run out. Hedgeguard and tehilim dim for everyone;
-    // a shield fades only for Pearococo's fairies and Master-Yuda's badges.
+    // Timed states fading as they run out. Hedgeguard and tehilim dim for everyone.
+    // A shield fades only for Pearococo's fairies and Master-Yuda's badges; Pip
+    // stands for the racers whose shield simply ends.
     fade_shield_00_pip: "fade:shield:0", false;
-    fade_shield_01_rocco: "fade:shield:1", false;
-    fade_shield_02_felix: "fade:shield:2", false;
-    fade_shield_03_benny: "fade:shield:3", false;
-    fade_shield_04_ellie: "fade:shield:4", false;
-    fade_shield_05_tammy: "fade:shield:5", false;
-    fade_shield_06_elon: "fade:shield:6", false;
-    fade_shield_07_houston: "fade:shield:7", false;
-    fade_shield_08_avita_jas: "fade:shield:8", false;
     fade_shield_09_pearococo: "fade:shield:9", true;
     fade_shield_10_master_yuda: "fade:shield:10", true;
-    fade_shield_11_r_yeah: "fade:shield:11", false;
-    fade_shield_12_catheterpillar: "fade:shield:12", false;
-    fade_shield_13_fourmidable: "fade:shield:13", false;
-    fade_shield_14_knowitowl: "fade:shield:14", false;
     fade_hedge_00_pip: "fade:hedge:0", true;
     fade_hedge_01_rocco: "fade:hedge:1", true;
     fade_hedge_02_felix: "fade:hedge:2", true;
