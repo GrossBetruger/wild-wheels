@@ -1,7 +1,7 @@
 //! `--showcase SCENE` plays one racer's ported animations in isolation, with no
 //! server, cycling through a state change so its transition can be watched live.
 //! B toggles blending between recorded frames; Escape quits. With `--capture DIR`
-//! it saves screenshots at fixed moments for `npm run test:native-animations`,
+//! it saves screenshots at fixed moments for `tests/animations.rs`,
 //! holding steady loops still so only the transition changes between them.
 use crate::{
     config::Config,
@@ -137,6 +137,7 @@ pub fn run(config: Config, name: &str) -> Result<(), Box<dyn Error>> {
         .iter()
         .find(|scene| scene.name == name)
         .ok_or_else(|| format!("Unknown showcase \"{name}\"; choose boost or rapid-fire"))?;
+    let capturing = config.capture.is_some();
     App::new()
         .insert_resource(Show {
             scene,
@@ -152,6 +153,12 @@ pub fn run(config: Config, name: &str) -> Result<(), Box<dyn Error>> {
             primary_window: Some(Window {
                 title: format!("Wild Wheels showcase: {name}"),
                 resolution: (1000, 700).into(),
+                // Covered windows capture as black on macOS; a capture run stays on top,
+                // so it can be captured without taking focus from other work.
+                window_level: match capturing {
+                    true => bevy::window::WindowLevel::AlwaysOnTop,
+                    false => bevy::window::WindowLevel::Normal,
+                },
                 ..default()
             }),
             ..default()
@@ -292,10 +299,8 @@ fn capture(
     };
     let cycle: f32 = show.scene.steps.iter().map(|step| step.seconds).sum();
     let since = time.elapsed_secs() - WARMUP - cycle;
-    // macOS returns black frames for covered windows, so only visible frames count.
-    let visible = windows
-        .iter()
-        .any(|window| window.focused && window.visible);
+    // The window stays on top while capturing; it still has to be shown.
+    let visible = windows.iter().any(|window| window.visible);
     for (label, at) in show.scene.captures {
         if since >= *at && visible && !show.taken.contains(label) {
             let path = directory.join(format!("{label}.png"));

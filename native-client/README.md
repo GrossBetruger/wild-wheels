@@ -82,15 +82,18 @@ To watch ported animations play in isolation, with no server:
 cargo +1.97.1 build --release --locked --manifest-path native-client/Cargo.toml
 ./native-client/target/release/wild-wheels-native --showcase boost
 ./native-client/target/release/wild-wheels-native --showcase rapid-fire
-npm run test:native-animations
 ```
 
 `boost` cycles Pearococo through boosting in and out; `rapid-fire` has
 KnowItOwl's bat fly in and away. B toggles blending between recorded frames, to
-compare it with the 24 recorded frames a second; Escape quits. The test runs
-both showcases in a visible window, holding steady loops still, and checks that
-each state change and its transition are visible in screenshots. It needs macOS
-and a display, and does not run in CI.
+compare it with the 24 recorded frames a second; Escape quits.
+
+`cargo test` also runs both showcases, one after the other, in a window that
+stays on top without taking focus (`tests/animations.rs`); they take about 35
+seconds. The test holds steady loops still and checks that each state change and
+its transition are visible in screenshots, and reports a blank capture if the
+window was hidden. It runs only on macOS; no CI job builds the native client.
+Run only the other tests with `cargo test --lib`.
 
 For a real Chrome/native transport check, build both binaries first, then run:
 

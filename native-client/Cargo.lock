@@ -6047,6 +6047,7 @@ dependencies = [
  "directories",
  "futures-util",
  "miniz_oxide 0.8.9",
+ "png",
  "reqwest",
  "serde",
  "serde_json",

@@ -20,6 +20,10 @@ serde_json = "=1.0.145"
 directories = "6"
 url = "2"
 
+[dev-dependencies]
+# Reads showcase screenshots in tests/animations.rs; already used by Bevy.
+png = "=0.18.1"
+
 [profile.release]
 # Thin link-time optimization and no symbol tables: a smaller, faster player build.
 lto = "thin"
