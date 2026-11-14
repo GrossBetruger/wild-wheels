@@ -12,7 +12,7 @@ use bevy::{
 use std::collections::HashMap;
 
 static PACK: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/graphics.wwgp"));
-const VERSION: u32 = 4;
+const VERSION: u32 = 5;
 const TRIANGLE_BYTES: usize = 20;
 const SPRITE_BYTES: usize = 28;
 /// The browser shader pitches models about this height and rolls them about `ROLL_PIVOT`.
@@ -94,6 +94,9 @@ pub struct Racer {
     pub color: Tint,
     /// The special ability's name; empty for racers without one.
     pub ability: String,
+    pub intelligence: u8,
+    /// Title, line and color of the announcement when the ability is used.
+    pub card: (String, String, Tint),
 }
 /// How a mesh is colored and shaded.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
@@ -215,6 +218,8 @@ impl Graphics {
                 description: r.text()?,
                 color: r.take(3)?.try_into().ok()?,
                 ability: r.text()?,
+                intelligence: r.take(1)?[0],
+                card: (r.text()?, r.text()?, r.take(3)?.try_into().ok()?),
             });
         }
         Some(Self {
@@ -598,6 +603,8 @@ mod tests {
         assert_eq!(graphics.racers()[0].name, "Pip the Panda");
         assert_eq!(graphics.racers()[14].ability, "DARK HUMOR");
         assert!(graphics.racers()[0].ability.is_empty());
+        assert_eq!(graphics.racers()[14].card.0, "DARK HUMOR");
+        assert_eq!(graphics.racers()[0].intelligence, 3);
         for driver in 0..15 {
             for state in ["idle", "boost", "celebrate"] {
                 let clip = graphics

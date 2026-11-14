@@ -169,7 +169,8 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
             crate::sound::GameAudioPlugin,
             crate::feedback::FeedbackPlugin,
         ))
-        .add_systems(Startup, (crate::gui::setup, crate::gui::setup_hud))
+        .init_resource::<crate::hud::Notices>()
+        .add_systems(Startup, (crate::gui::setup, crate::hud::setup))
         .add_systems(
             Update,
             (
@@ -181,7 +182,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
                 crate::sound::play,
                 crate::feedback::sync_match,
                 crate::gui::draw,
-                crate::gui::hud,
+                crate::hud::update,
                 crate::gui::hover,
             )
                 .chain(),

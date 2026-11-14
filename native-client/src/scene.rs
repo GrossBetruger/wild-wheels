@@ -9,7 +9,6 @@ use bevy::{
     image::Image,
     prelude::*,
     render::render_resource::{Extent3d, TextureDimension, TextureFormat},
-    text::FontSize,
     ui::{IsDefaultUiCamera, UiTargetCamera},
 };
 use std::collections::{HashMap, HashSet};
@@ -92,8 +91,6 @@ pub struct SceneCache {
 }
 #[derive(Component)]
 pub struct FollowCamera;
-#[derive(Component)]
-pub struct Hud;
 /// Draws what KnowItOwl sees through the dark, over the fog and under the menus.
 #[derive(Component)]
 pub struct XrayCamera;
@@ -218,25 +215,9 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
         UiTargetCamera(world),
         DarkFog,
     ));
-    commands.spawn((
-        Text::default(),
-        TextFont {
-            font_size: FontSize::Px(22.0),
-            ..default()
-        },
-        TextColor(Color::WHITE),
-        TextShadow::default(),
-        Node {
-            position_type: PositionType::Absolute,
-            top: px(18),
-            left: px(20),
-            ..default()
-        },
-        Hud,
-    ));
 }
 /// The browser's somersault pose; Master-Yuda's motorcycle barrel-rolls instead of flipping.
-fn somersault(driver: usize, remaining: f64) -> (f32, f32, f32, f32) {
+pub fn somersault(driver: usize, remaining: f64) -> (f32, f32, f32, f32) {
     if remaining <= 0.0 {
         return (0.0, 0.0, 0.0, 0.0);
     }
@@ -264,11 +245,10 @@ pub struct SceneAssets<'w> {
 pub struct Darkness<'w, 's> {
     fog: Query<'w, 's, &'static mut ImageNode, With<DarkFog>>,
     xray: Query<'w, 's, Lens, (With<XrayCamera>, Without<FollowCamera>)>,
-    hud: Query<'w, 's, &'static mut Text, With<Hud>>,
 }
 type Lens = (&'static mut Transform, &'static mut Projection);
 /// How dark KnowItOwl's special makes the arena, and whether the viewer cast it.
-fn dark_humor(view: &ClientView) -> (f32, bool) {
+pub fn dark_humor(view: &ClientView) -> (f32, bool) {
     if !view.special_abilities || view.phase != "racing" {
         return (0.0, false);
     }
@@ -602,9 +582,6 @@ pub fn sync(
     } = assets;
     let Some(client) = session.client.as_ref() else {
         // Outside a room the world is empty; the menus say what is happening.
-        for mut text in &mut darkness.hud {
-            text.0.clear();
-        }
         for (_, entity) in cache.shown.drain() {
             commands.entity(entity).despawn();
         }
@@ -753,11 +730,5 @@ pub fn sync(
             *xray = *camera;
             *lens = projection.clone();
         }
-    }
-    for mut text in &mut darkness.hud {
-        text.0 = format!(
-            "HEALTH {:.0}   KILLS {:.0}   DEATHS {}",
-            p.health, p.kills, p.deaths,
-        );
     }
 }

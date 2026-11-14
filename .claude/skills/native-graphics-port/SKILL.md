@@ -45,9 +45,11 @@ A new kind of visual is invisible natively until it is recorded:
 - GLSL changes. Shader-only effects need native code written by hand: Dark
   Humor's fog and X-ray live in `scene.rs`; feather sway, iridescence and
   distance fog are still missing.
-- HTML and CSS. The native menus, weapon cards, action buttons and leaderboard
-  in `native-client/src/gui.rs`, and the notices in `feedback.rs`, are
-  hand-written Bevy UI that mirrors the browser's labels and enabling rules.
+- HTML and CSS. The native menus in `native-client/src/gui.rs`, the in-match HUD
+  in `hud.rs` and the centre messages in `feedback.rs` are hand-written Bevy UI
+  that mirrors the browser's labels, enabling rules and notice timing. When the
+  browser HUD in `client/game.js` or `ui/` changes, make the same change there.
+  The built-in font has no emoji or symbols: keep HUD text to plain letters.
 - Per-frame browser state that depends on a racer's history, such as
   Master-Yuda's drift lean. Port the formula by hand in `scene.rs`.
 

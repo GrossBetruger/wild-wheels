@@ -18,7 +18,6 @@ pub struct DamageFlash;
 #[derive(Resource, Default)]
 pub struct FeedbackState {
     phase: String,
-    go_until: f32,
     health: Option<f64>,
     flash: f32,
 }
@@ -61,36 +60,38 @@ fn setup(mut commands: Commands) {
     ));
 }
 
-/// Priority rules keep AFK and death visible even while a match is underway.
-fn notice(
-    phase: &str,
-    away: bool,
-    destroyed: f64,
-    countdown: f64,
-    ending: bool,
-    go: bool,
-) -> Option<String> {
+/// The browser's centre message for each phase. Respawning is announced on the
+/// HUD's hint line instead, as in the browser.
+fn notice(phase: &str, away: bool, countdown: f64, ending: bool) -> Option<String> {
     if away {
-        return Some("AFK\nYou are sitting out\nEscape to return\nThe arena keeps running".into());
+        return Some("AFK\nYour place and score are saved.\nThe match continues.".into());
     }
     match phase {
-        "ready" => Some("READY TO RUMBLE?\nEnter to start the match".into()),
-        "paused" => Some("PAUSED\nWaiting for the match to resume".into()),
-        "countdown" => Some(format!("GET READY\n{}", countdown.ceil().max(1.0))),
-        "finished" => Some("MATCH COMPLETE".into()),
-        _ if ending => Some("MATCH OVER!\nOne last burst of mayhem...".into()),
-        _ if destroyed > 0.0 => Some(format!(
-            "WHACKED!\nBack in {}...",
-            destroyed.ceil().max(1.0)
+        "paused" => Some("PIT STOP\nCatch your breath.".into()),
+        "countdown" => Some(format!(
+            "ON YOUR MARKS\n{}\nHold Up or W to accelerate",
+            countdown.ceil().max(1.0)
         )),
-        "racing" if go => Some("GO!".into()),
+        "finished" => Some("BATTLE COMPLETE".into()),
+        _ if ending => Some("MATCH OVER!\nOne last burst of mayhem...".into()),
         _ => None,
     }
 }
+fn ordinal(place: usize) -> &'static str {
+    match (place % 100, place % 10) {
+        (11..=13, _) => "TH",
+        (_, 1) => "ST",
+        (_, 2) => "ND",
+        (_, 3) => "RD",
+        _ => "TH",
+    }
+}
 
+#[allow(clippy::too_many_arguments)]
 pub fn sync_match(
     session: Res<GameSession>,
     menu: Res<crate::gui::Menu>,
+    graphics: Res<crate::ported::Graphics>,
     time: Res<Time>,
     mut state: ResMut<FeedbackState>,
     mut panels: Query<&mut Node, With<MatchPanel>>,
@@ -110,9 +111,6 @@ pub fn sync_match(
         }
         Some(client) => {
             let view = client.view();
-            if view.phase == "racing" && state.phase == "countdown" {
-                state.go_until = now + 1.2;
-            }
             state.phase = view.phase.into();
             if state
                 .health
@@ -124,38 +122,64 @@ pub fn sync_match(
             message = notice(
                 view.phase,
                 session.away || view.player.afk,
-                view.player.destroyed,
                 view.countdown,
                 view.finish_countdown.is_some(),
-                now < state.go_until,
             );
             countdown = view.phase == "countdown";
             finished = view.phase == "finished";
             if view.phase == "finished" && !session.away && !view.player.afk {
-                let winner = view
-                    .winner
-                    .and_then(|id| view.actors.get(id))
-                    .and_then(|a| a.name.as_deref())
-                    .unwrap_or("Winner");
-                let mut racers: Vec<_> = view.actors.iter().filter(|a| !a.inactive).collect();
-                racers.sort_by(|a, b| {
-                    b.kills
-                        .total_cmp(&a.kills)
-                        .then_with(|| (Some(b.id) == view.winner).cmp(&(Some(a.id) == view.winner)))
-                        .then(a.deaths.cmp(&b.deaths))
-                        .then(a.id.cmp(&b.id))
-                });
-                let mut board = format!("MATCH COMPLETE\n{winner} wins!\n\n");
-                for (rank, actor) in racers.iter().take(8).enumerate() {
+                // The browser's results: placing, the final leaderboard, bicycle thefts.
+                let order = crate::hud::standings(&view);
+                let name = |a: &wild_wheels_core::Actor| {
+                    let racer = graphics.racers().get(a.driver);
+                    let name = a.name.as_deref().or(racer.map(|r| r.name.as_str()));
+                    match a.id == view.you {
+                        true => format!("{} (YOU)", name.unwrap_or("Racer")),
+                        false => name.unwrap_or("Racer").to_owned(),
+                    }
+                };
+                let place = order
+                    .iter()
+                    .position(|a| a.id == view.you)
+                    .map_or(1, |i| i + 1);
+                let tie = view.multiplayer
+                    && order.len() > 1
+                    && Some(order[0].id) == view.host
+                    && order[0].kills == order[1].kills;
+                let p = view.player;
+                let mut board = format!(
+                    "{}\n{place}{} PLACE\n{:.0} kills, {} deaths, {}\n\nFINAL LEADERBOARD\n",
+                    match tie {
+                        true => "TIE ON POINTS, HOST WINS",
+                        false => "BATTLE COMPLETE",
+                    },
+                    ordinal(place),
+                    p.kills,
+                    p.deaths,
+                    crate::hud::clock(view.finish_time.unwrap_or(view.elapsed)),
+                );
+                for (rank, actor) in order.iter().take(8).enumerate() {
                     board.push_str(&format!(
-                        "{}. {}  {:.1} pts / {} deaths\n",
+                        "{:>2}  {:<26} {:>3.0} kills {:>3} deaths\n",
                         rank + 1,
-                        actor.name.as_deref().unwrap_or("Racer"),
+                        name(actor),
                         actor.kills,
                         actor.deaths
                     ));
                 }
-                board.push_str("\nEnter for another round");
+                let mut thieves: Vec<_> = order.iter().filter(|a| a.bicycles_stolen > 0).collect();
+                thieves.sort_by(|a, b| {
+                    b.bicycles_stolen
+                        .cmp(&a.bicycles_stolen)
+                        .then(a.id.cmp(&b.id))
+                });
+                if !thieves.is_empty() {
+                    board.push_str("\nBICYCLES STOLEN\n");
+                    for thief in thieves {
+                        board.push_str(&format!("{:<30} {}\n", name(thief), thief.bicycles_stolen));
+                    }
+                }
+                board.push_str("\nEnter to play again");
                 message = Some(board);
             }
         }
@@ -194,32 +218,36 @@ pub fn sync_match(
 
 #[cfg(test)]
 mod tests {
-    use super::notice;
+    use super::{notice, ordinal};
     #[test]
-    fn racer_sees_countdown_go_death_and_clear_play() {
+    fn the_centre_message_follows_the_browser_for_each_phase() {
         assert_eq!(
-            notice("countdown", false, 0.0, 2.4, false, false).as_deref(),
-            Some("GET READY\n3")
+            notice("countdown", false, 2.4, false).as_deref(),
+            Some("ON YOUR MARKS\n3\nHold Up or W to accelerate")
+        );
+        // Respawning is shown on the HUD's hint line, not as a centre message.
+        assert_eq!(notice("racing", false, 0.0, false), None);
+        assert_eq!(
+            notice("racing", false, 0.0, true).as_deref(),
+            Some("MATCH OVER!\nOne last burst of mayhem...")
         );
         assert_eq!(
-            notice("racing", false, 0.0, 0.0, false, true).as_deref(),
-            Some("GO!")
+            notice("finished", false, 0.0, false).as_deref(),
+            Some("BATTLE COMPLETE")
         );
-        assert_eq!(
-            notice("racing", false, 2.1, 0.0, false, false).as_deref(),
-            Some("WHACKED!\nBack in 3...")
-        );
-        assert_eq!(notice("racing", false, 0.0, 0.0, false, false), None);
     }
     #[test]
-    fn afk_does_not_claim_the_shared_server_is_paused() {
+    fn sitting_out_does_not_claim_the_shared_match_is_paused() {
         assert_eq!(
-            notice("racing", true, 0.0, 0.0, false, false).as_deref(),
-            Some("AFK\nYou are sitting out\nEscape to return\nThe arena keeps running")
+            notice("racing", true, 0.0, false).as_deref(),
+            Some("AFK\nYour place and score are saved.\nThe match continues.")
         );
+    }
+    #[test]
+    fn places_read_as_the_browser_writes_them() {
         assert_eq!(
-            notice("racing", false, 0.0, 0.0, true, false).as_deref(),
-            Some("MATCH OVER!\nOne last burst of mayhem...")
+            [1, 2, 3, 4, 11, 12, 13, 21].map(ordinal),
+            ["ST", "ND", "RD", "TH", "TH", "TH", "TH", "ST"]
         );
     }
 }

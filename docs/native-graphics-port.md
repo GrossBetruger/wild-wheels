@@ -107,3 +107,20 @@ Little-endian. `WWGP`, `u32` version, then counted sections:
 - `cargo test --manifest-path native-client/Cargo.toml ported` checks that the
   embedded pack contains every racer and arena and that placement matches the
   browser shader.
+
+## The HUD is not ported
+
+The browser's HUD is HTML and CSS, which this port cannot record. The native HUD
+in `native-client/src/hud.rs` rebuilds it by hand for the arena: the same
+readouts, labels, enabling rules and notice timing as `client/game.js` and the
+classes in `ui/`. Racer names, ability names and ability announcement cards are
+read from the pack, so those stay in step automatically; everything else must be
+changed in both places.
+
+Differences from the browser HUD:
+
+- No icons or emoji; the built-in font has plain letters only. Health is drawn
+  as blocks, and symbols in server text become `>`.
+- No CSS animation: announcements appear and disappear without motion.
+- The page chrome around the game (status line, controls panel, chat,
+  photography) and the bomber and mobile controls are not present.

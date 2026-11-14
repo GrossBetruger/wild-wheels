@@ -17,8 +17,10 @@ Chat is not available in the native client yet.
 
 In a match: Arrows/WASD drive; Shift drifts; Space fires; Tab, Q or Command
 switches weapons; X boosts; C deploys chaff; Z flips; F uses the special ability.
-The weapon cards and action buttons on screen show counts and cooldowns and can
-be clicked instead.
+The HUD matches the browser's arena HUD: kills, health and time left; the
+leaderboard and arena map; weapon cards and action buttons with counts and
+cooldowns, which can be clicked; rivals' nameplates; missile warnings; kill,
+ability and reward announcements; the drift meter; and the final results.
 
 ### Developer options
 

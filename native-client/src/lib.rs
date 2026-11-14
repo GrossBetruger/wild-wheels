@@ -2,6 +2,7 @@ mod app;
 mod config;
 mod feedback;
 mod gui;
+mod hud;
 mod metrics;
 mod pilot;
 mod ported;

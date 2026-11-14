@@ -9,12 +9,13 @@ import {Renderer} from '../../client/renderer.js';
 import {createBattle,arenas,BOMB_FALL_TIME,RADIATION_DURATION} from '../../gameplay/combat.js';
 import {drivers} from '../../gameplay/engine.js';
 import {abilityNames} from '../../gameplay/special-abilities.js';
+import {abilityCards} from '../../ui/ability-announcements.js';
 
 globalThis.devicePixelRatio??=1;
 // Reduced motion keeps the dizzy camera wobble out of recordings.
 globalThis.matchMedia??=()=>({matches:true});
 
-export const PACK_VERSION=4;
+export const PACK_VERSION=5;
 // Fire rings are recorded at this radius and scaled by the native client.
 export const FIRE_RING_RADIUS=20;
 // Clips whose every frame is new geometry are recorded at the slower rate to bound the pack size.
@@ -172,7 +173,11 @@ class Pack {
       u32(names.length),...names.flatMap(([name,clip])=>{const text=Buffer.from(name),size=Buffer.alloc(2);size.writeUInt16LE(text.length);return[size,text,u32(clip)];}),
       u32(this.arenas.length),...this.arenas.flatMap(({sky,mesh,xray,name,desc})=>[Buffer.from(sky),u32(mesh),u32(xray),text(name),text(desc)]),
       // The menus name racers and arenas from the same data the browser shows.
-      u32(drivers.length),...drivers.flatMap((driver,index)=>[text(driver.name),text(driver.desc),Buffer.from(hex(driver.color)),text(abilityNames[index]??'')]),
+      u32(drivers.length),...drivers.flatMap((driver,index)=>{
+        // The announcement shown when a racer's special ability is used.
+        const card=abilityCards[index];
+        return[text(driver.name),text(driver.desc),Buffer.from(hex(driver.color)),text(abilityNames[index]??''),Buffer.from([driver.intelligence]),text(card?.title??''),text(card?.detail??''),Buffer.from(hex(card?.color??'#ffffff'))];
+      }),
     ]);
   }
 }

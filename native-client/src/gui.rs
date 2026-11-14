@@ -21,13 +21,13 @@ use bevy::{
 use serde_json::json;
 use wild_wheels_core::ClientAction;
 
-const PANEL: Color = Color::srgba(0.035, 0.025, 0.09, 0.88);
-const BUTTON: Color = Color::srgb(0.20, 0.17, 0.32);
-const SELECTED: Color = Color::srgb(0.52, 0.34, 0.81);
+pub const PANEL: Color = Color::srgba(0.035, 0.025, 0.09, 0.88);
+pub const BUTTON: Color = Color::srgb(0.20, 0.17, 0.32);
+pub const SELECTED: Color = Color::srgb(0.52, 0.34, 0.81);
 const PRIMARY: Color = Color::srgb(0.80, 0.36, 0.26);
-const GOLD: Color = Color::srgb(0.95, 0.80, 0.38);
-const MUTED: Color = Color::srgb(0.72, 0.70, 0.80);
-const WARNING: Color = Color::srgb(1.0, 0.62, 0.52);
+pub const GOLD: Color = Color::srgb(0.95, 0.80, 0.38);
+pub const MUTED: Color = Color::srgb(0.72, 0.70, 0.80);
+pub const WARNING: Color = Color::srgb(1.0, 0.62, 0.52);
 /// The racer preview stands far above the arena, out of every match's sight.
 const PREVIEW: Vec3 = Vec3::new(0.0, 500.0, 0.0);
 const ROOM_CAPACITY: usize = 8;
@@ -64,7 +64,7 @@ pub enum Act {
 }
 /// A button's resting color, brightened while the pointer is over it.
 #[derive(Component)]
-pub struct Tone(Color);
+pub struct Tone(pub Color);
 #[derive(Component)]
 pub struct Preview;
 
@@ -279,9 +279,9 @@ pub fn control(
 }
 
 /// Spawns menu widgets beneath a parent node.
-struct Builder<'a, 'w, 's>(&'a mut Commands<'w, 's>);
+pub struct Builder<'a, 'w, 's>(pub &'a mut Commands<'w, 's>);
 impl Builder<'_, '_, '_> {
-    fn node(&mut self, parent: Entity, node: Node, color: Color) -> Entity {
+    pub fn node(&mut self, parent: Entity, node: Node, color: Color) -> Entity {
         self.0
             .spawn((node, BackgroundColor(color), ChildOf(parent)))
             .id()
@@ -305,7 +305,7 @@ impl Builder<'_, '_, '_> {
         };
         self.node(parent, node, Color::NONE)
     }
-    fn text(&mut self, parent: Entity, text: &str, size: f32, color: Color) {
+    pub fn text(&mut self, parent: Entity, text: &str, size: f32, color: Color) {
         self.0.spawn((
             Text::new(text),
             TextFont {
@@ -317,7 +317,7 @@ impl Builder<'_, '_, '_> {
         ));
     }
     /// Empty text that a HUD system fills in every frame.
-    fn readout(&mut self, parent: Entity, size: f32, marker: impl Component) {
+    pub fn readout(&mut self, parent: Entity, size: f32, marker: impl Component) {
         self.0.spawn((
             Text::default(),
             TextFont {
@@ -541,342 +541,7 @@ pub fn draw(
             ui.button(panel, "Quit game", Act::Quit, BUTTON, percent(100));
             ui.text(panel, CONTROLS, 15.0, MUTED);
         }
-        _ => {
-            let hint = ui.node(
-                root,
-                Node {
-                    position_type: PositionType::Absolute,
-                    right: px(14),
-                    bottom: px(10),
-                    ..default()
-                },
-                Color::NONE,
-            );
-            ui.text(hint, "Esc  menu", 14.0, Color::WHITE);
-        }
-    }
-}
-
-/// A value the in-match HUD keeps up to date.
-#[derive(Component, Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Gauge {
-    Hedgehogs,
-    Missiles,
-    Turbos,
-    Special,
-    Chaff,
-    Flip,
-    Status,
-    Board,
-}
-/// The label beneath a card's count, or a button's whole text.
-#[derive(Component)]
-pub struct Caption(Gauge);
-#[derive(Component)]
-pub struct Count(Gauge);
-#[derive(Component)]
-pub struct Card(Gauge);
-#[derive(Component)]
-pub struct HudRoot;
-/// Racers whose special ability the browser offers a button for.
-const SPECIALISTS: [usize; 8] = [5, 7, 8, 9, 11, 12, 13, 14];
-const DISABLED: Color = Color::srgba(0.12, 0.11, 0.18, 0.75);
-const POWERED: Color = Color::srgb(0.72, 0.45, 0.12);
-
-/// The browser's weapon cards and action buttons, built once and updated in place.
-pub fn setup_hud(mut commands: Commands) {
-    let root = commands
-        .spawn((
-            Node {
-                position_type: PositionType::Absolute,
-                width: percent(100),
-                height: percent(100),
-                display: Display::None,
-                ..default()
-            },
-            HudRoot,
-        ))
-        .id();
-    let mut ui = Builder(&mut commands);
-    let rack = ui.node(
-        root,
-        Node {
-            position_type: PositionType::Absolute,
-            left: px(14),
-            bottom: px(12),
-            column_gap: px(7),
-            ..default()
-        },
-        Color::NONE,
-    );
-    for (gauge, action) in [
-        (Gauge::Hedgehogs, ClientAction::SelectHedgehog),
-        (Gauge::Missiles, ClientAction::SelectMissile),
-        (Gauge::Turbos, ClientAction::Boost),
-    ] {
-        let card = ui.node(
-            rack,
-            Node {
-                width: px(112),
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::Center,
-                padding: UiRect::all(px(6)),
-                ..default()
-            },
-            BUTTON,
-        );
-        ui.0.entity(card).insert((
-            RelativeCursorPosition::default(),
-            Act::Game(action),
-            Tone(BUTTON),
-            Card(gauge),
-        ));
-        ui.readout(card, 32.0, Count(gauge));
-        ui.readout(card, 11.0, Caption(gauge));
-    }
-    let actions = ui.node(
-        root,
-        Node {
-            position_type: PositionType::Absolute,
-            right: px(14),
-            bottom: px(40),
-            width: px(250),
-            flex_direction: FlexDirection::Column,
-            row_gap: px(8),
-            ..default()
-        },
-        Color::NONE,
-    );
-    for (gauge, action) in [
-        (Gauge::Special, ClientAction::Special),
-        (Gauge::Chaff, ClientAction::Chaff),
-        (Gauge::Flip, ClientAction::Somersault),
-    ] {
-        let button = ui.node(
-            actions,
-            Node {
-                padding: UiRect::axes(px(8), px(10)),
-                justify_content: JustifyContent::Center,
-                ..default()
-            },
-            BUTTON,
-        );
-        ui.0.entity(button).insert((
-            RelativeCursorPosition::default(),
-            Act::Game(action),
-            Tone(BUTTON),
-            Card(gauge),
-        ));
-        ui.readout(button, 13.0, Caption(gauge));
-    }
-    let status = ui.node(
-        root,
-        Node {
-            position_type: PositionType::Absolute,
-            left: px(380),
-            bottom: px(16),
-            ..default()
-        },
-        Color::NONE,
-    );
-    ui.readout(status, 14.0, Caption(Gauge::Status));
-    let board = ui.node(
-        root,
-        Node {
-            position_type: PositionType::Absolute,
-            right: px(14),
-            top: px(14),
-            padding: UiRect::all(px(10)),
-            ..default()
-        },
-        PANEL,
-    );
-    ui.readout(board, 14.0, Caption(Gauge::Board));
-}
-
-type Readouts<'w, 's> = Query<
-    'w,
-    's,
-    (
-        Option<&'static Count>,
-        Option<&'static Caption>,
-        &'static mut Text,
-    ),
-    Or<(With<Count>, With<Caption>)>,
->;
-
-pub fn hud(
-    session: Res<GameSession>,
-    menu: Res<Menu>,
-    graphics: Res<Graphics>,
-    mut roots: Query<&mut Node, (With<HudRoot>, Without<Card>)>,
-    mut cards: Query<(&Card, &mut Tone, &mut Node)>,
-    mut readouts: Readouts,
-) {
-    let view = session.client.as_ref().map(|client| client.view());
-    let shown = view
-        .as_ref()
-        .filter(|_| menu.screen(&session) == Screen::Playing);
-    for mut root in &mut roots {
-        let display = match shown {
-            Some(_) => Display::Flex,
-            None => Display::None,
-        };
-        if root.display != display {
-            root.display = display;
-        }
-    }
-    let Some(view) = shown else {
-        return;
-    };
-    let p = view.player;
-    let live = view.phase == "racing" && p.destroyed <= 0.0;
-    let powered = p.vulcan > 0.0;
-    let ability = graphics
-        .racers()
-        .get(p.driver)
-        .map(|racer| racer.ability.as_str())
-        .filter(|_| SPECIALISTS.contains(&p.driver) && view.special_abilities);
-    // Each gauge's count, caption, whether it can be used now, and its highlight.
-    let gauge = |gauge: Gauge| -> (String, String, bool, Option<Color>) {
-        let chosen = |item: &str| (p.item == item).then_some(SELECTED);
-        match gauge {
-            Gauge::Hedgehogs => (
-                match powered {
-                    true => "MAX".into(),
-                    false => p.ammo.to_string(),
-                },
-                match (powered, p.driver) {
-                    (true, 14) => "UZI".into(),
-                    (true, _) => "VULCAN".into(),
-                    _ => "HEDGEHOGS".into(),
-                },
-                powered || p.ammo > 0,
-                match powered {
-                    true => Some(POWERED),
-                    false => chosen("hedgehog"),
-                },
-            ),
-            Gauge::Missiles => (
-                p.missiles.to_string(),
-                "MISSILES".into(),
-                p.missiles > 0,
-                chosen("missile"),
-            ),
-            Gauge::Turbos => (
-                p.turbos.to_string(),
-                "X  TURBO".into(),
-                live && p.turbos > 0 && p.boost <= 0.0,
-                None,
-            ),
-            Gauge::Special => {
-                let hunting = view.locusts.iter().filter(|b| b.owner == view.you).count();
-                let label = match (p.special_cooldown > 0.0, p.driver) {
-                    (true, _) => format!("F  RECHARGE {:.1}s", p.special_cooldown),
-                    (false, 5) => format!("F  {}  {hunting} LOCUSTS", ability.unwrap_or("")),
-                    _ => format!("F  {}", ability.unwrap_or("")),
-                };
-                let ready =
-                    live && p.special_cooldown <= 0.0 && !(p.driver == 12 && p.health >= 6.0);
-                (String::new(), label, ready, None)
-            }
-            Gauge::Chaff => (
-                String::new(),
-                format!("C  CHAFF {}", p.chaff),
-                live && p.chaff > 0 && p.chaff_cooldown <= 0.0,
-                None,
-            ),
-            Gauge::Flip => (
-                String::new(),
-                match p.somersault_cooldown > 1e-8 {
-                    true => format!("Z  {:.1}s", p.somersault_cooldown),
-                    false => "Z  SOMERSAULT".into(),
-                },
-                live && p.somersault_cooldown <= 1e-8,
-                None,
-            ),
-            Gauge::Status => {
-                let mut lines = Vec::new();
-                if live && p.hedge_shield > 0.0 {
-                    let blocks = match p.tehilim > 0.0 {
-                        true => "HEDGEHOGS + BOMBS BLOCKED",
-                        false => "MISSILES STILL HURT",
-                    };
-                    lines.push(format!("HEDGEGUARD  {:.1}s  {blocks}", p.hedge_shield));
-                }
-                if live && p.tehilim > 0.0 {
-                    lines.push(format!(
-                        "TEHILIM VS TILIM  {:.1}s  MISSILE REPULSION",
-                        p.tehilim
-                    ));
-                }
-                if live && powered {
-                    lines.push(format!("RAPID FIRE  {:.0}s", p.vulcan.ceil()));
-                }
-                if view.phase == "racing" && p.was_drifting {
-                    lines.push(
-                        match p.drift {
-                            charge if charge >= 0.85 => "SUPER BOOST READY",
-                            charge if charge >= 0.45 => "BOOST READY",
-                            _ => "DRIFT CHARGING",
-                        }
-                        .into(),
-                    );
-                }
-                (String::new(), lines.join("\n"), true, None)
-            }
-            Gauge::Board => {
-                let mut racers: Vec<_> = view
-                    .actors
-                    .iter()
-                    .filter(|a| !a.inactive && !a.bomber)
-                    .collect();
-                racers.sort_by(|a, b| b.kills.total_cmp(&a.kills).then(a.id.cmp(&b.id)));
-                let rows: Vec<_> = racers
-                    .iter()
-                    .take(8)
-                    .map(|a| {
-                        // Bots go by their racer's name, as in the browser.
-                        let racer = graphics.racers().get(a.driver);
-                        let name = a
-                            .name
-                            .as_deref()
-                            .or(racer.map(|racer| racer.name.as_str()))
-                            .unwrap_or("Racer");
-                        format!("{:>4.1}  {name}", a.kills)
-                    })
-                    .collect();
-                (String::new(), rows.join("\n"), true, None)
-            }
-        }
-    };
-    for (count, caption, mut text) in &mut readouts {
-        let value = match (count, caption) {
-            (Some(Count(of)), _) => gauge(*of).0,
-            (_, Some(Caption(of))) => gauge(*of).1,
-            _ => continue,
-        };
-        if text.0 != value {
-            text.0 = value;
-        }
-    }
-    for (card, mut tone, mut node) in &mut cards {
-        let (_, _, usable, highlight) = gauge(card.0);
-        let color = match (usable, highlight) {
-            (_, Some(color)) => color,
-            (true, None) => BUTTON,
-            (false, None) => DISABLED,
-        };
-        if tone.0 != color {
-            tone.0 = color;
-        }
-        let display = match card.0 == Gauge::Special && ability.is_none() {
-            true => Display::None,
-            false => Display::Flex,
-        };
-        if node.display != display {
-            node.display = display;
-        }
+        _ => {}
     }
 }
 
