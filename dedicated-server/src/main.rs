@@ -136,7 +136,7 @@ async fn http(
         if path == "/api/info" && method == Method::GET {
             return response(
                 200,
-                json!({"dedicated":true,"room":"00","maxPlayers":8,"addresses":[],"publicOrigin":app.origin,"controlPort":null}),
+                json!({"dedicated":true,"room":"00","maxPlayers":room::CAPACITY,"addresses":[],"publicOrigin":app.origin,"controlPort":null}),
             );
         }
         if method != Method::POST {
@@ -211,7 +211,7 @@ async fn http(
                 .unwrap_or(0);
             response(
                 200,
-                json!({"status":"ok","players":room.count(),"maxPlayers":8,"ticks":room.ticks,"tickP99Us":p99,"overruns":room.overruns,"build":BUILD,"revision":REVISION}),
+                json!({"status":"ok","players":room.count(),"maxPlayers":room::CAPACITY,"ticks":room.ticks,"tickP99Us":p99,"overruns":room.overruns,"build":BUILD,"revision":REVISION}),
             )
         }
         _ => match ASSETS.iter().find(|a| a.0 == path) {
@@ -422,7 +422,7 @@ async fn main() {
         .unwrap_or_else(|_| "1".into())
         .parse::<usize>()
         .unwrap();
-    assert!(bots < 8, "BOTS must be 0–7");
+    assert!(bots < room::CAPACITY, "BOTS must leave a seat free");
     let origin = std::env::var("PUBLIC_ORIGIN").ok().map(|s| {
         let uri = s.parse::<Uri>().expect("Invalid PUBLIC_ORIGIN");
         assert!(
@@ -438,7 +438,14 @@ async fn main() {
         .unwrap_or_else(|| ".wild-wheels/chat.json".into());
     let stats_path = std::env::var_os("WILD_WHEELS_STATS_FILE").map(std::path::PathBuf::from)
         .unwrap_or_else(|| ".wild-wheels/stats.json".into());
+    // SPECIAL_ABILITIES=off starts the room with abilities off, as a host can set.
+    let abilities = match std::env::var("SPECIAL_ABILITIES").as_deref() {
+        Ok("off") => false,
+        Ok("on") | Err(_) => true,
+        Ok(_) => panic!("SPECIAL_ABILITIES must be on or off"),
+    };
     let mut room = Room::new(arena, bots);
+    room.abilities = abilities;
     room.chat = chat::Chat::open(&chat_path).expect("Unable to load saved chat");
     let app = App {
         stats: Arc::new(Mutex::new(stats::Stats::open(&stats_path).expect("Unable to load saved server stats"))),
@@ -505,7 +512,8 @@ async fn main() {
         .await
         .expect("Unable to bind game port");
     println!(
-        "Wild Wheels Rust: http://{bind}:{port} · one arena · 8 players · single async thread"
+        "Wild Wheels Rust: http://{bind}:{port} · one arena · {} players · single async thread",
+        room::CAPACITY
     );
     let shutdown = app.shutdown.clone();
     axum::serve(

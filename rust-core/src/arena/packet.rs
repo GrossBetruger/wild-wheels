@@ -77,7 +77,7 @@ pub(super) fn decode_packet(input:&[u8])->Result<(Game,usize),()>{
     if offset>input.len()||offset+n*4!=input.len(){return Err(());}
     let Received{layout,state}=serde_json::from_slice::<Received>(&input[16..16+meta]).map_err(|_|())?;
     let capacity=state.room.get("maxPlayers").and_then(|v|v.as_u64()).unwrap_or(6) as usize;
-    if !matches!(capacity,6|8){return Err(());}
+    if !super::valid_capacity(capacity){return Err(());}
     if layout.skids>512||layout.particles>512||layout.trails.len()>512||layout.trails.iter().any(|&n|n>24)||layout.skids*6+layout.particles*11+layout.trails.iter().sum::<usize>()*3!=n||state.kind!="state"||state.wire_version!=3||state.you>=capacity||!state.time.is_finite()||state.world.player.id!=state.you||state.world.global.arena>1{return Err(());}
     let Seed{mut global,player,bots}=state.world;
     if !global.skids.is_empty()||!global.drift_particles.is_empty()||global.projectiles.len()!=layout.trails.len()||global.projectiles.iter().any(|s|!s.trail.is_empty()){return Err(());}

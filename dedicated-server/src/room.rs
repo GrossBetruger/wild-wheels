@@ -7,7 +7,10 @@ use std::{
 };
 use tokio::sync::Notify;
 use wild_wheels_core::{Action, Frame, Input, Move, NativeArena};
-pub const CAPACITY: usize = 8;
+/// Set once, in rust-core: `wild_wheels_core::MAX_PLAYERS`.
+pub const CAPACITY: usize = wild_wheels_core::MAX_PLAYERS;
+static FULL: std::sync::LazyLock<&'static str> =
+    std::sync::LazyLock::new(|| String::leak(format!("This server is full ({CAPACITY} players).")));
 pub type Result<T> = std::result::Result<T, (u16, &'static str)>;
 fn bad<T>(message: &'static str) -> Result<T> {
     Err((400, message))
@@ -108,7 +111,7 @@ impl Room {
     pub fn new(arena: usize, bots: usize) -> Self {
         let epoch = 1;
         let seed = 1;
-        let config = json!({"maxPlayers":8,"code":"00","arena":arena,"bots":bots,"host":null,"dedicated":true,"epoch":epoch,"seed":seed,"players":[]});
+        let config = json!({"maxPlayers":CAPACITY,"code":"00","arena":arena,"bots":bots,"host":null,"dedicated":true,"epoch":epoch,"seed":seed,"players":[]});
         Self {
             chat: crate::chat::Chat::default(),
             core: NativeArena::new(config).unwrap(),
@@ -127,7 +130,7 @@ impl Room {
         self.members.iter().flatten().count()
     }
     pub fn config(&self) -> Value {
-        json!({"maxPlayers":8,"code":"00","arena":self.arena,"bots":self.bots,"host":null,"dedicated":true,"epoch":self.epoch,"seed":self.seed,"specialAbilities":self.abilities,"players":self.members.iter().enumerate().filter_map(|(id,p)|p.as_ref().map(|p|json!({"id":id,"name":p.name,"driver":p.driver,"role":p.role,"afk":p.afk}))).collect::<Vec<_>>()})
+        json!({"maxPlayers":CAPACITY,"code":"00","arena":self.arena,"bots":self.bots,"host":null,"dedicated":true,"epoch":self.epoch,"seed":self.seed,"specialAbilities":self.abilities,"players":self.members.iter().enumerate().filter_map(|(id,p)|p.as_ref().map(|p|json!({"id":id,"name":p.name,"driver":p.driver,"role":p.role,"afk":p.afk}))).collect::<Vec<_>>()})
     }
     pub fn sync(&mut self) {
         self.bots = self.bots.min(CAPACITY - self.count());
@@ -192,7 +195,7 @@ impl Room {
             Some(v) => Some(driver(v)?),
         };
         let Some(id) = self.members.iter().position(Option::is_none) else {
-            return Err((409, "This server is full (8 players)."));
+            return Err((409, *FULL));
         };
         let chosen = chosen.unwrap_or_else(|| {
             (0..15)
@@ -587,14 +590,14 @@ mod tests {
         for id in [0,1]{assert_eq!(room.control(id,"/api/chat",&json!({})).unwrap()["messages"][0]["text"],"Keep this private");}
     }
     #[test]
-    fn eight_people_can_join_and_the_ninth_is_rejected() {
+    fn a_full_room_of_people_can_join_and_one_more_is_rejected() {
         let mut room = Room::new(0, 1);
-        for id in 0..8 {
+        for id in 0..CAPACITY {
             let reply = room
                 .join(&json!({"name":format!("Player {id}"),"driver":null}))
                 .unwrap();
             assert_eq!(reply["you"], id);
-            assert_eq!(reply["maxPlayers"], 8);
+            assert_eq!(reply["maxPlayers"], CAPACITY);
             assert_eq!(reply["world"]["driver"], id);
         }
         assert_eq!(

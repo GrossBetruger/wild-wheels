@@ -30,7 +30,8 @@ const MUTED: Color = Color::srgb(0.72, 0.70, 0.80);
 const WARNING: Color = Color::srgb(1.0, 0.62, 0.52);
 /// The racer preview stands far above the arena, out of every match's sight.
 const PREVIEW: Vec3 = Vec3::new(0.0, 500.0, 0.0);
-const ROOM_CAPACITY: usize = 8;
+/// Set once, in rust-core.
+const ROOM_CAPACITY: usize = wild_wheels_core::MAX_PLAYERS;
 const CONTROLS: &str = "Arrows / WASD   drive\nShift   drift\nSpace   fire\nTab   switch weapon\nX   boost      C   chaff\nZ   flip      F   special ability";
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

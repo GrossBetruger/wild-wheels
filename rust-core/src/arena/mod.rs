@@ -13,7 +13,24 @@ pub use client::{NativeClient, ClientInput, ClientAction, ClientError, ClientVie
 mod presentation;
 mod control;
 pub mod native;
-pub const MAX_PLAYERS:usize=8;
+/// The most racers one room holds. This is the only place the limit is set; the
+/// server, native client and browser all follow it. Scenario builds override it
+/// without editing code: `WILD_WHEELS_MAX_PLAYERS=16 cargo build`.
+pub const MAX_PLAYERS:usize=build_setting(option_env!("WILD_WHEELS_MAX_PLAYERS"),8);
+/// Rooms hold six racers or the most allowed.
+pub const fn valid_capacity(capacity:usize)->bool{capacity==6||capacity==MAX_PLAYERS}
+/// Scenario builds only, `WILD_WHEELS_MISSILES_ONLY=1`: every shot is a missile
+/// and missiles never run out, for stress tests such as
+/// scripts/scenarios/missile-stress.mjs. Off in every normal build.
+pub const MISSILES_ONLY:bool=build_setting(option_env!("WILD_WHEELS_MISSILES_ONLY"),0)==1;
+const fn build_setting(text:Option<&str>,default:usize)->usize{
+    let Some(text)=text else{return default};
+    let (bytes,mut i,mut value)=(text.as_bytes(),0,0);
+    assert!(!bytes.is_empty(),"build settings are whole numbers");
+    while i<bytes.len(){assert!(bytes[i].is_ascii_digit(),"build settings are whole numbers");value=value*10+(bytes[i]-b'0')as usize;i+=1;}
+    value
+}
+const _:()=assert!(MAX_PLAYERS>=8&&MAX_PLAYERS<=64,"rooms hold 8 to 64 racers");
 pub use types::*;
 use serde_json::json;
 
@@ -64,7 +81,7 @@ impl Game {
     pub fn combat_active(&self)->bool{self.global.phase=="racing"}
     pub fn human_controlled(&self,id:usize)->bool{self.actors[id].human||id==0&&!self.global.multiplayer}
     pub fn from_seed(seed:Seed)->Result<Self,()> {
-        if seed.global.arena>1||!matches!(seed.bots.len(),5|7)||seed.player.id!=0{return Err(());}
+        if seed.global.arena>1||!valid_capacity(seed.bots.len()+1)||seed.player.id!=0{return Err(());}
         let mut actors=vec![seed.player];actors.extend(seed.bots);
         if actors.iter().enumerate().any(|(i,a)|a.id!=i||a.driver>=DRIVER_NAMES.len()||!a.wx.is_finite()||!a.wz.is_finite()){return Err(());}
         for i in 0..2 {

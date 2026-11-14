@@ -7,11 +7,11 @@ impl Game{
     pub(super) fn fire(&mut self,id:usize,action_id:Option<u32>){
         if !self.active(id)||self.actors[id].fire_cooldown>0.0{return;}
         let target=self.target(id);let root_x=self.actors[0].wx;let root_z=self.actors[0].wz;
-        let a=&mut self.actors[id];let missile=a.item=="missile"&&a.missiles>0;let vulcan=!missile&&a.vulcan>0.0;if a.driver==14&&vulcan{return;}
+        let a=&mut self.actors[id];let missile=MISSILES_ONLY||a.item=="missile"&&a.missiles>0;let vulcan=!missile&&a.vulcan>0.0;if a.driver==14&&vulcan{return;}
         if !missile&&!vulcan&&a.ammo==0{return;}
         let kind=match missile{true=>"missile",false=>"hedgehog"};let g=&mut self.global;g.projectile_sequence+=1;
         g.projectiles.push(Shot{id:g.projectile_sequence,owner:id,kind:kind.into(),vulcan,target,wx:a.wx+a.heading.sin()*3.5,wz:a.wz+a.heading.cos()*3.5,heading:a.heading,speed:match(missile,vulcan){(true,_)=>70.0,(_,true)=>125.0,_=>90.0},height:1.3,vy:3.0,life:match(missile,vulcan){(true,_)=>3.0,(_,true)=>1.3,_=>2.5},action_id,..Shot::default()});
-        if missile{a.missiles-=1;}if !missile&&!vulcan{a.ammo-=1;}
+        if missile&&!MISSILES_ONLY{a.missiles-=1;}if !missile&&!vulcan{a.ammo-=1;}
         a.fire_cooldown=match(missile,vulcan){(true,_)=>0.9,(_,true)=>0.075,_=>0.225};
         if a.item=="missile"&&a.missiles==0{a.item="hedgehog".into();}
         if g.multiplayer||distance(a.wx,a.wz,root_x,root_z)<90.0{sound(g,match(missile,vulcan){(true,_)=>"missile",(_,true)=>"vulcanFire",_=>"fire"},id,a.wx,a.wz,action_id.map(|id|format!("action:{}",id)));}

@@ -116,8 +116,9 @@ and up to six trail puffs each rebuilt and re-uploaded its own sprite mesh
 whenever the view turned. They are now turned in `native-client/src/sprite.wesl`,
 so a recorded frame's particles are one mesh shared by every entity showing it.
 
-Measured in a real uncapped window against a throwaway server copy with 16
-players (15 bots), missiles only and special abilities off, two runs each:
+Measured in a real uncapped window with 16 players (15 bots), missiles only and
+special abilities off, two runs each; `npm run scenario:missile-stress` repeats
+it (see docs/testing.md):
 
 | Client | Mean | 95th | 99th | With 2–8 missiles in flight |
 |---|---|---|---|---|

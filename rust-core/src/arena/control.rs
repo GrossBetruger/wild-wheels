@@ -23,7 +23,7 @@ pub(super) struct Room {
 fn default_capacity()->usize{6}
 impl Room {
     pub(super) fn valid(&self)->bool {
-        if self.code.len()!=2||!self.code.bytes().all(|b|b.is_ascii_digit())||!matches!(self.max_players,6|8)||self.arena>1||self.players.len()>self.max_players||self.bots>self.max_players-self.players.len() {return false;}
+        if self.code.len()!=2||!self.code.bytes().all(|b|b.is_ascii_digit())||!super::valid_capacity(self.max_players)||self.arena>1||self.players.len()>self.max_players||self.bots>self.max_players-self.players.len() {return false;}
         match (self.dedicated,self.host){
             (true,None)=>{if self.start_request.is_some(){return false;}},
             (false,Some(host))=>{if host>=self.max_players||!self.players.is_empty()&&!self.players.iter().any(|p|p.id==host){return false;}},
@@ -38,13 +38,13 @@ impl Room {
 }
 fn initial_actor(id:usize,skill:f64,capacity:usize)->Actor {
     let angle=(id*8/capacity)as f64*std::f64::consts::FRAC_PI_4;let x=angle.sin()*78.0;let z=angle.cos()*78.0;let heading=(-x).atan2(-z);
-    Actor{id,driver:id%DRIVER_NAMES.len(),color:COLORS[id].into(),wx:x,wz:z,heading,motion_heading:heading,camera_heading:heading,somersault_camera_start:heading,
+    Actor{id,driver:id%DRIVER_NAMES.len(),color:COLORS[id%COLORS.len()].into(),wx:x,wz:z,heading,motion_heading:heading,camera_heading:heading,somersault_camera_start:heading,
         health:3.0,shield:0.0,ammo:START_HEDGEHOGS,missiles:1,turbos:1,item:"hedgehog".into(),fire_cooldown:0.5,chaff:4,skill,..Actor::default()}
 }
 impl Game {
     pub(super) fn create_room(room:&Room)->Result<Self,()> {
         let mut state=room.seed.max(1);let mut random=||{state^=state<<13;state^=state>>17;state^=state<<5;state as f64/(u32::MAX as f64+1.0)};
-        let mut skills=[0.6;7];for (i,(low,high)) in [(0.94,1.0),(0.86,0.93),(0.70,0.83),(0.53,0.68),(0.35,0.51)].into_iter().enumerate(){skills[i]=low+random()*(high-low);}
+        let mut skills=[0.6;MAX_PLAYERS-1];for (i,(low,high)) in [(0.94,1.0),(0.86,0.93),(0.70,0.83),(0.53,0.68),(0.35,0.51)].into_iter().enumerate(){skills[i]=low+random()*(high-low);}
         for i in (1..5).rev(){let j=(random()*(i+1)as f64).floor()as usize;skills.swap(i,j);}
         let global=Globals{special_abilities:room.special_abilities,mode:"combat".into(),phase:"ready".into(),arena:room.arena,countdown:3.0,duration:180.0,target_score:10.0,rank:6,multiplayer:true,sound_epoch:room.epoch as u64,
             supplies:[(-70.0,-65.0,"missile"),(70.0,65.0,"missile"),(-65.0,70.0,"hedgehog"),(65.0,-70.0,"hedgehog"),(-12.0,48.0,"boost"),(12.0,-48.0,"boost"),(-70.0,0.0,"health"),(70.0,0.0,"health"),(-50.0,-50.0,"hedgeproof"),(50.0,50.0,"tehilim")].into_iter().enumerate().map(|(id,(wx,wz,kind))|Supply{id:id as u32,wx,wz,kind:kind.into(),cooldown:match kind{"hedgeproof"|"tehilim"=>30.0,_=>0.0},..Supply::default()}).collect(),..Globals::default()};
@@ -63,7 +63,7 @@ impl Game {
             let active=person.is_some()||bots>0;
             if person.is_none()&&active{bots-=1;}
             if active&&actor.inactive{actor.destroyed=0.0;actor.health=3.0;actor.shield=0.0;actor.speed=0.0;}
-            actor.human=person.is_some();actor.inactive=!active;actor.afk=person.is_some_and(|p|p.afk);if actor.afk{actor.speed=0.0;actor.boost=0.0;actor.was_drifting=false;actor.drift=0.0;actor.somersault=0.0;}actor.color=match person.map_or(actor.driver,|p|p.driver){6=>"#e8edf2",_=>COLORS[id]}.into();
+            actor.human=person.is_some();actor.inactive=!active;actor.afk=person.is_some_and(|p|p.afk);if actor.afk{actor.speed=0.0;actor.boost=0.0;actor.was_drifting=false;actor.drift=0.0;actor.somersault=0.0;}actor.color=match person.map_or(actor.driver,|p|p.driver){6=>"#e8edf2",_=>COLORS[id%COLORS.len()]}.into();
             if !active{actor.destroyed=1e9;actor.speed=0.0;}
             match person {
                 Some(p)=>{

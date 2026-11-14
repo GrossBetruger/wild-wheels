@@ -15,6 +15,7 @@
     "test:browser-netcode": "node scripts/checks/check-browser-netcode.mjs",
     "profile:network": "node scripts/profiling/profile-network.mjs",
     "test:regression": "node scripts/checks/check-regressions.mjs",
+    "scenario:missile-stress": "node scripts/scenarios/missile-stress.mjs",
     "build:core": "node scripts/build/build-rust-core.mjs",
     "port:graphics": "node scripts/build/port-graphics.mjs",
     "port:sounds": "node scripts/build/port-sounds.mjs",

@@ -108,6 +108,23 @@ npm run profile:network
 ```
 
 Recorded comparisons and traces are under [diagnostics](../diagnostics/): [movement](../diagnostics/netcode-report.html), [action feedback](../diagnostics/feedback-report.html), and [drift](../diagnostics/drift-report.html).
+## On-demand scenarios
+
+Stress scenarios measure performance and are never part of `npm test` or the
+regression runs; start one when it is needed.
+
+`npm run scenario:missile-stress -- [--seconds 20] [--runs 2] [--offscreen] [--client PATH]`
+plays a 16-racer match (15 bots) where every shot is a missile and special
+abilities are off, and prints the native client's frame times by missiles in
+flight. It builds the server and client into `native-client/target/scenarios/`
+with build-time settings, leaving normal builds alone.
+
+The room size is set in one place, `MAX_PLAYERS` in `rust-core/src/arena/mod.rs`
+(8 by default); the server, native client and browser follow it. A build can
+override it without editing code with `WILD_WHEELS_MAX_PLAYERS=16`, and
+`WILD_WHEELS_MISSILES_ONLY=1` makes every shot a missile. The dedicated server's
+`SPECIAL_ABILITIES=off` starts its room with abilities off.
+
 ## Room chat
 
 The chat panel sits directly beneath the game in its column, without waiting for the sidebar to end. The conversation selector beneath the Pit stop chat heading switches between Everyone and individual private conversations. Each view shows only that conversation, with incoming and outgoing message bubbles and an arrow send button. Drafts are preserved separately while switching conversations; changing room or session clears the local history and drafts. The server stores separate histories for each room. It is available in the lobby, during a match, and while AFK. Bots do not receive chat. Messages are held in memory, with at most 200 retained per room; private history is filtered by player session rather than reusable player slot. Messages contain at most 500 UTF-16 code units and each player can send once every 500 milliseconds. The panel polls separately from gameplay updates.
