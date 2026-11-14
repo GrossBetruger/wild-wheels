@@ -65,6 +65,7 @@ body.mobile-playing{overflow:hidden;overscroll-behavior:none}.race-panel.mobile-
 @media(max-width:760px){.item-box>.tehilim-status{max-width:190px;font-size:7px}}
 
 .special-button{bottom:177px}.special-status{position:absolute;left:50%;top:108px;transform:translateX(-50%);padding:5px 10px;background:#232955aa;color:#fbeba7;font:700 11px monospace;border-radius:7px;pointer-events:none}
+.nightmare-button{bottom:229px;display:grid;gap:5px;border-color:#d799ff;background:#311748ed;color:#f1d4ff}.nightmare-button strong{font-size:10px}.nightmare-button span{font-size:9px}.nightmare-button.active{opacity:1;box-shadow:0 0 18px #b647f488;border-color:#efc9ff}.nightmare-button:not(:disabled):active{background:#62317d}
 
 .viewport.time-stopped{box-shadow:inset 0 0 55px 12px #7bafff88}.time-stopped .special-status{background:#17294cbb;color:#baf4ff;border:1px solid #a4eaff88}
 
