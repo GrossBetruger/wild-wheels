@@ -78,7 +78,7 @@ clip name in `scene.rs`.
 - Master-Yuda's drift lean is the one piece ported by hand, in `scene.rs`.
 - Fire rings are recorded at one radius and scaled, which also scales flame width.
 - Ashes, celebrations and fire rings are recorded at 12 frames per second to
-  bound the pack size, which is about 120 MiB.
+  bound the pack size: about 120 MiB of geometry, compressed to about 45 MiB.
 - Loops whose browser period does not divide their length restart with a small jump.
 - Native lighting approximates the browser's `0.62 + 0.38 * n·l` shading; the
   light levels in `scene.rs` were matched against screenshots, not derived exactly.
@@ -89,16 +89,22 @@ clip name in `scene.rs`.
 Little-endian. `WWGP`, `u32` version, then counted sections:
 
 - Palette: `u32` count, then sRGB `u8[3]` entries. Entry 0 means the racer's color.
-- Meshes: `u32` count; each is `f32` scale, `u32` triangle count, then per
-  triangle nine `i16` coordinates (multiplied by the scale) and a `u16` palette index.
-- Clips: `u32` count; each is `f32` frames per second, `u32` mode (0 loop,
+- Meshes: `u32` count; each is `f32` scale, `u32` triangle count, `u32`
+  compressed length and the zlib-compressed triangles. Each triangle is nine
+  `i16` coordinates (multiplied by the scale) and a `u16` palette index. Meshes
+  are compressed one by one so the client inflates only those it shows.
+- Clips: `u32` uncompressed length, `u32` compressed length, then one zlib
+  block holding a `u32` count of clips; each is `f32` frames per second, `u32` mode (0 loop,
   1 play once), `u32` frame count, then per frame:
   - a `u16` part count and parts of `u32` mesh, `u32` layer (0 solid, 1 glow)
     and twelve `f32` giving the images of the X, Y and Z axes and the origin;
   - glow sprites, then smoke sprites: each a `u32` count and sprites of seven
     `f32`: x, y, z, size, red, green, blue.
 - Names: `u32` count; each is `u16` length, UTF-8 name, `u32` clip.
-- Arenas: `u32` count; each is sky `u8[3]` and `u32` mesh.
+- Arenas: `u32` count; each is sky `u8[3]`, `u32` scenery mesh, `u32` X-ray
+  outline mesh, and `u16`-length UTF-8 name and description.
+- Racers: `u32` count; each is name, description, color `u8[3]`, ability name,
+  `u8` intelligence, then the ability card's title, line and color `u8[3]`.
 
 ## Checks
 

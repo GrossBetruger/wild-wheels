@@ -6046,6 +6046,7 @@ dependencies = [
  "crossbeam-channel",
  "directories",
  "futures-util",
+ "miniz_oxide 0.8.9",
  "reqwest",
  "serde",
  "serde_json",

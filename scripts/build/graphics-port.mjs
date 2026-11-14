@@ -5,6 +5,7 @@
 // instances and point sprites become a binary pack that the Bevy client plays back.
 // See docs/native-graphics-port.md for the format and its limits.
 import {createHash} from 'node:crypto';
+import {deflateSync} from 'node:zlib';
 import {Renderer} from '../../client/renderer.js';
 import {createBattle,arenas,BOMB_FALL_TIME,RADIATION_DURATION} from '../../gameplay/combat.js';
 import {drivers} from '../../gameplay/engine.js';
@@ -15,7 +16,7 @@ globalThis.devicePixelRatio??=1;
 // Reduced motion keeps the dizzy camera wobble out of recordings.
 globalThis.matchMedia??=()=>({matches:true});
 
-export const PACK_VERSION=5;
+export const PACK_VERSION=6;
 // Fire rings are recorded at this radius and scaled by the native client.
 export const FIRE_RING_RADIUS=20;
 // Clips whose every frame is new geometry are recorded at the slower rate to bound the pack size.
@@ -121,8 +122,11 @@ class Pack {
       const follows=paired&&own.every((c,k)=>c===base[k])&&[tinted[i+6],tinted[i+7],tinted[i+8]].map(byte).every((c,k)=>c===marker[k]);
       triangles.push(...p,follows?0:this.color(data[i+6],data[i+7],data[i+8]));
     }
-    const body=Buffer.alloc(8+triangles.length*2);body.writeFloatLE(scale,0);body.writeUInt32LE(triangles.length/10,4);
-    for(let i=0;i<triangles.length;i++)i%10===9?body.writeUInt16LE(triangles[i],8+i*2):body.writeInt16LE(triangles[i],8+i*2);
+    const raw=Buffer.alloc(triangles.length*2);
+    for(let i=0;i<triangles.length;i++)i%10===9?raw.writeUInt16LE(triangles[i],i*2):raw.writeInt16LE(triangles[i],i*2);
+    // Each mesh is compressed on its own, so the native client inflates only what it shows.
+    const packed=deflateSync(raw,{level:6}),body=Buffer.alloc(12+packed.length);
+    body.writeFloatLE(scale,0);body.writeUInt32LE(triangles.length/10,4);body.writeUInt32LE(packed.length,8);packed.copy(body,12);
     const id=this.intern(this.meshes,this.meshIds,body);this.raw.set(rawKey,id);
     return id;
   }
@@ -169,7 +173,7 @@ class Pack {
       Buffer.from('WWGP'),u32(PACK_VERSION),
       u32(this.palette.length),Buffer.from(this.palette.flat()),
       u32(this.meshes.length),...this.meshes,
-      u32(this.clips.length),...this.clips,
+      ...(()=>{const raw=Buffer.concat([u32(this.clips.length),...this.clips]),packed=deflateSync(raw,{level:6});return[u32(raw.length),u32(packed.length),packed];})(),
       u32(names.length),...names.flatMap(([name,clip])=>{const text=Buffer.from(name),size=Buffer.alloc(2);size.writeUInt16LE(text.length);return[size,text,u32(clip)];}),
       u32(this.arenas.length),...this.arenas.flatMap(({sky,mesh,xray,name,desc})=>[Buffer.from(sky),u32(mesh),u32(xray),text(name),text(desc)]),
       // The menus name racers and arenas from the same data the browser shows.

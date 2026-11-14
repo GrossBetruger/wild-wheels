@@ -4,7 +4,7 @@ Measured 2026-11-14 on an Apple M4 Pro laptop, one client at a time against a
 local dedicated server with seven bots in Scrapyard, the client's racer left
 idle so that it is attacked and respawns throughout.
 
-**Read these as indicative, not definitive.** The laptop was on battery at 14%,
+**Read the first results as indicative, not definitive.** The laptop was on battery at 14%,
 macOS was running a storage scan at about 80% of a core, and each configuration
 was run once for 20 to 25 seconds. Repeat on mains power before relying on any
 single figure.
@@ -43,47 +43,51 @@ less time than the browser's JavaScript alone. Native logic by stage, uncapped
 release, in milliseconds per frame: network and prediction 0.032, scene 0.032,
 clips and particles 0.030, HUD 0.023, sound 0.015, menus and messages 0.040.
 
-## Where the native client can improve
+## After optimization
 
-The game logic is not the problem: all of it is under a third of a millisecond.
-The costs are in memory, frame-time spikes and what Bevy does with the scene.
+The items this benchmark suggested were implemented and measured against the
+previous release build on the same machine, now charging, alternating old and
+new binaries against a fresh local server with six bots. Each figure is one run
+of 25 seconds unless stated; the display ran at 120 Hz.
 
-1. **Meshes are built and never released.** Clips whose every frame is new
-   geometry (flames, explosions, ashes, chaff, fire rings) add about 20 meshes
-   per second to a cache that only grows: 888 after 30 seconds, and memory rose
-   from about 420 MiB to 818 MiB in the uncapped run. Bound the cache and drop
-   meshes of clips no longer on screen. This is the first thing to fix; a long
-   match will keep growing.
-2. **Frame times spike.** The median frame is 3.2 ms but the 95th percentile is
-   8.3 ms and the worst 26 ms. Building a mesh on the main thread averages only
-   about 20 microseconds, so the likely cause is uploading new meshes to the
-   GPU; this was not profiled directly. Building the meshes of a clip when it
-   starts, rather than frame by frame, would move the cost off the playing frames.
-3. **Particle quads are rebuilt every rendered frame.** Five to seven sprite
-   meshes are re-created and re-uploaded per frame, although clips advance at
-   24 frames per second. Rebuild only when the clip frame or the camera's
-   orientation changes, or orient the quads in a vertex shader so the meshes
-   never change.
-4. **The X-ray camera always renders.** The second camera added for Dark Humor
-   draws every frame even when nothing is dark. Switch it off unless a
-   KnowItOwl's special is active. The saving was not measured.
-5. **The packs are embedded uncompressed.** 125 MiB of graphics and sound make
-   a 262 MB binary and most of the baseline memory. Sharing vertices between
-   triangles, sharing triangles between animation phases, and compressing the
-   pack would each cut this substantially; none has been tried.
-6. **Release profile tuning.** `run_client.sh` now launches the release build;
-   the dev profile ran game logic about 1.7 times slower, though both held 60
-   frames per second. Link-time optimization and symbol stripping in the release
-   profile have not been tried.
-7. **Paced play uses about half a core.** With 0.3 ms of game logic per frame,
-   the rest is Bevy extracting and preparing roughly 550 entities. One entity
-   per model part, trail puff, skid mark and particle adds up; merging a clip
-   frame's static parts into one mesh would reduce it. Lower priority than the
-   items above.
+| | Before | After |
+| --- | ---: | ---: |
+| Uncapped frames per second | 244 | 453 |
+| Uncapped median / 95th / 99th frame | 3.3 / 9.3 / 15.5 ms | 1.8 / 4.0 / 8.7 ms |
+| Paced CPU, two runs | 113%, 108% | 70%, 71% |
+| Paced 95th / 99th frame, two runs | 9.2 / 9.5, 8.9 / 10.1 ms | 10.6 / 11.4, 10.1 / 11.1 ms |
+| Sprite meshes rebuilt per frame | 2.5 to 6.8 | 0.4 to 1.8 |
+| 105 s match: meshes held / memory / CPU | 881 / 724 MiB / 111% | 491 / 636 MiB / 80% |
+| Graphics pack / binary | 125 MB / 262 MB | 44 MB / 134 MB |
 
-Per-frame string formatting and map lookups in `scene.rs` and `hud.rs` are
-visible in the code but cost hundredths of a millisecond; they are not worth
-optimizing before the items above.
+What changed:
+
+1. **Meshes are built on Bevy's async compute pool**, never in the frame. Each
+   clip also builds the meshes of its next four frames ahead; a part keeps its
+   previous mesh until its new one is ready.
+2. **The mesh cache is bounded.** Meshes unused for 12 seconds are released.
+3. **Particle quads are rebuilt only when the clip frame changes or the view
+   turns** by more than about half a degree.
+4. **The X-ray camera renders only while Dark Humor darkens its caster's view**;
+   the HUD moves onto it then and back afterwards.
+5. **The pack is compressed**: each mesh separately, inflated only when it is
+   built, and the clip table as one block inflated at startup.
+6. **Release builds use thin link-time optimization and strip symbols**, and
+   `run_client.sh` launches the release build.
+7. **Bevy's task pools are capped at four threads in total.** Paced CPU rose
+   steadily with more: 70% at 4, 75% at 6, 89% at 8 and 95% at 14 threads.
+   `WILD_WHEELS_THREADS` overrides the cap for measurements.
+
+Not done: merging model parts into fewer entities. The benchmark counts about
+60 mesh entities among roughly 550; most entities are HUD nodes, so merging
+parts would save little. The HUD now skips rewriting unchanged button borders.
+
+**Open regression:** at 120 Hz the new build misses more frames at the tail
+(95th percentile about 10.4 ms against 9.0 ms over 105 seconds), although its
+worst frames are no worse. It is not the thread cap: 14 threads gave the same
+tail. Limiting new meshes to three uploads per frame did not help either. Not
+yet tested: the release profile change, the HUD drawing on the world camera,
+and the four-frame lookahead. At 60 Hz both builds hold every frame.
 
 ## Reproducing
 

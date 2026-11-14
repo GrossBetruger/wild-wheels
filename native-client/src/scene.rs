@@ -185,23 +185,25 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
             Tonemapping::None,
             DebandDither::Disabled,
             Transform::from_xyz(0.0, 65.0, -75.0).looking_at(Vec3::ZERO, Vec3::Y),
+            IsDefaultUiCamera,
             FollowCamera,
         ))
         .id();
     // Dark Humor: fog covers the world, then X-ray silhouettes are drawn over the
-    // fog with no walls in the way, and the menus and HUD come last.
+    // fog with no walls in the way, and the menus and HUD come last. This camera
+    // renders only while its caster's arena is dark; the HUD moves onto it then.
     commands.spawn((
         Camera3d::default(),
         Camera {
             order: 1,
             clear_color: ClearColorConfig::None,
+            is_active: false,
             ..default()
         },
         lens,
         Tonemapping::None,
         DebandDither::Disabled,
         RenderLayers::layer(1),
-        IsDefaultUiCamera,
         XrayCamera,
     ));
     commands.spawn((
@@ -245,8 +247,33 @@ pub struct SceneAssets<'w> {
 pub struct Darkness<'w, 's> {
     fog: Query<'w, 's, &'static mut ImageNode, With<DarkFog>>,
     xray: Query<'w, 's, Lens, (With<XrayCamera>, Without<FollowCamera>)>,
+    world: Query<'w, 's, Entity, With<FollowCamera>>,
 }
-type Lens = (&'static mut Transform, &'static mut Projection);
+type Lens = (
+    Entity,
+    &'static mut Camera,
+    &'static mut Transform,
+    &'static mut Projection,
+);
+impl Darkness<'_, '_> {
+    /// Turns the X-ray camera on or off, with the HUD drawn by whichever camera is last.
+    fn see_through(&mut self, commands: &mut Commands, seeing: bool) {
+        for (xray, mut camera, ..) in &mut self.xray {
+            if camera.is_active == seeing {
+                continue;
+            }
+            camera.is_active = seeing;
+            for world in &self.world {
+                let (on, off) = match seeing {
+                    true => (xray, world),
+                    false => (world, xray),
+                };
+                commands.entity(on).insert(IsDefaultUiCamera);
+                commands.entity(off).remove::<IsDefaultUiCamera>();
+            }
+        }
+    }
+}
 /// How dark KnowItOwl's special makes the arena, and whether the viewer cast it.
 pub fn dark_humor(view: &ClientView) -> (f32, bool) {
     if !view.special_abilities || view.phase != "racing" {
@@ -592,6 +619,7 @@ pub fn sync(
         for mut fog in &mut darkness.fog {
             fog.color = Color::NONE;
         }
+        darkness.see_through(&mut commands, false);
         return;
     };
     let view = client.view();
@@ -626,6 +654,7 @@ pub fn sync(
     for mut fog in &mut darkness.fog {
         fog.color = Color::srgba(1.0, 1.0, 1.0, dark);
     }
+    darkness.see_through(&mut commands, xray && dark > 0.0);
     if let Some((.., outlines)) = cache.arena {
         commands.entity(outlines).insert(match xray && dark > 0.0 {
             true => Visibility::Inherited,
@@ -726,7 +755,7 @@ pub fn sync(
                 _ => 1.07,
             };
         }
-        for (mut xray, mut lens) in &mut darkness.xray {
+        for (_, _, mut xray, mut lens) in &mut darkness.xray {
             *xray = *camera;
             *lens = projection.clone();
         }

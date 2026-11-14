@@ -9,10 +9,18 @@ use bevy::{
     prelude::*,
     render::render_resource::{Extent3d, TextureDimension, TextureFormat},
 };
-use std::{collections::HashMap, sync::atomic::Ordering};
+use crossbeam_channel::{Receiver, Sender, unbounded};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::{Arc, atomic::Ordering},
+};
 
 static PACK: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/graphics.wwgp"));
-const VERSION: u32 = 5;
+const VERSION: u32 = 6;
+/// Clip frames ahead of the one shown whose meshes are built in advance.
+const LOOKAHEAD: usize = 4;
+/// Meshes unused for this long are released; one shown again is rebuilt.
+const KEEP_SECONDS: f32 = 12.0;
 const TRIANGLE_BYTES: usize = 20;
 const SPRITE_BYTES: usize = 28;
 /// The browser shader pitches models about this height and rolls them about `ROLL_PIVOT`.
@@ -61,9 +69,25 @@ pub fn placement(position: Vec3, angle: f32, pitch: f32, roll: f32) -> Transform
     )
 }
 
+/// One mesh's triangles, compressed; they are inflated only when the mesh is built.
 struct MeshData {
     scale: f32,
-    triangles: &'static [u8],
+    count: usize,
+    packed: &'static [u8],
+}
+/// What a mesh is built from. Shared with build tasks on other threads.
+struct Source {
+    palette: Vec<Tint>,
+    meshes: Vec<MeshData>,
+}
+/// A built mesh: which pack mesh, in which racer color, and how it is shaded.
+type Key = (u32, Tint, Look);
+/// A mesh built on another thread, waiting to be added to the assets.
+type Finished = (Key, Mesh);
+struct Built {
+    handle: Handle<Mesh>,
+    /// Seconds since launch when the mesh was last shown or prefetched.
+    used: f32,
 }
 struct Part {
     mesh: u32,
@@ -114,13 +138,17 @@ pub enum Look {
 
 #[derive(Resource)]
 pub struct Graphics {
-    palette: Vec<Tint>,
-    meshes: Vec<MeshData>,
+    source: Arc<Source>,
     clips: Vec<Clip>,
     names: HashMap<String, usize>,
     arenas: Vec<Arena>,
     racers: Vec<Racer>,
-    built: HashMap<(u32, Tint, Look), Handle<Mesh>>,
+    built: HashMap<Key, Built>,
+    /// Meshes being built on the async compute pool.
+    pending: HashSet<Key>,
+    finished: (Sender<Finished>, Receiver<Finished>),
+    /// Seconds since launch, as of the last frame.
+    now: f32,
     /// One material per `Look`, in declaration order.
     surfaces: [Handle<StandardMaterial>; 4],
     /// Additive sparks and alpha-blended smoke, in the browser's draw order.
@@ -139,26 +167,34 @@ impl Graphics {
         for _ in 0..r.u32()? {
             let scale = r.f32()?;
             let count = r.u32()? as usize;
-            let triangles = r.take(count.checked_mul(TRIANGLE_BYTES)?)?;
-            let valid = triangles
-                .chunks_exact(TRIANGLE_BYTES)
-                .all(|t| usize::from(u16::from_le_bytes([t[18], t[19]])) < palette.len());
-            if !valid {
-                return None;
-            }
-            meshes.push(MeshData { scale, triangles });
+            let size = r.u32()? as usize;
+            meshes.push(MeshData {
+                scale,
+                count,
+                packed: r.take(size)?,
+            });
         }
+        // Clips are one compressed block, inflated once and kept for the whole run.
+        let raw = r.u32()? as usize;
+        let size = r.u32()? as usize;
+        let block =
+            miniz_oxide::inflate::decompress_to_vec_zlib_with_limit(r.take(size)?, raw).ok()?;
+        if block.len() != raw {
+            return None;
+        }
+        let block: &'static [u8] = Box::leak(block.into_boxed_slice());
+        let mut c = Reader(block);
         let mut clips = Vec::new();
-        for _ in 0..r.u32()? {
-            let fps = r.f32()?;
-            let once = r.u32()? == 1;
+        for _ in 0..c.u32()? {
+            let fps = c.f32()?;
+            let once = c.u32()? == 1;
             let mut frames = Vec::new();
-            for _ in 0..r.u32()? {
+            for _ in 0..c.u32()? {
                 let mut parts = Vec::new();
-                for _ in 0..r.u16()? {
-                    let mesh = r.u32()?;
-                    let glow = r.u32()? == 1;
-                    let (x, y, z, origin) = (r.vec3()?, r.vec3()?, r.vec3()?, r.vec3()?);
+                for _ in 0..c.u16()? {
+                    let mesh = c.u32()?;
+                    let glow = c.u32()? == 1;
+                    let (x, y, z, origin) = (c.vec3()?, c.vec3()?, c.vec3()?, c.vec3()?);
                     if mesh as usize >= meshes.len() {
                         return None;
                     }
@@ -175,8 +211,8 @@ impl Graphics {
                 }
                 let mut sprites = [&[][..]; 2];
                 for layer in &mut sprites {
-                    let count = r.u32()? as usize;
-                    *layer = r.take(count.checked_mul(SPRITE_BYTES)?)?;
+                    let count = c.u32()? as usize;
+                    *layer = c.take(count.checked_mul(SPRITE_BYTES)?)?;
                 }
                 frames.push(Frame { parts, sprites });
             }
@@ -223,13 +259,15 @@ impl Graphics {
             });
         }
         Some(Self {
-            palette,
-            meshes,
+            source: Arc::new(Source { palette, meshes }),
             clips,
             names,
             arenas,
             racers,
             built: HashMap::new(),
+            pending: HashSet::new(),
+            finished: unbounded(),
+            now: 0.0,
             surfaces: Default::default(),
             sprites: [Handle::default(), Handle::default()],
         })
@@ -249,48 +287,7 @@ impl Graphics {
     pub fn surface(&self, look: Look) -> Handle<StandardMaterial> {
         self.surfaces[look as usize].clone()
     }
-    /// Triangles with palette entry 0 follow the racer's color. Glow colors are
-    /// added to the picture as they are, as the browser's additive pass does.
-    fn geometry(&self, mesh: u32, tint: Tint, look: Look) -> Mesh {
-        let data = &self.meshes[mesh as usize];
-        let count = data.triangles.len() / TRIANGLE_BYTES * 3;
-        let mut positions = Vec::with_capacity(count);
-        let mut normals = Vec::with_capacity(count);
-        let mut colors = Vec::with_capacity(count);
-        for triangle in data.triangles.chunks_exact(TRIANGLE_BYTES) {
-            let number = |i: usize| i16::from_le_bytes([triangle[i * 2], triangle[i * 2 + 1]]);
-            let corner = |i: usize| {
-                Vec3::new(
-                    f32::from(number(i * 3)),
-                    f32::from(number(i * 3 + 1)),
-                    f32::from(number(i * 3 + 2)),
-                ) * data.scale
-            };
-            let (a, b, c) = (corner(0), corner(1), corner(2));
-            let normal = (b - a).cross(c - a).normalize_or_zero().to_array();
-            let [red, green, blue] = match u16::from_le_bytes([triangle[18], triangle[19]]) {
-                0 => tint,
-                index => self.palette[usize::from(index)],
-            };
-            let color = match look {
-                Look::Glow => [red, green, blue, 255].map(|c| f32::from(c) / 255.0),
-                Look::Silhouette => [1.0; 4],
-                _ => Color::srgb_u8(red, green, blue).to_linear().to_f32_array(),
-            };
-            for point in [a, b, c] {
-                positions.push(point.to_array());
-                normals.push(normal);
-                colors.push(color);
-            }
-        }
-        Mesh::new(
-            PrimitiveTopology::TriangleList,
-            RenderAssetUsages::RENDER_WORLD,
-        )
-        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
-        .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
-        .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, colors)
-    }
+    /// Builds a mesh now, on this thread. Used for the arena, which is needed at once.
     pub fn mesh(
         &mut self,
         mesh: u32,
@@ -298,13 +295,108 @@ impl Graphics {
         look: Look,
         meshes: &mut Assets<Mesh>,
     ) -> Handle<Mesh> {
-        if let Some(handle) = self.built.get(&(mesh, tint, look)) {
-            return handle.clone();
+        let key = (mesh, tint, look);
+        if let Some(built) = self.built.get_mut(&key) {
+            built.used = self.now;
+            return built.handle.clone();
         }
-        let handle = meshes.add(self.geometry(mesh, tint, look));
-        self.built.insert((mesh, tint, look), handle.clone());
+        let handle = meshes.add(geometry(&self.source, key));
+        let used = self.now;
+        self.built.insert(
+            key,
+            Built {
+                handle: handle.clone(),
+                used,
+            },
+        );
         handle
     }
+    /// The mesh if it is built; otherwise it is queued for the async compute pool.
+    fn ready(&mut self, key: Key) -> Option<Handle<Mesh>> {
+        if let Some(built) = self.built.get_mut(&key) {
+            built.used = self.now;
+            return Some(built.handle.clone());
+        }
+        if self.pending.insert(key) {
+            let (source, done) = (self.source.clone(), self.finished.0.clone());
+            bevy::tasks::AsyncComputeTaskPool::get()
+                .spawn(async move {
+                    let started = std::time::Instant::now();
+                    let mesh = geometry(&source, key);
+                    crate::bench::MESH_BUILD_NANOS
+                        .fetch_add(started.elapsed().as_nanos() as u64, Ordering::Relaxed);
+                    let _ = done.send((key, mesh));
+                })
+                .detach();
+        }
+        None
+    }
+    /// Adds meshes finished on other threads and releases ones not shown lately.
+    fn collect(&mut self, now: f32, meshes: &mut Assets<Mesh>) {
+        self.now = now;
+        while let Ok((key, mesh)) = self.finished.1.try_recv() {
+            self.pending.remove(&key);
+            crate::bench::MESHES_BUILT.fetch_add(1, Ordering::Relaxed);
+            let handle = meshes.add(mesh);
+            self.built.insert(key, Built { handle, used: now });
+        }
+        // Entities still showing a released mesh keep it alive until they move on.
+        self.built
+            .retain(|_, built| now - built.used < KEEP_SECONDS);
+    }
+}
+
+/// Inflates one pack mesh and builds it. Triangles with palette entry 0 follow the
+/// racer's color; glow colors are added to the picture as they are, as the
+/// browser's additive pass does. A damaged mesh builds empty instead of panicking.
+fn geometry(source: &Source, (mesh, tint, look): Key) -> Mesh {
+    let data = &source.meshes[mesh as usize];
+    let triangles = miniz_oxide::inflate::decompress_to_vec_zlib_with_limit(
+        data.packed,
+        data.count * TRIANGLE_BYTES,
+    )
+    .unwrap_or_default();
+    let count = triangles.len() / TRIANGLE_BYTES * 3;
+    let mut positions = Vec::with_capacity(count);
+    let mut normals = Vec::with_capacity(count);
+    let mut colors = Vec::with_capacity(count);
+    for triangle in triangles.chunks_exact(TRIANGLE_BYTES) {
+        let number = |i: usize| i16::from_le_bytes([triangle[i * 2], triangle[i * 2 + 1]]);
+        let corner = |i: usize| {
+            Vec3::new(
+                f32::from(number(i * 3)),
+                f32::from(number(i * 3 + 1)),
+                f32::from(number(i * 3 + 2)),
+            ) * data.scale
+        };
+        let (a, b, c) = (corner(0), corner(1), corner(2));
+        let normal = (b - a).cross(c - a).normalize_or_zero().to_array();
+        let [red, green, blue] = match usize::from(u16::from_le_bytes([triangle[18], triangle[19]]))
+        {
+            0 => tint,
+            index => match source.palette.get(index) {
+                Some(color) => *color,
+                None => continue,
+            },
+        };
+        let color = match look {
+            Look::Glow => [red, green, blue, 255].map(|c| f32::from(c) / 255.0),
+            Look::Silhouette => [1.0; 4],
+            _ => Color::srgb_u8(red, green, blue).to_linear().to_f32_array(),
+        };
+        for point in [a, b, c] {
+            positions.push(point.to_array());
+            normals.push(normal);
+            colors.push(color);
+        }
+    }
+    Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::RENDER_WORLD,
+    )
+    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, colors)
 }
 
 /// Camera-facing quads for one frame's point sprites, in the clip's own space.
@@ -396,6 +488,8 @@ pub struct Ported {
     pub ghost: bool,
     parts: Vec<Entity>,
     sprites: [Option<(Entity, Handle<Mesh>)>; 2],
+    /// What each sprite layer was last built for: clip, frame, facing and field of view.
+    built: [Option<(usize, usize, Quat, f32)>; 2],
 }
 impl Ported {
     pub fn new(clip: Option<usize>, tint: Tint, time: Option<f32>) -> Self {
@@ -481,6 +575,7 @@ pub fn animate(
     mut parts: PartQuery,
 ) {
     let graphics = &mut *graphics;
+    graphics.collect(time.elapsed_secs(), &mut meshes);
     let (view, projection) = *camera;
     // A sprite of size 1 is as tall as the browser draws it at the current field of view.
     let reach = match projection {
@@ -488,40 +583,52 @@ pub fn animate(
         _ => 0.5,
     };
     for (entity, mut player, root) in &mut players {
-        let frame = player.clip.map(|clip| {
-            let clip = &graphics.clips[clip];
-            let index = (player.time.unwrap_or(time.elapsed_secs()).max(0.0) * clip.fps) as usize;
-            &clip.frames[match clip.once {
-                true => index.min(clip.frames.len() - 1),
-                false => index % clip.frames.len(),
-            }]
-        });
-        let shown = frame.map(|f| f.parts.as_slice()).unwrap_or_default();
-        for (slot, part) in shown.iter().enumerate() {
-            let look = match (player.ghost, part.glow) {
-                (_, true) => Look::Glow,
-                (true, false) => Look::Silhouette,
-                (false, false) => Look::Solid,
+        let player = &mut *player;
+        let look_of = |glow: bool| match (player.ghost, glow) {
+            (_, true) => Look::Glow,
+            (true, false) => Look::Silhouette,
+            (false, false) => Look::Solid,
+        };
+        let position = player.clip.map(|clip| {
+            let frames = graphics.clips[clip].frames.len();
+            let index = (player.time.unwrap_or(time.elapsed_secs()).max(0.0)
+                * graphics.clips[clip].fps) as usize;
+            let once = graphics.clips[clip].once;
+            let at = move |index: usize| match once {
+                true => index.min(frames - 1),
+                false => index % frames,
             };
-            let key = (part.mesh, player.tint, look);
-            let mesh = match graphics.built.get(&key) {
-                Some(handle) => handle.clone(),
-                None => {
-                    let started = std::time::Instant::now();
-                    let handle = meshes.add(graphics.geometry(part.mesh, player.tint, look));
-                    crate::bench::MESHES_BUILT.fetch_add(1, Ordering::Relaxed);
-                    crate::bench::MESH_BUILD_NANOS
-                        .fetch_add(started.elapsed().as_nanos() as u64, Ordering::Relaxed);
-                    graphics.built.insert(key, handle.clone());
-                    handle
+            // Build the next few frames' meshes now, so they are ready when shown.
+            for ahead in 1..=LOOKAHEAD {
+                let parts = graphics.clips[clip].frames[at(index + ahead)].parts.len();
+                for slot in 0..parts {
+                    let part = &graphics.clips[clip].frames[at(index + ahead)].parts[slot];
+                    let key = (part.mesh, player.tint, look_of(part.glow));
+                    let _ = graphics.ready(key);
                 }
+            }
+            (clip, at(index))
+        });
+        let shown = position.map_or(0, |(clip, index)| {
+            graphics.clips[clip].frames[index].parts.len()
+        });
+        for slot in 0..shown {
+            let (clip, index) = position.unwrap_or_default();
+            let (key, transform) = {
+                let part = &graphics.clips[clip].frames[index].parts[slot];
+                ((part.mesh, player.tint, look_of(part.glow)), part.transform)
             };
-            let material = graphics.surface(look);
+            // Until a mesh is built, a part keeps showing what it showed before.
+            let mesh = graphics.ready(key);
+            let material = graphics.surface(key.2);
             match player.parts.get(slot) {
                 Some(child) => {
-                    let Ok((mut shown, mut surface, mut transform, mut visibility)) =
+                    let Ok((mut shown, mut surface, mut placed, mut visibility)) =
                         parts.get_mut(*child)
                     else {
+                        continue;
+                    };
+                    let Some(mesh) = mesh else {
                         continue;
                     };
                     if shown.0 != mesh {
@@ -530,15 +637,20 @@ pub fn animate(
                     if surface.0 != material {
                         surface.0 = material;
                     }
-                    *transform = part.transform;
+                    *placed = transform;
                     visibility.set_if_neq(Visibility::Inherited);
                 }
                 None => {
+                    let visibility = match mesh.is_some() {
+                        true => Visibility::Inherited,
+                        false => Visibility::Hidden,
+                    };
                     let child = commands
                         .spawn((
-                            Mesh3d(mesh),
+                            Mesh3d(mesh.unwrap_or_default()),
                             MeshMaterial3d(material),
-                            part.transform,
+                            transform,
+                            visibility,
                             RenderLayers::layer(usize::from(player.ghost)),
                             ChildOf(entity),
                         ))
@@ -547,18 +659,29 @@ pub fn animate(
                 }
             }
         }
-        for child in player.parts.iter().skip(shown.len()) {
+        for child in player.parts.iter().skip(shown) {
             if let Ok((_, _, _, mut visibility)) = parts.get_mut(*child) {
                 visibility.set_if_neq(Visibility::Hidden);
             }
         }
-        // Billboards are rebuilt every frame to face the camera from the clip's own space.
+        // Billboards face the camera from the clip's own space. They are rebuilt only
+        // when the clip frame changes or the view turns, not on every rendered frame.
         let facing = root.rotation.inverse() * view.rotation;
         let (right, up) = (facing * Vec3::X * reach, facing * Vec3::Y * reach);
         for layer in 0..2 {
-            let sprites = match player.ghost {
-                true => &[][..],
-                false => frame.map(|f| f.sprites[layer]).unwrap_or_default(),
+            let sprites = match (player.ghost, position) {
+                (false, Some((clip, index))) => graphics.clips[clip].frames[index].sprites[layer],
+                _ => &[][..],
+            };
+            let stamp = position.map(|(clip, index)| (clip, index, facing, reach));
+            let stale = match (player.built[layer], stamp) {
+                (Some((clip, index, was, fov)), Some((now_clip, now_index, now, now_fov))) => {
+                    clip != now_clip
+                        || index != now_index
+                        || was.angle_between(now) > 0.01
+                        || (fov - now_fov).abs() > 1e-3
+                }
+                _ => true,
             };
             match &player.sprites[layer] {
                 Some((child, handle)) => {
@@ -570,16 +693,19 @@ pub fn animate(
                     if let Ok((_, _, _, mut visibility)) = parts.get_mut(*child) {
                         visibility.set_if_neq(wanted);
                     }
-                    if !sprites.is_empty()
+                    if stale
+                        && !sprites.is_empty()
                         && let Some(mut mesh) = meshes.get_mut(handle)
                     {
                         *mesh = billboards(sprites, layer == 1, right, up);
+                        player.built[layer] = stamp;
                         crate::bench::SPRITE_MESHES.fetch_add(1, Ordering::Relaxed);
                     }
                 }
                 None if sprites.is_empty() => {}
                 None => {
                     let handle = meshes.add(billboards(sprites, layer == 1, right, up));
+                    player.built[layer] = stamp;
                     let child = commands
                         .spawn((
                             Mesh3d(handle.clone()),
@@ -682,7 +808,10 @@ mod tests {
         let graphics = Graphics::parse(PACK).expect("valid pack");
         let clip = &graphics.clips[graphics.clip("driver:0:idle").unwrap()];
         let colors = |tint| {
-            let mesh = graphics.geometry(clip.frames[0].parts[0].mesh, tint, Look::Solid);
+            let mesh = geometry(
+                &graphics.source,
+                (clip.frames[0].parts[0].mesh, tint, Look::Solid),
+            );
             let Some(bevy::mesh::VertexAttributeValues::Float32x4(colors)) =
                 mesh.attribute(Mesh::ATTRIBUTE_COLOR)
             else {

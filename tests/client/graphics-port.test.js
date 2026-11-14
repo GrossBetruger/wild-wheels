@@ -1,13 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {inflateSync} from 'node:zlib';
 import {buildGraphicsPack,PACK_VERSION} from '../../scripts/build/graphics-port.mjs';
 
 // Minimal reader for the layout documented in docs/native-graphics-port.md.
 function read(pack){
   let at=8;const u32=()=>{const value=pack.readUInt32LE(at);at+=4;return value;};
   const palette=u32();at+=palette*3;
-  const meshes=[];for(let i=u32();i>0;i--){at+=4;const triangles=u32();let tinted=0;for(let t=0;t<triangles;t++)tinted+=pack.readUInt16LE(at+t*20+18)===0;meshes.push({triangles,tinted});at+=triangles*20;}
-  const clips=[];for(let i=u32();i>0;i--){at+=4;const once=u32()===1,frames=[];for(let f=u32();f>0;f--){const parts=[];for(let p=pack.readUInt16LE((at+=2)-2);p>0;p--){parts.push({mesh:pack.readUInt32LE(at),layer:pack.readUInt32LE(at+4)});at+=56;}const sprites=[0,1].map(()=>{const count=u32();at+=count*28;return count;});frames.push({parts,sprites});}clips.push({once,frames});}
+  const meshes=[];for(let i=u32();i>0;i--){at+=4;const triangles=u32(),size=u32(),raw=inflateSync(pack.subarray(at,at+size));assert.equal(raw.length,triangles*20);let tinted=0;for(let t=0;t<triangles;t++)tinted+=raw.readUInt16LE(t*20+18)===0;meshes.push({triangles,tinted});at+=size;}
+  // Clips are one compressed block.
+  const rawSize=u32(),packedSize=u32(),block=inflateSync(pack.subarray(at,at+packedSize));at+=packedSize;assert.equal(block.length,rawSize);
+  let c=0;const word=()=>{const value=block.readUInt32LE(c);c+=4;return value;};
+  const clips=[];for(let i=word();i>0;i--){c+=4;const once=word()===1,frames=[];for(let f=word();f>0;f--){const parts=[];for(let p=block.readUInt16LE((c+=2)-2);p>0;p--){parts.push({mesh:block.readUInt32LE(c),layer:block.readUInt32LE(c+4)});c+=56;}const sprites=[0,1].map(()=>{const count=word();c+=count*28;return count;});frames.push({parts,sprites});}clips.push({once,frames});}
   const names=new Map();for(let i=u32();i>0;i--){const size=pack.readUInt16LE(at);names.set(pack.toString('utf8',at+2,at+2+size),clips[pack.readUInt32LE(at+2+size)]);at+=size+6;}
   const text=()=>{const size=pack.readUInt16LE(at),value=pack.toString('utf8',at+2,at+2+size);at+=2+size;return value;};
   const arenas=[];for(let i=u32();i>0;i--){at+=7;const xray=u32();arenas.push({xray,name:text(),desc:text()});}

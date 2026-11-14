@@ -138,6 +138,9 @@ impl GameSession {
         }
     }
 }
+/// Worker threads for Bevy's task pools in total: input/output, async compute
+/// (where pack meshes are built) and compute.
+const THREADS: usize = 4;
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     if config.headless {
         return headless(config);
@@ -159,20 +162,34 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         ))
         .insert_resource(ClearColor(Color::srgb(0.71, 0.83, 0.85)))
         .insert_resource(crate::bench::Bench::new(benchmark))
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: "Wild Wheels".into(),
-                resolution: (1280, 800).into(),
-                // A benchmark measures how fast frames can be made, not the display's
-                // rate, unless WILD_WHEELS_BENCH_VSYNC asks for the cost of normal play.
-                present_mode: match benchmark.filter(|_| !paced) {
-                    Some(_) => bevy::window::PresentMode::AutoNoVsync,
-                    None => bevy::window::PresentMode::AutoVsync,
-                },
-                ..default()
-            }),
-            ..default()
-        }))
+        // The game's own work is a fraction of a millisecond per frame; Bevy's default
+        // of one worker per core spends more waking idle threads than it saves.
+        // WILD_WHEELS_THREADS overrides the total for measurements.
+        .add_plugins(
+            DefaultPlugins
+                .set(bevy::app::TaskPoolPlugin {
+                    task_pool_options: bevy::app::TaskPoolOptions::with_num_threads(
+                        std::env::var("WILD_WHEELS_THREADS")
+                            .ok()
+                            .and_then(|threads| threads.parse().ok())
+                            .unwrap_or(THREADS),
+                    ),
+                })
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        title: "Wild Wheels".into(),
+                        resolution: (1280, 800).into(),
+                        // A benchmark measures how fast frames can be made, not the display's
+                        // rate, unless WILD_WHEELS_BENCH_VSYNC asks for the cost of normal play.
+                        present_mode: match benchmark.filter(|_| !paced) {
+                            Some(_) => bevy::window::PresentMode::AutoNoVsync,
+                            None => bevy::window::PresentMode::AutoVsync,
+                        },
+                        ..default()
+                    }),
+                    ..default()
+                }),
+        )
         .add_plugins((
             crate::ported::PortedGraphicsPlugin,
             crate::scene::ArenaPresentationPlugin,

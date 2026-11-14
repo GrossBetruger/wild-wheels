@@ -1519,7 +1519,7 @@ pub fn update(
             }
             Part::PlateEdge(index) => {
                 if let Some((_, _, [r, g, b])) = plates.get(index) {
-                    *edge = BorderColor::all(Color::srgb_u8(*r, *g, *b));
+                    edge.set_if_neq(BorderColor::all(Color::srgb_u8(*r, *g, *b)));
                 }
             }
             Part::Plate(index) => {
@@ -1566,7 +1566,9 @@ pub fn update(
         if tone.0 != wanted {
             tone.0 = wanted;
         }
-        *edge = BorderColor::all(reading.and_then(|r| r.border).unwrap_or(ACTION.edge));
+        edge.set_if_neq(BorderColor::all(
+            reading.and_then(|r| r.border).unwrap_or(ACTION.edge),
+        ));
         // A selected card has the browser's thicker border.
         let chosen = reading.is_some_and(|r| r.border == Some(CHOSEN.edge));
         let width = px(match chosen {
