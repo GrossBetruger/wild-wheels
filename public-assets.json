@@ -52,5 +52,6 @@
   "photos/photography.js",
   "photos/photo-protocol.js",
   "characters/knowitowl/dark-bomb-light.js",
-  "gameplay/bicycle-pickup.js"
+  "gameplay/bicycle-pickup.js",
+  "characters/houston/nightmare-fuel.js"
 ]

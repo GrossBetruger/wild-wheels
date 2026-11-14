@@ -18,6 +18,8 @@ function fields(Type,names,{booleans=[],nullable=[]}={}){
   }
 }
 class Actor extends Row{
+  get nightmareActive(){return this.frame.text.actors[this.id]?.nightmareActive??0;}
+  get nightmareCooldown(){return this.frame.text.actors[this.id]?.nightmareCooldown??0;}
   get intelligenceBonus(){return this.frame.text.actors[this.id]?.intelligenceBonus??0;}
   get bicyclesStolen(){return this.frame.text.actors[this.id]?.bicyclesStolen??0;}
   get specialCooldown(){return this.n(46);}

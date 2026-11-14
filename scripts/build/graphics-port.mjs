@@ -187,7 +187,7 @@ class Pack {
       u32(drivers.length),...drivers.flatMap((driver,index)=>{
         // The announcement shown when a racer's special ability is used.
         const card=abilityCards[index];
-        return[text(driver.name),text(driver.desc),Buffer.from(hex(driver.color)),text(abilityNames[index]??''),Buffer.from([driver.intelligence]),text(card?.title??''),text(card?.detail??''),Buffer.from(hex(card?.color??'#ffffff'))];
+        return[text(driver.name),text(driver.desc),Buffer.from(hex(driver.color)),text(index===7?`${abilityNames[index]}\nNIGHTMARE FUEL · XX · 12s / 30s recharge`:abilityNames[index]??''),Buffer.from([driver.intelligence]),text(card?.title??''),text(card?.detail??''),Buffer.from(hex(card?.color??'#ffffff'))];
       }),
     ]);
   }
@@ -244,6 +244,7 @@ export function buildGraphicsPack({only=[...drivers.keys()]}={}){
     const rapid=trail=>capture({driver,setup:r=>{hidden(r);r.projectiles=[{id:1,owner:r.id,kind:'hedgehog',vulcan:true,wx:0,wz:0,heading:0,height:0,age:1,trail}];}})[0];
     pack.clip(`trail:vulcan:${driver}`,FPS,[pack.overlay(rapid([]),rapid([{wx:0,wz:0,height:0}]))]);
     record(`shot:vulcan:${driver}`,{driver,frames:FPS,setup:r=>{hidden(r);r.projectiles=[{id:1,owner:r.id,kind:'hedgehog',vulcan:true,wx:0,wz:0,heading:0,height:0,age:1,trail:[]}];}});
+    if(driver===7){const shots=capture({driver,frames:OVERLAY_LOOP*FPS,warmup:1,setup:r=>{r.nightmareActive=12;r.boost=12;}});pack.clip('overlay:7:nightmare',FPS,shots.map((shot,i)=>pack.overlay(idle[i],shot)));}
     // States layered over the racer. KnowItOwl's special is a full-screen shader effect.
     const states={shield:r=>{r.shield=1;},hedge:r=>{r.hedgeShield=2;},tehilim:r=>{r.tehilim=2;},dizzy:r=>{r.dizzy=1;},vulcan:r=>{r.vulcan=3;r.fireCooldown=0;},...(driver===14?{}:{special:r=>{r.specialActive=4;}})};
     for(const [state,setup] of Object.entries(states)){

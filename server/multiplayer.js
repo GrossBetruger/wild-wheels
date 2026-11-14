@@ -54,7 +54,7 @@ export class Multiplayer {
   controls(member,body){
     if(member.afk)return;
     if(!Number.isSafeInteger(body.sequence)||body.sequence<0||!Array.isArray(body.keys)||body.keys.length>10||body.keys.some(k=>!KEYS.has(k))||!Array.isArray(body.actions)||body.actions.length>8)throw problem(400,'Invalid controls.');
-    for(const action of body.actions)if(!action||!['special','fire','turbo','somersault','chaff','cycle','select','bomb'].includes(action.type)||(action.type==='select'&&!['hedgehog','missile'].includes(action.item))||(action.type==='bomb'&&((!Number.isFinite(action.wx)||!Number.isFinite(action.wz)||Math.abs(action.wx)>96||Math.abs(action.wz)>96)||(action.kind!==undefined&&!['abomb','stink'].includes(action.kind)))))throw problem(400,'Invalid action.');
+    for(const action of body.actions)if(!action||!['special','nightmare','fire','turbo','somersault','chaff','cycle','select','bomb'].includes(action.type)||(action.type==='select'&&!['hedgehog','missile'].includes(action.item))||(action.type==='bomb'&&((!Number.isFinite(action.wx)||!Number.isFinite(action.wz)||Math.abs(action.wx)>96||Math.abs(action.wz)>96)||(action.kind!==undefined&&!['abomb','stink'].includes(action.kind)))))throw problem(400,'Invalid action.');
     for(const action of body.actions)if(action.id!==undefined&&(!Number.isSafeInteger(action.id)||action.id<0||action.id>0xffffffff||!Number.isSafeInteger(action.afterMove)||action.afterMove< -1||action.afterMove>(member.acceptedMove??-1)+128))throw problem(400,'Invalid action sequence.');
     if(body.epoch!==undefined&&body.epoch!==member.room.core.status.soundEpoch)return;
     if(body.moves!==undefined){

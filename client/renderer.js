@@ -1,3 +1,4 @@
+import {drawNightmareFuel} from '../characters/houston/nightmare-fuel.js';
 import {darkBombLights,lightUniforms} from '../characters/knowitowl/dark-bomb-light.js';
 import {drawFireRing,drawFireRingOut} from '../characters/master-yuda/fire-ring-visual.js';
 import {bicyclePose} from '../gameplay/bicycle-pickup.js';
@@ -377,6 +378,7 @@ export class Renderer {
     for(const side of [-1,1]){m.box(side*.57,1.65,1.45,.25,.23,1.5,'#273a43');m.ball(side*.57,1.77,2.22,.12,.12,.04,'#8dfff0',8,4);if(actor.item==='hedgehog'&&actor.fireCooldown>.035)this.glow.particle(side*.57,1.77,2.4,.9,[.15,.8,.65]);}
   }
   starshipEngines(p,angle,clock,jump=null,boost=false){
+    if(p.nightmareActive>0){drawNightmareFuel(this.glow,p,angle,clock,jump);return;}
     drawStarshipThrust(this.glow,this.smoke,p,angle,clock,jump,boost);
   }
   houstonHelmet(p,actor,time,jump){
@@ -632,7 +634,7 @@ export class Renderer {
     for(const actor of [r,...r.bots]){
       if(actor.destroyed||actor.bomber||actor.inactive||actor.afk)this.batSummons.delete(actor.id);
       if(actor.bomber||actor.inactive||actor.afk)continue;
-      const pose={...combatPose(actor),id:actor.id,vulcan:actor.vulcan,specialActive:actor.specialActive,bikeRoll:this.yudaDrift.roll(actor.id)};if(actor.destroyed){
+      const pose={...combatPose(actor),id:actor.id,vulcan:actor.vulcan,specialActive:actor.specialActive,nightmareActive:actor.nightmareActive,bikeRoll:this.yudaDrift.roll(actor.id)};if(actor.destroyed){
         const ash=r.effects.find(f=>f.type==='ash'&&Math.hypot(f.wx-pose.x,f.wz-pose.z)<.1),key=`${pose.x}:${pose.z}`;
         if(ash&&(!this.ashBodies.has(key)||ash.age<this.ashBodies.get(key).age)){
           if(!this.lastBodies.has(actor.id)){

@@ -61,6 +61,7 @@ enum Role {
     Racer,
     Health,
     Overlay(usize),
+    Nightmare,
     Xylophone,
     /// A racer's silhouette seen through Dark Humor.
     Ghost,
@@ -469,6 +470,7 @@ fn racers(stage: &mut Stage, view: &ClientView, dt: f32, now: f32, xray: bool) {
         // Recorded transitions carry the browser's easing between idle and boost.
         let mut play = match (wrecked, boosting, a.celebrate > 0.0) {
             (true, ..) => stage.clip("wreck"),
+            (false, ..) if a.nightmare_active > 0.0 => stage.clip(&racer("idle")),
             (false, true, _) if shifting => {
                 stage.transition(&racer("boost:in"), &racer("boost"), changed)
             }
@@ -531,6 +533,10 @@ fn racers(stage: &mut Stage, view: &ClientView, dt: f32, now: f32, xray: bool) {
         stage.show(Role::Racer, a.id, play, body);
         if wrecked {
             continue;
+        }
+        if view.special_abilities && a.driver == 7 && a.nightmare_active > 0.0 {
+            let nightmare = stage.clip("overlay:7:nightmare");
+            stage.show(Role::Nightmare, a.id, nightmare, body);
         }
         // Health pips face along the viewer's heading, as in the browser.
         let pips = stage.clip(&format!("health:{}", (a.health.max(0.0) as usize).min(6)));

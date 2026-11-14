@@ -94,7 +94,7 @@ cargo +1.97.1 build --release --locked --manifest-path native-client/Cargo.toml
 ./native-client/target/release/wild-wheels-native --showcase boost:9
 ```
 
-Scenes are `plumage` (Pearococo's tail from behind, swaying and swinging
+Scenes include `nightmare` (Houston's ultraviolet exhaust), `plumage` (Pearococo's tail from behind, swaying and swinging
 through turns, with the camera circling to show its iridescence), `boost:N`, `rapid-fire:N`, `fade:shield:N`, `fade:hedge:N`,
 `fade:tehilim:N`, `special-start:11` and `special-end:11`, for racer N from 0
 (Pip) to 14 (KnowItOwl). Each cycles through a state change and back. B toggles

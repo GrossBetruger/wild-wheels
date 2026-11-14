@@ -433,7 +433,7 @@ impl Room {
         for a in &frame.inputs[0].actions {
             if !matches!(
                 a.kind.as_str(),
-                "fire" | "turbo" | "chaff" | "special" | "somersault" | "cycle" | "select" | "bomb"
+                "fire" | "nightmare" | "turbo" | "chaff" | "special" | "somersault" | "cycle" | "select" | "bomb"
             ) || a.after_move < -1
                 || a.after_move > accepted
                 || !a.wx.is_finite()
@@ -733,6 +733,25 @@ mod tests {
         assert_eq!(room.reply(1)["arena"], 0);
         assert_eq!(room.reply(1)["bots"], 0);
         assert_eq!(room.reply(1)["specialAbilities"], true);
+    }
+    #[test]
+    fn houstons_nightmare_action_is_acknowledged_and_cannot_reset_its_cooldown() {
+        let mut room = Room::new(0, 0);
+        room.join(&json!({"name":"Houston","driver":7})).unwrap();
+        room.control(0,"/api/control",&json!({"action":"start"})).unwrap();
+        for _ in 0..181 { room.tick(); }
+        let epoch=room.core.epoch();
+        room.controls(0,json!({"sequence":0,"epoch":epoch,"keys":[],"moves":[],"actions":[{"type":"nightmare","id":0,"afterMove":-1}]})).unwrap();
+        room.tick();
+        let active=room.reply(0);
+        assert_eq!(active["actionSequence"],0);
+        assert!(active["world"]["nightmareActive"].as_f64().unwrap()>11.9);
+        assert!(active["world"]["nightmareCooldown"].as_f64().unwrap()>29.9);
+        assert_eq!(active["world"]["specialCooldown"],0.0);
+        room.controls(0,json!({"sequence":1,"epoch":epoch,"keys":[],"moves":[],"actions":[{"type":"nightmare","id":1,"afterMove":-1}]})).unwrap();
+        room.tick();
+        assert_eq!(room.reply(0)["actionSequence"],1);
+        assert!(room.reply(0)["world"]["nightmareCooldown"].as_f64().unwrap()<active["world"]["nightmareCooldown"].as_f64().unwrap());
     }
     #[test]
     fn movement_gaps_and_actions_beyond_received_movement_are_rejected() {

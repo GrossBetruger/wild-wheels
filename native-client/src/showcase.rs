@@ -87,6 +87,7 @@ impl Scene {
         let racer = |text: &str| text.parse::<usize>().ok().filter(|driver| *driver < 15);
         let (kind, driver, state) = match parts.as_slice() {
             ["boost"] => ("boost", 9, None),
+            ["nightmare"] => ("nightmare", 7, None),
             ["plumage"] => ("plumage", 9, None),
             ["rapid-fire"] => ("rapid-fire", 14, None),
             [kind, driver] => (*kind, racer(driver)?, None),
@@ -95,6 +96,18 @@ impl Scene {
         };
         let step = Step::new;
         let steps = match (kind, state) {
+            ("nightmare", None) if driver == 7 => vec![
+                step("normal engines", 2.0, "idle", None, false),
+                step(
+                    "Nightmare Fuel ignition",
+                    1.0,
+                    "idle",
+                    Some("nightmare"),
+                    false,
+                ),
+                step("Nightmare Fuel", 2.0, "idle", Some("nightmare"), false),
+                step("engines cooling", 1.0, "idle", None, false),
+            ],
             ("boost", None) => vec![
                 step("idle", 2.0, "idle", None, false),
                 step("boost in", 1.0, "boost:in", None, true),
@@ -341,6 +354,13 @@ fn setup(
 /// Where the camera stands and looks. Scenes seen from behind are circled slowly,
 /// `turned` radians so far, so their sheen can be watched shifting with the view.
 fn viewpoint(scene: &Scene, turned: f32) -> (Vec3, Vec3) {
+    if scene
+        .steps
+        .iter()
+        .any(|step| step.overlay.as_deref() == Some("nightmare"))
+    {
+        return (Vec3::new(32.0, 22.0, -16.0), Vec3::new(0.0, 1.5, -13.0));
+    }
     let tall = matches!(scene.driver, 11 | 12 | 14);
     match (scene.behind, tall) {
         (true, _) => {
