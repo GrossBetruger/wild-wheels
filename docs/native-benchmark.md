@@ -43,6 +43,26 @@ less time than the browser's JavaScript alone. Native logic by stage, uncapped
 release, in milliseconds per frame: network and prediction 0.032, scene 0.032,
 clips and particles 0.030, HUD 0.023, sound 0.015, menus and messages 0.040.
 
+## Browser on mains power
+
+The browser was measured again on mains power, at 120 Hz with no frame cap and a
+1154 × 721 canvas, over 20 seconds of a live match with six bots. The native
+column is the optimized release build below, uncapped, at 2560 × 1600.
+
+| | Browser | Native | Native advantage |
+| --- | ---: | ---: | ---: |
+| Mean frame work | 3.8 ms | 2.2 ms | 1.7× |
+| Median | 3.1 ms | 1.8 ms | 1.7× |
+| 95th percentile | 12.9 ms | 4.0 ms | 3.2× |
+| 99th percentile | 15.9 ms | 8.7 ms | 1.8× |
+| Frame interval at 120 Hz, 95th / 99th | 13.7 / 17.0 ms | 10.4 / 11.3 ms | |
+
+The browser figure is its JavaScript frame callback and excludes Chrome's GPU
+process; the native figure is the whole frame while drawing about five times
+the pixels. The earlier 8.1 ms browser figure was inflated by battery
+throttling. Like for like, the native client is about 1.7 times faster on a
+typical frame and two to three times faster on slow ones.
+
 ## After optimization
 
 The items this benchmark suggested were implemented and measured against the

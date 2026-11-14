@@ -32,6 +32,10 @@ A new kind of visual is invisible natively until it is recorded:
    - Something that plays by age: `once(name, life, setup, each)`.
    - A state layered on a racer: record with and without it and keep
      `pack.overlay(base, shot)`.
+   - Easing between states: record a one-second transition from the settled
+     state (see `boost:in` and `vulcan:in`) and choose it in `scene.rs` with
+     `stage.transition` while the change is recent. A fade driven by time
+     remaining is an `:end` clip played by that time.
 2. Choose the clip in `native-client/src/scene.rs`: add a `Role` if it is a new
    kind of entity, and call `stage.show` with the clip name and a transform.
    A new effect type named `effect:<type>` is picked up without a scene change.

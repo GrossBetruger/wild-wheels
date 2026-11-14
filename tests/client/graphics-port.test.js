@@ -25,13 +25,15 @@ test('the browser renderer ports to a native graphics pack',()=>{
   assert.equal(end,pack.length);assert.deepEqual(arenas.map(arena=>arena.name),['Scrapyard','Crossfire Court']);
   assert.equal(racers.length,15);assert.equal(racers[0].name,'Pip the Panda');assert.equal(racers[14].ability,'DARK HUMOR');assert.equal(racers[14].card,'DARK HUMOR');assert.equal(racers[0].intelligence,3);assert.equal(racers[0].ability,'');
   assert.ok(meshes[arenas[0].xray].triangles>100);
-  for(const name of ['driver:0:idle','driver:0:boost','driver:0:celebrate','shot:vulcan:0','shot:hedgehog','shot:missile','wreck','pickup:boost','pickup:bicycle','health:1','health:6','overlay:0:shield','overlay:0:vulcan','overlay:xylophone','effect:ash:0','effect:explosion','effect:fireRing:blue','bomb:bomb','cloud:chaff','cloud:stink','particle:smoke','locust','timestop','trail:missile','trail:hedgehog','trail:vulcan:0','skid:0','skid:1'])assert.ok(names.has(name),name);
+  for(const name of ['driver:0:idle','driver:0:boost','driver:0:celebrate','shot:vulcan:0','shot:hedgehog','shot:missile','wreck','pickup:boost','pickup:bicycle','health:1','health:6','overlay:0:shield','overlay:0:vulcan','overlay:xylophone','effect:ash:0','effect:explosion','effect:fireRing:blue','bomb:bomb','cloud:chaff','cloud:stink','particle:smoke','locust','timestop','trail:missile','trail:hedgehog','trail:vulcan:0','skid:0','skid:1','driver:0:boost:in','driver:0:boost:out','overlay:0:shield:end','overlay:0:hedge:end','overlay:0:tehilim:end'])assert.ok(names.has(name),name);
   // Pip's kart follows the player's color, while the panda keeps its own.
   const idle=names.get('driver:0:idle'),boost=names.get('driver:0:boost'),kart=meshes[idle.frames[0].parts[0].mesh];
   assert.ok(kart.tinted>0&&kart.tinted<kart.triangles);
   // Boost flames are an additive layer with glow sprites; idling shows neither.
   assert.ok(boost.frames[0].parts.some(part=>part.layer===1)&&boost.frames[0].sprites[0]>0);
   assert.ok(!idle.frames[0].parts.some(part=>part.layer===1)&&idle.frames[0].sprites[0]===0);
+  // Transitions play once, a second long at the recording rate.
+  assert.equal(names.get('driver:0:boost:in').once,true);assert.equal(names.get('driver:0:boost:in').frames.length,25);
   assert.equal(idle.once,false);assert.equal(names.get('effect:explosion').once,true);
   // Overlays hold only what a state adds: each health pip is one box, and a
   // shield ring never repeats the kart beneath it.

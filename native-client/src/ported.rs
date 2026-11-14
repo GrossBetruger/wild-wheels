@@ -21,6 +21,11 @@ const VERSION: u32 = 6;
 const LOOKAHEAD: usize = 4;
 /// Meshes unused for this long are released; one shown again is rebuilt.
 const KEEP_SECONDS: f32 = 12.0;
+/// Between recorded frames a part or particle is blended towards its next
+/// position, unless it moves further than this: then it is a different object.
+const BLEND_LIMIT: f32 = 2.0;
+/// Blended particles are rebuilt at most this many times per recorded frame.
+const BLEND_STEPS: f32 = 8.0;
 const TRIANGLE_BYTES: usize = 20;
 const SPRITE_BYTES: usize = 28;
 /// The browser shader pitches models about this height and rolls them about `ROLL_PIVOT`.
@@ -399,6 +404,49 @@ fn geometry(source: &Source, (mesh, tint, look): Key) -> Mesh {
     .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, colors)
 }
 
+/// A part's placement between two recorded frames, `between` of the way along.
+fn blend(from: Transform, to: Transform, between: f32) -> Transform {
+    if between <= 0.0 || from.translation.distance(to.translation) > BLEND_LIMIT {
+        return from;
+    }
+    Transform {
+        translation: from.translation.lerp(to.translation, between),
+        rotation: from.rotation.slerp(to.rotation, between),
+        scale: from.scale.lerp(to.scale, between),
+    }
+}
+/// Two frames' particles, `between` of the way from the first to the second.
+/// A particle that jumps, such as one that wraps around its loop, is not blended.
+fn blend_sprites(from: &[u8], to: &[u8], between: f32) -> Vec<u8> {
+    let value = |bytes: &[u8], k: usize| {
+        f32::from_le_bytes([
+            bytes[k * 4],
+            bytes[k * 4 + 1],
+            bytes[k * 4 + 2],
+            bytes[k * 4 + 3],
+        ])
+    };
+    let mut out = Vec::with_capacity(from.len());
+    for (a, b) in from
+        .chunks_exact(SPRITE_BYTES)
+        .zip(to.chunks_exact(SPRITE_BYTES))
+    {
+        let gap = Vec3::new(
+            value(b, 0) - value(a, 0),
+            value(b, 1) - value(a, 1),
+            value(b, 2) - value(a, 2),
+        );
+        let along = match gap.length() > BLEND_LIMIT {
+            true => 0.0,
+            false => between,
+        };
+        for k in 0..SPRITE_BYTES / 4 {
+            let mixed = value(a, k) + (value(b, k) - value(a, k)) * along;
+            out.extend_from_slice(&mixed.to_le_bytes());
+        }
+    }
+    out
+}
 /// Camera-facing quads for one frame's point sprites, in the clip's own space.
 /// `right` and `up` are the camera's axes there, scaled by half a unit sprite.
 fn billboards(sprites: &[u8], smoke: bool, right: Vec3, up: Vec3) -> Mesh {
@@ -477,6 +525,8 @@ pub fn tint(color: &str) -> Option<Tint> {
     Some([channel(0)?, channel(2)?, channel(4)?])
 }
 
+/// What a particle layer was built for: clip, frame, blend step, facing and field of view.
+type SpriteStamp = (usize, usize, u8, Quat, f32);
 /// Plays one ported clip beneath this entity. `None` draws nothing.
 #[derive(Component, Default)]
 pub struct Ported {
@@ -488,8 +538,8 @@ pub struct Ported {
     pub ghost: bool,
     parts: Vec<Entity>,
     sprites: [Option<(Entity, Handle<Mesh>)>; 2],
-    /// What each sprite layer was last built for: clip, frame, facing and field of view.
-    built: [Option<(usize, usize, Quat, f32)>; 2],
+    /// What each sprite layer was last built for.
+    built: [Option<SpriteStamp>; 2],
 }
 impl Ported {
     pub fn new(clip: Option<usize>, tint: Tint, time: Option<f32>) -> Self {
@@ -589,10 +639,12 @@ pub fn animate(
             (true, false) => Look::Silhouette,
             (false, false) => Look::Solid,
         };
+        // The frame shown, the one after it, and how far between them we are.
         let position = player.clip.map(|clip| {
             let frames = graphics.clips[clip].frames.len();
-            let index = (player.time.unwrap_or(time.elapsed_secs()).max(0.0)
-                * graphics.clips[clip].fps) as usize;
+            let exact =
+                player.time.unwrap_or(time.elapsed_secs()).max(0.0) * graphics.clips[clip].fps;
+            let index = exact as usize;
             let once = graphics.clips[clip].once;
             let at = move |index: usize| match once {
                 true => index.min(frames - 1),
@@ -607,16 +659,30 @@ pub fn animate(
                     let _ = graphics.ready(key);
                 }
             }
-            (clip, at(index))
+            let next = at(index + 1);
+            let between = match next == at(index) {
+                true => 0.0,
+                false => exact.fract(),
+            };
+            (clip, at(index), next, between)
         });
-        let shown = position.map_or(0, |(clip, index)| {
+        let shown = position.map_or(0, |(clip, index, ..)| {
             graphics.clips[clip].frames[index].parts.len()
         });
         for slot in 0..shown {
-            let (clip, index) = position.unwrap_or_default();
+            let (clip, index, next, between) = position.unwrap_or_default();
             let (key, transform) = {
                 let part = &graphics.clips[clip].frames[index].parts[slot];
-                ((part.mesh, player.tint, look_of(part.glow)), part.transform)
+                let after = graphics.clips[clip].frames[next].parts.get(slot);
+                // Recordings are 24 frames a second; the same mesh moving between
+                // frames is blended so it moves at the display's full rate.
+                let transform = match after {
+                    Some(after) if after.mesh == part.mesh && after.glow == part.glow => {
+                        blend(part.transform, after.transform, between)
+                    }
+                    _ => part.transform,
+                };
+                ((part.mesh, player.tint, look_of(part.glow)), transform)
             };
             // Until a mesh is built, a part keeps showing what it showed before.
             let mesh = graphics.ready(key);
@@ -669,19 +735,40 @@ pub fn animate(
         let facing = root.rotation.inverse() * view.rotation;
         let (right, up) = (facing * Vec3::X * reach, facing * Vec3::Y * reach);
         for layer in 0..2 {
-            let sprites = match (player.ghost, position) {
-                (false, Some((clip, index))) => graphics.clips[clip].frames[index].sprites[layer],
-                _ => &[][..],
+            let (sprites, after) = match (player.ghost, position) {
+                (false, Some((clip, index, next, _))) => (
+                    graphics.clips[clip].frames[index].sprites[layer],
+                    graphics.clips[clip].frames[next].sprites[layer],
+                ),
+                _ => (&[][..], &[][..]),
             };
-            let stamp = position.map(|(clip, index)| (clip, index, facing, reach));
+            // Particles blend too when both frames hold the same particles.
+            let blending = after.len() == sprites.len() && after.as_ptr() != sprites.as_ptr();
+            let step = match blending {
+                true => position.map_or(0, |(.., between)| (between * BLEND_STEPS) as u8),
+                false => 0,
+            };
+            let stamp = position.map(|(clip, index, ..)| (clip, index, step, facing, reach));
             let stale = match (player.built[layer], stamp) {
-                (Some((clip, index, was, fov)), Some((now_clip, now_index, now, now_fov))) => {
+                (
+                    Some((clip, index, was_step, was, fov)),
+                    Some((now_clip, now_index, now_step, now, now_fov)),
+                ) => {
                     clip != now_clip
                         || index != now_index
+                        || was_step != now_step
                         || was.angle_between(now) > 0.01
                         || (fov - now_fov).abs() > 1e-3
                 }
                 _ => true,
+            };
+            let blended;
+            let sprites = match blending && step > 0 {
+                true => {
+                    blended = blend_sprites(sprites, after, f32::from(step) / BLEND_STEPS);
+                    &blended[..]
+                }
+                false => sprites,
             };
             match &player.sprites[layer] {
                 Some((child, handle)) => {
@@ -781,6 +868,13 @@ mod tests {
             "skid:1",
             "overlay:7:special",
             "overlay:11:special",
+            "overlay:11:special:start",
+            "overlay:11:special:end",
+            "overlay:14:vulcan:in",
+            "overlay:14:vulcan:out",
+            "overlay:9:hedge:end",
+            "driver:9:boost:in",
+            "driver:14:boost:out",
         ] {
             assert!(graphics.clip(name).is_some(), "{name}");
         }
@@ -822,6 +916,29 @@ mod tests {
         let (red, blue) = (colors([255, 0, 0]), colors([0, 0, 255]));
         let changed = red.iter().zip(&blue).filter(|(a, b)| a != b).count();
         assert!(changed > 0 && changed < red.len());
+    }
+
+    #[test]
+    fn frames_blend_smoothly_but_not_across_jumps() {
+        let from = Transform::from_xyz(0.0, 0.0, 0.0);
+        let near = Transform::from_xyz(1.0, 0.0, 0.0).with_rotation(Quat::from_rotation_y(1.0));
+        let halfway = blend(from, near, 0.5);
+        assert!(halfway.translation.distance(Vec3::new(0.5, 0.0, 0.0)) < 1e-6);
+        assert!((halfway.rotation.angle_between(Quat::IDENTITY) - 0.5).abs() < 1e-5);
+        let far = Transform::from_xyz(10.0, 0.0, 0.0);
+        assert_eq!(blend(from, far, 0.5).translation, Vec3::ZERO);
+        let sprite = |x: f32, size: f32| {
+            [x, 0.0, 0.0, size, 1.0, 1.0, 1.0]
+                .iter()
+                .flat_map(|v| v.to_le_bytes())
+                .collect::<Vec<u8>>()
+        };
+        let mixed = blend_sprites(&sprite(0.0, 1.0), &sprite(1.0, 3.0), 0.5);
+        assert_eq!(mixed, sprite(0.5, 2.0));
+        assert_eq!(
+            blend_sprites(&sprite(0.0, 1.0), &sprite(9.0, 3.0), 0.5),
+            sprite(0.0, 1.0)
+        );
     }
 
     #[test]

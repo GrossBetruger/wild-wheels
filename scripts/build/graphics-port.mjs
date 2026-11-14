@@ -21,6 +21,10 @@ export const PACK_VERSION=6;
 export const FIRE_RING_RADIUS=20;
 // Clips whose every frame is new geometry are recorded at the slower rate to bound the pack size.
 const SLOW_FPS=12;
+// Transitions between states are recorded for this long after the change.
+export const TRANSITION=1;
+// Seconds over which timed states fade out in the browser, by state.
+const ENDINGS={shield:1,hedge:1.5,tehilim:1.5};
 // Racers are recorded in open ground: at the arena's center an obstacle would
 // change anything that looks for free space, such as KnowItOwl's bat companion.
 const HOME=[0,60];
@@ -227,6 +231,11 @@ export function buildGraphicsPack({only=[...drivers.keys()]}={}){
     const idle=tinted(`driver:${driver}:idle`,base,{driver,frames:LOOP*FPS,warmup:WARMUP,mark});
     // Boosting racers are recorded while driving so that trails stream behind them.
     tinted(`driver:${driver}:boost`,base,{driver,frames:LOOP*FPS,warmup:WARMUP,speed:BOOST_SPEED,mark,setup:r=>{r.boost=1;}});
+    // Boosting in and out, through whatever easing the renderer keeps between
+    // frames: Pearococo's tail folds, KnowItOwl takes off, rotors tilt.
+    const steps=Math.round(TRANSITION*FPS)+1;
+    tinted(`driver:${driver}:boost:in`,base,{driver,frames:steps,warmup:WARMUP,mark,each:(r,t)=>{r.boost=t>=0?1:0;r.wz=HOME[1]+Math.max(0,t)*BOOST_SPEED;}},ONCE);
+    tinted(`driver:${driver}:boost:out`,base,{driver,frames:steps,warmup:WARMUP,mark,each:(r,t)=>{r.boost=t<0?1:0;r.wz=HOME[1]+Math.min(0,t)*BOOST_SPEED;}},ONCE);
     tinted(`driver:${driver}:celebrate`,base,{driver,fps:SLOW_FPS,frames:Math.ceil(1.6*SLOW_FPS),mark,each:(r,t)=>{r.celebrate=Math.max(.001,1.6-t);}},ONCE);
     // One trail puff of this racer's rapid fire: the shot drawn with and without it.
     const rapid=trail=>capture({driver,setup:r=>{hidden(r);r.projectiles=[{id:1,owner:r.id,kind:'hedgehog',vulcan:true,wx:0,wz:0,heading:0,height:0,age:1,trail}];}})[0];
@@ -237,6 +246,22 @@ export function buildGraphicsPack({only=[...drivers.keys()]}={}){
     for(const [state,setup] of Object.entries(states)){
       const shots=capture({driver,frames:OVERLAY_LOOP*FPS,warmup:1,setup});
       pack.clip(`overlay:${driver}:${state}`,FPS,shots.map((shot,i)=>pack.overlay(idle[i],shot)));
+    }
+    // Rapid fire starting and ending: KnowItOwl's bat flies in and away.
+    for(const [name,on] of [['in',t=>t>=0],['out',t=>t<0]]){
+      const shots=capture({driver,frames:steps,warmup:1,each:(r,t)=>{r.vulcan=on(t)?3:0;r.fireCooldown=0;}});
+      pack.clip(`overlay:${driver}:vulcan:${name}`,FPS,shots.map((shot,i)=>pack.overlay(idle[i],shot)),ONCE);
+    }
+    // Timed states fade over their last moments, driven by the time remaining.
+    const field={shield:'shield',hedge:'hedgeShield',tehilim:'tehilim'};
+    for(const [state,length] of Object.entries(ENDINGS)){
+      const shots=capture({driver,frames:Math.round(length*FPS)+1,each:(r,t)=>{r[field[state]]=Math.max(.001,length-Math.max(0,t));}});
+      pack.clip(`overlay:${driver}:${state}:end`,FPS,shots.map((shot,i)=>pack.overlay(idle[i],shot)),ONCE);
+    }
+    // R-yeah's archangels descend when called and rise when the ability ends.
+    if(driver===11)for(const [name,value] of [['start',t=>12-Math.max(0,t)],['end',t=>Math.max(.001,TRANSITION-Math.max(0,t))]]){
+      const shots=capture({driver,frames:steps,each:(r,t)=>{r.specialActive=value(t);}});
+      pack.clip(`overlay:${driver}:special:${name}`,FPS,shots.map((shot,i)=>pack.overlay(idle[i],shot)),ONCE);
     }
     // Ashes collapse from the body that was last drawn alive at that spot.
     const ash=capture({driver,fps:SLOW_FPS,frames:Math.ceil(4.3*SLOW_FPS)+1,warmup:2/SLOW_FPS,each:(r,t)=>{if(t<0)return;r.destroyed=1;r.effects=[{type:'ash',wx:r.wx,wz:r.wz,age:t,life:4.3}];}});

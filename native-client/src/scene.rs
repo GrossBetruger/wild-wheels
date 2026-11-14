@@ -77,6 +77,14 @@ enum Role {
 }
 /// Racer states the browser layers over the racer's own model.
 const OVERLAYS: [&str; 6] = ["shield", "hedge", "tehilim", "dizzy", "vulcan", "special"];
+/// Matches `TRANSITION` in scripts/build/graphics-port.mjs: how long recorded
+/// transitions between states last.
+const TRANSITION: f32 = 1.0;
+/// Matches `ENDINGS` in scripts/build/graphics-port.mjs: the seconds over which
+/// each timed state fades out in the browser, by its index in `OVERLAYS`.
+const ENDINGS: [Option<f64>; 6] = [Some(1.0), Some(1.5), Some(1.5), None, None, Some(1.0)];
+/// Racers whose special ability ramps in from its starting duration.
+const SPECIAL_STARTS: [(usize, f64); 1] = [(11, 12.0)];
 /// Matches `FIRE_RING_RADIUS` in scripts/build/graphics-port.mjs.
 const FIRE_RING_RADIUS: f32 = 20.0;
 
@@ -88,6 +96,22 @@ pub struct SceneCache {
     arena: Option<(usize, Entity, Entity)>,
     /// Master-Yuda's eased drift lean and the side he last leaned to, per racer.
     leans: HashMap<usize, (f32, f32)>,
+    /// Per racer and state (0 boost, 1 rapid fire): whether it is on, and since when.
+    changes: HashMap<(usize, u8), (bool, f32)>,
+}
+impl SceneCache {
+    /// Seconds since a racer's state last changed. A state first seen is treated
+    /// as long settled, so joining a match plays no transitions.
+    fn since(&mut self, racer: usize, state: u8, on: bool, now: f32) -> f32 {
+        let entry = self
+            .changes
+            .entry((racer, state))
+            .or_insert((on, f32::NEG_INFINITY));
+        if entry.0 != on {
+            *entry = (on, now);
+        }
+        now - entry.1
+    }
 }
 #[derive(Component)]
 pub struct FollowCamera;
@@ -327,6 +351,13 @@ impl Stage<'_, '_, '_, '_, '_, '_, '_> {
             ..self.clip(name)
         }
     }
+    /// A recorded transition `age` seconds in, or the steady clip if this racer has none.
+    fn transition(&self, name: &str, steady: &str, age: f32) -> Play {
+        match self.graphics.clip(name) {
+            Some(_) => self.aged(name, f64::from(age)),
+            None => self.clip(steady),
+        }
+    }
     fn show(&mut self, role: Role, key: usize, play: Play, transform: Transform) {
         if play.clip.is_none() {
             return;
@@ -369,7 +400,7 @@ fn at(wx: f64, height: f64, wz: f64, heading: f64) -> Transform {
         .with_rotation(Quat::from_rotation_y(heading as f32))
 }
 
-fn racers(stage: &mut Stage, view: &ClientView, dt: f32, xray: bool) {
+fn racers(stage: &mut Stage, view: &ClientView, dt: f32, now: f32, xray: bool) {
     let auditing = |id: usize| {
         view.actors
             .iter()
@@ -381,19 +412,24 @@ fn racers(stage: &mut Stage, view: &ClientView, dt: f32, xray: bool) {
         .filter(|a| !a.inactive && !a.bomber && !a.afk)
     {
         let wrecked = a.destroyed > 0.0;
-        let state = match (a.boost > 0.0, a.celebrate > 0.0) {
-            (true, _) => "boost",
-            (false, true) => "celebrate",
-            _ => "idle",
-        };
-        let mut play = match wrecked {
-            true => stage.clip("wreck"),
-            false => stage.clip(&format!("driver:{}:{state}", a.driver)),
+        let boosting = a.boost > 0.0;
+        let changed = stage.cache.since(a.id, 0, boosting, now);
+        let shifting = changed < TRANSITION;
+        let racer = |state: &str| format!("driver:{}:{state}", a.driver);
+        // Recorded transitions carry the browser's easing between idle and boost.
+        let mut play = match (wrecked, boosting, a.celebrate > 0.0) {
+            (true, ..) => stage.clip("wreck"),
+            (false, true, _) if shifting => {
+                stage.transition(&racer("boost:in"), &racer("boost"), changed)
+            }
+            (false, true, _) => stage.clip(&racer("boost")),
+            (false, false, true) => stage.aged(&racer("celebrate"), 1.6 - a.celebrate),
+            (false, false, false) if shifting => {
+                stage.transition(&racer("boost:out"), &racer("idle"), changed)
+            }
+            (false, false, false) => stage.clip(&racer("idle")),
         };
         play.tint = tint(&a.color).unwrap_or([255; 3]);
-        if state == "celebrate" && !wrecked {
-            play.time = Some((1.6 - a.celebrate) as f32);
-        }
         let (height, pitch, mut roll, yaw) = match wrecked {
             true => (0.0, 0.0, 0.0, 0.0),
             false => somersault(a.driver, a.somersault),
@@ -452,9 +488,32 @@ fn racers(stage: &mut Stage, view: &ClientView, dt: f32, xray: bool) {
             a.vulcan,
             a.special_active,
         ];
+        let firing = a.vulcan > 0.0;
+        let fired = stage.cache.since(a.id, 1, firing, now);
         for (index, name) in OVERLAYS.iter().enumerate() {
-            if active[index] > 0.0 {
-                let overlay = stage.clip(&format!("overlay:{}:{name}", a.driver));
+            let value = active[index];
+            let clip = |part: &str| format!("overlay:{}:{name}{part}", a.driver);
+            let start = SPECIAL_STARTS
+                .iter()
+                .find(|(driver, _)| *name == "special" && *driver == a.driver)
+                .map(|(_, initial)| initial - value);
+            let overlay = match ENDINGS[index] {
+                // Rapid fire's start and end are transitions; it has no fade.
+                _ if *name == "vulcan" && fired < TRANSITION => match firing {
+                    true => stage.transition(&clip(":in"), &clip(""), fired),
+                    false => stage.aged(&clip(":out"), f64::from(fired)),
+                },
+                _ if value <= 0.0 => continue,
+                _ if start.is_some_and(|age| age < f64::from(TRANSITION)) => {
+                    stage.transition(&clip(":start"), &clip(""), start.unwrap_or(0.0) as f32)
+                }
+                // Timed states fade out as their remaining time runs down.
+                Some(length) if value < length => {
+                    stage.transition(&clip(":end"), &clip(""), (length - value) as f32)
+                }
+                _ => stage.clip(&clip("")),
+            };
+            {
                 let key = a.id * OVERLAYS.len() + index;
                 stage.show(
                     Role::Overlay(index),
@@ -671,6 +730,7 @@ pub fn sync(
         &mut stage,
         &view,
         time.delta_secs().min(0.05),
+        time.elapsed_secs(),
         xray && dark > 0.0,
     );
     for p in view.projectiles {

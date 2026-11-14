@@ -28,6 +28,10 @@ Run the port by hand with `npm run port:graphics -- /tmp/graphics.wwgp`.
 | `driver:<n>:idle` | Each racer for an eight-second loop at 24 frames per second, after a three-second warm-up that settles eased animation |
 | `driver:<n>:boost` | The same loop while boosting, recorded with the racer driving so that trails stream behind |
 | `driver:<n>:celebrate` | The celebration after a kill, played by its timer |
+| `driver:<n>:boost:in`, `driver:<n>:boost:out` | One second after a boost starts or ends, through the renderer's own easing: Pearococo's tail folds, KnowItOwl takes off and drops the bicycle, rotors tilt |
+| `overlay:<n>:vulcan:in`, `overlay:<n>:vulcan:out` | Rapid fire starting and ending, such as the bat flying in and away |
+| `overlay:<n>:<state>:end` | Shield, hedgeguard and tehilim fading over their last 1 to 1.5 seconds, played by the time remaining |
+| `overlay:11:special:start`, `overlay:11:special:end` | R-yeah's archangels descending and rising |
 | `overlay:<n>:<state>` | What `shield`, `hedge`, `tehilim`, `dizzy`, `vulcan` and `special` add to a racer |
 | `overlay:xylophone`, `timestop` | Fourmidable's and the time-stop special, shown at other racers or the caster |
 | `shot:missile`, `shot:hedgehog`, `shot:vulcan:<n>` | Projectiles, including each racer's rapid-fire variant |
@@ -48,6 +52,17 @@ as camera-facing quads with the particle shader's soft disc.
 Racers are recorded standing in open ground rather than at the arena's center,
 where an obstacle would change anything that looks for free space, such as
 KnowItOwl's bat companion.
+
+## Smoother than the browser
+
+Clips are recorded at 24 frames a second, but the native client plays them at
+the display's rate. Between two recorded frames, a part whose mesh is the same
+in both is blended: position and scale linearly, rotation along the shortest
+arc. Particles are blended the same way when both frames hold the same number
+of them. Anything that moves more than two units between frames is treated as a
+different object and is not blended. Spinning pickups, hovering vehicles,
+orbiting icons, flames and smoke therefore move at 60 or 120 frames a second,
+where the browser redraws them only as often as its own frame rate allows.
 
 Three techniques keep the recording automatic:
 
@@ -70,8 +85,11 @@ clip name in `scene.rs`.
   caster sees the recorded arena outlines and flat racer silhouettes through it.
   The fog does not drift, bomb flashes do not light it, and nearby objects are
   not brightened.
-- Recorded states do not fade in or out, and combine by layering only. A boost
-  trail is the one recorded while driving straight.
+- Transitions are recorded from a settled state, so a state that changes again
+  within a second restarts its transition. States combine by layering only. A
+  boost trail is the one recorded while driving straight.
+- Interpolation cannot add poses the browser does not draw: models that switch
+  between a few fixed poses, such as wing flaps, still switch.
 - Not recorded: Master-Yuda's drift sparks,
   Houston's flying helmet, muzzle flashes, Tammy's arrival scale-up, the dizzy
   camera wobble and the bomber views.
