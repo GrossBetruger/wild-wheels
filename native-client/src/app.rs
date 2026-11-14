@@ -143,6 +143,9 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         return headless(config);
     }
     let screenshot = config.screenshot.clone();
+    let benchmark = config.benchmark;
+    let paced = std::env::var_os("WILD_WHEELS_BENCH_VSYNC").is_some();
+    use crate::bench::mark;
     let mut session = GameSession::new();
     if config.join {
         session.join(config.clone());
@@ -155,10 +158,17 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
             crate::prefs::Preferences::load(),
         ))
         .insert_resource(ClearColor(Color::srgb(0.71, 0.83, 0.85)))
+        .insert_resource(crate::bench::Bench::new(benchmark))
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: "Wild Wheels".into(),
                 resolution: (1280, 800).into(),
+                // A benchmark measures how fast frames can be made, not the display's
+                // rate, unless WILD_WHEELS_BENCH_VSYNC asks for the cost of normal play.
+                present_mode: match benchmark.filter(|_| !paced) {
+                    Some(_) => bevy::window::PresentMode::AutoNoVsync,
+                    None => bevy::window::PresentMode::AutoVsync,
+                },
                 ..default()
             }),
             ..default()
@@ -174,16 +184,33 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         .add_systems(
             Update,
             (
-                crate::gui::control,
-                drive,
-                crate::scene::sync,
-                crate::gui::preview,
-                crate::ported::animate,
-                crate::sound::play,
-                crate::feedback::sync_match,
-                crate::gui::draw,
-                crate::hud::update,
-                crate::gui::hover,
+                (
+                    crate::bench::begin,
+                    crate::gui::control,
+                    mark(0),
+                    drive,
+                    mark(1),
+                    crate::scene::sync,
+                    mark(2),
+                    crate::gui::preview,
+                    mark(3),
+                    crate::ported::animate,
+                    mark(4),
+                )
+                    .chain(),
+                (
+                    crate::sound::play,
+                    mark(5),
+                    crate::feedback::sync_match,
+                    mark(6),
+                    crate::gui::draw,
+                    crate::gui::hover,
+                    mark(7),
+                    crate::hud::update,
+                    mark(8),
+                    crate::bench::finish,
+                )
+                    .chain(),
             )
                 .chain(),
         )

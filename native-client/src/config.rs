@@ -13,6 +13,8 @@ pub struct Config {
     pub auto_start: bool,
     pub screenshot: Option<String>,
     pub sparring: bool,
+    /// Measure frame times for this many seconds, then exit.
+    pub benchmark: Option<f64>,
 }
 impl Config {
     pub fn from_args(args: impl Iterator<Item = String>) -> Result<Self, Box<dyn Error>> {
@@ -26,6 +28,7 @@ impl Config {
             auto_start: false,
             screenshot: None,
             sparring: false,
+            benchmark: None,
         };
         let mut args = args;
         while let Some(arg) = args.next() {
@@ -41,6 +44,13 @@ impl Config {
                     config.headless = true;
                 }
                 "--auto-start" => config.auto_start = true,
+                "--benchmark" => {
+                    config.benchmark = Some(
+                        args.next()
+                            .ok_or("--benchmark requires a duration")?
+                            .parse()?,
+                    )
+                }
                 "--screenshot" => {
                     config.screenshot = Some(args.next().ok_or("--screenshot requires a PNG path")?)
                 }

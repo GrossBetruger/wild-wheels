@@ -1,4 +1,5 @@
 mod app;
+mod bench;
 mod config;
 mod feedback;
 mod gui;

@@ -9,7 +9,7 @@ use bevy::{
     prelude::*,
     render::render_resource::{Extent3d, TextureDimension, TextureFormat},
 };
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::atomic::Ordering};
 
 static PACK: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/graphics.wwgp"));
 const VERSION: u32 = 5;
@@ -507,7 +507,11 @@ pub fn animate(
             let mesh = match graphics.built.get(&key) {
                 Some(handle) => handle.clone(),
                 None => {
+                    let started = std::time::Instant::now();
                     let handle = meshes.add(graphics.geometry(part.mesh, player.tint, look));
+                    crate::bench::MESHES_BUILT.fetch_add(1, Ordering::Relaxed);
+                    crate::bench::MESH_BUILD_NANOS
+                        .fetch_add(started.elapsed().as_nanos() as u64, Ordering::Relaxed);
                     graphics.built.insert(key, handle.clone());
                     handle
                 }
@@ -570,6 +574,7 @@ pub fn animate(
                         && let Some(mut mesh) = meshes.get_mut(handle)
                     {
                         *mesh = billboards(sprites, layer == 1, right, up);
+                        crate::bench::SPRITE_MESHES.fetch_add(1, Ordering::Relaxed);
                     }
                 }
                 None if sprites.is_empty() => {}
