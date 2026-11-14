@@ -117,10 +117,17 @@ classes in `ui/`. Racer names, ability names and ability announcement cards are
 read from the pack, so those stay in step automatically; everything else must be
 changed in both places.
 
+Positions, sizes, colors, borders and corner radii are the browser's CSS scaled
+from its 922-pixel viewport to the 1280-pixel window. Text uses Menlo, the macOS
+system monospace font the browser also resolves to, which supplies the HUD's
+symbols; on a system without it the built-in font is used and symbols are missing.
+
 Differences from the browser HUD:
 
-- No icons or emoji; the built-in font has plain letters only. Health is drawn
-  as blocks, and symbols in server text become `>`.
-- No CSS animation: announcements appear and disappear without motion.
+- The weapon cards have no emoji icons, and emoji in server text are dropped.
+- The leaderboard sits under the arena map; the browser shows it beside the game.
+- A MENU button sits beside the browser's AFK button.
+- No CSS animation, gradients, blur or letter spacing: announcements appear and
+  disappear without motion.
 - The page chrome around the game (status line, controls panel, chat,
   photography) and the bomber and mobile controls are not present.

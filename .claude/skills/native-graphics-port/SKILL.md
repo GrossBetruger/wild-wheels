@@ -49,7 +49,8 @@ A new kind of visual is invisible natively until it is recorded:
   in `hud.rs` and the centre messages in `feedback.rs` are hand-written Bevy UI
   that mirrors the browser's labels, enabling rules and notice timing. When the
   browser HUD in `client/game.js` or `ui/` changes, make the same change there.
-  The built-in font has no emoji or symbols: keep HUD text to plain letters.
+  `hud.rs` takes its lengths and colors from `style.css`, scaled by `K`; copy new
+  values from there. Its font, Menlo, has symbols but no emoji.
 - Per-frame browser state that depends on a racer's history, such as
   Master-Yuda's drift lean. Port the formula by hand in `scene.rs`.
 

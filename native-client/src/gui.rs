@@ -21,13 +21,13 @@ use bevy::{
 use serde_json::json;
 use wild_wheels_core::ClientAction;
 
-pub const PANEL: Color = Color::srgba(0.035, 0.025, 0.09, 0.88);
-pub const BUTTON: Color = Color::srgb(0.20, 0.17, 0.32);
-pub const SELECTED: Color = Color::srgb(0.52, 0.34, 0.81);
+const PANEL: Color = Color::srgba(0.035, 0.025, 0.09, 0.88);
+const BUTTON: Color = Color::srgb(0.20, 0.17, 0.32);
+const SELECTED: Color = Color::srgb(0.52, 0.34, 0.81);
 const PRIMARY: Color = Color::srgb(0.80, 0.36, 0.26);
-pub const GOLD: Color = Color::srgb(0.95, 0.80, 0.38);
-pub const MUTED: Color = Color::srgb(0.72, 0.70, 0.80);
-pub const WARNING: Color = Color::srgb(1.0, 0.62, 0.52);
+const GOLD: Color = Color::srgb(0.95, 0.80, 0.38);
+const MUTED: Color = Color::srgb(0.72, 0.70, 0.80);
+const WARNING: Color = Color::srgb(1.0, 0.62, 0.52);
 /// The racer preview stands far above the arena, out of every match's sight.
 const PREVIEW: Vec3 = Vec3::new(0.0, 500.0, 0.0);
 const ROOM_CAPACITY: usize = 8;
@@ -57,6 +57,8 @@ pub enum Act {
     Arena(usize),
     Bots(usize),
     Abilities(bool),
+    /// Opens the in-game menu, as Escape does.
+    Menu,
     Resume,
     SitOut,
     Leave,
@@ -258,6 +260,7 @@ pub fn control(
                 &mut session,
                 json!({"action":"special-abilities","enabled":enabled}),
             ),
+            Act::Menu => menu.open = true,
             Act::Resume => menu.open = false,
             Act::SitOut => {
                 let away = !session.away;
@@ -279,9 +282,9 @@ pub fn control(
 }
 
 /// Spawns menu widgets beneath a parent node.
-pub struct Builder<'a, 'w, 's>(pub &'a mut Commands<'w, 's>);
+struct Builder<'a, 'w, 's>(&'a mut Commands<'w, 's>);
 impl Builder<'_, '_, '_> {
-    pub fn node(&mut self, parent: Entity, node: Node, color: Color) -> Entity {
+    fn node(&mut self, parent: Entity, node: Node, color: Color) -> Entity {
         self.0
             .spawn((node, BackgroundColor(color), ChildOf(parent)))
             .id()
@@ -305,7 +308,7 @@ impl Builder<'_, '_, '_> {
         };
         self.node(parent, node, Color::NONE)
     }
-    pub fn text(&mut self, parent: Entity, text: &str, size: f32, color: Color) {
+    fn text(&mut self, parent: Entity, text: &str, size: f32, color: Color) {
         self.0.spawn((
             Text::new(text),
             TextFont {
@@ -313,19 +316,6 @@ impl Builder<'_, '_, '_> {
                 ..default()
             },
             TextColor(color),
-            ChildOf(parent),
-        ));
-    }
-    /// Empty text that a HUD system fills in every frame.
-    pub fn readout(&mut self, parent: Entity, size: f32, marker: impl Component) {
-        self.0.spawn((
-            Text::default(),
-            TextFont {
-                font_size: FontSize::Px(size),
-                ..default()
-            },
-            TextColor(Color::WHITE),
-            marker,
             ChildOf(parent),
         ));
     }
