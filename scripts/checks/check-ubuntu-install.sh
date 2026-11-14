@@ -3,7 +3,7 @@
 set -euo pipefail
 ./install_ubuntu.sh
 apt-get install -y --no-install-recommends shellcheck
-shellcheck install_ubuntu.sh run_server.sh kill_server.sh update_server.sh scripts/server/server-process.sh scripts/checks/check-ubuntu-install.sh
+shellcheck install_ubuntu.sh run_server.sh run_client.sh kill_server.sh update_server.sh scripts/server/server-process.sh scripts/checks/check-ubuntu-install.sh
 export CARGO_TARGET_DIR=/tmp/wild-wheels-ubuntu-build
 export WILD_WHEELS_RUN_DIR=/tmp/wild-wheels-ubuntu-run
 PORT=5174 ./run_server.sh

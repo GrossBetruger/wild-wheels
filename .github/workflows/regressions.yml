@@ -41,7 +41,7 @@ jobs:
           cache: npm
       - run: ./install_ubuntu.sh
       - run: sudo apt-get install -y --no-install-recommends shellcheck
-      - run: shellcheck install_ubuntu.sh run_server.sh kill_server.sh update_server.sh scripts/server/server-process.sh scripts/checks/check-ubuntu-install.sh
+      - run: shellcheck install_ubuntu.sh run_server.sh run_client.sh kill_server.sh update_server.sh scripts/server/server-process.sh scripts/checks/check-ubuntu-install.sh
       - run: npm ci --ignore-scripts
       - run: cargo +1.90.0 test --locked --manifest-path dedicated-server/Cargo.toml
       - run: cargo +1.90.0 build --release --locked --manifest-path dedicated-server/Cargo.toml

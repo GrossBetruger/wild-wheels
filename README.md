@@ -25,6 +25,16 @@ The command builds and starts the server detached; you can close SSH. Stop it wi
 
 Open [localhost:5174](http://localhost:5174). Everyone joins one shared arena automatically, with up to eight players. Anyone can start a match or change room settings between matches. The server keeps playing when someone disconnects. After building, the executable runs independently with no Node.js dependency. See [dedicated server setup](docs/dedicated-server.md) for public hosting.
 
+## Native Rust client POC
+
+On macOS with Rust and the Xcode command line tools installed, connect to a running dedicated Rust server:
+
+```sh
+./run_client.sh --server http://localhost:5173 --name "Native Pip"
+```
+
+The launcher builds and opens the native client using its pinned Rust toolchain. Run `./run_client.sh --help` for options. This POC supports arena racers; see [native client instructions](native-client/README.md) for its current scope.
+
 ## Play with friends
 
 1. Enter your name, choose a character, and click **Host Arena**.

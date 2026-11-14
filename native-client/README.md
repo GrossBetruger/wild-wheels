@@ -6,13 +6,13 @@ server only; no Grand Prix, bomber client, or mobile controls.
 From the repository root:
 
 ```sh
-cargo +1.97.1 run --manifest-path native-client/Cargo.toml -- --server http://localhost:5173 --name "Native Pip"
+./run_client.sh --server http://localhost:5173 --name "Native Pip"
 ```
 
 For a non-graphical network smoke test against an isolated dedicated server:
 
 ```sh
-cargo +1.97.1 run --manifest-path native-client/Cargo.toml -- --server http://localhost:5189 --name "Native Pip" --headless --auto-start --seconds 10
+./run_client.sh --server http://localhost:5189 --name "Native Pip" --headless --auto-start --seconds 10
 ```
 
 The smoke test requires movement, firing, and server acknowledgements. It prints
