@@ -204,7 +204,7 @@ export class Renderer {
     const progress=1.6-celebrate,envelope=celebrate>0?Math.min(1,progress/.25,celebrate/.4):0;
     const turn=envelope*envelope*(3-2*envelope),bounce=turn*Math.sin(progress*15)*.1;
     m.at(p.x,.13+bounce+(gesture?.bounce??0),p.z,angle+Math.PI*turn+(gesture?.yaw??0));m.pitch=gesture?.lean??0;m.pivot=2;
-    if(!drawNewDriver(m,driver,turn,progress,helmet,gesture)){
+    if(!drawNewDriver(m,driver,turn,progress,helmet,gesture,color)){
     m.ball(0,2.2,0,1,1.1,.8,driver===0?'#252b36':['#9a9ba0','#d3883f','#8c5f42'][driver-1]);
     const fur=['#eee8d8','#969798','#e69a43','#9b7250'][driver];
     m.ball(0,3.55,.15,1.05,1.05,.94,fur,12,7);
@@ -386,7 +386,7 @@ export class Renderer {
     flight.remaining=actor.vulcan;
     const age=Math.max(0,time-flight.start);if(age>=1.1)return;
     const progress=age/1.1,behind=progress*3;
-    this.model('houston:helmet',p.x-Math.sin(actor.heading)*behind,.13+(jump?.height??0)+progress*6+progress*progress*4,p.z-Math.cos(actor.heading)*behind,actor.heading+progress*Math.PI*2,drawHoustonHelmet);
+    this.model(`houston:helmet:${actor.color}`,p.x-Math.sin(actor.heading)*behind,.13+(jump?.height??0)+progress*6+progress*progress*4,p.z-Math.cos(actor.heading)*behind,actor.heading+progress*Math.PI*2,mesh=>drawHoustonHelmet(mesh,actor.color));
   }
   royalChariot(m,p,color,yaw,spin,boost,clock,celebrate,jump,gesture=null){
     const angle=Math.atan2(p.tx,p.tz)-yaw+spin,pitch=jump?.pitch??0,height=jump?.height??0;

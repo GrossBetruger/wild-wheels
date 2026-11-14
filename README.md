@@ -63,10 +63,14 @@ Each running server keeps one room. Refresh to reconnect; names are remembered i
 | X | Use a turbo |
 | C | Deploy chaff to divert incoming missiles in arenas |
 | Z | Somersault and turn 180° in arenas |
-| F | Activate your character's special ability (20-second recharge) |
+| F | Activate your character's special ability (30-second recharge; Houston: 25 seconds) |
 | Escape | Pause; multiplayer continues for everyone else |
 
 You can also click the ammo cards to select weapons. Watch for the incoming missile warning and use chaff to break the lock.
+
+The same physical controls work with a Hebrew keyboard layout: ס uses turbo (X), כ activates abilities (F), ב releases chaff (C), and ז somersaults (Z). Movement keys also work. Typing in chat does not activate game controls.
+
+During a match, press Up or Down in the chat input to return to driving immediately. Your unsent draft is kept. Modified arrow keys still work for text editing.
 
 ### Mobile bombers
 

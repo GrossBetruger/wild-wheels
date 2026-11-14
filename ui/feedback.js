@@ -122,7 +122,7 @@ export class LocalFeedback {
       }
     }
     const view={...world,...pick(pose,poseFields),...pick(actor,resources),fireCooldown:Math.max(0,(this.fireTick-sequence)*MOVEMENT_DT)};
-    view.supplies=this.world.supplies.map((s,index)=>this.operations.some(op=>op.type==='pickup'&&op.supplyId===(s.id??index))?{...s,cooldown:8}:s);
+    view.supplies=this.world.supplies.map((s,index)=>this.operations.some(op=>op.type==='pickup'&&op.supplyId===(s.id??index))?{...s,cooldown:['hedgeproof','tehilim'].includes(s.kind)?50:10}:s);
     view.projectiles=world.projectiles.filter(shot=>shot.owner!==world.id||shot.actionId==null||!this.shots.has(shot.actionId));
     for(const entry of this.shots.values()){
       const elapsed=Math.max(0,now-entry.updated);advance(view,entry.model,elapsed);entry.updated=now;

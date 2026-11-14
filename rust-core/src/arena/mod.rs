@@ -1,4 +1,5 @@
 mod types;
+mod supplies;
 mod movement;
 mod weapons;
 mod bat;

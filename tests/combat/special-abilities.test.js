@@ -39,14 +39,14 @@ for(const engine of ['JavaScript','Rust'])test(`${engine}: bots keep their AI an
   for(let i=0;i<60;i++)step();assert.ok(read().bots[0].wz>z+1);
 });
 
-for(const engine of ['JavaScript','Rust'])for(const driver of [11,12])test(`${engine}: driver ${driver} starts inactive and must recharge for twenty seconds`,()=>{
+for(const engine of ['JavaScript','Rust'])for(const driver of [11,12])test(`${engine}: driver ${driver} starts inactive and must recharge for thirty seconds`,()=>{
   const world=createBattle(driver);Object.assign(world,{phase:'racing',human:true,wx:-65,wz:0,health:3,supplies:[]});for(const a of world.bots)Object.assign(a,{inactive:true,destroyed:999});
   const core=engine==='Rust'?new ArenaCore(world):null,read=()=>core?core.snapshot():world;
   const step=dt=>core?core.step(dt):tickBattle(world,new Set(),dt),activate=()=>core?core.step(0,[{actor:0,actions:[{type:'special'}]}]):useSpecial(world);
   step(.05);assert.equal(read().specialActive??0,0);assert.equal(read().health,3);
-  activate();assert.equal(read().specialCooldown,20);assert.equal(read().specialActive,driver===11?12:5);assert.equal(read().health,driver===12?4:3);
-  for(let i=0;i<280;i++)step(.05);assert.equal(read().specialActive,0);assert.ok(read().specialCooldown>5.9);activate();assert.equal(read().specialActive,0);
-  for(let i=0;i<121;i++)step(.05);assert.equal(read().specialCooldown,0);
+  activate();assert.equal(read().specialCooldown,30);assert.equal(read().specialActive,driver===11?12:5);assert.equal(read().health,driver===12?4:3);
+  for(let i=0;i<280;i++)step(.05);assert.equal(read().specialActive,0);assert.ok(read().specialCooldown>15.9);activate();assert.equal(read().specialActive,0);
+  for(let i=0;i<321;i++)step(.05);assert.equal(read().specialCooldown,0);
   if(driver===11){activate();assert.equal(read().specialActive,12);}
 });
 

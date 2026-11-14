@@ -71,7 +71,7 @@ test('touching a pickup immediately hides it, updates inventory, and sounds once
   const world=createBattle();Object.assign(world,{phase:'racing',wx:0,wz:60,health:3});world.supplies=[{id:0,version:0,kind:'health',wx:0,wz:62,cooldown:0}];
   const heard=[],feedback=new LocalFeedback(type=>heard.push(type));feedback.accept({world,movementSequence:-1,actionSequence:-1},0);
   const immediate=feedback.render(world,world,0,0);
-  assert.equal(immediate.health,4);assert.equal(world.health,3);assert.equal(immediate.supplies[0].cooldown,8);
+  assert.equal(immediate.health,4);assert.equal(world.health,3);assert.equal(immediate.supplies[0].cooldown,10);
   feedback.accept({world,movementSequence:-1,actionSequence:-1},.05);feedback.render(world,world,.05,0);
   const confirmed={...world,health:4,supplies:[{...world.supplies[0],version:1,collector:0,cooldown:8}]};feedback.accept({world:confirmed,movementSequence:1,actionSequence:-1},.16);
   assert.equal(feedback.render(confirmed,world,.16,1).health,4);assert.deepEqual(heard,['pickup']);

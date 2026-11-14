@@ -57,7 +57,7 @@ pub struct Chaff {
 pub struct Stink { pub id:u32,pub owner:usize,pub wx:f64,pub wz:f64,pub age:f64,pub life:f64,pub hits:Vec<usize> }
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(default,rename_all="camelCase")]
-pub struct Supply { pub age:f64,pub heading:f64,pub owner:Option<usize>,pub drop_wx:f64,pub drop_wz:f64,pub drop_height:f64, pub id:u32,pub wx:f64,pub wz:f64,pub kind:String,pub cooldown:f64,pub version:u32,pub collector:Option<usize>,#[serde(skip_serializing_if="Option::is_none")]pub home_wx:Option<f64>,#[serde(skip_serializing_if="Option::is_none")]pub home_wz:Option<f64> }
+pub struct Supply { pub random_spawn:bool, pub age:f64,pub heading:f64,pub owner:Option<usize>,pub drop_wx:f64,pub drop_wz:f64,pub drop_height:f64, pub id:u32,pub wx:f64,pub wz:f64,pub kind:String,pub cooldown:f64,pub version:u32,pub collector:Option<usize>,#[serde(skip_serializing_if="Option::is_none")]pub home_wx:Option<f64>,#[serde(skip_serializing_if="Option::is_none")]pub home_wz:Option<f64> }
 impl Supply{pub fn restore_home(&mut self){if let Some(x)=self.home_wx.take(){self.wx=x;}if let Some(z)=self.home_wz.take(){self.wz=z;}}}
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(default,rename_all="camelCase")]
@@ -75,6 +75,7 @@ pub struct Kill { pub id:u32,pub attacker:usize,pub victim:usize,pub attacker_na
 #[serde(default,rename_all="camelCase")]
 pub struct Globals {
     pub locusts:Vec<Locust>,pub locust_sequence:u32,
+    pub supply_seed:u32,
     pub bicycle_sequence:u32,
     #[serde(default="abilities_default")]pub special_abilities:bool,
     pub time_stop:f64,pub time_owner:Option<usize>,

@@ -66,9 +66,9 @@ test('Rust pickup feedback hides the item, updates inventory and plays its cue i
   const seed=createBattle();Object.assign(seed,{phase:'racing',multiplayer:true,human:true,wx:-65,wz:0,supplies:[{id:0,wx:-65,wz:0,kind:'missile',cooldown:0,version:0}]});
   for(const bot of seed.bots)Object.assign(bot,{inactive:true,destroyed:1e9});
   const server=new ArenaCore(seed),client=new ArenaClient();client.accept(server.packet(),0);client.frame(0,[],.01);
-  let view=client.present();assert.equal(view.missiles,2);assert.equal(view.item,'missile');assert.equal(view.supplies[0].cooldown,8);assert.deepEqual(view.events,['pickup']);
+  let view=client.present();assert.equal(view.missiles,2);assert.equal(view.item,'missile');assert.equal(view.supplies[0].cooldown,10);assert.deepEqual(view.events,['pickup']);
   client.frame(1/60,[],1/60);const input=client.outbound([]);server.step(1/60,[{actor:0,...input}]);client.accept(server.packet(),.02);client.frame(0,[],.02);
-  view=client.present();assert.equal(view.missiles,2);assert.equal(view.supplies[0].cooldown,8);assert.deepEqual(view.events,[]);
+  view=client.present();assert.equal(view.missiles,2);assert.equal(view.supplies[0].cooldown,10);assert.deepEqual(view.events,[]);
 });
 
 test('a contested pickup returns a Rust guest to the authoritative inventory',()=>{

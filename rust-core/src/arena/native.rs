@@ -42,6 +42,9 @@ impl NativeArena {
     pub fn phase(&self) -> &str {
         &self.game.global.phase
     }
+    pub fn player_color(&self, id: usize) -> Option<&str> {
+        self.game.actors.get(id).map(|actor| actor.color.as_str())
+    }
     pub fn elapsed(&self)->f64{self.game.global.elapsed}
     pub fn epoch(&self) -> u64 {
         self.game.global.sound_epoch
@@ -89,5 +92,41 @@ impl NativeArena {
     pub fn drain(&mut self) {
         self.game.global.events.clear();
         self.game.global.voices.clear();
+    }
+}
+
+#[cfg(test)]
+mod player_color_tests {
+    use super::*;
+    fn config() -> Value {
+        json!({"code":"00","host":null,"dedicated":true,"maxPlayers":8,"arena":0,"bots":7,"epoch":1,
+            "players":[{"id":0,"name":"Player","driver":6,"role":"driver"}]})
+    }
+    fn assert_colors(arena: &NativeArena) {
+        let colors = (0..8).map(|id| arena.player_color(id).unwrap()).collect::<std::collections::HashSet<_>>();
+        assert_eq!(colors.len(), 8);
+        for color in colors { assert!(crate::PLAYER_COLORS.contains(&color)); }
+    }
+    #[test]
+    fn automatic_colors_and_bot_reassignment_use_the_shared_palette() {
+        let mut config = config();
+        let mut arena = NativeArena::new(config.clone()).unwrap();
+        assert_colors(&arena);
+        let taken = arena.player_color(1).unwrap().to_owned();
+        config["players"][0]["color"] = json!(taken);
+        arena.configure(config.clone()).unwrap();
+        assert_eq!(arena.player_color(0).unwrap(), taken); assert_colors(&arena);
+        let before = (0..8).map(|id| arena.player_color(id).unwrap().to_owned()).collect::<Vec<_>>();
+        arena.configure(config).unwrap();
+        assert_eq!((0..8).map(|id| arena.player_color(id).unwrap().to_owned()).collect::<Vec<_>>(), before);
+    }
+    #[test]
+    fn duplicate_or_malformed_explicit_colors_are_rejected() {
+        let mut config = config();config["bots"] = json!(6);
+        config["players"][0]["color"] = json!("#a4198b");
+        config["players"].as_array_mut().unwrap().push(json!({"id":1,"name":"Other","driver":6,"role":"driver","color":"#A4198B"}));
+        assert!(NativeArena::new(config.clone()).is_err());
+        config["players"][1]["color"] = json!("url(https://attacker.invalid)");
+        assert!(NativeArena::new(config).is_err());
     }
 }
