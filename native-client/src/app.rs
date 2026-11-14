@@ -116,6 +116,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
             ..default()
         }))
         .add_plugins((
+            crate::ported::PortedGraphicsPlugin,
             crate::scene::ArenaPresentationPlugin,
             crate::sound::GameAudioPlugin,
             crate::feedback::FeedbackPlugin,
@@ -126,7 +127,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
                 drive,
                 crate::scene::sync,
                 crate::scene::sync_pickups,
-                crate::scene::animate_wheels,
+                crate::ported::animate,
                 crate::sound::play,
                 crate::feedback::sync_effects,
                 crate::feedback::sync_match,

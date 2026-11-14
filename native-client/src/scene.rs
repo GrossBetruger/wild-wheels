@@ -1,8 +1,10 @@
 //! Presentation-only entities. All gameplay state comes from the core client.
 use crate::app::GameSession;
+use crate::ported::{Graphics, Ported, Tint, placement, tint};
 use bevy::ecs::system::SystemParam;
-use bevy::{prelude::*, text::FontSize};
+use bevy::{core_pipeline::tonemapping::Tonemapping, prelude::*, text::FontSize};
 use std::collections::{HashMap, HashSet};
+use std::f32::consts::{PI, TAU};
 
 pub struct ArenaPresentationPlugin;
 impl Plugin for ArenaPresentationPlugin {
@@ -45,78 +47,34 @@ fn capture(
 }
 #[derive(Resource, Default)]
 pub struct SceneCache {
-    actors: HashMap<usize, (Entity, usize)>,
+    actors: HashMap<usize, Entity>,
+    health: HashMap<usize, Entity>,
     shots: HashMap<u32, Entity>,
     supplies: HashMap<u32, Entity>,
-    built: bool,
-}
-#[derive(Resource)]
-pub struct Geometry {
-    cube: Handle<Mesh>,
-    ball: Handle<Mesh>,
-    wheel: Handle<Mesh>,
-    white: Handle<StandardMaterial>,
-    black: Handle<StandardMaterial>,
-    purple: Handle<StandardMaterial>,
-    gold: Handle<StandardMaterial>,
-    pickups: HashMap<&'static str, Handle<StandardMaterial>>,
+    arena: Option<(usize, Entity)>,
 }
 #[derive(Component)]
 pub struct FollowCamera;
 #[derive(Component)]
 pub struct Hud;
-#[derive(Component)]
-pub struct Wheel {
-    actor: usize,
-    front: bool,
-    angle: f32,
-}
 
-fn setup(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-) {
-    let cube = meshes.add(Cuboid::default());
-    let ball = meshes.add(Sphere::new(1.0).mesh().uv(16, 12));
-    let wheel = meshes.add(Cylinder::new(1.0, 1.0));
-    let white = materials.add(Color::srgb(0.96, 0.95, 0.90));
-    let black = materials.add(Color::srgb(0.07, 0.07, 0.10));
-    let purple = materials.add(Color::srgb(0.52, 0.34, 0.81));
-    let gold = materials.add(Color::srgb(0.95, 0.78, 0.25));
-    let pickups = [
-        ("hedgehog", Color::srgb(0.65, 0.42, 0.23)),
-        ("missile", Color::srgb(0.95, 0.30, 0.20)),
-        ("boost", Color::srgb(0.95, 0.80, 0.15)),
-        ("health", Color::srgb(0.25, 0.90, 0.4)),
-        ("other", Color::srgb(0.55, 0.35, 0.95)),
-    ]
-    .into_iter()
-    .map(|(kind, color)| (kind, materials.add(color)))
-    .collect();
-    commands.insert_resource(Geometry {
-        cube,
-        ball,
-        wheel,
-        white,
-        black,
-        purple,
-        gold,
-        pickups,
-    });
+fn setup(mut commands: Commands) {
+    // The browser shades as color * (0.62 + 0.38 * n·l) in display space with no
+    // tone mapping. These linear-light levels reproduce that at Bevy's default exposure.
     commands.insert_resource(GlobalAmbientLight {
-        brightness: 350.0,
+        brightness: 783.0,
         ..default()
     });
     commands.spawn((
         DirectionalLight {
-            illuminance: 18000.0,
+            illuminance: 1920.0,
             ..default()
         },
-        Transform::from_xyz(-40.0, 80.0, 30.0).looking_at(Vec3::ZERO, Vec3::Y),
+        Transform::from_xyz(-50.0, 100.0, 30.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
     commands.spawn((
         Camera3d::default(),
+        Tonemapping::None,
         Transform::from_xyz(0.0, 65.0, -75.0).looking_at(Vec3::ZERO, Vec3::Y),
         FollowCamera,
     ));
@@ -137,160 +95,70 @@ fn setup(
         Hud,
     ));
 }
-fn part(
+/// Keeps one ported clip per live key, spawning and despawning its entity as needed.
+fn show<K: Copy + Eq + std::hash::Hash>(
     commands: &mut Commands,
-    parent: Entity,
-    mesh: &Handle<Mesh>,
-    material: &Handle<StandardMaterial>,
-    position: Vec3,
-    scale: Vec3,
-    rotation: Quat,
-) -> Entity {
-    commands
-        .spawn((
-            Mesh3d(mesh.clone()),
-            MeshMaterial3d(material.clone()),
-            Transform {
-                translation: position,
-                scale,
-                rotation,
-            },
-            ChildOf(parent),
-        ))
-        .id()
-}
-fn kart(
-    commands: &mut Commands,
-    g: &Geometry,
-    driver: usize,
-    color: Handle<StandardMaterial>,
-    actor: usize,
-) -> Entity {
-    let root = commands
-        .spawn((Transform::default(), Visibility::default()))
-        .id();
-    part(
-        commands,
-        root,
-        &g.cube,
-        &color,
-        Vec3::new(0.0, 0.8, 0.0),
-        Vec3::new(2.6, 0.65, 3.6),
-        Quat::IDENTITY,
-    );
-    part(
-        commands,
-        root,
-        &g.cube,
-        &g.black,
-        Vec3::new(0.0, 1.2, -0.7),
-        Vec3::new(1.5, 0.5, 1.1),
-        Quat::IDENTITY,
-    );
-    for x in [-1.4, 1.4] {
-        for z in [-1.1, 1.1] {
-            let entity = part(
-                commands,
-                root,
-                &g.wheel,
-                &g.black,
-                Vec3::new(x, 0.58, z),
-                Vec3::new(0.6, 0.4, 0.6),
-                Quat::from_rotation_z(std::f32::consts::FRAC_PI_2),
-            );
-            commands.entity(entity).insert(Wheel {
-                actor,
-                front: z > 0.0,
-                angle: 0.0,
-            });
-        }
-    }
-    match driver {
-        0 => {
-            part(
-                commands,
-                root,
-                &g.ball,
-                &g.white,
-                Vec3::new(0.0, 1.9, -0.2),
-                Vec3::new(0.8, 1.0, 0.65),
-                Quat::IDENTITY,
-            );
-            part(
-                commands,
-                root,
-                &g.ball,
-                &g.white,
-                Vec3::new(0.0, 3.0, 0.0),
-                Vec3::splat(0.92),
-                Quat::IDENTITY,
-            );
-            for side in [-1.0, 1.0] {
-                part(
-                    commands,
-                    root,
-                    &g.ball,
-                    &g.black,
-                    Vec3::new(side * 0.67, 3.65, -0.05),
-                    Vec3::splat(0.36),
-                    Quat::IDENTITY,
-                );
-                part(
-                    commands,
-                    root,
-                    &g.ball,
-                    &g.black,
-                    Vec3::new(side * 0.36, 3.10, 0.76),
-                    Vec3::new(0.29, 0.35, 0.13),
-                    Quat::from_rotation_z(side * 0.25),
-                );
-                part(
-                    commands,
-                    root,
-                    &g.ball,
-                    &g.white,
-                    Vec3::new(side * 0.34, 3.15, 0.89),
-                    Vec3::splat(0.10),
-                    Quat::IDENTITY,
-                );
-                part(
-                    commands,
-                    root,
-                    &g.ball,
-                    &g.black,
-                    Vec3::new(side * 0.75, 1.9, 0.35),
-                    Vec3::new(0.25, 0.45, 0.3),
-                    Quat::from_rotation_z(side * 0.5),
-                );
+    shown: &mut HashMap<K, Entity>,
+    players: &mut Query<&mut Ported>,
+    key: K,
+    clip: Option<usize>,
+    tint: Tint,
+    transform: Transform,
+) {
+    match shown.get(&key) {
+        Some(entity) => {
+            // A clip spawned this frame is not queryable until the next one.
+            if let Ok(mut player) = players.get_mut(*entity) {
+                if player.clip != clip || player.tint != tint {
+                    (player.clip, player.tint) = (clip, tint);
+                }
+                commands.entity(*entity).insert(transform);
             }
-            part(
-                commands,
-                root,
-                &g.ball,
-                &g.black,
-                Vec3::new(0.0, 2.86, 0.91),
-                Vec3::new(0.20, 0.13, 0.13),
-                Quat::IDENTITY,
-            );
         }
-        _ => {
-            part(
-                commands,
-                root,
-                &g.ball,
-                &color,
-                Vec3::new(0.0, 2.5, 0.0),
-                Vec3::new(0.8, 1.1, 0.8),
-                Quat::IDENTITY,
-            );
+        None => {
+            let entity = commands
+                .spawn((transform, Visibility::default(), Ported::new(clip, tint)))
+                .id();
+            shown.insert(key, entity);
         }
     }
-    root
+}
+fn retire<K: Eq + std::hash::Hash>(
+    commands: &mut Commands,
+    shown: &mut HashMap<K, Entity>,
+    live: &HashSet<K>,
+) {
+    shown.retain(|key, entity| {
+        if live.contains(key) {
+            return true;
+        }
+        commands.entity(*entity).despawn();
+        false
+    });
+}
+/// The browser's somersault pose; Master-Yuda's motorcycle barrel-rolls instead of flipping.
+fn somersault(driver: usize, remaining: f64) -> (f32, f32, f32, f32) {
+    if remaining <= 0.0 {
+        return (0.0, 0.0, 0.0, 0.0);
+    }
+    let progress = (1.0 - remaining / 0.55).clamp(0.0, 1.0) as f32;
+    let arc = (progress * PI).sin();
+    if driver == 10 {
+        let turn = progress * progress * (3.0 - 2.0 * progress);
+        return (
+            arc * 2.8,
+            -(progress * TAU).sin() * 0.45,
+            turn * TAU,
+            -(1.0 - turn) * PI,
+        );
+    }
+    (arc * 5.0, -progress * TAU, 0.0, 0.0)
 }
 #[derive(SystemParam)]
 pub struct SceneAssets<'w> {
-    geometry: Res<'w, Geometry>,
-    materials: ResMut<'w, Assets<StandardMaterial>>,
+    graphics: ResMut<'w, Graphics>,
+    meshes: ResMut<'w, Assets<Mesh>>,
+    sky: ResMut<'w, ClearColor>,
 }
 
 pub fn sync(
@@ -298,13 +166,14 @@ pub fn sync(
     session: Res<GameSession>,
     assets: SceneAssets,
     mut cache: ResMut<SceneCache>,
-    mut transforms: Query<&mut Transform, Without<FollowCamera>>,
+    mut players: Query<&mut Ported>,
     mut cameras: Query<&mut Transform, With<FollowCamera>>,
     mut hud: Query<&mut Text, With<Hud>>,
 ) {
     let SceneAssets {
-        geometry: g,
-        mut materials,
+        mut graphics,
+        mut meshes,
+        mut sky,
     } = assets;
     let Some(client) = session.client.as_ref() else {
         for mut text in &mut hud {
@@ -313,117 +182,89 @@ pub fn sync(
         return;
     };
     let view = client.view();
-    if view.arena != 0 {
-        for mut text in &mut hud {
-            text.0 = "POC supports Scrapyard only. Select it in the browser lobby.".into();
+    let cache = &mut *cache;
+    if cache.arena.is_none_or(|(arena, _)| arena != view.arena) {
+        if let Some((_, old)) = cache.arena.take() {
+            commands.entity(old).despawn();
         }
-        return;
-    }
-    if !cache.built {
-        let ground = materials.add(Color::srgb(0.46, 0.51, 0.38));
-        let wall = materials.add(Color::srgb(0.84, 0.44, 0.29));
-        commands.spawn((
-            Mesh3d(g.cube.clone()),
-            MeshMaterial3d(ground),
-            Transform::from_xyz(0.0, -0.3, 0.0).with_scale(Vec3::new(192.0, 0.5, 192.0)),
-        ));
-        for [x, z, w, d] in view.blocks {
-            commands.spawn((
-                Mesh3d(g.cube.clone()),
-                MeshMaterial3d(wall.clone()),
-                Transform::from_xyz(*x as f32, 3.0, *z as f32)
-                    .with_scale(Vec3::new(*w as f32, 6.0, *d as f32)),
-            ));
-        }
-        for (x, z, w, d) in [
-            (0.0, 97.0, 196.0, 2.0),
-            (0.0, -97.0, 196.0, 2.0),
-            (97.0, 0.0, 2.0, 192.0),
-            (-97.0, 0.0, 2.0, 192.0),
-        ] {
-            commands.spawn((
-                Mesh3d(g.cube.clone()),
-                MeshMaterial3d(wall.clone()),
-                Transform::from_xyz(x, 2.0, z).with_scale(Vec3::new(w, 4.0, d)),
-            ));
-        }
-        cache.built = true;
-    }
-    let live: HashSet<_> = view
-        .actors
-        .iter()
-        .filter(|a| !a.inactive && !a.bomber)
-        .map(|a| a.id)
-        .collect();
-    cache.actors.retain(|id, (entity, _)| {
-        if live.contains(id) {
-            return true;
-        }
-        commands.entity(*entity).despawn();
-        false
-    });
-    for a in view.actors.iter().filter(|a| live.contains(&a.id)) {
-        let entity = match cache.actors.get(&a.id) {
-            Some((entity, driver)) if *driver == a.driver => *entity,
-            _ => {
-                if let Some((old, _)) = cache.actors.remove(&a.id) {
-                    commands.entity(old).despawn();
-                }
-                let color = match a.driver {
-                    0 => g.purple.clone(),
-                    _ => materials.add(Color::srgb_u8(
-                        ((a.id * 73 + 60) % 200 + 40) as u8,
-                        ((a.id * 41 + 100) % 200 + 40) as u8,
-                        ((a.id * 29 + 120) % 200 + 40) as u8,
-                    )),
-                };
-                let entity = kart(&mut commands, &g, a.driver, color, a.id);
-                cache.actors.insert(a.id, (entity, a.driver));
-                entity
-            }
-        };
-        let progress = (1.0 - a.somersault / 0.55).clamp(0.0, 1.0) as f32;
-        let jump = match a.somersault > 0.0 {
-            true => (progress * std::f32::consts::PI).sin() * 5.0,
-            false => 0.0,
-        };
-        let transform = Transform::from_xyz(a.wx as f32, jump, a.wz as f32).with_rotation(
-            Quat::from_rotation_y(a.heading as f32) * Quat::from_rotation_z(-(a.yaw as f32) * 0.4),
-        );
-        commands.entity(entity).insert((
-            transform,
-            match a.destroyed > 0.0 {
-                true => Visibility::Hidden,
-                false => Visibility::Inherited,
-            },
-        ));
-    }
-    let live_shots: HashSet<_> = view.projectiles.iter().map(|p| p.id).collect();
-    cache.shots.retain(|id, entity| {
-        if live_shots.contains(id) {
-            return true;
-        }
-        commands.entity(*entity).despawn();
-        false
-    });
-    for p in view.projectiles {
-        let entity = *cache.shots.entry(p.id).or_insert_with(|| {
-            commands
+        if let Some(arena) = graphics.arena(view.arena) {
+            let (mesh, color) = (arena.mesh, arena.sky);
+            sky.0 = color;
+            let scenery = commands
                 .spawn((
-                    Mesh3d(g.ball.clone()),
-                    MeshMaterial3d(g.gold.clone()),
+                    Mesh3d(graphics.mesh(mesh, [0; 3], &mut meshes)),
+                    MeshMaterial3d(graphics.solid()),
                     Transform::default(),
                 ))
-                .id()
-        });
-        if let Ok(mut transform) = transforms.get_mut(entity) {
-            *transform = Transform::from_xyz(p.wx as f32, p.height as f32, p.wz as f32)
-                .with_scale(match p.kind.as_str() {
-                    "missile" => Vec3::new(0.28, 0.28, 1.2),
-                    _ => Vec3::splat(0.45),
-                })
-                .with_rotation(Quat::from_rotation_y(p.heading as f32));
+                .id();
+            cache.arena = Some((view.arena, scenery));
         }
+    }
+    let racers = || view.actors.iter().filter(|a| !a.inactive && !a.bomber);
+    let live: HashSet<_> = racers().map(|a| a.id).collect();
+    retire(&mut commands, &mut cache.actors, &live);
+    retire(&mut commands, &mut cache.health, &live);
+    for a in racers() {
+        let wrecked = a.destroyed > 0.0;
+        let clip = match (wrecked, a.boost > 0.0) {
+            (true, _) => graphics.clip("wreck"),
+            (false, true) => graphics.clip(&format!("driver:{}:boost", a.driver)),
+            (false, false) => graphics.clip(&format!("driver:{}:idle", a.driver)),
+        };
+        let (height, pitch, roll, yaw) = match wrecked {
+            true => (0.0, 0.0, 0.0, 0.0),
+            false => somersault(a.driver, a.somersault),
+        };
+        let position = Vec3::new(a.wx as f32, 0.0, a.wz as f32);
+        show(
+            &mut commands,
+            &mut cache.actors,
+            &mut players,
+            a.id,
+            clip,
+            tint(&a.color).unwrap_or([255; 3]),
+            placement(
+                position + Vec3::Y * height,
+                a.heading as f32 + yaw,
+                pitch,
+                roll,
+            ),
+        );
+        // Health pips face along the viewer's heading, as in the browser.
+        let pips = match wrecked {
+            true => None,
+            false => graphics.clip(&format!("health:{}", (a.health.max(0.0) as usize).min(6))),
+        };
+        show(
+            &mut commands,
+            &mut cache.health,
+            &mut players,
+            a.id,
+            pips,
+            [255; 3],
+            Transform::from_translation(position)
+                .with_rotation(Quat::from_rotation_y(view.player.heading as f32)),
+        );
+    }
+    let live_shots: HashSet<_> = view.projectiles.iter().map(|p| p.id).collect();
+    retire(&mut commands, &mut cache.shots, &live_shots);
+    for p in view.projectiles {
+        let owner = view.actors.get(p.owner).map_or(0, |a| a.driver);
+        let clip = match (p.kind.as_str(), p.vulcan) {
+            ("missile", _) => graphics.clip("shot:missile"),
+            (_, true) => graphics.clip(&format!("shot:vulcan:{owner}")),
+            _ => graphics.clip("shot:hedgehog"),
+        };
+        show(
+            &mut commands,
+            &mut cache.shots,
+            &mut players,
+            p.id,
+            clip,
+            [255; 3],
+            Transform::from_xyz(p.wx as f32, p.height as f32, p.wz as f32)
+                .with_rotation(Quat::from_rotation_y(p.heading as f32)),
+        );
     }
     let p = view.player;
     let facing = Vec3::new(
@@ -456,83 +297,33 @@ pub fn sync(
     }
 }
 
-pub fn animate_wheels(
-    session: Res<GameSession>,
-    time: Res<Time>,
-    mut wheels: Query<(&mut Transform, &mut Wheel)>,
-) {
-    let Some(client) = session.client.as_ref() else {
-        return;
-    };
-    let view = client.view();
-    for (mut transform, mut wheel) in &mut wheels {
-        let Some(actor) = view.actors.get(wheel.actor) else {
-            continue;
-        };
-        if actor.destroyed > 0.0 {
-            continue;
-        }
-        wheel.angle = (wheel.angle + actor.speed as f32 * time.delta_secs().min(0.05) / 0.6)
-            .rem_euclid(std::f32::consts::TAU);
-        let steering = match wheel.front {
-            true => actor.yaw as f32 * 3.0,
-            false => 0.0,
-        };
-        transform.rotation = Quat::from_rotation_y(steering)
-            * Quat::from_rotation_z(std::f32::consts::FRAC_PI_2)
-            * Quat::from_rotation_y(wheel.angle);
-    }
-}
-
 pub fn sync_pickups(
     mut commands: Commands,
     session: Res<GameSession>,
-    g: Res<Geometry>,
+    graphics: Res<Graphics>,
     mut cache: ResMut<SceneCache>,
-    mut transforms: Query<&mut Transform>,
+    mut players: Query<&mut Ported>,
 ) {
     let Some(client) = session.client.as_ref() else {
         return;
     };
     let view = client.view();
-    if view.arena != 0 {
-        return;
-    }
     let visible: HashSet<_> = view
         .supplies
         .iter()
         .filter(|s| s.cooldown <= 0.0)
         .map(|s| s.id)
         .collect();
-    cache.supplies.retain(|id, entity| {
-        if visible.contains(id) {
-            return true;
-        }
-        commands.entity(*entity).despawn();
-        false
-    });
+    retire(&mut commands, &mut cache.supplies, &visible);
     for supply in view.supplies.iter().filter(|s| visible.contains(&s.id)) {
-        let entity = *cache.supplies.entry(supply.id).or_insert_with(|| {
-            let material = g
-                .pickups
-                .get(supply.kind.as_str())
-                .unwrap_or(&g.pickups["other"]);
-            commands
-                .spawn((
-                    Mesh3d(g.cube.clone()),
-                    MeshMaterial3d(material.clone()),
-                    Transform::default(),
-                ))
-                .id()
-        });
-        if let Ok(mut transform) = transforms.get_mut(entity) {
-            *transform = Transform::from_xyz(
-                supply.wx as f32,
-                1.2 + (view.elapsed as f32 * 3.0 + supply.id as f32).sin() * 0.2,
-                supply.wz as f32,
-            )
-            .with_scale(Vec3::splat(1.2))
-            .with_rotation(Quat::from_rotation_y(view.elapsed as f32));
-        }
+        show(
+            &mut commands,
+            &mut cache.supplies,
+            &mut players,
+            supply.id,
+            graphics.clip(&format!("pickup:{}", supply.kind)),
+            [255; 3],
+            Transform::from_xyz(supply.wx as f32, 0.0, supply.wz as f32),
+        );
     }
 }

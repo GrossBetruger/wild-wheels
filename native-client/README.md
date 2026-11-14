@@ -37,11 +37,13 @@ An automated 10-second dedicated-server test observed 69 units of movement,
 In a zero-bot manual test, a browser player whacked the native Panda three times;
 native telemetry confirmed all three deaths and full-health respawns.
 
-The native Metal window renders Scrapyard, Pip's kart/panda model, animated wheels,
-pickups, projectiles, and a chase camera/HUD. Procedural engine audio changes pitch
-with speed; firing, missiles, hits, explosions, pickups and boost have sound cues.
-Other racers use placeholder models. This is the playable slice, not full browser
-visual or audio parity. See [results and remaining work](../docs/native-client-poc-results.md).
+The native Metal window renders every arena, racer, projectile and pickup from
+graphics ported automatically from the browser renderer at build time, so
+building needs Node.js. See [native graphics port](../docs/native-graphics-port.md)
+for what is and is not ported. Procedural engine audio changes pitch with speed;
+firing, missiles, hits, explosions, pickups and boost have sound cues. This is
+not yet full browser visual or audio parity. See
+[results and remaining work](../docs/native-client-poc-results.md).
 
 ## Repeatable checks
 

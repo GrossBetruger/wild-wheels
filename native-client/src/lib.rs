@@ -3,6 +3,7 @@ mod config;
 mod feedback;
 mod metrics;
 mod pilot;
+mod ported;
 mod scene;
 mod session;
 mod sound;
