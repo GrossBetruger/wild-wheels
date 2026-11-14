@@ -66,6 +66,8 @@ Local checks enforce frame time ≤20 ms at the 95th percentile, with guests wit
 
 GitHub Actions runs all seven groups with --functional --repeat 1 on pushes and pull requests, retaining traces for 30 days. Functional checks enforce behavior and record frame times without enforcing hardware-dependent FPS thresholds.
 
+The drift scenario schedules acceleration, Shift hold and release using accumulated simulation time. Browser frame deltas are capped at 50 ms, so wall-clock scheduling can release Shift before the second charge on a slow runner. The scenario still requires both charge effects within 20 ms of their observed charge thresholds, no skid emission after release, and fresh sparks at the rendered wheels. A bounded completion wait and cleanup prevent stalled scenarios from passing or leaving test controls installed.
+
 Room checks require refresh to restore the same player, room, host role and scores after going offline. AFK must retain the seat and prevent combat; returning must restore responsive controls. The host can replace the server's only room, invalidating old sessions and invitations. Names survive refresh in a cookie; the separate session cookie is HttpOnly. Lightweight tests also reject replacement by guests and verify fresh input sequencing after resumption. Rooms persist for the lifetime of the Node process, without disk storage.
 
 Guest lobby checks require room setup, map, restart, invitation and duplicate character controls to be hidden while name, character, play request, AFK and fullscreen controls remain usable. Names have no save button: edits reach the server when play is requested or begins. The mobile group verifies this for bomber names too.
