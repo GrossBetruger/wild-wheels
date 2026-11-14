@@ -9,6 +9,27 @@ concurrency:
   group: regressions-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  native-client:
+    name: Native client debug build
+    runs-on: macos-15
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: native-client
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+        working-directory: .
+      - name: Install the client's pinned Rust toolchain
+        run: rustup show
+      - name: Build native client (debug)
+        run: cargo build --locked --bin wild-wheels-native
   regressions:
     runs-on: macos-15
     timeout-minutes: 15
