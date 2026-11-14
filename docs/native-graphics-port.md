@@ -73,14 +73,22 @@ Three techniques keep the recording automatic:
   own model keeps only its added geometry and particles.
 - **Model placement.** The vertex shader's yaw, pitch, roll and Pearococo's
   feather fold are evaluated in the exporter and stored as one matrix.
+- **Plumage.** Parts the browser draws with its plumage shader are stored in a
+  plumage layer. The native client draws them with `native-client/src/plumage.wesl`,
+  a hand port of that shader's sway, bent normals and angle-dependent iridescence,
+  shaded per pixel. It adds native-only detail the browser lacks: tip flutter,
+  the tail swinging behind turns and pressed back by speed (a spring in
+  `scene.rs`, passed through each feather's mesh tag), barbs that each sit at
+  their own point on the iridescent palette, glints, rings around the eyes and a
+  gold gleam. A change to the browser's plumage shader must be repeated there.
 
 To port another state, add a recording in `buildGraphicsPack` and select the new
 clip name in `scene.rs`.
 
 ## Limits
 
-- Shader-only effects are not ported automatically. Pearococo's feather sway and
-  iridescence and distance fog are missing. KnowItOwl's Dark Humor is written by
+- Shader-only effects are not ported automatically. Pearococo's plumage shader is
+  ported by hand (see Plumage above); distance fog is missing. KnowItOwl's Dark Humor is written by
   hand in `scene.rs`: one still frame of the fog shader covers the world, and the
   caster sees the recorded arena outlines and flat racer silhouettes through it.
   The fog does not drift, bomb flashes do not light it, and nearby objects are
@@ -114,7 +122,8 @@ Little-endian. `WWGP`, `u32` version, then counted sections:
 - Clips: `u32` uncompressed length, `u32` compressed length, then one zlib
   block holding a `u32` count of clips; each is `f32` frames per second, `u32` mode (0 loop,
   1 play once), `u32` frame count, then per frame:
-  - a `u16` part count and parts of `u32` mesh, `u32` layer (0 solid, 1 glow)
+  - a `u16` part count and parts of `u32` mesh, `u32` layer (0 solid, 1 glow,
+    2 plumage)
     and twelve `f32` giving the images of the X, Y and Z axes and the origin;
   - glow sprites, then smoke sprites: each a `u32` count and sprites of seven
     `f32`: x, y, z, size, red, green, blue.

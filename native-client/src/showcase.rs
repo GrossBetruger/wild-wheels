@@ -5,17 +5,24 @@
 //! holding steady loops still so only the transition changes between them.
 use crate::{
     config::Config,
-    ported::{BLENDING, Graphics, Ported, PortedGraphicsPlugin},
+    plumage::Wind,
+    ported::{BLENDING, Graphics, Ported, PortedGraphicsPlugin, STILL},
     scene::FollowCamera,
 };
 use bevy::{
-    app::AppExit,
+    app::{AppExit, ScheduleRunnerPlugin},
+    camera::RenderTarget,
     core_pipeline::tonemapping::Tonemapping,
     prelude::*,
-    render::view::screenshot::{Screenshot, save_to_disk},
+    render::{
+        render_resource::{TextureFormat, TextureUsages},
+        view::screenshot::{Screenshot, save_to_disk},
+    },
     text::FontSize,
+    window::ExitCondition,
+    winit::WinitPlugin,
 };
-use std::{error::Error, path::PathBuf, sync::atomic::Ordering};
+use std::{error::Error, path::PathBuf, sync::atomic::Ordering, time::Duration};
 
 /// One step of a scene's cycle: what the racer and the layer over it play.
 struct Step {
@@ -25,6 +32,10 @@ struct Step {
     overlay: Option<String>,
     /// Transitions play once from their start; steady states loop.
     once: bool,
+    /// Plumage keeps swaying through this step even while screenshots are taken.
+    sways: bool,
+    /// The racer is shown turning and speeding, for the tail's response to it.
+    turns: bool,
 }
 impl Step {
     fn new(
@@ -40,6 +51,20 @@ impl Step {
             racer,
             overlay: overlay.map(str::to_owned),
             once,
+            sways: false,
+            turns: false,
+        }
+    }
+    fn swaying(self) -> Self {
+        Self {
+            sways: true,
+            ..self
+        }
+    }
+    fn turning(self) -> Self {
+        Self {
+            turns: true,
+            ..self.swaying()
         }
     }
 }
@@ -48,18 +73,21 @@ impl Step {
 pub struct Scene {
     driver: usize,
     steps: Vec<Step>,
+    /// Seen from behind, as when driving, and circled when not capturing.
+    behind: bool,
 }
 /// Matches `ENDINGS` in scripts/build/graphics-port.mjs.
 const FADES: [(&str, f32); 3] = [("shield", 1.0), ("hedge", 1.5), ("tehilim", 1.5)];
 impl Scene {
     /// `boost:N`, `rapid-fire:N`, `fade:STATE:N` (shield, hedge or tehilim),
-    /// `special-start:N` or `special-end:N`, for racer N; `boost` and
-    /// `rapid-fire` alone show Pearococo and KnowItOwl.
+    /// `special-start:N`, `special-end:N` or `plumage:N`, for racer N; `boost`,
+    /// `plumage` and `rapid-fire` alone show Pearococo and KnowItOwl.
     pub fn parse(name: &str) -> Option<Self> {
         let parts: Vec<&str> = name.split(':').collect();
         let racer = |text: &str| text.parse::<usize>().ok().filter(|driver| *driver < 15);
         let (kind, driver, state) = match parts.as_slice() {
             ["boost"] => ("boost", 9, None),
+            ["plumage"] => ("plumage", 9, None),
             ["rapid-fire"] => ("rapid-fire", 14, None),
             [kind, driver] => (*kind, racer(driver)?, None),
             ["fade", state, driver] => ("fade", racer(driver)?, Some(*state)),
@@ -78,6 +106,12 @@ impl Scene {
                 step("rapid fire in", 1.0, "idle", Some("vulcan:in"), true),
                 step("rapid fire", 2.0, "idle", Some("vulcan"), false),
                 step("rapid fire out", 1.0, "idle", Some("vulcan:out"), true),
+            ],
+            // The plumage shader's own sway, then the tail's response to turning.
+            ("plumage", None) => vec![
+                step("tail held still", 2.0, "idle", None, false),
+                step("tail swaying", 2.0, "idle", None, false).swaying(),
+                step("tail swinging through turns", 4.0, "idle", None, false).turning(),
             ],
             ("fade", Some(state)) => {
                 let (_, length) = FADES.iter().find(|(name, _)| *name == state)?;
@@ -108,7 +142,11 @@ impl Scene {
             ],
             _ => return None,
         };
-        Some(Self { driver, steps })
+        Some(Self {
+            driver,
+            steps,
+            behind: kind == "plumage",
+        })
     }
     fn cycle(&self) -> f32 {
         self.steps.iter().map(|step| step.seconds).sum()
@@ -142,7 +180,15 @@ struct Show {
     capture: Option<PathBuf>,
     taken: Vec<&'static str>,
     seconds: f32,
+    /// Where the scene is drawn when it has no window.
+    offscreen: Option<RenderTarget>,
 }
+/// Whether the showcase draws to an image instead of opening a window.
+#[derive(Resource)]
+struct Offscreen(bool);
+/// The showcase's size in points; an offscreen one is drawn at twice that, as
+/// on a high-density screen.
+const SIZE: (u32, u32) = (1000, 700);
 #[derive(Component)]
 struct Racer;
 #[derive(Component)]
@@ -152,10 +198,42 @@ struct Caption;
 
 pub fn run(config: Config, name: &str) -> Result<(), Box<dyn Error>> {
     let scene = Scene::parse(name).ok_or_else(|| {
-        format!("Unknown showcase \"{name}\"; try boost:9, rapid-fire:14, fade:hedge:0, special-start:11 or special-end:11")
+        format!("Unknown showcase \"{name}\"; try plumage, boost:9, rapid-fire:14, fade:hedge:0, special-start:11 or special-end:11")
     })?;
     let capturing = config.capture.is_some();
-    App::new()
+    let window = Window {
+        title: format!("Wild Wheels showcase: {name}"),
+        resolution: SIZE.into(),
+        // Covered windows capture as black on macOS; a capture run stays on top,
+        // so it can be captured without taking focus from other work.
+        window_level: match capturing {
+            true => bevy::window::WindowLevel::AlwaysOnTop,
+            false => bevy::window::WindowLevel::Normal,
+        },
+        ..default()
+    };
+    let mut app = App::new();
+    match config.offscreen {
+        // No window and no event loop: the scene is stepped sixty times a second.
+        true => app
+            .add_plugins(
+                DefaultPlugins
+                    .set(WindowPlugin {
+                        primary_window: None,
+                        exit_condition: ExitCondition::DontExit,
+                        ..default()
+                    })
+                    .disable::<WinitPlugin>(),
+            )
+            .add_plugins(ScheduleRunnerPlugin::run_loop(Duration::from_secs_f64(
+                1.0 / 60.0,
+            ))),
+        false => app.add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(window),
+            ..default()
+        })),
+    };
+    app.insert_resource(Offscreen(config.offscreen))
         .insert_resource(Show {
             scene,
             capture: config.capture.map(PathBuf::from),
@@ -164,22 +242,9 @@ pub fn run(config: Config, name: &str) -> Result<(), Box<dyn Error>> {
                 true => config.seconds as f32,
                 false => f32::INFINITY,
             },
+            offscreen: None,
         })
         .insert_resource(ClearColor(Color::srgb_u8(0xe5, 0xde, 0xef)))
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: format!("Wild Wheels showcase: {name}"),
-                resolution: (1000, 700).into(),
-                // Covered windows capture as black on macOS; a capture run stays on top,
-                // so it can be captured without taking focus from other work.
-                window_level: match capturing {
-                    true => bevy::window::WindowLevel::AlwaysOnTop,
-                    false => bevy::window::WindowLevel::Normal,
-                },
-                ..default()
-            }),
-            ..default()
-        }))
         .add_plugins(PortedGraphicsPlugin)
         .add_systems(Startup, setup)
         .add_systems(
@@ -192,8 +257,10 @@ pub fn run(config: Config, name: &str) -> Result<(), Box<dyn Error>> {
 
 fn setup(
     mut commands: Commands,
-    show: Res<Show>,
+    mut show: ResMut<Show>,
+    offscreen: Res<Offscreen>,
     graphics: Res<Graphics>,
+    mut images: ResMut<Assets<Image>>,
     mut exit: MessageWriter<AppExit>,
 ) {
     let required = show.scene.required();
@@ -201,11 +268,7 @@ fn setup(
         eprintln!("The graphics pack has no {required} clip to show.");
         exit.write(AppExit::from_code(2));
     }
-    let tall = matches!(show.scene.driver, 11 | 12 | 14);
-    let (eye, focus) = match tall {
-        true => (Vec3::new(9.0, 9.5, 12.0), Vec3::Y * 4.0),
-        false => (Vec3::new(7.5, 7.4, 9.5), Vec3::Y * 2.55),
-    };
+    let (eye, focus) = viewpoint(&show.scene, 0.0);
     commands.insert_resource(GlobalAmbientLight {
         brightness: 783.0,
         ..default()
@@ -217,8 +280,27 @@ fn setup(
         },
         Transform::from_xyz(-50.0, 100.0, 30.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
+    let target = match offscreen.0 {
+        true => {
+            let mut image = Image::new_target_texture(
+                SIZE.0 * 2,
+                SIZE.1 * 2,
+                TextureFormat::Rgba8UnormSrgb,
+                None,
+            );
+            image.texture_descriptor.usage |= TextureUsages::COPY_SRC;
+            let target = RenderTarget::Image(bevy::camera::ImageRenderTarget {
+                handle: images.add(image),
+                scale_factor: 2.0,
+            });
+            show.offscreen = Some(target.clone());
+            target
+        }
+        false => RenderTarget::default(),
+    };
     commands.spawn((
         Camera3d::default(),
+        target,
         Tonemapping::None,
         Transform::from_translation(eye).looking_at(focus, Vec3::Y),
         FollowCamera,
@@ -256,6 +338,21 @@ fn setup(
     ));
 }
 
+/// Where the camera stands and looks. Scenes seen from behind are circled slowly,
+/// `turned` radians so far, so their sheen can be watched shifting with the view.
+fn viewpoint(scene: &Scene, turned: f32) -> (Vec3, Vec3) {
+    let tall = matches!(scene.driver, 11 | 12 | 14);
+    match (scene.behind, tall) {
+        (true, _) => {
+            let focus = Vec3::new(0.0, 3.5, -0.9);
+            let around = Quat::from_rotation_y(turned) * Vec3::new(-4.5, 3.4, -10.5);
+            (focus + around, focus)
+        }
+        (false, true) => (Vec3::new(9.0, 9.5, 12.0), Vec3::Y * 4.0),
+        (false, false) => (Vec3::new(7.5, 7.4, 9.5), Vec3::Y * 2.55),
+    }
+}
+
 /// Where in its cycle a scene is: the step and seconds into it.
 fn step_at(scene: &Scene, seconds: f32) -> (&Step, f32) {
     if seconds < WARMUP {
@@ -278,6 +375,7 @@ fn play(
     mut racers: Query<&mut Ported, (With<Racer>, Without<Layer>)>,
     mut layers: Query<&mut Ported, (With<Layer>, Without<Racer>)>,
     mut captions: Query<&mut Text, With<Caption>>,
+    mut cameras: Query<&mut Transform, With<FollowCamera>>,
 ) {
     let (step, into) = step_at(&show.scene, time.elapsed_secs());
     let driver = show.scene.driver;
@@ -293,8 +391,25 @@ fn play(
         true => Some(into),
         false => held,
     };
+    // Plumage sways on its own clock; held still, screenshots of it do not change.
+    let capturing = show.capture.is_some();
+    STILL.store(capturing && !step.sways, Ordering::Relaxed);
+    let wind = match step.turns || (!capturing && show.scene.behind) {
+        true => Wind {
+            swing: (into * 2.2).sin() * 0.9,
+            press: 0.5 + 0.4 * (into * 1.1).sin(),
+        },
+        false => Wind::default(),
+    };
     for mut player in &mut racers {
         (player.clip, player.time) = (racer, at(step.once && step.overlay.is_none()));
+        player.wind = wind;
+    }
+    if !capturing && show.scene.behind {
+        let (eye, focus) = viewpoint(&show.scene, time.elapsed_secs() * 0.28);
+        for mut camera in &mut cameras {
+            *camera = Transform::from_translation(eye).looking_at(focus, Vec3::Y);
+        }
     }
     for mut player in &mut layers {
         (player.clip, player.time) = (layer, at(step.once));
@@ -326,13 +441,17 @@ fn capture(
     };
     let since = time.elapsed_secs() - WARMUP - show.scene.cycle();
     // The window stays on top while capturing; it still has to be shown.
-    let visible = windows.iter().any(|window| window.visible);
+    let visible = show.offscreen.is_some() || windows.iter().any(|window| window.visible);
     for (label, at) in show.scene.captures() {
         if since >= at && visible && !show.taken.contains(&label) {
             let path = directory.join(format!("{label}.png"));
-            commands
-                .spawn(Screenshot::primary_window())
-                .observe(save_to_disk(path));
+            // A screenshot replaces the output of the cameras whose target equals
+            // its own, scale and all.
+            let shot = match &show.offscreen {
+                Some(target) => Screenshot(target.clone()),
+                None => Screenshot::primary_window(),
+            };
+            commands.spawn(shot).observe(save_to_disk(path));
             show.taken.push(label);
         }
     }
@@ -370,6 +489,7 @@ mod tests {
         assert_eq!((step.label.as_str(), (into * 10.0).round()), ("boost", 5.0));
         // Each capture lands inside the step it is meant to show, for every kind.
         for name in [
+            "plumage",
             "boost:0",
             "rapid-fire:14",
             "fade:hedge:3",

@@ -1,11 +1,13 @@
 //! Plays the graphics pack that `build.rs` ports from the browser renderer.
 //! Nothing here is drawn by hand: models, animation frames, particles and arenas
 //! all come from the JavaScript client. See docs/native-graphics-port.md.
+use crate::plumage::{PlumageMaterial, Wind};
 use bevy::{
     asset::RenderAssetUsages,
     camera::visibility::{NoFrustumCulling, RenderLayers},
+    ecs::system::SystemParam,
     image::Image,
-    mesh::{Indices, PrimitiveTopology},
+    mesh::{Indices, MeshTag, PrimitiveTopology},
     prelude::*,
     render::render_resource::{Extent3d, TextureDimension, TextureFormat},
 };
@@ -19,7 +21,7 @@ use std::{
 };
 
 static PACK: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/graphics.wwgp"));
-const VERSION: u32 = 6;
+const VERSION: u32 = 7;
 /// Clip frames ahead of the one shown whose meshes are built in advance.
 const LOOKAHEAD: usize = 4;
 /// Meshes unused for this long are released; one shown again is rebuilt.
@@ -31,6 +33,9 @@ const BLEND_LIMIT: f32 = 2.0;
 const BLEND_STEPS: f32 = 8.0;
 /// Whether frames are blended; the showcase turns it off for comparison.
 pub static BLENDING: AtomicBool = AtomicBool::new(true);
+/// Holds plumage at the first moment of its sway, so the showcase's screenshots
+/// differ only by the transition under test.
+pub static STILL: AtomicBool = AtomicBool::new(false);
 const TRIANGLE_BYTES: usize = 20;
 const SPRITE_BYTES: usize = 28;
 /// The browser shader pitches models about this height and rolls them about `ROLL_PIVOT`.
@@ -99,9 +104,16 @@ struct Built {
     /// Seconds since launch when the mesh was last shown or prefetched.
     used: f32,
 }
+/// How the browser draws a model: lit, added to the picture, or with its plumage shader.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Layer {
+    Solid,
+    Glow,
+    Plumage,
+}
 struct Part {
     mesh: u32,
-    glow: bool,
+    layer: Layer,
     transform: Transform,
 }
 /// Sprites are the browser's point particles: x, y, z, size and color as `f32`s.
@@ -144,6 +156,8 @@ pub enum Look {
     Flat,
     /// One flat color: a racer seen through Dark Humor.
     Silhouette,
+    /// Pearococo's feathers, swayed and shaded by the plumage material.
+    Plumage,
 }
 
 #[derive(Resource)]
@@ -159,8 +173,9 @@ pub struct Graphics {
     finished: (Sender<Finished>, Receiver<Finished>),
     /// Seconds since launch, as of the last frame.
     now: f32,
-    /// One material per `Look`, in declaration order.
+    /// One material for each `Look` up to `Silhouette`, in declaration order.
     surfaces: [Handle<StandardMaterial>; 4],
+    plumage: Handle<PlumageMaterial>,
     /// Additive sparks and alpha-blended smoke, in the browser's draw order.
     sprites: [Handle<StandardMaterial>; 2],
 }
@@ -203,14 +218,19 @@ impl Graphics {
                 let mut parts = Vec::new();
                 for _ in 0..c.u16()? {
                     let mesh = c.u32()?;
-                    let glow = c.u32()? == 1;
+                    let layer = match c.u32()? {
+                        0 => Layer::Solid,
+                        1 => Layer::Glow,
+                        2 => Layer::Plumage,
+                        _ => return None,
+                    };
                     let (x, y, z, origin) = (c.vec3()?, c.vec3()?, c.vec3()?, c.vec3()?);
                     if mesh as usize >= meshes.len() {
                         return None;
                     }
                     parts.push(Part {
                         mesh,
-                        glow,
+                        layer,
                         transform: Transform::from_matrix(Mat4::from_cols(
                             x.extend(0.0),
                             y.extend(0.0),
@@ -279,6 +299,7 @@ impl Graphics {
             finished: unbounded(),
             now: 0.0,
             surfaces: Default::default(),
+            plumage: Handle::default(),
             sprites: [Handle::default(), Handle::default()],
         })
     }
@@ -390,7 +411,9 @@ fn geometry(source: &Source, (mesh, tint, look): Key) -> Mesh {
             },
         };
         let color = match look {
-            Look::Glow => [red, green, blue, 255].map(|c| f32::from(c) / 255.0),
+            // Added to the picture, or shaded by the plumage shader, as the browser
+            // writes them to the screen.
+            Look::Glow | Look::Plumage => [red, green, blue, 255].map(|c| f32::from(c) / 255.0),
             Look::Silhouette => [1.0; 4],
             _ => Color::srgb_u8(red, green, blue).to_linear().to_f32_array(),
         };
@@ -400,13 +423,19 @@ fn geometry(source: &Source, (mesh, tint, look): Key) -> Mesh {
             colors.push(color);
         }
     }
-    Mesh::new(
+    let mut built = Mesh::new(
         PrimitiveTopology::TriangleList,
         RenderAssetUsages::RENDER_WORLD,
-    )
-    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
-    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
-    .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, colors)
+    );
+    if look == Look::Plumage {
+        let (feather, eye) = crate::plumage::feather_coordinates(&positions);
+        built.insert_attribute(Mesh::ATTRIBUTE_UV_0, feather);
+        built.insert_attribute(Mesh::ATTRIBUTE_UV_1, eye);
+    }
+    built
+        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, colors)
 }
 
 /// A part's placement between two recorded frames, `between` of the way along.
@@ -541,7 +570,11 @@ pub struct Ported {
     pub time: Option<f32>,
     /// Drawn as a flat silhouette on the X-ray layer instead of in the world.
     pub ghost: bool,
+    /// How the racer's movement acts on any plumage in the clip.
+    pub wind: Wind,
     parts: Vec<Entity>,
+    /// Parts drawn by the plumage material, which is a different component.
+    plumes: Vec<Entity>,
     sprites: [Option<(Entity, Handle<Mesh>)>; 2],
     /// What each sprite layer was last built for.
     built: [Option<SpriteStamp>; 2],
@@ -561,6 +594,11 @@ pub struct PortedGraphicsPlugin;
 impl Plugin for PortedGraphicsPlugin {
     fn build(&self, app: &mut App) {
         let mut graphics = Graphics::parse(PACK).expect("the ported graphics pack is valid");
+        crate::plumage::build(app);
+        graphics.plumage = app
+            .world_mut()
+            .resource_mut::<Assets<PlumageMaterial>>()
+            .add(PlumageMaterial::default());
         let texture = app
             .world_mut()
             .resource_mut::<Assets<Image>>()
@@ -611,8 +649,34 @@ type PartQuery<'w, 's> = Query<
         &'static mut Transform,
         &'static mut Visibility,
     ),
-    (Without<Ported>, Without<crate::scene::FollowCamera>),
+    (
+        Without<Ported>,
+        Without<crate::scene::FollowCamera>,
+        Without<MeshMaterial3d<PlumageMaterial>>,
+    ),
 >;
+type PlumeQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static mut Mesh3d,
+        &'static mut Transform,
+        &'static mut Visibility,
+        &'static mut MeshTag,
+    ),
+    (
+        With<MeshMaterial3d<PlumageMaterial>>,
+        Without<Ported>,
+        Without<crate::scene::FollowCamera>,
+        Without<MeshMaterial3d<StandardMaterial>>,
+    ),
+>;
+/// The child entities that draw clips: ordinary parts and plumage.
+#[derive(SystemParam)]
+pub struct Pools<'w, 's> {
+    parts: PartQuery<'w, 's>,
+    plumes: PlumeQuery<'w, 's>,
+}
 type CameraQuery<'w, 's> = Single<
     'w,
     's,
@@ -627,8 +691,13 @@ pub fn animate(
     mut meshes: ResMut<Assets<Mesh>>,
     camera: CameraQuery,
     mut players: Query<(Entity, &mut Ported, &Transform)>,
-    mut parts: PartQuery,
+    pools: Pools,
 ) {
+    let Pools {
+        mut parts,
+        mut plumes,
+    } = pools;
+    let still = STILL.load(Ordering::Relaxed);
     let graphics = &mut *graphics;
     graphics.collect(time.elapsed_secs(), &mut meshes);
     let (view, projection) = *camera;
@@ -639,11 +708,13 @@ pub fn animate(
     };
     for (entity, mut player, root) in &mut players {
         let player = &mut *player;
-        let look_of = |glow: bool| match (player.ghost, glow) {
-            (_, true) => Look::Glow,
-            (true, false) => Look::Silhouette,
-            (false, false) => Look::Solid,
+        let look_of = |layer: Layer| match (player.ghost, layer) {
+            (_, Layer::Glow) => Look::Glow,
+            (true, _) => Look::Silhouette,
+            (false, Layer::Plumage) => Look::Plumage,
+            (false, Layer::Solid) => Look::Solid,
         };
+        let tag = player.wind.tag(still);
         // The frame shown, the one after it, and how far between them we are.
         let position = player.clip.map(|clip| {
             let frames = graphics.clips[clip].frames.len();
@@ -660,7 +731,7 @@ pub fn animate(
                 let parts = graphics.clips[clip].frames[at(index + ahead)].parts.len();
                 for slot in 0..parts {
                     let part = &graphics.clips[clip].frames[at(index + ahead)].parts[slot];
-                    let key = (part.mesh, player.tint, look_of(part.glow));
+                    let key = (part.mesh, player.tint, look_of(part.layer));
                     let _ = graphics.ready(key);
                 }
             }
@@ -674,6 +745,9 @@ pub fn animate(
         let shown = position.map_or(0, |(clip, index, ..)| {
             graphics.clips[clip].frames[index].parts.len()
         });
+        // Ordinary parts and plumage are drawn by different materials, so each
+        // has its own pool of child entities, filled in the clip's order.
+        let (mut drawn, mut feathered) = (0, 0);
         for slot in 0..shown {
             let (clip, index, next, between) = position.unwrap_or_default();
             let (key, transform) = {
@@ -682,17 +756,61 @@ pub fn animate(
                 // Recordings are 24 frames a second; the same mesh moving between
                 // frames is blended so it moves at the display's full rate.
                 let transform = match after {
-                    Some(after) if after.mesh == part.mesh && after.glow == part.glow => {
+                    Some(after) if after.mesh == part.mesh && after.layer == part.layer => {
                         blend(part.transform, after.transform, between)
                     }
                     _ => part.transform,
                 };
-                ((part.mesh, player.tint, look_of(part.glow)), transform)
+                ((part.mesh, player.tint, look_of(part.layer)), transform)
             };
             // Until a mesh is built, a part keeps showing what it showed before.
             let mesh = graphics.ready(key);
+            let visibility = match mesh.is_some() {
+                true => Visibility::Inherited,
+                false => Visibility::Hidden,
+            };
+            if key.2 == Look::Plumage {
+                feathered += 1;
+                match player.plumes.get(feathered - 1) {
+                    Some(child) => {
+                        let Ok((mut shown, mut placed, mut visibility, mut wind)) =
+                            plumes.get_mut(*child)
+                        else {
+                            continue;
+                        };
+                        if wind.value != tag {
+                            wind.value = tag;
+                        }
+                        let Some(mesh) = mesh else {
+                            continue;
+                        };
+                        if shown.0 != mesh {
+                            shown.0 = mesh;
+                        }
+                        *placed = transform;
+                        visibility.set_if_neq(Visibility::Inherited);
+                    }
+                    None => {
+                        // The shader moves feathers beyond their meshes' bounds.
+                        let child = commands
+                            .spawn((
+                                Mesh3d(mesh.unwrap_or_default()),
+                                MeshMaterial3d(graphics.plumage.clone()),
+                                MeshTag::new(tag),
+                                transform,
+                                visibility,
+                                NoFrustumCulling,
+                                ChildOf(entity),
+                            ))
+                            .id();
+                        player.plumes.push(child);
+                    }
+                }
+                continue;
+            }
+            drawn += 1;
             let material = graphics.surface(key.2);
-            match player.parts.get(slot) {
+            match player.parts.get(drawn - 1) {
                 Some(child) => {
                     let Ok((mut shown, mut surface, mut placed, mut visibility)) =
                         parts.get_mut(*child)
@@ -712,10 +830,6 @@ pub fn animate(
                     visibility.set_if_neq(Visibility::Inherited);
                 }
                 None => {
-                    let visibility = match mesh.is_some() {
-                        true => Visibility::Inherited,
-                        false => Visibility::Hidden,
-                    };
                     let child = commands
                         .spawn((
                             Mesh3d(mesh.unwrap_or_default()),
@@ -730,8 +844,13 @@ pub fn animate(
                 }
             }
         }
-        for child in player.parts.iter().skip(shown) {
+        for child in player.parts.iter().skip(drawn) {
             if let Ok((_, _, _, mut visibility)) = parts.get_mut(*child) {
+                visibility.set_if_neq(Visibility::Hidden);
+            }
+        }
+        for child in player.plumes.iter().skip(feathered) {
+            if let Ok((_, _, mut visibility, _)) = plumes.get_mut(*child) {
                 visibility.set_if_neq(Visibility::Hidden);
             }
         }
@@ -825,6 +944,17 @@ mod tests {
         assert_eq!(graphics.racers().len(), 15);
         assert_eq!(graphics.racers()[0].name, "Pip the Panda");
         assert_eq!(graphics.racers()[14].ability, "DARK HUMOR");
+        // Pearococo's eleven tail feathers are drawn by the plumage shader; no
+        // other racer has any.
+        let feathers = |driver: usize| {
+            let clip = graphics.clip(&format!("driver:{driver}:idle")).unwrap();
+            graphics.clips[clip].frames[0]
+                .parts
+                .iter()
+                .filter(|part| part.layer == Layer::Plumage)
+                .count()
+        };
+        assert_eq!((feathers(9), feathers(0), feathers(14)), (11, 0, 0));
         assert!(graphics.racers()[0].ability.is_empty());
         assert_eq!(graphics.racers()[14].card.0, "DARK HUMOR");
         assert_eq!(graphics.racers()[0].intelligence, 3);
@@ -921,6 +1051,44 @@ mod tests {
         let (red, blue) = (colors([255, 0, 0]), colors([0, 0, 255]));
         let changed = red.iter().zip(&blue).filter(|(a, b)| a != b).count();
         assert!(changed > 0 && changed < red.len());
+    }
+
+    #[test]
+    fn feathers_carry_what_the_plumage_shader_needs() {
+        let graphics = Graphics::parse(PACK).expect("valid pack");
+        let clip = &graphics.clips[graphics.clip("driver:9:idle").unwrap()];
+        let feather = clip.frames[0]
+            .parts
+            .iter()
+            .find(|part| part.layer == Layer::Plumage)
+            .expect("a feather");
+        let mesh = geometry(&graphics.source, (feather.mesh, [255; 3], Look::Plumage));
+        let count = mesh.count_vertices();
+        for attribute in [
+            Mesh::ATTRIBUTE_UV_0,
+            Mesh::ATTRIBUTE_UV_1,
+            Mesh::ATTRIBUTE_COLOR,
+        ] {
+            assert_eq!(
+                mesh.attribute(attribute).map(|values| values.len()),
+                Some(count)
+            );
+        }
+        // A feather is about 3.8 units long, and its blade under half a unit wide.
+        let Some(bevy::mesh::VertexAttributeValues::Float32x2(along)) =
+            mesh.attribute(Mesh::ATTRIBUTE_UV_0)
+        else {
+            panic!("feather coordinates");
+        };
+        let length = along.iter().map(|uv| uv[0]).fold(0.0, f32::max);
+        let width = along.iter().map(|uv| uv[1].abs()).fold(0.0, f32::max);
+        assert!(
+            (3.7..4.0).contains(&length) && (0.3..0.6).contains(&width),
+            "{length} {width}"
+        );
+        // The same mesh as an ordinary part has no such coordinates.
+        let plain = geometry(&graphics.source, (feather.mesh, [255; 3], Look::Solid));
+        assert!(plain.attribute(Mesh::ATTRIBUTE_UV_0).is_none());
     }
 
     #[test]

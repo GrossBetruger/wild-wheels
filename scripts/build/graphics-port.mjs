@@ -16,7 +16,7 @@ globalThis.devicePixelRatio??=1;
 // Reduced motion keeps the dizzy camera wobble out of recordings.
 globalThis.matchMedia??=()=>({matches:true});
 
-export const PACK_VERSION=6;
+export const PACK_VERSION=7;
 // Fire rings are recorded at this radius and scaled by the native client.
 export const FIRE_RING_RADIUS=20;
 // Clips whose every frame is new geometry are recorded at the slower rate to bound the pack size.
@@ -28,7 +28,7 @@ const ENDINGS={shield:1,hedge:1.5,tehilim:1.5};
 // Racers are recorded in open ground: at the arena's center an obstacle would
 // change anything that looks for free space, such as KnowItOwl's bat companion.
 const HOME=[0,60];
-const VERTICES=27,SPRITE=7,FPS=24,LOOP=8,OVERLAY_LOOP=4,WARMUP=3,BOOST_SPEED=40,MARKER='#fe01fd',SOLID=0,GLOW=1,REPEAT=0,ONCE=1;
+const VERTICES=27,SPRITE=7,FPS=24,LOOP=8,OVERLAY_LOOP=4,WARMUP=3,BOOST_SPEED=40,MARKER='#fe01fd',SOLID=0,GLOW=1,PLUMAGE=2,REPEAT=0,ONCE=1;
 const hex=color=>[1,3,5].map(i=>parseInt(color.slice(i,i+2),16));
 const byte=value=>Math.max(0,Math.min(255,Math.round(value*255)));
 const digest=data=>createHash('sha1').update(Buffer.from(data.buffer,data.byteOffset,data.byteLength)).digest('latin1');
@@ -59,7 +59,8 @@ function world(driver=0,arena=0){
   return r;
 }
 // The vertex shader's rigid placement of one model instance, as a 3x4 matrix.
-// Pearococo's feather fold is rigid and is kept; the feather sway is not.
+// Pearococo's feather fold is rigid and is baked in here; her feathers' sway and
+// iridescence are the native client's plumage shader (native-client/src/plumage.wesl).
 function placement(instance,[dx,dz]){
   const point=([x,y,z])=>{
     const plumage=instance.plumage;
@@ -86,7 +87,7 @@ function draw(view,r,time,shift=[0,0]){
   view.draw(r,time);
   const sprites=smoke=>moved(join(view.particleBuffer.uploads.filter(u=>u.smoke===smoke).map(u=>u.data)),SPRITE,shift);
   return {
-    instances:view.instances.filter(i=>(i.opacity??1)>0).map(i=>({data:i.buffer.data,matrix:placement(i,shift)})),
+    instances:view.instances.filter(i=>(i.opacity??1)>0).map(i=>({data:i.buffer.data,matrix:placement(i,shift),plumage:Boolean(i.plumage)})),
     dynamic:moved(view.dynamicBuffer.data,9,shift),glow:moved(view.glowBuffer.data,9,shift),
     sparks:sprites(false),smoke:sprites(true),scenery:view.staticBuffer.data,
   };
@@ -143,7 +144,9 @@ class Pack {
   // shot of the same frame pairs with it index by index.
   frame(shot,tinted=null,base=null){
     const still=[1,0,0,0,1,0,0,0,1,0,0,0];
-    const parts=shot.instances.map((part,i)=>({matrix:part.matrix,layer:SOLID,mesh:this.mesh(part.data,tinted?.instances[i]?.data,base)}));
+    // Models the browser draws with its plumage shader keep that as their layer: the
+    // native client sways and shades them with its own port of that shader.
+    const parts=shot.instances.map((part,i)=>({matrix:part.matrix,layer:part.plumage?PLUMAGE:SOLID,mesh:this.mesh(part.data,tinted?.instances[i]?.data,base)}));
     if(shot.dynamic.length)parts.push({matrix:still,layer:SOLID,mesh:this.mesh(shot.dynamic,tinted?.dynamic,base)});
     if(shot.glow.length)parts.push({matrix:still,layer:GLOW,mesh:this.mesh(shot.glow)});
     return {parts,sparks:shot.sparks,smoke:shot.smoke};

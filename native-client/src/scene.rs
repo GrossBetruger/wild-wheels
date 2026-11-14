@@ -1,5 +1,6 @@
 //! Presentation-only entities. All gameplay state comes from the core client.
 use crate::app::GameSession;
+use crate::plumage::Wind;
 use crate::ported::{Graphics, Look, Ported, Tint, placement, tint};
 use bevy::ecs::system::SystemParam;
 use bevy::{
@@ -98,6 +99,50 @@ pub struct SceneCache {
     leans: HashMap<usize, (f32, f32)>,
     /// Per racer and state (0 boost, 1 rapid fire): whether it is on, and since when.
     changes: HashMap<(usize, u8), (bool, f32)>,
+    /// Each racer's tail, swinging behind their turns.
+    tails: HashMap<usize, Tail>,
+}
+/// A damped spring that trails a racer's turning, and how hard speed presses on it.
+/// The browser's plumage only sways on its own; this response is native.
+#[derive(Default)]
+struct Tail {
+    heading: f64,
+    place: (f64, f64),
+    swing: f32,
+    velocity: f32,
+    press: f32,
+}
+/// Swing, as a share of its limit, per radian a second of turning: a full swing
+/// while drifting, about half in an ordinary turn.
+const SWING_PER_TURN: f32 = 0.28;
+/// The speed at which a tail is pressed fully back: the arena's top speed unboosted.
+const FULL_PRESS_SPEED: f64 = 520.0;
+impl Tail {
+    fn follow(&mut self, heading: f64, place: (f64, f64), speed: f64, dt: f32) -> Wind {
+        let turned = (heading - self.heading)
+            .sin()
+            .atan2((heading - self.heading).cos()) as f32;
+        // A respawn or teleport is not a turn.
+        let moved = (place.0 - self.place.0).hypot(place.1 - self.place.1);
+        (self.heading, self.place) = (heading, place);
+        if moved > 18.0 || dt <= 0.0 {
+            (self.swing, self.velocity) = (0.0, 0.0);
+            return Wind {
+                swing: 0.0,
+                press: self.press,
+            };
+        }
+        // Turning left carries the base of the tail right, so the tips trail left.
+        let target = ((turned / dt).clamp(-6.0, 6.0) * SWING_PER_TURN).clamp(-1.0, 1.0);
+        self.velocity += ((target - self.swing) * 90.0 - self.velocity * 9.0) * dt;
+        self.swing = (self.swing + self.velocity * dt).clamp(-1.0, 1.0);
+        let press = (speed.abs() / FULL_PRESS_SPEED).min(1.0) as f32;
+        self.press += (press - self.press) * (1.0 - (-dt * 4.0).exp());
+        Wind {
+            swing: self.swing,
+            press: self.press,
+        }
+    }
 }
 impl SceneCache {
     /// Seconds since a racer's state last changed. A state first seen is treated
@@ -334,6 +379,7 @@ struct Play {
     tint: Tint,
     time: Option<f32>,
     ghost: bool,
+    wind: Wind,
 }
 impl Stage<'_, '_, '_, '_, '_, '_, '_> {
     fn clip(&self, name: &str) -> Play {
@@ -342,6 +388,7 @@ impl Stage<'_, '_, '_, '_, '_, '_, '_> {
             tint: [255; 3],
             time: None,
             ghost: false,
+            wind: Wind::default(),
         }
     }
     /// A clip that plays once, `age` seconds in.
@@ -369,12 +416,13 @@ impl Stage<'_, '_, '_, '_, '_, '_, '_> {
                 // A clip spawned this frame is not queryable until the next one.
                 if let Ok(mut player) = self.players.get_mut(*entity) {
                     (player.clip, player.tint, player.time) = (play.clip, play.tint, play.time);
+                    player.wind = play.wind;
                     self.commands.entity(*entity).insert(transform);
                 }
             }
             None => {
                 let mut player = Ported::new(play.clip, play.tint, play.time);
-                player.ghost = play.ghost;
+                (player.ghost, player.wind) = (play.ghost, play.wind);
                 let entity = self
                     .commands
                     .spawn((transform, Visibility::default(), player))
@@ -430,6 +478,16 @@ fn racers(stage: &mut Stage, view: &ClientView, dt: f32, now: f32, xray: bool) {
             (false, false, false) => stage.clip(&racer("idle")),
         };
         play.tint = tint(&a.color).unwrap_or([255; 3]);
+        play.wind = stage
+            .cache
+            .tails
+            .entry(a.id)
+            .or_insert_with(|| Tail {
+                heading: a.heading,
+                place: (a.wx, a.wz),
+                ..default()
+            })
+            .follow(a.heading, (a.wx, a.wz), a.speed, dt);
         let (height, pitch, mut roll, yaw) = match wrecked {
             true => (0.0, 0.0, 0.0, 0.0),
             false => somersault(a.driver, a.somersault),
@@ -819,5 +877,50 @@ pub fn sync(
             *xray = *camera;
             *lens = projection.clone();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_tail_trails_a_turn_overshoots_and_settles() {
+        let mut tail = Tail::default();
+        let dt = 1.0 / 120.0;
+        let mut heading = 0.0;
+        let mut peak = 0.0f32;
+        // Half a second turning left at two radians a second, then straight on.
+        for step in 0..240 {
+            if step < 60 {
+                heading += 2.0 * f64::from(dt);
+            }
+            let wind = tail.follow(heading, (0.0, 0.0), 0.0, dt);
+            peak = peak.max(wind.swing);
+            if step == 59 {
+                // Trailing left of where a steady turn would hold it, about 0.56.
+                assert!((0.3..0.9).contains(&wind.swing), "{}", wind.swing);
+            }
+            if step == 80 {
+                // Springing back through centre after the turn ends.
+                assert!(wind.swing < 0.3, "{}", wind.swing);
+            }
+        }
+        assert!(peak > 0.56, "the spring overshoots: {peak}");
+        assert!(tail.swing.abs() < 0.02 && tail.velocity.abs() < 0.2);
+    }
+
+    #[test]
+    fn speed_presses_a_tail_back_and_a_respawn_is_not_a_turn() {
+        let mut tail = Tail::default();
+        let dt = 1.0 / 60.0;
+        for _ in 0..120 {
+            tail.follow(0.0, (0.0, 0.0), 520.0, dt);
+        }
+        assert!(tail.press > 0.95);
+        // Jumping across the arena while facing the other way does not swing it.
+        let wind = tail.follow(3.0, (60.0, -40.0), 0.0, dt);
+        assert_eq!(wind.swing, 0.0);
+        assert_eq!(tail.velocity, 0.0);
     }
 }

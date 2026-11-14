@@ -6,6 +6,7 @@ mod gui;
 mod hud;
 mod metrics;
 mod pilot;
+mod plumage;
 mod ported;
 mod prefs;
 mod scene;

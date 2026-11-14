@@ -83,20 +83,21 @@ cargo +1.97.1 build --release --locked --manifest-path native-client/Cargo.toml
 ./native-client/target/release/wild-wheels-native --showcase boost:9
 ```
 
-Scenes are `boost:N`, `rapid-fire:N`, `fade:shield:N`, `fade:hedge:N`,
+Scenes are `plumage` (Pearococo's tail from behind, swaying and swinging
+through turns, with the camera circling to show its iridescence), `boost:N`, `rapid-fire:N`, `fade:shield:N`, `fade:hedge:N`,
 `fade:tehilim:N`, `special-start:11` and `special-end:11`, for racer N from 0
 (Pip) to 14 (KnowItOwl). Each cycles through a state change and back. B toggles
 blending between recorded frames, to compare it with the 24 recorded frames a
 second; Escape quits.
 
-`cargo test` also runs 22 of these transitions in turn, the most interesting
-first, in a window that stays on top without taking focus (`tests/animations.rs`).
+`cargo test` also runs 23 of these transitions in turn, the most interesting
+first, offscreen, so nothing appears on the screen (`tests/animations.rs`).
 Racers that draw a transition through the same browser code share one test. The
 whole file takes about 6 minutes; run part of it by name, such as
 `cargo test --test animations knowitowl`. Each test holds steady loops still and
 checks from screenshots that the state change is visible and its transition has
 begun; eased transitions must also look unlike the state they lead to. A blank
-capture means the window was hidden. It runs only on macOS; no CI job builds the
+capture means nothing was drawn. It runs only on macOS; no CI job builds the
 native client. Run only the other tests with `cargo test --lib`.
 
 For a real Chrome/native transport check, build both binaries first, then run:

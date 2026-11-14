@@ -1,12 +1,13 @@
-//! Watches every ported animation transition play live, in isolation, and checks
-//! that each one really runs. `cargo test` builds the client and opens a showcase
-//! window for each, one at a time; the whole file takes about 6 minutes. Run part
-//! of it by name, such as `cargo test --test animations knowitowl`.
+//! Plays every ported animation transition in isolation and checks that each one
+//! really runs. `cargo test` builds the client and runs a showcase for each, one
+//! at a time and offscreen, so nothing appears on the screen; the whole file takes
+//! about 6 minutes. Run part of it by name, such as
+//! `cargo test --test animations knowitowl`. To watch one live, run the client
+//! with `--showcase SCENE`.
 //!
 //! The showcase cycles a racer through a state change with no server and saves
 //! screenshots at fixed moments, holding steady loops still so only the transition
-//! changes between them. Screenshots of covered windows come back black on macOS;
-//! the showcase window stays on top while capturing, and this runs only there.
+//! changes between them. It runs only on macOS, where it was written.
 #![cfg(target_os = "macos")]
 
 use std::{
@@ -55,7 +56,7 @@ impl Drop for Turn {
     }
 }
 
-/// Runs one showcase in a visible window and returns its screenshot directory.
+/// Runs one showcase offscreen and returns its screenshot directory.
 fn showcase(scene: &str) -> PathBuf {
     let directory = std::env::temp_dir().join(format!(
         "wild-wheels-showcase-{}-{}",
@@ -65,7 +66,7 @@ fn showcase(scene: &str) -> PathBuf {
     let _ = std::fs::remove_dir_all(&directory);
     std::fs::create_dir_all(&directory).expect("screenshot directory");
     let mut child = Command::new(env!("CARGO_BIN_EXE_wild-wheels-native"))
-        .args(["--showcase", scene, "--capture"])
+        .args(["--showcase", scene, "--offscreen", "--capture"])
         .arg(&directory)
         .args(["--seconds", "60"])
         .env("WILD_WHEELS_NATIVE_DATA_DIR", &directory)
@@ -95,8 +96,7 @@ fn showcase(scene: &str) -> PathBuf {
 
 /// Width, height and RGB pixels of a screenshot.
 fn pixels(file: &Path) -> (u32, u32, Vec<[u8; 3]>) {
-    let bytes = std::fs::read(file)
-        .unwrap_or_else(|_| panic!("no {} screenshot; was the window covered?", file.display()));
+    let bytes = std::fs::read(file).unwrap_or_else(|_| panic!("no {} screenshot", file.display()));
     let mut reader = png::Decoder::new(std::io::Cursor::new(bytes))
         .read_info()
         .expect("a PNG screenshot");
@@ -108,11 +108,11 @@ fn pixels(file: &Path) -> (u32, u32, Vec<[u8; 3]>) {
         .chunks_exact(channels)
         .map(|pixel| [pixel[0], pixel[1], pixel[2]])
         .collect::<Vec<_>>();
-    // The showcase's sky is light; an all-dark capture means the window was hidden.
+    // The showcase's sky is light; an all-dark capture means nothing was drawn.
     let dark = rgb.iter().filter(|p| p.iter().all(|c| *c < 24)).count();
     assert!(
         dark < rgb.len() / 2,
-        "{} is blank; the showcase window was hidden when it was captured",
+        "{} is blank; the showcase drew nothing",
         file.display()
     );
     (info.width, info.height, rgb)
@@ -183,6 +183,8 @@ macro_rules! animations {
 // Racers that draw a transition through the same browser code, differing only in
 // color, share one test. The most interesting run first.
 animations! {
+    // Native only: Pearococo's tail sways, then swings behind turns.
+    t00_pearococo_tail_sways_and_swings: 0, "plumage", true;
     // Eased: the browser moves gradually between the states.
     t01_knowitowl_bat_flies_in: 1, "rapid-fire:14", true;
     t02_knowitowl_takes_off: 2, "boost:14", true;

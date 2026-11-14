@@ -18,6 +18,9 @@ pub struct Config {
     pub showcase: Option<String>,
     /// A directory for showcase screenshots.
     pub capture: Option<String>,
+    /// Render the showcase to an image instead of a window, so capturing it
+    /// neither needs the screen nor shows anything on it.
+    pub offscreen: bool,
     pub sparring: bool,
     /// Measure frame times for this many seconds, then exit.
     pub benchmark: Option<f64>,
@@ -36,6 +39,7 @@ impl Config {
             screenshot: None,
             showcase: None,
             capture: None,
+            offscreen: false,
             sparring: false,
             benchmark: None,
         };
@@ -69,6 +73,7 @@ impl Config {
                 "--capture" => {
                     config.capture = Some(args.next().ok_or("--capture requires a directory")?)
                 }
+                "--offscreen" => config.offscreen = true,
                 "--screenshot" => {
                     config.screenshot = Some(args.next().ok_or("--screenshot requires a PNG path")?)
                 }
