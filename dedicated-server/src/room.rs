@@ -6,7 +6,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::sync::Notify;
-use wild_wheels_core::{Action, Frame, Input, Move, NativeArena};
+use wild_wheels_core::{Action, Frame, Input, Move, NativeArena, PLAYER_COLORS};
 pub const CAPACITY: usize = 8;
 pub type Result<T> = std::result::Result<T, (u16, &'static str)>;
 fn bad<T>(message: &'static str) -> Result<T> {
@@ -25,6 +25,13 @@ fn name(value: &Value) -> Result<String> {
         return bad("Enter a name (1–24 characters).");
     }
     Ok(s.trim().into())
+}
+pub(crate) fn color_preference(body: &Value) -> Result<Option<String>> {
+    match body.get("color") {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(color)) if PLAYER_COLORS.contains(&color.as_str()) => Ok(Some(color.clone())),
+        _ => Err((400, "Choose a color from the palette.")),
+    }
 }
 fn driver(value: &Value) -> Result<usize> {
     value
@@ -56,6 +63,9 @@ pub struct Member {
     pub identity: String,
     pub name: String,
     pub driver: usize,
+    pub color: String,
+    pub chat_color: String,
+    pub preferred_color: Option<String>,
     pub role: String,
     pub afk: bool,
     pub seen: Instant,
@@ -127,7 +137,7 @@ impl Room {
         self.members.iter().flatten().count()
     }
     pub fn config(&self) -> Value {
-        json!({"maxPlayers":8,"code":"00","arena":self.arena,"bots":self.bots,"host":null,"dedicated":true,"epoch":self.epoch,"seed":self.seed,"specialAbilities":self.abilities,"players":self.members.iter().enumerate().filter_map(|(id,p)|p.as_ref().map(|p|json!({"id":id,"name":p.name,"driver":p.driver,"role":p.role,"afk":p.afk}))).collect::<Vec<_>>()})
+        json!({"maxPlayers":8,"code":"00","arena":self.arena,"bots":self.bots,"host":null,"dedicated":true,"epoch":self.epoch,"seed":self.seed,"specialAbilities":self.abilities,"players":self.members.iter().enumerate().filter_map(|(id,p)|p.as_ref().map(|p|json!({"id":id,"name":p.name,"driver":p.driver,"color":p.color,"role":p.role,"afk":p.afk}))).collect::<Vec<_>>()})
     }
     pub fn sync(&mut self) {
         self.bots = self.bots.min(CAPACITY - self.count());
@@ -181,8 +191,15 @@ impl Room {
             .iter()
             .position(|p| p.as_ref().is_some_and(|p| p.token == token))
     }
+    fn available_chat_color(&self, preferred: &str, except: Option<usize>) -> Result<String> {
+        let available = |color: &str| !self.members.iter().enumerate().any(|(id, member)| Some(id) != except && member.as_ref().is_some_and(|member| member.chat_color == color));
+        if PLAYER_COLORS.contains(&preferred) && available(preferred) { return Ok(preferred.to_owned()); }
+        PLAYER_COLORS.iter().find(|color| available(color)).map(|color| color.to_string())
+            .ok_or((503, "No chat colors are available."))
+    }
     pub fn join(&mut self, body: &Value) -> Result<Value> {
         let name = name(&body["name"])?;
+        let preferred_color = color_preference(body)?;
         let role = body["role"].as_str().unwrap_or("driver");
         if !matches!(role, "driver" | "bomber") {
             return bad("Choose a driver or bomber role.");
@@ -199,12 +216,21 @@ impl Room {
                 .find(|&d| !self.members.iter().flatten().any(|p| p.driver == d))
                 .unwrap_or(id)
         });
+        let available = |color: &str| !self.members.iter().flatten().any(|member| member.color == color);
+        let color = preferred_color.as_deref().filter(|color| available(color)).map(str::to_owned)
+            .or_else(|| PLAYER_COLORS.iter().find(|color| available(color)).map(|color| color.to_string()))
+            .ok_or((503, "No player colors are available."))?;
+        let preferred_color = Some(preferred_color.unwrap_or_else(|| color.clone()));
+        let chat_color = self.available_chat_color(&color, None)?;
         let now = Instant::now();
         let mut p = Member {
             token: token(),
             identity: token(),
             name,
             driver: chosen,
+            color,
+            chat_color,
+            preferred_color,
             role: role.into(),
             afk: false,
             seen: now,
@@ -237,14 +263,31 @@ impl Room {
         if let Some(id) = self.members.iter().position(|p| p.as_ref().is_some_and(|p| p.identity == saved.identity)) {
             return Ok(id);
         }
-        let reply = self.join(&json!({"name":saved.name,"driver":saved.driver,"role":saved.role}))?;
+        let reply = self.join(&json!({"name":saved.name,"driver":saved.driver,"role":saved.role,"color":saved.color}))?;
         let id = reply["you"].as_u64().unwrap() as usize;
+        let preferred = saved.chat_color.as_deref().unwrap_or(&self.members[id].as_ref().unwrap().chat_color);
+        let chat_color = self.available_chat_color(preferred, Some(id))?;
+        self.members[id].as_mut().unwrap().chat_color = chat_color;
         self.members[id].as_mut().unwrap().identity = saved.identity.clone();
         Ok(id)
+    }
+    pub fn prefer_color(&mut self, id: usize, color: &str) -> Result<()> {
+        if !PLAYER_COLORS.contains(&color) { return Err((400, "Choose a color from the palette.")); }
+        // Reconnecting must preserve the color assigned to the current match.
+        if !matches!(self.core.phase(), "ready" | "finished") { return Ok(()); }
+        let available = !self.members.iter().enumerate().any(|(other, p)| other != id && p.as_ref().is_some_and(|p| p.color == color));
+        let member = self.members[id].as_mut().unwrap();
+        member.preferred_color = Some(color.to_owned());
+        // Keep the current unique assignment if the preferred swatch is occupied.
+        if available { member.color = color.to_owned(); }
+        self.broadcast();
+        Ok(())
     }
     pub fn reply(&self, id: usize) -> Value {
         let mut reply = self.core.snapshot(id);
         reply["token"] = json!(self.members[id].as_ref().unwrap().token);
+        reply["preferredColor"] = json!(self.members[id].as_ref().unwrap().preferred_color);
+        reply["chatColor"] = json!(self.members[id].as_ref().unwrap().chat_color);
         reply
     }
     pub fn resume(&mut self, id: usize, afk: bool) -> Value {
@@ -286,11 +329,26 @@ impl Room {
     pub fn control(&mut self, id: usize, path: &str, b: &Value) -> Result<Value> {
         self.members[id].as_mut().unwrap().seen = Instant::now();
         if path == "/api/chat" {
-            let players = self.members.iter().enumerate().filter_map(|(id,p)|p.as_ref().map(|p|(id,p.identity.clone(),p.name.clone()))).collect::<Vec<_>>();
+            let players = self.members.iter().enumerate().filter_map(|(id,p)|p.as_ref().map(|p|(id,p.identity.clone(),p.name.clone(),Some(p.chat_color.clone())))).collect::<Vec<_>>();
             return self.chat.exchange(id, &players, b);
         }
         match path {
-            "/api/session" => return Ok(self.resume(id, false)),
+            "/api/session" => {
+                if let Some(color) = color_preference(b)? { self.prefer_color(id, &color)?; }
+                return Ok(self.resume(id, false));
+            }
+            "/api/color" => {
+                if !matches!(self.core.phase(), "ready" | "finished") {
+                    return Err((409, "Choose your color between matches."));
+                }
+                let color = b["color"].as_str().filter(|color| PLAYER_COLORS.contains(color))
+                    .ok_or((400, "Choose a color from the palette."))?;
+                if self.members.iter().enumerate().any(|(other, p)| other != id && p.as_ref().is_some_and(|p| p.color == color)) {
+                    return Err((409, "Another player has chosen that color."));
+                }
+                self.prefer_color(id, color)?;
+                return Ok(json!({"ok":true,"color":color,"preferredColor":color}));
+            }
             "/api/afk" => {
                 let afk = b["afk"]
                     .as_bool()
@@ -478,8 +536,9 @@ impl Room {
         let mut changed = false;
         for p in &mut self.members {
             if p.as_ref()
-                .is_some_and(|p| !p.connected && p.seen.elapsed() > Duration::from_secs(900))
+                .is_some_and(|p| p.seen.elapsed() > Duration::from_secs(900))
             {
+                if let Some(member) = p.as_ref() { member.notify.notify_one(); }
                 *p = None;
                 changed = true;
                 continue;
@@ -568,8 +627,9 @@ mod tests {
         for name in ["Alice", "Bob", "Eve"] {
             room.join(&json!({"name":name,"driver":null})).unwrap();
         }
-        let sent=room.control(0,"/api/chat",&json!({"text":"Private hello","to":1,"name":"Forged"})).unwrap();
+        let sent=room.control(0,"/api/chat",&json!({"text":"Private hello","to":1,"name":"Forged","color":"#000000"})).unwrap();
         assert_eq!(sent["messages"][0]["name"],"Alice");
+        assert_eq!(sent["messages"][0]["color"],room.core.player_color(0).unwrap());
         assert_eq!(room.control(1,"/api/chat",&json!({})).unwrap()["messages"][0]["text"],"Private hello");
         assert!(room.control(2,"/api/chat",&json!({})).unwrap()["messages"].as_array().unwrap().is_empty());
         room.control(1,"/api/chat",&json!({"text":"Public hello"})).unwrap();
@@ -740,5 +800,41 @@ mod tests {
         room.controls(0,json!({"sequence":0,"epoch":1,"keys":[],"moves":[{"sequence":0,"keys":["w"]}],"actions":[]})).unwrap();
         room.tick();
         assert_eq!(room.reply(0)["movementSequence"], 0);
+    }
+}
+
+#[cfg(test)]
+mod security_tests {
+    use super::*;
+    #[test]
+    fn abandoned_members_expire_even_when_the_socket_never_closed() {
+        let mut room=Room::new(0,0);let old=room.join(&json!({"name":"Abandoned","driver":0})).unwrap();
+        let member=room.members[0].as_mut().unwrap();member.connected=true;member.seen=Instant::now()-Duration::from_secs(901);
+        room.tick();assert_eq!(room.count(),0);assert!(room.find(old["token"].as_str().unwrap()).is_none());
+        assert_eq!(room.join(&json!({"name":"Replacement","driver":0})).unwrap()["you"],0);
+    }
+}
+
+#[cfg(test)]
+mod automatic_color_tests {
+    use super::*;
+    #[test]
+    fn default_colors_are_unique_and_survive_reconnects_driver_changes_and_new_matches() {
+        let mut room = Room::new(0, 7);
+        let first = room.join(&json!({"name":"Same name","driver":6})).unwrap();
+        let color = first["world"]["color"].as_str().unwrap().to_owned();
+        assert!(PLAYER_COLORS.contains(&color.as_str()));
+        room.control(0, "/api/driver", &json!({"driver":0})).unwrap();
+        let resumed = room.resume(0, false);
+        assert_eq!(resumed["world"]["color"], color);
+        for _ in 1..CAPACITY { room.join(&json!({"name":"Same name","driver":6})).unwrap(); }
+        let colors = room.members.iter().flatten().map(|p| p.color.clone()).collect::<std::collections::HashSet<_>>();
+        assert_eq!(colors.len(), CAPACITY);
+        for id in 0..CAPACITY {
+            assert!(PLAYER_COLORS.contains(&room.core.player_color(id).unwrap()));
+            assert_eq!(room.core.player_color(id).unwrap(), room.members[id].as_ref().unwrap().color);
+        }
+        room.control(0, "/api/control", &json!({"action":"start"})).unwrap();
+        assert_eq!(room.core.player_color(0).unwrap(), color);
     }
 }

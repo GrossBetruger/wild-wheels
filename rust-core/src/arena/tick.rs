@@ -28,7 +28,7 @@ impl Game{
         let ending=self.global.finish_countdown.is_some();if let Some(left)=self.global.finish_countdown{dt=dt.min(left);}
         let world_dt=match self.global.time_stop>0.0{true=>0.0,false=>dt};
         let g=&mut self.global;g.elapsed+=dt;g.shake=(g.shake-dt*2.0).max(0.0);
-        for supply in &mut g.supplies{supply.cooldown=(supply.cooldown-world_dt).max(0.0);}
+        supplies::tick(g,&self.actors,world_dt);
         for fx in &mut g.effects{fx.age+=world_dt;}g.effects.retain(|fx|fx.age<fx.life);
         for c in &mut g.chaff_clouds{c.age+=world_dt;}g.chaff_clouds.retain(|c|c.age<c.life);
         for c in &mut g.stink_clouds{c.age+=world_dt;}g.stink_clouds.retain(|c|c.age<c.life);

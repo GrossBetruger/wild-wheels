@@ -32,17 +32,18 @@ impl Chat {
         let chat: Self = serde_json::from_slice(&bytes).map_err(io::Error::other)?;
         let key = |s: &str| s.len() == 64 && s.bytes().all(|b| b.is_ascii_hexdigit());
         let text = |v: &Value, limit| v.as_str().is_some_and(|s| s.encode_utf16().count() <= limit);
+        let color = |m: &Value| m.get("color").is_none_or(|v| v.as_str().is_some_and(|s| s.len() == 7 && s.starts_with('#') && s.as_bytes()[1..].iter().all(u8::is_ascii_hexdigit)));
         let cursor = |v: &Value| v.as_u64().is_some_and(|n| n > 0 && n <= chat.sequence);
         if chat.sequence > 9_007_199_254_740_991 || chat.messages.len() > 200
             || chat.messages.iter().any(|(from, to, m)| {
                 !key(from) || to.as_ref().is_some_and(|s| !key(s))
                     || !cursor(&m["id"]) || m.get("updated").is_some_and(|v| !cursor(v))
-                    || !text(&m["name"], 24) || !text(&m["text"], 500)
+                    || !text(&m["name"], 24) || !text(&m["text"], 500) || !color(m)
                     || m["from"].as_u64().is_none_or(|n| n >= 8)
                     || (to.is_some() && (m["to"].as_u64().is_none_or(|n| n >= 8) || !text(&m["toName"], 24)))
                     || (to.is_none() && !m["to"].is_null())
                     || m["time"].as_u64().is_none()
-                    || (!m["reply"].is_null() && (!cursor(&m["reply"]["id"]) || !text(&m["reply"]["name"], 24) || !text(&m["reply"]["text"], 500)))
+                    || (!m["reply"].is_null() && (!cursor(&m["reply"]["id"]) || !text(&m["reply"]["name"], 24) || !text(&m["reply"]["text"], 500) || !color(&m["reply"])))
             }) {
             return Err(io::Error::other("Invalid saved chat"));
         }
@@ -58,7 +59,7 @@ impl Chat {
     pub fn exchange(
         &mut self,
         id: usize,
-        players: &[(usize, String, String)],
+        players: &[(usize, String, String, Option<String>)],
         body: &Value,
     ) -> crate::room::Result<Value> {
         let after = match body.get("after") {
@@ -85,7 +86,7 @@ impl Chat {
                 })
                 .ok_or((404, "Message unavailable."))?;
             if self.messages[index].0 != sender.1 {
-                return Err((403, "You can only delete your own messages."));
+                return Err((404, "Message unavailable."));
             }
             if self.messages[index].2["deleted"] != true {
                 self.sequence += 1;
@@ -144,7 +145,11 @@ impl Chat {
                             }
                         })
                         .ok_or((400, "That message is unavailable in this conversation."))?;
-                    json!({"id":original.2["id"],"name":original.2["name"],"text":original.2["text"]})
+                    {
+                        let mut quote = json!({"id":original.2["id"],"name":original.2["name"],"text":original.2["text"]});
+                        if let Some(color) = original.2.get("color") { quote["color"] = color.clone(); }
+                        quote
+                    }
                 }
             };
             if self
@@ -158,7 +163,8 @@ impl Chat {
                 .retain(|token, _| players.iter().any(|p| &p.1 == token));
             self.sent.insert(sender.1.clone(), Instant::now());
             self.sequence += 1;
-            let message = json!({"id":self.sequence,"from":id,"name":sender.2,"to":recipient.map(|p|p.0),"toName":recipient.map(|p|&p.2),"text":text.trim(),"reply":reply,"time":SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64});
+            let mut message = json!({"id":self.sequence,"from":id,"name":sender.2,"to":recipient.map(|p|p.0),"toName":recipient.map(|p|&p.2),"text":text.trim(),"reply":reply,"time":SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64});
+            if let Some(color) = &sender.3 { message["color"] = json!(color); }
             self.messages
                 .push_back((sender.1.clone(), recipient.map(|p| p.1.clone()), message));
             if self.messages.len() > 200 {
@@ -187,7 +193,7 @@ impl Chat {
             })
             .collect();
         Ok(
-            json!({"you":id,"players":players.iter().map(|p|json!({"id":p.0,"name":p.2})).collect::<Vec<_>>(),"cursor":self.sequence,"messages":messages}),
+            json!({"you":id,"players":players.iter().map(|p|json!({"id":p.0,"name":p.2,"color":p.3})).collect::<Vec<_>>(),"cursor":self.sequence,"messages":messages}),
         )
     }
 }
@@ -200,7 +206,7 @@ mod tests {
         let alice = "a".repeat(64);
         let bob = "b".repeat(64);
         let stranger = "c".repeat(64);
-        let players = vec![(0, alice.clone(), "Alice".into()), (1, bob.clone(), "Bob".into())];
+        let players = vec![(0, alice.clone(), "Alice".into(), None), (1, bob.clone(), "Bob".into(), None)];
         let mut chat = super::Chat::default();
         let text = "\"},\"command\":\"$(touch /tmp/chat-must-not-execute)\" <script> & \\";
         chat.exchange(0, &players, &serde_json::json!({"text":text})).unwrap();
@@ -208,7 +214,7 @@ mod tests {
         chat.exchange(0, &players, &serde_json::json!({"deleteId":1})).unwrap();
         chat.save(&path).unwrap();
         let mut restored = super::Chat::open(&path).unwrap();
-        let players = vec![(0, stranger, "Alice".into()), (3, bob, "Bob".into()), (5, alice, "Alice".into())];
+        let players = vec![(0, stranger, "Alice".into(), None), (3, bob, "Bob".into(), None), (5, alice, "Alice".into(), None)];
         let public = restored.exchange(0, &players, &serde_json::json!({})).unwrap();
         assert_eq!(public["messages"].as_array().unwrap().len(), 1);
         assert_eq!(public["messages"][0]["deleted"], true);
@@ -216,7 +222,7 @@ mod tests {
         assert_eq!(private["messages"][1]["text"], "Secret");
         assert_eq!(private["messages"][1]["from"], 3);
         assert_eq!(private["messages"][1]["to"], 5);
-        assert_eq!(restored.exchange(0, &players, &serde_json::json!({"deleteId":2})).unwrap_err().0, 403);
+        assert_eq!(restored.exchange(0, &players, &serde_json::json!({"deleteId":2})).unwrap_err().0, 404);
         let reply = restored.exchange(5, &players, &serde_json::json!({"text":text,"to":3,"replyTo":2})).unwrap();
         assert_eq!(reply["messages"][2]["reply"]["text"], "Secret");
         restored.save(&path).unwrap();
@@ -289,7 +295,7 @@ mod tests {
             chat.exchange(1, &players, &json!({"deleteId":1}))
                 .unwrap_err()
                 .0,
-            403
+            404
         );
         let update = chat
             .exchange(0, &players, &json!({"deleteId":1,"after":2}))
@@ -312,11 +318,11 @@ mod tests {
                 .is_empty()
         );
     }
-    fn players() -> Vec<(usize, String, String)> {
+    fn players() -> Vec<(usize, String, String, Option<String>)> {
         vec![
-            (0, "alice-token".into(), "Alice".into()),
-            (1, "bob-token".into(), "Bob".into()),
-            (2, "eve-token".into(), "Eve".into()),
+            (0, "alice-token".into(), "Alice".into(), None),
+            (1, "bob-token".into(), "Bob".into(), None),
+            (2, "eve-token".into(), "Eve".into(), None),
         ]
     }
     #[test]
@@ -372,5 +378,51 @@ mod tests {
                 .unwrap()
                 .is_empty()
         );
+    }
+}
+
+#[cfg(test)]
+mod attack_tests {
+    use super::*;
+    #[test]
+    fn injection_payloads_are_data_and_private_message_ids_do_not_grant_access() {
+        let players=vec![(0,"alice".into(),"Alice".into(), None),(1,"bob".into(),"Bob".into(), None),(2,"eve".into(),"Eve".into(), None)];
+        for text in ["<script>alert(1)</script>","<img src=x onerror=alert(1)>","' OR 1=1; DROP TABLE messages; --","{\"__proto__\":{\"admin\":true}}"] {
+            let mut chat=Chat::default();
+            let sent=chat.exchange(0,&players,&json!({"text":text,"to":1,"from":2})).unwrap();
+            assert_eq!(sent["messages"][0]["text"],text);assert_eq!(sent["messages"][0]["from"],0);
+            assert_eq!(chat.exchange(2,&players,&json!({})).unwrap()["messages"],json!([]));
+            for id in [1,999] { assert_eq!(chat.exchange(2,&players,&json!({"deleteId":id})).unwrap_err(),(404,"Message unavailable.")); }
+            assert_eq!(chat.exchange(2,&players,&json!({"text":"Leak","to":0,"replyTo":1})).unwrap_err().0,400);
+        }
+    }
+}
+
+#[cfg(test)]
+mod color_tests {
+    use super::*;
+    #[test]
+    fn quotes_preserve_original_colors_across_changes_and_restarts_without_trusting_client_colors() {
+        let mut players = vec![
+            (0, "a".repeat(64), "Alice".into(), Some("#a4198b".into())),
+            (1, "b".repeat(64), "Bob".into(), Some("#3c75d8".into())),
+            (2, "c".repeat(64), "Eve".into(), None),
+        ];
+        let mut chat = Chat::default();
+        let sent = chat.exchange(0, &players, &json!({"text":"Private question","to":1,"color":"#000000"})).unwrap();
+        assert_eq!(sent["messages"][0]["color"], "#a4198b");
+        players[0].3 = Some("#3b6329".into());
+        let answer = chat.exchange(1, &players, &json!({"text":"Answer","to":0,"replyTo":1,"reply":{"color":"#000000"}})).unwrap();
+        let quote = json!({"id":1,"name":"Alice","text":"Private question","color":"#a4198b"});
+        assert_eq!(answer["messages"][1]["color"], "#3c75d8");
+        assert_eq!(answer["messages"][1]["reply"], quote);
+        assert_eq!(chat.exchange(2, &players, &json!({})).unwrap()["messages"], json!([]));
+        let path = std::env::temp_dir().join(format!("wild-wheels-chat-color-{}", crate::room::token())).join("chat.json");
+        chat.save(&path).unwrap();
+        let mut restored = Chat::open(&path).unwrap();
+        assert_eq!(restored.exchange(0, &players, &json!({})).unwrap()["messages"][1]["reply"], quote);
+        let deletion = restored.exchange(0, &players, &json!({"deleteId":1,"after":2})).unwrap();
+        assert_eq!(deletion["messages"][1]["reply"], json!({"id":1,"name":"Alice","text":"","deleted":true}));
+        std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
     }
 }

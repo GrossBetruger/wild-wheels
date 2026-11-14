@@ -1,3 +1,4 @@
+import {canChoosePlayerColor, isPlayerColor, savedPlayerColor} from '../gameplay/player-colors.js';
 import { drivers } from '../gameplay/engine.js';
 import {ArenaClient} from '../gameplay/arena-core.js';
 import {createBinaryEncoder} from './binary-wire.js';
@@ -9,10 +10,10 @@ export function savedPlayerName(cookies){
   try{const name=decodeURIComponent(value??'').trim();return name&&name.length<=24?name:'Player';}catch{return 'Player';}
 }
 
-export function invitationUrl(pageUrl,code,{publicOrigin,lan}={}){
+export function invitationUrl(pageUrl,code,{publicOrigin,lan,invite}={}){
   const page=new URL(pageUrl);
   const origin=['localhost','127.0.0.1'].includes(page.hostname)?publicOrigin??lan??page.origin:page.origin;
-  return new URL(`/?room=${encodeURIComponent(code)}`,origin).href;
+  const url=new URL(`/?room=${encodeURIComponent(code)}`,origin);if(invite)url.hash=new URLSearchParams({invite}).toString();return url.href;
 }
 
 export class PlayRequestPrompt {
@@ -26,6 +27,7 @@ export class NetworkGame {
   playRequestPrompt=new PlayRequestPrompt();
   token=null;state=null;paused=false;sequence=0;actions=[];client=null;rtt=0;lastPing=-Infinity;
   constructor({anchor,keys,driver,arena,onState,onLeave,unlock,sound=()=>{},role='driver'}){
+    this.preferredColor=savedPlayerColor(document.cookie);this.colorDirty=false;this.colorPending=false;this.colorError='';
     Object.assign(this,{keys,driver,arena,onState,onLeave,unlock,sound,role});this.dedicated=document.body.classList.contains('dedicated-server');
     this.panel=document.createElement('section');this.panel.className='network-panel';this.panel.setAttribute('aria-label','Multiplayer arena lobby');
     const title=this.title=document.createElement('strong');title.textContent='PLAY TOGETHER · UP TO 6 PLAYERS';
@@ -34,6 +36,7 @@ export class NetworkGame {
     this.nameFeedback=document.createElement('span');this.nameFeedback.className='network-name-status';this.nameFeedback.setAttribute('role','status');
     this.nameFields=[];
     this.name.oninput=()=>{for(const input of this.nameFields)if(input.value!==this.name.value)input.value=this.name.value;this.hostButton.disabled=!this.hasName||this.connecting||this.active&&!this.isHost;if(this.connection&&!this.active)this.connectionStatus();this.rememberName();this.nameDirty=this.name.value.trim()!==this.state?.world.name;this.nameFeedback.textContent='';};
+    this.invite=new URLSearchParams(location.hash.slice(1)).get('invite')??'';
     this.invitation=new URL(location.href).searchParams.get('room')??(this.dedicated?'00':'');
     this.connection=document.getElementById('arena-connection');
     if(this.connection)this.connection.querySelector('button').onclick=()=>this.restore();
@@ -173,18 +176,41 @@ export class NetworkGame {
     }catch(error){this.updating=false;this.updateStatus.textContent=error.message;this.updateServerButton.disabled=false;this.checkUpdatesButton.disabled=false;}
   }
   rememberName(){const name=this.name.value.trim();if(!name||name.length>24)return;document.cookie=`wild-wheels-name=${encodeURIComponent(name)}; Path=/; SameSite=Lax; Max-Age=31536000${location.protocol==='https:'?'; Secure':''}`;}
+  rememberColor(){
+    if(isPlayerColor(this.preferredColor))document.cookie=`wild-wheels-color=${encodeURIComponent(this.preferredColor)}; Path=/; SameSite=Lax; Max-Age=31536000${location.protocol==='https:'?'; Secure':''}`;
+  }
+  async chooseColor(color){
+    if(this.colorPending||this.connecting||this.restoring)return false;
+    if(this.active&&!canChoosePlayerColor(this.state?.world.phase)){this.colorError='Choose your color between matches.';return false;}
+    if(!isPlayerColor(color)){this.colorError='Choose a color from the palette.';return false;}
+    this.colorError='';
+    if(!this.active){this.preferredColor=color;this.colorDirty=true;this.rememberColor();return true;}
+    const token=this.token;this.colorPending=true;
+    try{
+      const reply=await this.request('/api/color',{color});if(this.token!==token)return false;
+      const accepted=reply.preferredColor??reply.color;if(!isPlayerColor(accepted))throw new Error('Invalid player color response.');
+      this.preferredColor=accepted;this.colorDirty=false;this.rememberColor();return true;
+    }catch(error){if(this.token===token)this.colorError=error.message;return false;}
+    finally{if(this.token===token)this.colorPending=false;}
+  }
   adopt(reply){
+    this.chatColor=isPlayerColor(reply.chatColor)?reply.chatColor:null;
+    const preferred=reply.preferredColor??reply.world.color;
+    if(isPlayerColor(preferred)){this.preferredColor=preferred;this.colorDirty=false;this.rememberColor();}
+    this.colorPending=false;this.colorError='';
     const draft=this.nameDirty?this.name.value:null;
-    const url=new URL(location.href);url.searchParams.set('room',reply.code);history.replaceState(null,'',url);this.invitation=reply.code;
+    if(reply.invite)this.invite=reply.invite;
+    const url=new URL(location.href);url.searchParams.set('room',reply.code);if(this.invite)url.hash=new URLSearchParams({invite:this.invite}).toString();history.replaceState(null,'',url);this.invitation=reply.code;
     this.token=reply.token;this.socket?.close();this.nameDirty=false;this.namePending=false;this.namePromise=null;this.sequence=0;this.pending=null;this.failures=0;this.shareEdited=false;this.actions=[];this.keys.clear();this.paused=Boolean(reply.players.find(player=>player.id===reply.you)?.afk);this.client=new ArenaClient();this.accept(bootstrapPacket(reply));
     if(draft!==null){this.name.value=draft;this.nameDirty=draft.trim()!==reply.world.name;}
     this.rememberName();this.stream();
   }
   async restore(){
+    if(this.restoring)return;this.restoring=true;
     this.connectionStatus();
-    try{this.adopt(await this.request('/api/session',{}));}
+    try{this.adopt(await this.request('/api/session',this.colorDirty&&isPlayerColor(this.preferredColor)?{color:this.preferredColor}:{}));}
     catch(error){if(error.status!==401){this.status.textContent=error.message;this.connectionStatus(error.message);return;}if(this.active){this.leave('This room is no longer available.',false);return;}await this.infoReady;if(this.invitation)await this.connect('/api/join');}
-    finally{this.hostButton.disabled=this.active&&!this.isHost;}
+    finally{this.restoring=false;this.hostButton.disabled=this.active&&!this.isHost;}
   }
   async setAway(afk){
     if(!this.active||this.awayPending)return;this.awayPending=true;this.leaveButton.disabled=true;
@@ -200,7 +226,7 @@ export class NetworkGame {
   updateShare(){
     if(!this.state)return;
     const local=['localhost','127.0.0.1'].includes(location.hostname);
-    if(!this.shareEdited)this.share.value=invitationUrl(location.href,this.state.code,{publicOrigin:this.publicOrigin,lan:this.lan});
+    if(!this.shareEdited)this.share.value=invitationUrl(location.href,this.state.code,{publicOrigin:this.publicOrigin,lan:this.lan,invite:this.invite});
     this.internetButton.classList.toggle('hidden',!local||!this.isHost||!this.controlPort||Boolean(this.publicOrigin));
     this.help.textContent=this.dedicated?'Share this server’s invitation link with a friend.':this.internetError?'Could not start ngrok. Install it and sign in once, then try again.':location.protocol==='https:'||local&&this.publicOrigin?'Share this HTTPS link with a friend to play over the internet.':local&&this.controlPort?'To play with a friend elsewhere, click START INTERNET LINK, then COPY INVITE.':'Same Wi-Fi: share this link.';
   }
@@ -238,7 +264,7 @@ export class NetworkGame {
     this.connectionStatus();
     this.hostButton.disabled=true;this.status.textContent='Connecting…';
     try{
-      this.unlock().catch(()=>{});if(path==='/api/rooms')await this.refreshInfo();const reply=await this.request(path,{name:this.name.value.trim(),driver:path==='/api/join'?null:this.driver(),role:this.role,arena:this.arena(),bots:Number(this.botCount.value),code:this.invitation.toUpperCase()});
+      this.unlock().catch(()=>{});if(path==='/api/rooms')await this.refreshInfo();const reply=await this.request(path,{name:this.name.value.trim(),driver:path==='/api/join'?null:this.driver(),role:this.role,arena:this.arena(),bots:Number(this.botCount.value),code:this.invitation.toUpperCase(),invite:this.invite,...(isPlayerColor(this.preferredColor)?{color:this.preferredColor}:{})});
       this.adopt(reply);
     }catch(error){this.status.textContent=error.message;this.connectionStatus(error.message);}
     this.connecting=false;this.hostButton.disabled=this.active&&!this.isHost;this.name.disabled=false;
@@ -283,7 +309,7 @@ export class NetworkGame {
     }
     if(['countdown','racing'].includes(state.world.phase))this.status.textContent=`MATCH LIVE · ${state.players.length} players + ${state.bots} bots`;
     if(this.afk)this.status.textContent='AFK · Your place and scores are saved. Press BACK TO ARENA to return.';
-    if(rosterKey!==this.rosterKey){this.rosterKey=rosterKey;this.players.replaceChildren(...state.players.map(player=>{const label=document.createElement('span');label.textContent=`${player.role==='bomber'?'✈':drivers[player.driver].emoji} ${player.name}${player.role==='bomber'?' · BOMBER':''}${player.id===state.host?' · HOST':''}${player.id===state.you?' · YOU':''}${player.afk?' · AFK':''}${player.wantsToPlay?' · READY ✓':''}`;label.style.borderLeft=`4px solid ${player.color}`;return label;}));}
+    if(rosterKey!==this.rosterKey){this.rosterKey=rosterKey;this.players.replaceChildren(...state.players.map(player=>{const label=document.createElement('span');label.textContent=`${player.role==='bomber'?'✈':drivers[player.driver].emoji} ${player.name}${player.role==='bomber'?' · BOMBER':''}${player.id===state.host?' · HOST':''}${player.id===state.you?' · YOU':''}${player.afk?' · AFK':''}${player.wantsToPlay?' · READY ✓':''}`;label.style.borderLeft=`4px solid ${player.color}`;if(this.isHost&&player.id!==state.you){const remove=this.button('REMOVE',()=>this.request('/api/kick',{id:player.id}).then(reply=>{this.invite=reply.invite;const url=new URL(location.href);url.hash=new URLSearchParams({invite:this.invite}).toString();history.replaceState(null,'',url);this.shareEdited=false;this.updateShare();}).catch(error=>{this.status.textContent=error.message;}));remove.setAttribute('aria-label',`Remove ${player.name} from room`);label.append(remove);}return label;}));}
     this.updatePlayRequest();
     this.onState(this.view());
   }
@@ -309,7 +335,7 @@ export class NetworkGame {
     socket.onopen=()=>{if(this.token===token){this.client.resend();socket.send(JSON.stringify({type:'authenticate',token}));}};
     socket.onmessage=event=>{try{if(this.token!==token)return;if(event.data instanceof ArrayBuffer){this.accept(event.data);return;}if(typeof event.data!=='string'||event.data.length>2048)throw new Error();const state=JSON.parse(event.data);if(state.type!=='pong')throw new Error();if(state.sent===this.lastPing)this.rtt=Math.max(0,Math.min(.3,performance.now()/1000-state.sent));}catch{socket.close();}};
     socket.onerror=()=>{};
-    socket.onclose=event=>{if(this.token!==token||this.socket!==socket)return;this.keys.clear();if([4001,4004].includes(event.code)){if(this.awayPending||this.connecting)return;this.leave(event.code===4004?'The host replaced this room. Open the new invitation.':'This player resumed in another tab.',false);return;}this.status.textContent='Reconnecting to the room…';setTimeout(()=>{if(this.token===token)this.restore();},500);};
+    socket.onclose=event=>{if(this.token!==token||this.socket!==socket)return;this.keys.clear();if([4001,4003,4004].includes(event.code)){if(this.awayPending||this.connecting)return;this.leave(event.code===4003?'You were removed by the host.':event.code===4004?'The host replaced this room. Open the new invitation.':'This player resumed in another tab.',false);return;}this.status.textContent='Reconnecting to the room…';setTimeout(()=>{if(this.token===token)this.restore();},500);};
   }
   async control(action,arena,bots){try{if(action==='start'&&!await this.saveName())return;await this.request('/api/control',{action,arena,bots});this.paused=false;}catch(error){this.status.textContent=error.message;}}
   async chooseDriver(driver){
@@ -321,8 +347,9 @@ export class NetworkGame {
     if(!this.active)return;
     this.readyDialog?.close();this.playRequestPrompt=new PlayRequestPrompt();
     this.hostButton.classList.remove('hidden');this.botCount.classList.remove('hidden');this.share.parentElement.classList.remove('hidden');
+    this.colorPending=false;this.colorError='';
     this.nameFeedback.textContent='';this.nameDirty=false;this.namePending=false;this.namePromise=null;
-    if(notify)this.request('/api/leave',{}).catch(()=>{});this.token=null;this.socket?.close();this.state=null;this.pending=null;this.actions=[];this.keys.clear();this.client=null;this.rtt=0;this.lastPing=-Infinity;
+    if(notify)this.request('/api/leave',{}).catch(()=>{});this.token=null;this.chatColor=null;this.socket?.close();this.state=null;this.pending=null;this.actions=[];this.keys.clear();this.client=null;this.rtt=0;this.lastPing=-Infinity;
     this.internetError=false;this.hostButton.disabled=false;this.name.disabled=false;this.botCount.disabled=false;for(const option of this.botCount.options)option.disabled=false;this.leaveButton.classList.add('hidden');this.copyButton.classList.add('hidden');this.internetButton.classList.add('hidden');this.animalChoice.classList.add('hidden');this.share.classList.add('hidden');this.help.classList.add('hidden');this.players.replaceChildren();this.status.textContent=message;this.onLeave();
     if(this.dedicated){document.body.classList.remove('arena-connected');this.connectionStatus(message);}
   }
