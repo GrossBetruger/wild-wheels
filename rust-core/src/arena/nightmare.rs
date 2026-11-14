@@ -10,6 +10,7 @@ impl Game {
             || !self.active(id)
             || self.global.finish_countdown.is_some()
             || a.driver != 7
+            || !ability_on(id, 1)
             || a.nightmare_cooldown > 1e-8
         {
             return;
