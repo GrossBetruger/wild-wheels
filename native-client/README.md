@@ -89,11 +89,11 @@ Scenes are `boost:N`, `rapid-fire:N`, `fade:shield:N`, `fade:hedge:N`,
 blending between recorded frames, to compare it with the 24 recorded frames a
 second; Escape quits.
 
-`cargo test` also runs these transitions in turn (one plain boost and shield, every
-eased one, and all the rest), in a window
-that stays on top without taking focus (`tests/animations.rs`). The whole file
-takes about 14 minutes; run part of it by name, such as
-`cargo test --test animations boost_`. Each test holds steady loops still and
+`cargo test` also runs 22 of these transitions in turn, the most interesting
+first, in a window that stays on top without taking focus (`tests/animations.rs`).
+Racers that draw a transition through the same browser code share one test. The
+whole file takes about 6 minutes; run part of it by name, such as
+`cargo test --test animations knowitowl`. Each test holds steady loops still and
 checks from screenshots that the state change is visible and its transition has
 begun; eased transitions must also look unlike the state they lead to. A blank
 capture means the window was hidden. It runs only on macOS; no CI job builds the

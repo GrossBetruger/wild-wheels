@@ -1,7 +1,7 @@
 //! Watches every ported animation transition play live, in isolation, and checks
 //! that each one really runs. `cargo test` builds the client and opens a showcase
-//! window for each, one at a time; the whole file takes about 14 minutes. Run part
-//! of it by name, such as `cargo test --test animations boost_` or `fade_hedge_`.
+//! window for each, one at a time; the whole file takes about 6 minutes. Run part
+//! of it by name, such as `cargo test --test animations knowitowl`.
 //!
 //! The showcase cycles a racer through a state change with no server and saves
 //! screenshots at fixed moments, holding steady loops still so only the transition
@@ -10,15 +10,50 @@
 #![cfg(target_os = "macos")]
 
 use std::{
+    collections::BTreeSet,
     path::{Path, PathBuf},
     process::{Command, Stdio},
-    sync::Mutex,
+    sync::{Condvar, Mutex},
     thread::sleep,
     time::{Duration, Instant},
 };
 
-/// Showcases run one at a time: each window needs to be in front.
-static WINDOW: Mutex<()> = Mutex::new(());
+/// Showcases run one at a time, most interesting first. Tests start in name order,
+/// and their names begin with their rank, so the lowest-ranked waiting test goes
+/// next; this holds when only some tests are selected by name.
+struct Queue {
+    waiting: BTreeSet<u32>,
+    busy: bool,
+}
+static QUEUE: Mutex<Queue> = Mutex::new(Queue {
+    waiting: BTreeSet::new(),
+    busy: false,
+});
+static NEXT: Condvar = Condvar::new();
+struct Turn;
+fn take_turn(rank: u32) -> Turn {
+    let mut queue = QUEUE
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    queue.waiting.insert(rank);
+    while queue.busy || queue.waiting.first() != Some(&rank) {
+        queue = NEXT
+            .wait(queue)
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+    }
+    queue.waiting.remove(&rank);
+    queue.busy = true;
+    Turn
+}
+impl Drop for Turn {
+    fn drop(&mut self) {
+        QUEUE
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .busy = false;
+        NEXT.notify_all();
+    }
+}
 
 /// Runs one showcase in a visible window and returns its screenshot directory.
 fn showcase(scene: &str) -> PathBuf {
@@ -105,10 +140,8 @@ fn difference(a: &Path, b: &Path) -> f64 {
 /// A state change must be clearly visible and its transition must have begun to
 /// change the picture. An eased transition, where the browser moves gradually
 /// between the states, must also look unlike the state it leads to.
-fn check_transition(scene: &str, eased: bool) {
-    let _window = WINDOW
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+fn check_transition(rank: u32, scene: &str, eased: bool) {
+    let _turn = take_turn(rank);
     let directory = showcase(scene);
     let shot = |label: &str| directory.join(format!("{label}.png"));
     let noise = difference(&shot("steady-a"), &shot("steady-b"));
@@ -135,81 +168,45 @@ fn check_transition(scene: &str, eased: bool) {
     );
 }
 
-/// One test per recorded transition: `name: "scene", eased;`.
+/// One test per transition worth watching: `name: rank, "scene", eased;`.
 macro_rules! animations {
-    ($($name:ident: $scene:literal, $eased:literal;)*) => {
+    ($($name:ident: $rank:literal, $scene:literal, $eased:literal;)*) => {
         $(
             #[test]
             fn $name() {
-                check_transition($scene, $eased);
+                check_transition($rank, $scene, $eased);
             }
         )*
     };
 }
 
+// Racers that draw a transition through the same browser code, differing only in
+// color, share one test. The most interesting run first.
 animations! {
-    // Boosting in and out: Pip stands for the racers whose boost simply switches on;
-    // the rest ease in: Pearococo's tail folds, Master-Yuda's stunts, R-yeah's rotors
-    // tilt, Fourmidable's receipts spring out, KnowItOwl takes off.
-    boost_00_pip: "boost:0", false;
-    boost_09_pearococo: "boost:9", true;
-    boost_10_master_yuda: "boost:10", true;
-    boost_11_r_yeah: "boost:11", true;
-    boost_13_fourmidable: "boost:13", true;
-    boost_14_knowitowl: "boost:14", true;
-    // Rapid fire starting. Eased: KnowItOwl's bat flies in, and away again after.
-    rapid_fire_00_pip: "rapid-fire:0", false;
-    rapid_fire_01_rocco: "rapid-fire:1", false;
-    rapid_fire_02_felix: "rapid-fire:2", false;
-    rapid_fire_03_benny: "rapid-fire:3", false;
-    rapid_fire_04_ellie: "rapid-fire:4", false;
-    rapid_fire_05_tammy: "rapid-fire:5", false;
-    rapid_fire_06_elon: "rapid-fire:6", false;
-    rapid_fire_07_houston: "rapid-fire:7", false;
-    rapid_fire_08_avita_jas: "rapid-fire:8", false;
-    rapid_fire_09_pearococo: "rapid-fire:9", false;
-    rapid_fire_10_master_yuda: "rapid-fire:10", false;
-    rapid_fire_11_r_yeah: "rapid-fire:11", false;
-    rapid_fire_12_catheterpillar: "rapid-fire:12", false;
-    rapid_fire_13_fourmidable: "rapid-fire:13", false;
-    rapid_fire_14_knowitowl: "rapid-fire:14", true;
-    // Timed states fading as they run out. Hedgeguard and tehilim dim for everyone.
-    // A shield fades only for Pearococo's fairies and Master-Yuda's badges; Pip
-    // stands for the racers whose shield simply ends.
-    fade_shield_00_pip: "fade:shield:0", false;
-    fade_shield_09_pearococo: "fade:shield:9", true;
-    fade_shield_10_master_yuda: "fade:shield:10", true;
-    fade_hedge_00_pip: "fade:hedge:0", true;
-    fade_hedge_01_rocco: "fade:hedge:1", true;
-    fade_hedge_02_felix: "fade:hedge:2", true;
-    fade_hedge_03_benny: "fade:hedge:3", true;
-    fade_hedge_04_ellie: "fade:hedge:4", true;
-    fade_hedge_05_tammy: "fade:hedge:5", true;
-    fade_hedge_06_elon: "fade:hedge:6", true;
-    fade_hedge_07_houston: "fade:hedge:7", true;
-    fade_hedge_08_avita_jas: "fade:hedge:8", true;
-    fade_hedge_09_pearococo: "fade:hedge:9", true;
-    fade_hedge_10_master_yuda: "fade:hedge:10", true;
-    fade_hedge_11_r_yeah: "fade:hedge:11", true;
-    fade_hedge_12_catheterpillar: "fade:hedge:12", true;
-    fade_hedge_13_fourmidable: "fade:hedge:13", true;
-    fade_hedge_14_knowitowl: "fade:hedge:14", true;
-    fade_tehilim_00_pip: "fade:tehilim:0", true;
-    fade_tehilim_01_rocco: "fade:tehilim:1", true;
-    fade_tehilim_02_felix: "fade:tehilim:2", true;
-    fade_tehilim_03_benny: "fade:tehilim:3", true;
-    fade_tehilim_04_ellie: "fade:tehilim:4", true;
-    fade_tehilim_05_tammy: "fade:tehilim:5", true;
-    fade_tehilim_06_elon: "fade:tehilim:6", true;
-    fade_tehilim_07_houston: "fade:tehilim:7", true;
-    fade_tehilim_08_avita_jas: "fade:tehilim:8", true;
-    fade_tehilim_09_pearococo: "fade:tehilim:9", true;
-    fade_tehilim_10_master_yuda: "fade:tehilim:10", true;
-    fade_tehilim_11_r_yeah: "fade:tehilim:11", true;
-    fade_tehilim_12_catheterpillar: "fade:tehilim:12", true;
-    fade_tehilim_13_fourmidable: "fade:tehilim:13", true;
-    fade_tehilim_14_knowitowl: "fade:tehilim:14", true;
-    // R-yeah's archangels descending and rising.
-    special_start_11_r_yeah: "special-start:11", true;
-    special_end_11_r_yeah: "special-end:11", true;
+    // Eased: the browser moves gradually between the states.
+    t01_knowitowl_bat_flies_in: 1, "rapid-fire:14", true;
+    t02_knowitowl_takes_off: 2, "boost:14", true;
+    t03_r_yeah_archangels_descend: 3, "special-start:11", true;
+    t04_r_yeah_archangels_rise: 4, "special-end:11", true;
+    t05_pearococo_tail_folds: 5, "boost:9", true;
+    t06_r_yeah_rotors_tilt: 6, "boost:11", true;
+    t07_master_yuda_boost_stunt: 7, "boost:10", true;
+    t08_fourmidable_receipts_spring_out: 8, "boost:13", true;
+    t09_houston_helmet_flies_off: 9, "rapid-fire:7", true;
+    // Distinct rapid-fire weapons.
+    t10_r_yeah_chopper_gun: 10, "rapid-fire:11", false;
+    t11_master_yuda_laser_mount: 11, "rapid-fire:10", false;
+    // Fades as states run out.
+    t12_pearococo_fairy_shield_fades: 12, "fade:shield:9", true;
+    t13_master_yuda_badge_shield_fades: 13, "fade:shield:10", true;
+    t14_pearococo_hedgeguard_fades: 14, "fade:hedge:9", true;
+    t15_master_yuda_hedgeguard_fades: 15, "fade:hedge:10", true;
+    t16_tammy_cricket_hedgeguard_fades: 16, "fade:hedge:5", true;
+    t17_elon_dollar_hedgeguard_fades: 17, "fade:hedge:6", true;
+    t18_hedgeguard_fades: 18, "fade:hedge:0", true;
+    t19_tehilim_fades: 19, "fade:tehilim:0", true;
+    // Plain: the browser switches these at once; Pip stands for every such racer.
+    t20_plain_boost: 20, "boost:0", false;
+    t21_plain_rapid_fire: 21, "rapid-fire:0", false;
+    t22_plain_shield_ends: 22, "fade:shield:0", false;
 }
