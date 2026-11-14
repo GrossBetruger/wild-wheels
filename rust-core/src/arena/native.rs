@@ -3,7 +3,7 @@
 use super::*;
 use serde_json::Value;
 use std::sync::Mutex;
-static KERNEL: Mutex<()> = Mutex::new(());
+pub(super) static KERNEL: Mutex<()> = Mutex::new(());
 pub struct NativeArena {
     game: Game,
 }

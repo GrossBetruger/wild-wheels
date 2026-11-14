@@ -9,6 +9,7 @@ mod locusts;
 mod fire_ring;
 mod packet;
 mod client;
+pub use client::{NativeClient, ClientInput, ClientAction, ClientError, ClientView};
 mod presentation;
 mod control;
 pub mod native;

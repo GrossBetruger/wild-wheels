@@ -2,6 +2,8 @@ use super::*;
 use std::collections::VecDeque;
 use std::collections::{BTreeMap,BTreeSet};
 mod feedback;
+mod native;
+pub use native::*;
 #[derive(Clone)]struct Received{time:f64,offset:f64,game:Game}
 pub struct Client{
     viewer:usize,pred:Game,display:Game,frames:VecDeque<Received>,history:Vec<Move>,

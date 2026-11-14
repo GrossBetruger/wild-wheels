@@ -1,6 +1,7 @@
 const SLOTS: usize = 128;
 mod arena;
 pub use arena::native::NativeArena;
+pub use arena::{NativeClient, ClientInput, ClientAction, ClientError, ClientView};
 pub use arena::{Action,Frame,Input,Move};
 const FIELDS: usize = 16;
 const CLEAR: u32 = 1;
