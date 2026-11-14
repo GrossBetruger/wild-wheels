@@ -10,6 +10,7 @@ mod ported;
 mod prefs;
 mod scene;
 mod session;
+mod showcase;
 mod sound;
 mod transport;
 

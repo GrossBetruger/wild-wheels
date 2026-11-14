@@ -10,8 +10,14 @@ pub struct Config {
     pub join: bool,
     pub headless: bool,
     pub seconds: f64,
+    /// Whether `--seconds` was given; a showcase otherwise runs until closed.
+    pub timed: bool,
     pub auto_start: bool,
     pub screenshot: Option<String>,
+    /// Play one racer's animations without a server; see showcase.rs.
+    pub showcase: Option<String>,
+    /// A directory for showcase screenshots.
+    pub capture: Option<String>,
     pub sparring: bool,
     /// Measure frame times for this many seconds, then exit.
     pub benchmark: Option<f64>,
@@ -25,8 +31,11 @@ impl Config {
             join: false,
             headless: false,
             seconds: 8.0,
+            timed: false,
             auto_start: false,
             screenshot: None,
+            showcase: None,
+            capture: None,
             sparring: false,
             benchmark: None,
         };
@@ -51,10 +60,20 @@ impl Config {
                             .parse()?,
                     )
                 }
+                "--showcase" => {
+                    config.showcase = Some(
+                        args.next()
+                            .ok_or("--showcase requires boost or rapid-fire")?,
+                    )
+                }
+                "--capture" => {
+                    config.capture = Some(args.next().ok_or("--capture requires a directory")?)
+                }
                 "--screenshot" => {
                     config.screenshot = Some(args.next().ok_or("--screenshot requires a PNG path")?)
                 }
                 "--seconds" => {
+                    config.timed = true;
                     config.seconds = args
                         .next()
                         .ok_or("--seconds requires a duration")?
@@ -62,7 +81,7 @@ impl Config {
                 }
                 "--help" => {
                     println!(
-                        "Wild Wheels native arena client\nRun without options to choose a server, name and racer in the menu.\nDeveloper options: --server URL --name NAME [--auto-start] [--headless --seconds 8]"
+                        "Wild Wheels native arena client\nRun without options to choose a server, name and racer in the menu.\nDeveloper options: --server URL --name NAME [--auto-start] [--headless --seconds 8]\n--showcase boost|rapid-fire [--seconds 60] plays one racer's animations without a server"
                     );
                     std::process::exit(0);
                 }

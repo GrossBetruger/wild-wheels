@@ -76,6 +76,22 @@ The replay compares 600 frames per profile against the browser/Wasm adapter for
 local, 160 ms round trip, and jittered snapshots, including predicted shots and
 audio cues. It runs in CI. It does not launch a graphical browser or measure GPU time.
 
+To watch ported animations play in isolation, with no server:
+
+```sh
+cargo +1.97.1 build --release --locked --manifest-path native-client/Cargo.toml
+./native-client/target/release/wild-wheels-native --showcase boost
+./native-client/target/release/wild-wheels-native --showcase rapid-fire
+npm run test:native-animations
+```
+
+`boost` cycles Pearococo through boosting in and out; `rapid-fire` has
+KnowItOwl's bat fly in and away. B toggles blending between recorded frames, to
+compare it with the 24 recorded frames a second; Escape quits. The test runs
+both showcases in a visible window, holding steady loops still, and checks that
+each state change and its transition are visible in screenshots. It needs macOS
+and a display, and does not run in CI.
+
 For a real Chrome/native transport check, build both binaries first, then run:
 
 ```sh

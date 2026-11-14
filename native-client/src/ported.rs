@@ -12,7 +12,10 @@ use bevy::{
 use crossbeam_channel::{Receiver, Sender, unbounded};
 use std::{
     collections::{HashMap, HashSet},
-    sync::{Arc, atomic::Ordering},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 static PACK: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/graphics.wwgp"));
@@ -26,6 +29,8 @@ const KEEP_SECONDS: f32 = 12.0;
 const BLEND_LIMIT: f32 = 2.0;
 /// Blended particles are rebuilt at most this many times per recorded frame.
 const BLEND_STEPS: f32 = 8.0;
+/// Whether frames are blended; the showcase turns it off for comparison.
+pub static BLENDING: AtomicBool = AtomicBool::new(true);
 const TRIANGLE_BYTES: usize = 20;
 const SPRITE_BYTES: usize = 28;
 /// The browser shader pitches models about this height and rolls them about `ROLL_PIVOT`.
@@ -660,7 +665,7 @@ pub fn animate(
                 }
             }
             let next = at(index + 1);
-            let between = match next == at(index) {
+            let between = match next == at(index) || !BLENDING.load(Ordering::Relaxed) {
                 true => 0.0,
                 false => exact.fract(),
             };

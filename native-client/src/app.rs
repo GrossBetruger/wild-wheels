@@ -145,6 +145,9 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
     if config.headless {
         return headless(config);
     }
+    if let Some(scene) = config.showcase.clone() {
+        return crate::showcase::run(config, &scene);
+    }
     let screenshot = config.screenshot.clone();
     let benchmark = config.benchmark;
     let paced = std::env::var_os("WILD_WHEELS_BENCH_VSYNC").is_some();

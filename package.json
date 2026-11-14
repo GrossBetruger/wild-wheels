@@ -12,6 +12,7 @@
     "test:netcode": "node scripts/checks/check-netcode.mjs",
     "test:native-parity": "node scripts/checks/check-native-client-parity.mjs",
     "test:native-multiplayer": "node scripts/checks/check-native-client-multiplayer.mjs",
+    "test:native-animations": "node --test scripts/checks/check-native-animations.mjs",
     "test:browser-netcode": "node scripts/checks/check-browser-netcode.mjs",
     "profile:network": "node scripts/profiling/profile-network.mjs",
     "test:regression": "node scripts/checks/check-regressions.mjs",
