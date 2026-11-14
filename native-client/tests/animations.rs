@@ -1,6 +1,7 @@
-//! Watches two ported animations play live, in isolation, and checks that each
-//! one's transition really runs. `cargo test` builds the client and opens its
-//! showcase window for each; keep the window visible while they run.
+//! Watches every ported animation transition play live, in isolation, and checks
+//! that each one really runs. `cargo test` builds the client and opens a showcase
+//! window for each, one at a time; the whole file takes about 20 minutes. Run part
+//! of it by name, such as `cargo test --test animations boost_` or `fade_hedge_`.
 //!
 //! The showcase cycles a racer through a state change with no server and saves
 //! screenshots at fixed moments, holding steady loops still so only the transition
@@ -22,7 +23,8 @@ static WINDOW: Mutex<()> = Mutex::new(());
 /// Runs one showcase in a visible window and returns its screenshot directory.
 fn showcase(scene: &str) -> PathBuf {
     let directory = std::env::temp_dir().join(format!(
-        "wild-wheels-showcase-{scene}-{}",
+        "wild-wheels-showcase-{}-{}",
+        scene.replace(':', "-"),
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&directory);
@@ -33,13 +35,21 @@ fn showcase(scene: &str) -> PathBuf {
         .args(["--seconds", "60"])
         .env("WILD_WHEELS_NATIVE_DATA_DIR", &directory)
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(std::fs::File::create(directory.join("errors.log")).expect("error log"))
         .spawn()
         .expect("the native client starts");
     let deadline = Instant::now() + Duration::from_secs(90);
     loop {
         if let Some(status) = child.try_wait().expect("the showcase runs") {
-            assert!(status.success(), "{scene} showcase failed: {status}");
+            let errors = std::fs::read_to_string(directory.join("errors.log")).unwrap_or_default();
+            let reason = errors
+                .lines()
+                .rfind(|line| !line.contains(" INFO "))
+                .unwrap_or("");
+            assert!(
+                status.success(),
+                "{scene} showcase failed ({status}): {reason}"
+            );
             break;
         }
         assert!(Instant::now() < deadline, "{scene} showcase did not finish");
@@ -92,9 +102,10 @@ fn difference(a: &Path, b: &Path) -> f64 {
     changed as f64 / first.2.len() as f64
 }
 
-/// A state change must be clearly visible, and its transition must look like
-/// neither the starting nor the final state.
-fn check_transition(scene: &str) {
+/// A state change must be clearly visible and its transition must have begun to
+/// change the picture. An eased transition, where the browser moves gradually
+/// between the states, must also look unlike the state it leads to.
+fn check_transition(scene: &str, eased: bool) {
     let _window = WINDOW
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -108,26 +119,116 @@ fn check_transition(scene: &str) {
         "{scene}: noise {noise:.4}, change {change:.4}, transition from start {from_start:.4}, to end {to_end:.4}"
     );
     let _ = std::fs::remove_dir_all(&directory);
+    // Noise is the caption's timer; small effects such as a shield's sparks cover
+    // only a fraction of a percent of the window.
     assert!(
-        change > (3.0 * noise).max(0.003),
+        change > (3.0 * noise).max(0.001),
         "{scene}: the state change is not visible ({change} against noise {noise})"
     );
     assert!(
-        from_start > (1.5 * noise).max(0.002),
+        from_start > (1.5 * noise).max(0.0005),
         "{scene}: the transition looks like the starting state"
     );
     assert!(
-        to_end > (1.5 * noise).max(0.002),
-        "{scene}: the transition looks like the final state"
+        !eased || to_end > (1.5 * noise).max(0.0005),
+        "{scene}: the transition looks like the final state, without easing"
     );
 }
 
-#[test]
-fn pearococo_boosts_in_and_out_through_her_tail_folding() {
-    check_transition("boost");
+/// One test per recorded transition: `name: "scene", eased;`.
+macro_rules! animations {
+    ($($name:ident: $scene:literal, $eased:literal;)*) => {
+        $(
+            #[test]
+            fn $name() {
+                check_transition($scene, $eased);
+            }
+        )*
+    };
 }
 
-#[test]
-fn knowitowls_bat_flies_in_and_away_with_rapid_fire() {
-    check_transition("rapid-fire");
+animations! {
+    // Boosting in and out. Eased: Pearococo's tail folds, Master-Yuda's stunts,
+    // R-yeah's rotors tilt, Fourmidable's receipts spring out, KnowItOwl takes off.
+    boost_00_pip: "boost:0", false;
+    boost_01_rocco: "boost:1", false;
+    boost_02_felix: "boost:2", false;
+    boost_03_benny: "boost:3", false;
+    boost_04_ellie: "boost:4", false;
+    boost_05_tammy: "boost:5", false;
+    boost_06_elon: "boost:6", false;
+    boost_07_houston: "boost:7", false;
+    boost_08_avita_jas: "boost:8", false;
+    boost_09_pearococo: "boost:9", true;
+    boost_10_master_yuda: "boost:10", true;
+    boost_11_r_yeah: "boost:11", true;
+    boost_12_catheterpillar: "boost:12", false;
+    boost_13_fourmidable: "boost:13", true;
+    boost_14_knowitowl: "boost:14", true;
+    // Rapid fire starting. Eased: KnowItOwl's bat flies in, and away again after.
+    rapid_fire_00_pip: "rapid-fire:0", false;
+    rapid_fire_01_rocco: "rapid-fire:1", false;
+    rapid_fire_02_felix: "rapid-fire:2", false;
+    rapid_fire_03_benny: "rapid-fire:3", false;
+    rapid_fire_04_ellie: "rapid-fire:4", false;
+    rapid_fire_05_tammy: "rapid-fire:5", false;
+    rapid_fire_06_elon: "rapid-fire:6", false;
+    rapid_fire_07_houston: "rapid-fire:7", false;
+    rapid_fire_08_avita_jas: "rapid-fire:8", false;
+    rapid_fire_09_pearococo: "rapid-fire:9", false;
+    rapid_fire_10_master_yuda: "rapid-fire:10", false;
+    rapid_fire_11_r_yeah: "rapid-fire:11", false;
+    rapid_fire_12_catheterpillar: "rapid-fire:12", false;
+    rapid_fire_13_fourmidable: "rapid-fire:13", false;
+    rapid_fire_14_knowitowl: "rapid-fire:14", true;
+    // Timed states fading as they run out. Hedgeguard and tehilim dim for everyone;
+    // a shield fades only for Pearococo's fairies and Master-Yuda's badges.
+    fade_shield_00_pip: "fade:shield:0", false;
+    fade_shield_01_rocco: "fade:shield:1", false;
+    fade_shield_02_felix: "fade:shield:2", false;
+    fade_shield_03_benny: "fade:shield:3", false;
+    fade_shield_04_ellie: "fade:shield:4", false;
+    fade_shield_05_tammy: "fade:shield:5", false;
+    fade_shield_06_elon: "fade:shield:6", false;
+    fade_shield_07_houston: "fade:shield:7", false;
+    fade_shield_08_avita_jas: "fade:shield:8", false;
+    fade_shield_09_pearococo: "fade:shield:9", true;
+    fade_shield_10_master_yuda: "fade:shield:10", true;
+    fade_shield_11_r_yeah: "fade:shield:11", false;
+    fade_shield_12_catheterpillar: "fade:shield:12", false;
+    fade_shield_13_fourmidable: "fade:shield:13", false;
+    fade_shield_14_knowitowl: "fade:shield:14", false;
+    fade_hedge_00_pip: "fade:hedge:0", true;
+    fade_hedge_01_rocco: "fade:hedge:1", true;
+    fade_hedge_02_felix: "fade:hedge:2", true;
+    fade_hedge_03_benny: "fade:hedge:3", true;
+    fade_hedge_04_ellie: "fade:hedge:4", true;
+    fade_hedge_05_tammy: "fade:hedge:5", true;
+    fade_hedge_06_elon: "fade:hedge:6", true;
+    fade_hedge_07_houston: "fade:hedge:7", true;
+    fade_hedge_08_avita_jas: "fade:hedge:8", true;
+    fade_hedge_09_pearococo: "fade:hedge:9", true;
+    fade_hedge_10_master_yuda: "fade:hedge:10", true;
+    fade_hedge_11_r_yeah: "fade:hedge:11", true;
+    fade_hedge_12_catheterpillar: "fade:hedge:12", true;
+    fade_hedge_13_fourmidable: "fade:hedge:13", true;
+    fade_hedge_14_knowitowl: "fade:hedge:14", true;
+    fade_tehilim_00_pip: "fade:tehilim:0", true;
+    fade_tehilim_01_rocco: "fade:tehilim:1", true;
+    fade_tehilim_02_felix: "fade:tehilim:2", true;
+    fade_tehilim_03_benny: "fade:tehilim:3", true;
+    fade_tehilim_04_ellie: "fade:tehilim:4", true;
+    fade_tehilim_05_tammy: "fade:tehilim:5", true;
+    fade_tehilim_06_elon: "fade:tehilim:6", true;
+    fade_tehilim_07_houston: "fade:tehilim:7", true;
+    fade_tehilim_08_avita_jas: "fade:tehilim:8", true;
+    fade_tehilim_09_pearococo: "fade:tehilim:9", true;
+    fade_tehilim_10_master_yuda: "fade:tehilim:10", true;
+    fade_tehilim_11_r_yeah: "fade:tehilim:11", true;
+    fade_tehilim_12_catheterpillar: "fade:tehilim:12", true;
+    fade_tehilim_13_fourmidable: "fade:tehilim:13", true;
+    fade_tehilim_14_knowitowl: "fade:tehilim:14", true;
+    // R-yeah's archangels descending and rising.
+    special_start_11_r_yeah: "special-start:11", true;
+    special_end_11_r_yeah: "special-end:11", true;
 }

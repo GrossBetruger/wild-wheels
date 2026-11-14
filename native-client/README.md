@@ -80,20 +80,23 @@ To watch ported animations play in isolation, with no server:
 
 ```sh
 cargo +1.97.1 build --release --locked --manifest-path native-client/Cargo.toml
-./native-client/target/release/wild-wheels-native --showcase boost
-./native-client/target/release/wild-wheels-native --showcase rapid-fire
+./native-client/target/release/wild-wheels-native --showcase boost:9
 ```
 
-`boost` cycles Pearococo through boosting in and out; `rapid-fire` has
-KnowItOwl's bat fly in and away. B toggles blending between recorded frames, to
-compare it with the 24 recorded frames a second; Escape quits.
+Scenes are `boost:N`, `rapid-fire:N`, `fade:shield:N`, `fade:hedge:N`,
+`fade:tehilim:N`, `special-start:11` and `special-end:11`, for racer N from 0
+(Pip) to 14 (KnowItOwl). Each cycles through a state change and back. B toggles
+blending between recorded frames, to compare it with the 24 recorded frames a
+second; Escape quits.
 
-`cargo test` also runs both showcases, one after the other, in a window that
-stays on top without taking focus (`tests/animations.rs`); they take about 35
-seconds. The test holds steady loops still and checks that each state change and
-its transition are visible in screenshots, and reports a blank capture if the
-window was hidden. It runs only on macOS; no CI job builds the native client.
-Run only the other tests with `cargo test --lib`.
+`cargo test` also runs every one of these 77 transitions in turn, in a window
+that stays on top without taking focus (`tests/animations.rs`). The whole file
+takes about 20 minutes; run part of it by name, such as
+`cargo test --test animations boost_`. Each test holds steady loops still and
+checks from screenshots that the state change is visible and its transition has
+begun; eased transitions must also look unlike the state they lead to. A blank
+capture means the window was hidden. It runs only on macOS; no CI job builds the
+native client. Run only the other tests with `cargo test --lib`.
 
 For a real Chrome/native transport check, build both binaries first, then run:
 
