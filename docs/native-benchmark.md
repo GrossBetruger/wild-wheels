@@ -109,6 +109,26 @@ tail. Limiting new meshes to three uploads per frame did not help either. Not
 yet tested: the release profile change, the HUD drawing on the world camera,
 and the four-frame lookahead. At 60 Hz both builds hold every frame.
 
+## Missile-heavy matches
+
+Particles used to be turned to face the camera on the CPU: every missile's shot
+and up to six trail puffs each rebuilt and re-uploaded its own sprite mesh
+whenever the view turned. They are now turned in `native-client/src/sprite.wesl`,
+so a recorded frame's particles are one mesh shared by every entity showing it.
+
+Measured in a real uncapped window against a throwaway server copy with 16
+players (15 bots), missiles only and special abilities off, two runs each:
+
+| Client | Mean | 95th | 99th | With 2–8 missiles in flight |
+|---|---|---|---|---|
+| per-entity sprites | 2.94–3.17 ms | 7.3–8.3 ms | 10.5–12.1 ms | 3.5–4.2 ms |
+| shared GPU-facing sprites | 2.54–2.60 ms | 6.6–6.7 ms | 8.3–10.2 ms | about 2.5 ms, flat |
+
+With six bots there are too few missiles in flight at once to show a difference,
+and offscreen runs show none either; the cost appeared only when drawing to a
+window. The 20 ms spikes in every run, missiles or not, are the open 120 Hz
+regression above.
+
 ## Reproducing
 
 ```sh
@@ -117,6 +137,11 @@ and the four-frame lookahead. At 60 Hz both builds hold every frame.
 WILD_WHEELS_BENCH_VSYNC=1 ./native-client/target/release/wild-wheels-native --server http://localhost:5197 --name Bench --auto-start --benchmark 25
 ```
 
-Keep the window visible and in front. For the browser, wrap
+Keep the window visible and in front. `--offscreen` with `--benchmark` plays
+the match with no window instead: every camera draws into a 2560×1600 image and
+each frame waits for the GPU to finish the one before, so frame times include
+the GPU's work without display pacing, and nothing appears on screen. A
+benchmark also prints the 25 slowest frames with what the scene held, and frame
+times by the number of projectiles in flight. For the browser, wrap
 `window.requestAnimationFrame` in the page console to time each callback and the
 gap between callbacks, as `docs/performance.md` does with its profiler.

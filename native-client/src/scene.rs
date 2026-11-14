@@ -423,6 +423,7 @@ impl Stage<'_, '_, '_, '_, '_, '_, '_> {
             None => {
                 let mut player = Ported::new(play.clip, play.tint, play.time);
                 (player.ghost, player.wind) = (play.ghost, play.wind);
+                crate::bench::SPAWNED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 let entity = self
                     .commands
                     .spawn((transform, Visibility::default(), player))
@@ -438,6 +439,7 @@ impl Stage<'_, '_, '_, '_, '_, '_, '_> {
                 return true;
             }
             self.commands.entity(*entity).despawn();
+            crate::bench::DESPAWNED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             false
         });
         live.clear();
@@ -790,6 +792,14 @@ pub fn sync(
         time.delta_secs().min(0.05),
         time.elapsed_secs(),
         xray && dark > 0.0,
+    );
+    crate::bench::PROJECTILES.store(
+        view.projectiles.len() as u64,
+        std::sync::atomic::Ordering::Relaxed,
+    );
+    crate::bench::EFFECTS.store(
+        view.effects.len() as u64,
+        std::sync::atomic::Ordering::Relaxed,
     );
     for p in view.projectiles {
         let owner = view.actors.get(p.owner).map_or(0, |a| a.driver);

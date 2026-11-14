@@ -5,6 +5,7 @@ mod feedback;
 mod gui;
 mod hud;
 mod metrics;
+mod offscreen;
 mod pilot;
 mod plumage;
 mod ported;
@@ -13,6 +14,7 @@ mod scene;
 mod session;
 mod showcase;
 mod sound;
+mod sprite;
 mod transport;
 
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {

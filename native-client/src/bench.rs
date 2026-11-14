@@ -24,6 +24,24 @@ const WARMUP: f64 = 5.0;
 pub static MESHES_BUILT: AtomicU64 = AtomicU64::new(0);
 pub static MESH_BUILD_NANOS: AtomicU64 = AtomicU64::new(0);
 pub static SPRITE_MESHES: AtomicU64 = AtomicU64::new(0);
+/// What the scene showed last frame, for explaining slow frames.
+pub static PROJECTILES: AtomicU64 = AtomicU64::new(0);
+pub static EFFECTS: AtomicU64 = AtomicU64::new(0);
+pub static SPAWNED: AtomicU64 = AtomicU64::new(0);
+pub static DESPAWNED: AtomicU64 = AtomicU64::new(0);
+
+/// One measured frame: its time, the logic stages' share, and what happened in it.
+#[derive(Clone, Copy, Default)]
+struct Frame {
+    seconds: f32,
+    logic: f32,
+    stages: [f32; STAGES.len()],
+    built: u64,
+    spawned: u64,
+    despawned: u64,
+    projectiles: u64,
+    effects: u64,
+}
 
 #[derive(Resource)]
 pub struct Bench {
@@ -34,6 +52,9 @@ pub struct Bench {
     frame: Instant,
     stage_seconds: [f64; STAGES.len()],
     frames: Vec<f32>,
+    details: Vec<Frame>,
+    current: Frame,
+    counted: (u64, u64, u64),
     baseline: (u64, u64, u64),
 }
 impl Bench {
@@ -46,6 +67,9 @@ impl Bench {
             frame: now,
             stage_seconds: [0.0; STAGES.len()],
             frames: Vec::new(),
+            details: Vec::new(),
+            current: Frame::default(),
+            counted: (0, 0, 0),
             baseline: (0, 0, 0),
         }
     }
@@ -69,7 +93,23 @@ pub fn begin(mut bench: ResMut<Bench>) {
         }
         let frame = now.duration_since(bench.frame).as_secs_f32();
         bench.frames.push(frame);
+        let counts = (
+            MESHES_BUILT.load(Ordering::Relaxed),
+            SPAWNED.load(Ordering::Relaxed),
+            DESPAWNED.load(Ordering::Relaxed),
+        );
+        let mut detail = bench.current;
+        detail.seconds = frame;
+        detail.logic = detail.stages.iter().sum();
+        detail.built = counts.0 - bench.counted.0;
+        detail.spawned = counts.1 - bench.counted.1;
+        detail.despawned = counts.2 - bench.counted.2;
+        detail.projectiles = PROJECTILES.load(Ordering::Relaxed);
+        detail.effects = EFFECTS.load(Ordering::Relaxed);
+        bench.details.push(detail);
+        bench.counted = counts;
     }
+    bench.current = Frame::default();
     bench.frame = now;
     bench.last = now;
 }
@@ -78,7 +118,9 @@ pub fn mark(stage: usize) -> impl FnMut(ResMut<Bench>) {
     move |mut bench: ResMut<Bench>| {
         let now = Instant::now();
         if bench.measuring() {
-            bench.stage_seconds[stage] += now.duration_since(bench.last).as_secs_f64();
+            let spent = now.duration_since(bench.last).as_secs_f64();
+            bench.stage_seconds[stage] += spent;
+            bench.current.stages[stage] += spent as f32;
         }
         bench.last = now;
     }
@@ -126,5 +168,51 @@ pub fn finish(
             "spriteMeshesPerFrame": (sprites - bench.baseline.2) as f64 / count,
         })
     );
+    // The slowest frames, with what the scene was doing in the frame before.
+    let mut slow: Vec<(usize, Frame)> = bench.details.iter().copied().enumerate().skip(1).collect();
+    slow.sort_by(|a, b| b.1.seconds.total_cmp(&a.1.seconds));
+    for (index, frame) in slow.iter().take(25) {
+        let previous = bench.details[index - 1];
+        let stage = STAGES
+            .iter()
+            .zip(frame.stages)
+            .max_by(|a, b| a.1.total_cmp(&b.1))
+            .map_or("", |(name, _)| name);
+        println!(
+            "{}",
+            serde_json::json!({
+                "event": "slow-frame",
+                "ms": frame.seconds * 1000.0,
+                "logicMs": frame.logic * 1000.0,
+                "slowestStage": stage,
+                "slowestStageMs": frame.stages.iter().copied().fold(0.0, f32::max) * 1000.0,
+                "meshesBuilt": frame.built,
+                "spawned": previous.spawned,
+                "despawned": previous.despawned,
+                "projectiles": frame.projectiles,
+                "effects": frame.effects,
+            })
+        );
+    }
+    // Mean frame time by how many projectiles were in flight.
+    let mut buckets = std::collections::BTreeMap::<u64, (f64, u32, f32)>::new();
+    for frame in &bench.details[1..] {
+        let bucket = buckets.entry(frame.projectiles.min(12)).or_default();
+        bucket.0 += f64::from(frame.seconds);
+        bucket.1 += 1;
+        bucket.2 = bucket.2.max(frame.seconds);
+    }
+    for (projectiles, (total, count, max)) in buckets {
+        println!(
+            "{}",
+            serde_json::json!({
+                "event": "by-projectiles",
+                "projectiles": projectiles,
+                "frames": count,
+                "meanMs": total / f64::from(count) * 1000.0,
+                "maxMs": max * 1000.0,
+            })
+        );
+    }
     exit.write(AppExit::Success);
 }

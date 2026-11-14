@@ -6,10 +6,8 @@ use bevy::{
     asset::RenderAssetUsages,
     camera::visibility::{NoFrustumCulling, RenderLayers},
     ecs::system::SystemParam,
-    image::Image,
-    mesh::{Indices, MeshTag, PrimitiveTopology},
+    mesh::{MeshTag, PrimitiveTopology},
     prelude::*,
-    render::render_resource::{Extent3d, TextureDimension, TextureFormat},
 };
 use crossbeam_channel::{Receiver, Sender, unbounded};
 use std::{
@@ -26,6 +24,8 @@ const VERSION: u32 = 7;
 const LOOKAHEAD: usize = 4;
 /// Meshes unused for this long are released; one shown again is rebuilt.
 const KEEP_SECONDS: f32 = 12.0;
+/// Seconds a particle mesh is kept after it was last shown.
+const PARTICLE_SECONDS: f32 = 2.0;
 /// Between recorded frames a part or particle is blended towards its next
 /// position, unless it moves further than this: then it is a different object.
 const BLEND_LIMIT: f32 = 2.0;
@@ -37,7 +37,7 @@ pub static BLENDING: AtomicBool = AtomicBool::new(true);
 /// differ only by the transition under test.
 pub static STILL: AtomicBool = AtomicBool::new(false);
 const TRIANGLE_BYTES: usize = 20;
-const SPRITE_BYTES: usize = 28;
+use crate::sprite::{SPRITE_BYTES, SpriteMaterial};
 /// The browser shader pitches models about this height and rolls them about `ROLL_PIVOT`.
 const PITCH_PIVOT: f32 = 2.0;
 const ROLL_PIVOT: f32 = 0.9;
@@ -170,6 +170,8 @@ pub struct Graphics {
     built: HashMap<Key, Built>,
     /// Meshes being built on the async compute pool.
     pending: HashSet<Key>,
+    /// Particle meshes, shared by every entity showing the same recorded frame.
+    particles: HashMap<ParticleKey, Built>,
     finished: (Sender<Finished>, Receiver<Finished>),
     /// Seconds since launch, as of the last frame.
     now: f32,
@@ -177,7 +179,7 @@ pub struct Graphics {
     surfaces: [Handle<StandardMaterial>; 4],
     plumage: Handle<PlumageMaterial>,
     /// Additive sparks and alpha-blended smoke, in the browser's draw order.
-    sprites: [Handle<StandardMaterial>; 2],
+    sprites: [Handle<SpriteMaterial>; 2],
 }
 impl Graphics {
     fn parse(bytes: &'static [u8]) -> Option<Self> {
@@ -296,6 +298,7 @@ impl Graphics {
             racers,
             built: HashMap::new(),
             pending: HashSet::new(),
+            particles: HashMap::new(),
             finished: unbounded(),
             now: 0.0,
             surfaces: Default::default(),
@@ -362,6 +365,34 @@ impl Graphics {
         }
         None
     }
+    /// The shared particle mesh for one recorded frame, blended `key.2` steps
+    /// towards the next, built now if this is its first use.
+    fn particles(
+        &mut self,
+        key: ParticleKey,
+        sprites: &[u8],
+        after: &[u8],
+        meshes: &mut Assets<Mesh>,
+    ) -> Handle<Mesh> {
+        let now = self.now;
+        let built = self.particles.entry(key).or_insert_with(|| {
+            let blended;
+            let sprites = match key.2 {
+                0 => sprites,
+                step => {
+                    blended = blend_sprites(sprites, after, f32::from(step) / BLEND_STEPS);
+                    &blended[..]
+                }
+            };
+            crate::bench::SPRITE_MESHES.fetch_add(1, Ordering::Relaxed);
+            Built {
+                handle: meshes.add(crate::sprite::particles(sprites, key.3 == 1)),
+                used: now,
+            }
+        });
+        built.used = now;
+        built.handle.clone()
+    }
     /// Adds meshes finished on other threads and releases ones not shown lately.
     fn collect(&mut self, now: f32, meshes: &mut Assets<Mesh>) {
         self.now = now;
@@ -374,6 +405,9 @@ impl Graphics {
         // Entities still showing a released mesh keep it alive until they move on.
         self.built
             .retain(|_, built| now - built.used < KEEP_SECONDS);
+        // Particle meshes are cheap to rebuild and numerous; keep only recent ones.
+        self.particles
+            .retain(|_, built| now - built.used < PARTICLE_SECONDS);
     }
 }
 
@@ -481,77 +515,6 @@ fn blend_sprites(from: &[u8], to: &[u8], between: f32) -> Vec<u8> {
     }
     out
 }
-/// Camera-facing quads for one frame's point sprites, in the clip's own space.
-/// `right` and `up` are the camera's axes there, scaled by half a unit sprite.
-fn billboards(sprites: &[u8], smoke: bool, right: Vec3, up: Vec3) -> Mesh {
-    let count = sprites.len() / SPRITE_BYTES;
-    let mut positions = Vec::with_capacity(count * 4);
-    let mut colors = Vec::with_capacity(count * 4);
-    let mut uvs = Vec::with_capacity(count * 4);
-    let mut indices = Vec::with_capacity(count * 6);
-    for (i, sprite) in sprites.chunks_exact(SPRITE_BYTES).enumerate() {
-        let value = |k: usize| {
-            f32::from_le_bytes([
-                sprite[k * 4],
-                sprite[k * 4 + 1],
-                sprite[k * 4 + 2],
-                sprite[k * 4 + 3],
-            ])
-        };
-        let center = Vec3::new(value(0), value(1), value(2));
-        let color = match smoke {
-            true => {
-                let [r, g, b, _] = Color::srgb(value(4), value(5), value(6))
-                    .to_linear()
-                    .to_f32_array();
-                [r, g, b, 0.5]
-            }
-            false => [value(4), value(5), value(6), 1.0],
-        };
-        for (x, y) in [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)] {
-            positions.push((center + (right * x + up * y) * value(3)).to_array());
-            colors.push(color);
-            uvs.push([x * 0.5 + 0.5, y * 0.5 + 0.5]);
-        }
-        let base = i as u32 * 4;
-        indices.extend([base, base + 1, base + 2, base, base + 2, base + 3]);
-    }
-    Mesh::new(
-        PrimitiveTopology::TriangleList,
-        RenderAssetUsages::default(),
-    )
-    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, vec![[0.0, 1.0, 0.0]; count * 4])
-    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
-    .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, colors)
-    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
-    .with_inserted_indices(Indices::U32(indices))
-}
-/// The browser particle shader's soft disc, stored in the alpha channel.
-fn sprite_texture() -> Image {
-    const SIZE: u32 = 64;
-    let mut data = Vec::with_capacity((SIZE * SIZE * 4) as usize);
-    for y in 0..SIZE {
-        for x in 0..SIZE {
-            let p = (Vec2::new(x as f32, y as f32) + 0.5) / SIZE as f32 * 2.0 - 1.0;
-            let r = p.length();
-            let edge = ((r - 0.65) / 0.35).clamp(0.0, 1.0);
-            let glow = (-r * r * 3.5).exp() * (1.0 - edge * edge * (3.0 - 2.0 * edge));
-            data.extend([255, 255, 255, (glow * 255.0).round() as u8]);
-        }
-    }
-    Image::new(
-        Extent3d {
-            width: SIZE,
-            height: SIZE,
-            depth_or_array_layers: 1,
-        },
-        TextureDimension::D2,
-        data,
-        TextureFormat::Rgba8Unorm,
-        RenderAssetUsages::RENDER_WORLD,
-    )
-}
-
 /// `#rrggbb` as sent by the server.
 pub fn tint(color: &str) -> Option<Tint> {
     let digits = color.strip_prefix('#').filter(|d| d.len() == 6)?;
@@ -559,8 +522,8 @@ pub fn tint(color: &str) -> Option<Tint> {
     Some([channel(0)?, channel(2)?, channel(4)?])
 }
 
-/// What a particle layer was built for: clip, frame, blend step, facing and field of view.
-type SpriteStamp = (usize, usize, u8, Quat, f32);
+/// A recorded frame's particles: clip, frame, blend step towards the next frame, layer.
+type ParticleKey = (usize, usize, u8, usize);
 /// Plays one ported clip beneath this entity. `None` draws nothing.
 #[derive(Component, Default)]
 pub struct Ported {
@@ -575,9 +538,8 @@ pub struct Ported {
     parts: Vec<Entity>,
     /// Parts drawn by the plumage material, which is a different component.
     plumes: Vec<Entity>,
-    sprites: [Option<(Entity, Handle<Mesh>)>; 2],
-    /// What each sprite layer was last built for.
-    built: [Option<SpriteStamp>; 2],
+    /// The child drawing each particle layer, glow then smoke.
+    sprites: [Option<Entity>; 2],
 }
 impl Ported {
     pub fn new(clip: Option<usize>, tint: Tint, time: Option<f32>) -> Self {
@@ -595,14 +557,11 @@ impl Plugin for PortedGraphicsPlugin {
     fn build(&self, app: &mut App) {
         let mut graphics = Graphics::parse(PACK).expect("the ported graphics pack is valid");
         crate::plumage::build(app);
+        crate::sprite::build(app);
         graphics.plumage = app
             .world_mut()
             .resource_mut::<Assets<PlumageMaterial>>()
             .add(PlumageMaterial::default());
-        let texture = app
-            .world_mut()
-            .resource_mut::<Assets<Image>>()
-            .add(sprite_texture());
         let mut materials = app.world_mut().resource_mut::<Assets<StandardMaterial>>();
         // The browser paints every face, whichever way it winds.
         let surface = StandardMaterial {
@@ -627,15 +586,9 @@ impl Plugin for PortedGraphicsPlugin {
             base_color: Color::srgb(0.26, 0.74, 0.79),
             ..surface.clone()
         });
-        graphics.sprites = [AlphaMode::Add, AlphaMode::Blend].map(|alpha_mode| {
-            materials.add(StandardMaterial {
-                unlit: true,
-                alpha_mode,
-                base_color_texture: Some(texture.clone()),
-                ..surface.clone()
-            })
-        });
         graphics.surfaces = [materials.add(surface), glow, flat, silhouette];
+        let mut sprites = app.world_mut().resource_mut::<Assets<SpriteMaterial>>();
+        graphics.sprites = [true, false].map(|additive| sprites.add(SpriteMaterial { additive }));
         app.insert_resource(graphics);
     }
 }
@@ -671,42 +624,43 @@ type PlumeQuery<'w, 's> = Query<
         Without<MeshMaterial3d<StandardMaterial>>,
     ),
 >;
+type ParticleQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static mut Mesh3d, &'static mut Visibility),
+    (
+        With<MeshMaterial3d<SpriteMaterial>>,
+        Without<Ported>,
+        Without<crate::scene::FollowCamera>,
+        Without<MeshMaterial3d<StandardMaterial>>,
+        Without<MeshMaterial3d<PlumageMaterial>>,
+    ),
+>;
 /// The child entities that draw clips: ordinary parts and plumage.
 #[derive(SystemParam)]
 pub struct Pools<'w, 's> {
     parts: PartQuery<'w, 's>,
     plumes: PlumeQuery<'w, 's>,
+    particles: ParticleQuery<'w, 's>,
 }
-type CameraQuery<'w, 's> = Single<
-    'w,
-    's,
-    (&'static Transform, &'static Projection),
-    (With<crate::scene::FollowCamera>, Without<Ported>),
->;
 
 pub fn animate(
     mut commands: Commands,
     time: Res<Time>,
     mut graphics: ResMut<Graphics>,
     mut meshes: ResMut<Assets<Mesh>>,
-    camera: CameraQuery,
-    mut players: Query<(Entity, &mut Ported, &Transform)>,
+    mut players: Query<(Entity, &mut Ported)>,
     pools: Pools,
 ) {
     let Pools {
         mut parts,
         mut plumes,
+        mut particles,
     } = pools;
     let still = STILL.load(Ordering::Relaxed);
     let graphics = &mut *graphics;
     graphics.collect(time.elapsed_secs(), &mut meshes);
-    let (view, projection) = *camera;
-    // A sprite of size 1 is as tall as the browser draws it at the current field of view.
-    let reach = match projection {
-        Projection::Perspective(perspective) => (perspective.fov / 2.0).tan(),
-        _ => 0.5,
-    };
-    for (entity, mut player, root) in &mut players {
+    for (entity, mut player) in &mut players {
         let player = &mut *player;
         let look_of = |layer: Layer| match (player.ghost, layer) {
             (_, Layer::Glow) => Look::Glow,
@@ -854,80 +808,58 @@ pub fn animate(
                 visibility.set_if_neq(Visibility::Hidden);
             }
         }
-        // Billboards face the camera from the clip's own space. They are rebuilt only
-        // when the clip frame changes or the view turns, not on every rendered frame.
-        let facing = root.rotation.inverse() * view.rotation;
-        let (right, up) = (facing * Vec3::X * reach, facing * Vec3::Y * reach);
+        // Particles face the camera in the sprite shader, so a recorded frame's
+        // particles are one mesh, built once and shared by everything showing it.
         for layer in 0..2 {
-            let (sprites, after) = match (player.ghost, position) {
-                (false, Some((clip, index, next, _))) => (
-                    graphics.clips[clip].frames[index].sprites[layer],
-                    graphics.clips[clip].frames[next].sprites[layer],
-                ),
-                _ => (&[][..], &[][..]),
-            };
-            // Particles blend too when both frames hold the same particles.
-            let blending = after.len() == sprites.len() && after.as_ptr() != sprites.as_ptr();
-            let step = match blending {
-                true => position.map_or(0, |(.., between)| (between * BLEND_STEPS) as u8),
-                false => 0,
-            };
-            let stamp = position.map(|(clip, index, ..)| (clip, index, step, facing, reach));
-            let stale = match (player.built[layer], stamp) {
-                (
-                    Some((clip, index, was_step, was, fov)),
-                    Some((now_clip, now_index, now_step, now, now_fov)),
-                ) => {
-                    clip != now_clip
-                        || index != now_index
-                        || was_step != now_step
-                        || was.angle_between(now) > 0.01
-                        || (fov - now_fov).abs() > 1e-3
-                }
-                _ => true,
-            };
-            let blended;
-            let sprites = match blending && step > 0 {
-                true => {
-                    blended = blend_sprites(sprites, after, f32::from(step) / BLEND_STEPS);
-                    &blended[..]
-                }
-                false => sprites,
-            };
-            match &player.sprites[layer] {
-                Some((child, handle)) => {
-                    // An empty mesh cannot be uploaded, so an idle layer is hidden instead.
-                    let wanted = match sprites.is_empty() {
-                        true => Visibility::Hidden,
-                        false => Visibility::Inherited,
+            let (sprites, after, key) = match (player.ghost, position) {
+                (false, Some((clip, index, next, between))) => {
+                    let (sprites, after) = (
+                        graphics.clips[clip].frames[index].sprites[layer],
+                        graphics.clips[clip].frames[next].sprites[layer],
+                    );
+                    // Particles blend too when both frames hold the same particles.
+                    let blending =
+                        after.len() == sprites.len() && after.as_ptr() != sprites.as_ptr();
+                    let step = match blending {
+                        true => (between * BLEND_STEPS) as u8,
+                        false => 0,
                     };
-                    if let Ok((_, _, _, mut visibility)) = parts.get_mut(*child) {
-                        visibility.set_if_neq(wanted);
-                    }
-                    if stale
-                        && !sprites.is_empty()
-                        && let Some(mut mesh) = meshes.get_mut(handle)
-                    {
-                        *mesh = billboards(sprites, layer == 1, right, up);
-                        player.built[layer] = stamp;
-                        crate::bench::SPRITE_MESHES.fetch_add(1, Ordering::Relaxed);
+                    (sprites, after, Some((clip, index, step, layer)))
+                }
+                _ => (&[][..], &[][..], None),
+            };
+            let handle = match (key, sprites.is_empty()) {
+                (Some(key), false) => Some(graphics.particles(key, sprites, after, &mut meshes)),
+                _ => None,
+            };
+            match (player.sprites[layer], handle) {
+                (Some(child), handle) => {
+                    // An empty mesh cannot be uploaded, so an idle layer is hidden instead.
+                    if let Ok((mut mesh, mut visibility)) = particles.get_mut(child) {
+                        visibility.set_if_neq(match handle {
+                            Some(_) => Visibility::Inherited,
+                            None => Visibility::Hidden,
+                        });
+                        if let Some(handle) = handle
+                            && mesh.0 != handle
+                        {
+                            mesh.0 = handle;
+                        }
                     }
                 }
-                None if sprites.is_empty() => {}
-                None => {
-                    let handle = meshes.add(billboards(sprites, layer == 1, right, up));
-                    player.built[layer] = stamp;
+                (None, Some(handle)) => {
                     let child = commands
                         .spawn((
-                            Mesh3d(handle.clone()),
+                            Mesh3d(handle),
                             MeshMaterial3d(graphics.sprites[layer].clone()),
                             Transform::default(),
                             NoFrustumCulling,
                             ChildOf(entity),
                         ))
                         .id();
-                    player.sprites[layer] = Some((child, handle));
+                    player.sprites[layer] = Some(child);
                 }
+                (None, None) => {}
             }
         }
     }
@@ -1025,7 +957,7 @@ mod tests {
         assert!(!boost.once);
         // Tammy's boost is drawn entirely with smoke and glow sprites.
         assert!(boost.frames.iter().all(|f| !f.sprites[1].is_empty()));
-        let mesh = billboards(boost.frames[0].sprites[1], true, Vec3::X, Vec3::Y);
+        let mesh = crate::sprite::particles(boost.frames[0].sprites[1], true);
         assert_eq!(
             mesh.count_vertices(),
             boost.frames[0].sprites[1].len() / SPRITE_BYTES * 4

@@ -47,7 +47,9 @@ Run the port by hand with `npm run port:graphics -- /tmp/graphics.wwgp`.
 
 Each frame holds solid models, additive glow geometry, and the browser's point
 sprites (additive sparks and alpha-blended smoke), which the native client draws
-as camera-facing quads with the particle shader's soft disc.
+as quads turned to face the camera in `native-client/src/sprite.wesl`, with the
+particle shader's soft disc. Each recorded frame's particles are one mesh shared
+by everything showing that frame.
 
 Racers are recorded standing in open ground rather than at the arena's center,
 where an obstacle would change anything that looks for free space, such as

@@ -18,7 +18,7 @@ pub struct Config {
     pub showcase: Option<String>,
     /// A directory for showcase screenshots.
     pub capture: Option<String>,
-    /// Render the showcase to an image instead of a window, so capturing it
+    /// Draw the showcase or a benchmark into an image instead of a window, so it
     /// neither needs the screen nor shows anything on it.
     pub offscreen: bool,
     pub sparring: bool,
