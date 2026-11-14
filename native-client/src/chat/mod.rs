@@ -166,6 +166,9 @@ impl Chat {
         while self.messages.len() > 200 {
             self.messages.pop_first();
         }
+        for ids in self.unread_ids.values_mut() {
+            ids.retain(|id| self.messages.contains_key(id));
+        }
         self.you = Some(response.you);
         self.players = response.players;
         self.initialized = true;

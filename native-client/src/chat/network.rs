@@ -100,7 +100,7 @@ async fn run(origin: url::Url, token: String, commands: Receiver<Value>, events:
                 };
                 players = response.players.clone();
                 if events
-                    .try_send(Event::Reply {
+                    .send(Event::Reply {
                         response,
                         action: mutation,
                         sent: sending,
@@ -112,7 +112,7 @@ async fn run(origin: url::Url, token: String, commands: Receiver<Value>, events:
             }
             Err(message) => {
                 if events
-                    .try_send(Event::Error {
+                    .send(Event::Error {
                         message,
                         action: mutation,
                     })
