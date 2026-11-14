@@ -10,7 +10,8 @@ use super::*;
 use std::collections::BTreeMap;
 
 /// Racers whose special ability deals damage, with the kill kind it records.
-const ABILITIES: [(usize, &str, &str); 4] = [
+const ABILITIES: [(usize, &str, &str); 5] = [
+    (7, "nightmare", "Nightmare Fuel"),
     (5, "locust", "Low-Cost Locust"),
     (9, "fashion", "Fashion-Statement"),
     (10, "fireRing", "fire ring"),
@@ -55,6 +56,7 @@ fn play(seed: u32, target: f64, tallies: &mut BTreeMap<usize, Tally>) -> (f64, u
     let mut seen = 0;
     let mut steps = 0usize;
     while game.global.phase != "finished" && steps < 60 * 60 * 120 {
+        super::abilities::press_for_bots(&mut game);
         game.tick(Frame { dt: STEP, inputs: Vec::new() });
         steps += 1;
         for kill in game.global.kill_feed.iter().filter(|kill| kill.id > seen && !kill.assist) {
@@ -120,4 +122,5 @@ fn lethality() {
     }
     println!();
     println!("Ability kills are those its own ability dealt; per hour is per seat-hour of play.");
+    println!("Bots never press Nightmare Fuel themselves; the simulation presses it whenever it is ready.");
 }
