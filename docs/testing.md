@@ -120,7 +120,7 @@ flight. It builds the server and client into `native-client/target/scenarios/`
 with build-time settings, leaving normal builds alone.
 
 `npm run scenario:lethality -- [--matches 6] [--target 50]` has bots play the
-racers whose special abilities deal damage (Tammy's locusts, Houston's
+racers whose special abilities deal damage (Houston's
 Nightmare Fuel, Pearococo's Fashion-Statement, Master-Yuda's fire ring and
 Fourmidable's Tax-Audit), seated in turn, in matches that run until a racer has `--target` kills. Every kill is
 credited to what dealt it, and the table ranks the abilities by their kills. It

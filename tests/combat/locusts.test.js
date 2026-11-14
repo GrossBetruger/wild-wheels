@@ -1,8 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createBattle,tickBattle} from '../../gameplay/combat.js';
-import {useSpecial,characterAbilities} from '../../gameplay/special-abilities.js';
-import {ArenaCore,ArenaClient} from '../../gameplay/arena-core.js';
+import {ArenaCore} from '../../gameplay/arena-core.js';
 
 for(const engine of ['JavaScript','Rust']){
   for(const owner of [0,1])test(`${engine}: a lethal locust credits Tammy in slot ${owner}`,()=>{
@@ -18,18 +17,6 @@ for(const engine of ['JavaScript','Rust']){
     for(let i=0;i<1200&&read().locusts.length;i++){if(core)core.step(.05);else tickBattle(world,new Set(),.05);}
     assert.equal(read().locusts.length,0);assert.equal(read().bots[0].health,2);
   });
-  test(`${engine}: Low-Cost Locust spawns two per opponent in groups of four`,()=>{
-    const world=createBattle(5);Object.assign(world,{phase:'racing',human:true,supplies:[]});
-    world.bots.forEach((a,i)=>Object.assign(a,{human:true,inactive:i>=3,destroyed:i>=3?999:0,wx:65,wz:0}));
-    const core=engine==='Rust'?new ArenaCore(world):null;
-    if(core)core.step(0,[{actor:0,actions:[{type:'special'}]}]);else assert.equal(useSpecial(world),true);
-    const state=core?core.snapshot():world;
-    assert.equal(state.locusts.length,6);assert.equal(state.effects.filter(f=>f.type==='locustSpawn').length,2);
-    assert.ok(state.locusts.slice(0,4).every(b=>Math.abs(b.wx+65)<2&&Math.abs(b.wz+65)<2));
-    assert.ok(state.locusts.slice(4).every(b=>Math.abs(b.wx-65)<2&&Math.abs(b.wz-65)<2));
-    assert.equal(state.specialCooldown,20);
-    if(core){const client=new ArenaClient();client.accept(core.packet(),0);client.frame(0,[],0);assert.equal(client.present().locusts.length,6);}
-  });
   test(`${engine}: every exploding locust deals one damage and disappears only after hitting`,()=>{
     const world=createBattle(5);Object.assign(world,{phase:'racing',human:true,wx:-65,wz:0,supplies:[],locusts:[{id:1,owner:0,wx:65,wz:0,age:1,jump:.7},{id:2,owner:0,wx:65,wz:0,age:1,jump:.7}]});
     world.bots.forEach((a,i)=>Object.assign(a,{human:true,inactive:i>0,destroyed:i>0?999:0,wx:65,wz:1,health:3,shield:0}));
@@ -44,37 +31,3 @@ for(const engine of ['JavaScript','Rust']){
     const state=core?core.snapshot():world;assert.equal(state.locusts.length,1);assert.equal(state.health,3);assert.equal(state.bots[0].health,3);
   });
 }
-test('Tammy’s preview explains Low-Cost Locust and Cricket’s Jump separately',()=>{
-  assert.deepEqual(characterAbilities(5).map(a=>a.title),['LOW-COST LOCUST','CRICKET’S JUMP']);
-});
-test('Tammy can activate Low-Cost Locust through the actual client command protocol',()=>{
-  const world=createBattle(5);Object.assign(world,{phase:'racing',human:true,supplies:[]});
-  world.bots.forEach((a,i)=>Object.assign(a,{human:true,inactive:i>0,destroyed:i>0?999:0}));
-  const server=new ArenaCore(world),client=new ArenaClient();client.accept(server.packet(),0);client.frame(0,[],0);
-  assert.equal(client.action('special',undefined,0),true);
-  assert.equal(client.action('special',undefined,0),false);
-  server.step(0,[{actor:0,...client.outbound([])}]);
-  assert.equal(server.snapshot().locusts.length,2);
-  client.accept(server.packet(),.02);client.frame(0,[],.02);
-  assert.equal(client.action('special',undefined,.02),false);
-});
-test('Tammy deploys Low-Cost Locust when every opponent is a server-controlled bot',()=>{
-  const server=ArenaCore.room({code:'00',maxPlayers:8,dedicated:true,host:null,arena:0,bots:3,epoch:1,players:[{id:0,name:'Tammy',driver:5,role:'driver'}]});
-  server.start();for(let i=0;i<181;i++)server.step(1/60);
-  assert.equal(server.snapshot().bots.filter(a=>!a.human).length,3);
-  const client=new ArenaClient();client.accept(server.packet(),0);client.frame(0,[],0);
-  assert.equal(client.action('special',undefined,0),true);server.step(.01,[{actor:0,...client.outbound([])}]);
-  assert.equal(server.snapshot().locusts.length,6);
-  client.accept(server.packet(),.02);client.frame(0,[],.02);assert.equal(client.present().locusts.length,6);
-});
-test('Low-Cost Locust recharges in twenty seconds even while surviving locusts keep hunting',()=>{
-  const config={code:'00',maxPlayers:8,dedicated:true,host:null,arena:0,bots:3,epoch:1,players:[{id:0,name:'Tammy',driver:5,role:'driver'}]};
-  const server=ArenaCore.room(config);server.start();for(let i=0;i<181;i++)server.step(1/60);
-  server.step(0,[{actor:0,actions:[{type:'special'}]}]);assert.equal(server.snapshot().specialCooldown,20);
-  server.configure({...config,bots:0});for(let i=0;i<60;i++)server.step(1/60);
-  assert.ok(Math.abs(server.snapshot().specialCooldown-19)<1e-7);assert.equal(server.snapshot().locusts.length,6);
-  const client=new ArenaClient();client.accept(server.packet(),1);client.frame(0,[],1);assert.equal(client.action('special',undefined,1),false);
-  for(let i=0;i<1141;i++)server.step(1/60);
-  assert.equal(server.snapshot().specialCooldown,0);assert.equal(server.snapshot().locusts.length,6);
-  client.accept(server.packet(),21);client.frame(0,[],21);assert.equal(client.action('special',undefined,21),true);
-});

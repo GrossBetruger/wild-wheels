@@ -218,6 +218,8 @@ function hud(){
   }
   const dizzy=!race.bomber&&race.phase==='racing'&&race.destroyed<=0&&race.dizzy>0;
   dizzyNotice.classList.toggle('hidden',!dizzy);document.querySelector('.viewport').classList.toggle('dizzy-active',dizzy);if(dizzy)put('dizzy-notice',`✦ DIZZY · ${race.dizzy.toFixed(1)}s`);
+  const reversed=race.specialAbilities!==false&&!race.bomber&&race.phase==='racing'&&!race.destroyed&&(race.reverseControls??0)>0;
+  if(reversed){dizzyNotice.classList.remove('hidden');put('dizzy-notice',`⇄ CONTROLS REVERSED · ${race.reverseControls.toFixed(1)}s`);}
   showResults();
   const ignition=ringNotice.sample(race,performance.now()/1000);ringBanner.classList.toggle('hidden',!ignition);ringBanner.classList.toggle('blue-fire',Boolean(ignition?.blue));
   const whack=killCelebration.sample(race,performance.now()/1000);whackBanner.classList.toggle('hidden',!whack);
@@ -272,7 +274,6 @@ function hud(){
   leaderboard.classList.toggle('hidden',mode!=='combat');
   document.querySelector('.viewport').classList.toggle('time-stopped',mode==='combat'&&race.timeStop>0);
   specialButton.classList.toggle('hidden',mode!=='combat'||![5,7,8,9,11,12,13,14].includes(race.driver)||race.bomber||race.specialAbilities===false);specialButton.textContent=(race.specialCooldown??0)>0?`F · RECHARGE ${race.specialCooldown.toFixed(1)}s`:`F · ${race.driver===13&&!auditTarget(race,race)?'XYLOPHONE-ATTACK':abilityNames[race.driver]??'SPECIAL'}`;specialButton.disabled=!battleActive(race)||race.destroyed>0||race.specialCooldown>0||race.driver===12&&race.health>=6||frozen(race,race.id);
-  if(race.driver===5){const hunting=(race.locusts??[]).filter(b=>b.owner===race.id).length;specialButton.textContent+=` · ${hunting} LOCUST${hunting===1?'':'S'}`;}
   nightmareButton.classList.toggle('hidden',mode!=='combat'||race.driver!==7||race.bomber||race.specialAbilities===false);
   const nightmareActive=race.nightmareActive??0,nightmareCooldown=race.nightmareCooldown??0;
   nightmareState.textContent=nightmareActive>0?`BURNING · ${nightmareActive.toFixed(1)}s`:nightmareCooldown>0?`RECHARGE · ${nightmareCooldown.toFixed(1)}s`:'DOUBLE X · READY';

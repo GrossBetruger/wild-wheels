@@ -484,6 +484,12 @@ fn readings(
     if !p.bomber && live && p.dizzy > 0.0 {
         text(Id::Dizzy, format!("\u{2726} DIZZY · {:.1}s", p.dizzy));
     }
+    if view.special_abilities && !p.bomber && live && p.reverse_controls > 0.0 {
+        text(
+            Id::Dizzy,
+            format!("⇄ CONTROLS REVERSED · {:.1}s", p.reverse_controls),
+        );
+    }
     // Missiles locked on the viewer that chaff has not yet drawn away.
     let threats = view
         .projectiles
@@ -712,10 +718,8 @@ fn readings(
         .map(|racer| racer.ability.as_str())
         .filter(|_| SPECIALISTS.contains(&p.driver) && view.special_abilities && !p.bomber);
     if let Some(ability) = ability {
-        let hunting = view.locusts.iter().filter(|b| b.owner == view.you).count();
         let label = match (p.special_cooldown > 0.0, p.driver) {
             (true, _) => format!("F · RECHARGE {:.1}s", p.special_cooldown),
-            (false, 5) => format!("F · {ability} · {hunting} LOCUSTS"),
             _ => format!("F · {ability}"),
         };
         let ready = live && p.special_cooldown <= 0.0 && !(p.driver == 12 && p.health >= 6.0);

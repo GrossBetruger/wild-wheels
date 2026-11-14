@@ -18,6 +18,7 @@ function fields(Type,names,{booleans=[],nullable=[]}={}){
   }
 }
 class Actor extends Row{
+  get reverseControls(){return this.frame.text.actors[this.id]?.reverseControls??0;}
   get nightmareActive(){return this.frame.text.actors[this.id]?.nightmareActive??0;}
   get nightmareCooldown(){return this.frame.text.actors[this.id]?.nightmareCooldown??0;}
   get intelligenceBonus(){return this.frame.text.actors[this.id]?.intelligenceBonus??0;}

@@ -14,12 +14,12 @@ pub struct Client{
     local_drift:Globals,emitter:Option<Actor>,emitter_level:u32,drift_last:Option<f64>,drift_previous:Option<(f64,f64,f64)>,
 }
 fn pose_copy(target:&mut Actor,source:&Actor){
-    target.wx=source.wx;target.wz=source.wz;target.heading=source.heading;target.motion_heading=source.motion_heading;target.camera_heading=source.camera_heading;target.speed=source.speed;target.drift=source.drift;target.was_drifting=source.was_drifting;target.boost=source.boost;target.yaw=source.yaw;target.somersault=source.somersault;target.somersault_cooldown=source.somersault_cooldown;target.dizzy=source.dizzy;target.nightmare_active=source.nightmare_active;target.nightmare_cooldown=source.nightmare_cooldown;
+    target.wx=source.wx;target.wz=source.wz;target.heading=source.heading;target.motion_heading=source.motion_heading;target.camera_heading=source.camera_heading;target.speed=source.speed;target.drift=source.drift;target.was_drifting=source.was_drifting;target.boost=source.boost;target.yaw=source.yaw;target.somersault=source.somersault;target.somersault_cooldown=source.somersault_cooldown;target.dizzy=source.dizzy;target.reverse_controls=source.reverse_controls;target.nightmare_active=source.nightmare_active;target.nightmare_cooldown=source.nightmare_cooldown;
 }
 fn move_one(game:&mut Game,id:usize,command:&Move){
     if !game.combat_active()||game.actors[id].destroyed>0.0||game.actors[id].bomber||game.actors[id].afk{return;}
     let steer=command.steer.unwrap_or(f64::from(u8::from(command.keys&4!=0))-f64::from(u8::from(command.keys&8!=0)));
-    game.move_cart(id,steer,command.keys,1.0/60.0,true,false);let a=&mut game.actors[id];a.nightmare_active=(a.nightmare_active-1.0/60.0).max(0.0);a.nightmare_cooldown=(a.nightmare_cooldown-1.0/60.0).max(0.0);
+    game.move_cart(id,steer,command.keys,1.0/60.0,true,false);let a=&mut game.actors[id];a.reverse_controls=(a.reverse_controls-1.0/60.0).max(0.0);a.nightmare_active=(a.nightmare_active-1.0/60.0).max(0.0);a.nightmare_cooldown=(a.nightmare_cooldown-1.0/60.0).max(0.0);
 }
 impl Client{
     fn new(game:Game,viewer:usize,now:f64)->Self{

@@ -10,9 +10,8 @@ use super::*;
 use std::collections::BTreeMap;
 
 /// Racers whose special ability deals damage, with the kill kind it records.
-const ABILITIES: [(usize, &str, &str); 5] = [
+const ABILITIES: [(usize, &str, &str); 4] = [
     (7, "nightmare", "Nightmare Fuel"),
-    (5, "locust", "Low-Cost Locust"),
     (9, "fashion", "Fashion-Statement"),
     (10, "fireRing", "fire ring"),
     (13, "tax", "Tax-Audit"),

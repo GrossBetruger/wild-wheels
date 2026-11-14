@@ -6,7 +6,7 @@ import {RewardQueue} from '../../ui/reward-notice.js';
 test('having an ability does not announce it while idle, and an activation expires after 2.4 seconds',()=>{
   const tracker=new AbilityUsage(),queue=new RewardQueue(),world={mode:'combat',phase:'racing',soundEpoch:1,arena:0,elapsed:1,id:0,driver:5,specialCooldown:0,bots:[]};
   assert.deepEqual(tracker.sample(world),[]);assert.deepEqual(tracker.sample(world),[]);
-  world.specialCooldown=20;const [event]=tracker.sample(world);assert.equal(event.title,'LOW-COST LOCUST');queue.show(event);
+  world.specialCooldown=20;const [event]=tracker.sample(world);assert.equal(event.title,'REVERSE PSYCHOLOGY');queue.show(event);
   assert.equal(queue.sample(0).theme,'locust');world.specialCooldown=19.9;assert.deepEqual(tracker.sample(world),[]);
   assert.equal(queue.sample(2.4),null);assert.deepEqual(tracker.sample(world),[]);
 });

@@ -20,7 +20,7 @@ use std::fmt::Write as _;
 
 /// Racers and their abilities, numbered as `ability_on` numbers them.
 const RACERS: [(usize, &[&str]); 9] = [
-    (5, &["Low-Cost Locust", "Cricket's Jump"]),
+    (5, &["Reverse Psychology", "Cricket's Jump"]),
     (7, &["Reine de la paresse", "Nightmare Fuel"]),
     (8, &["Special Relativity"]),
     (9, &["Fashion-Statement"]),

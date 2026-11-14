@@ -1,6 +1,6 @@
 import {RewardNotice} from './reward-notice.js';
 export const abilityCards={
-  5:{title:'LOW-COST LOCUST',icon:'🦗',color:'#b7f35b',theme:'locust',detail:'THE SWARM IS HUNGRY'},
+  5:{title:'REVERSE PSYCHOLOGY',icon:'⇄',color:'#b7f35b',theme:'locust',detail:'LEFT IS RIGHT · FORWARD IS BACK'},
   7:{title:'REINE DE LA PARESSE',icon:'✺',color:'#ccb5ff',theme:'gravity',detail:'EVERYTHING GRAVITATES TO HER'},
   8:{title:'SPECIAL RELATIVITY',icon:'⏱',color:'#9ffaff',theme:'relativity',detail:'TIME IS A MATTER OF PERSPECTIVE'},
   9:{title:'FASHION-STATEMENT',icon:'🫰',color:'#ffd59d',theme:'fashion',detail:'FLORALS? FOR SPRING? GROUNDBREAKING.'},
