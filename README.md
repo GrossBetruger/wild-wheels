@@ -33,7 +33,7 @@ On macOS with Rust and the Xcode command line tools installed, connect to a runn
 ./run_client.sh --server http://localhost:5173 --name "Native Pip"
 ```
 
-The launcher builds and opens the native client using its pinned Rust toolchain. Run `./run_client.sh --help` for options. This POC supports arena racers; see [native client instructions](native-client/README.md) for its current scope.
+The launcher builds an optimized release of the native client with its pinned Rust toolchain and opens it; the first build takes a few minutes. Run `./run_client.sh --help` for options. This POC supports arena racers; see [native client instructions](native-client/README.md) for its current scope.
 
 ## Play with friends
 

@@ -71,10 +71,10 @@ The costs are in memory, frame-time spikes and what Bevy does with the scene.
    a 262 MB binary and most of the baseline memory. Sharing vertices between
    triangles, sharing triangles between animation phases, and compressing the
    pack would each cut this substantially; none has been tried.
-6. **Players run the dev profile.** `run_client.sh` builds without `--release`.
-   Game logic is about 1.7 times slower there, though both hold 60 frames per
-   second. Launch the release build and add link-time optimization and symbol
-   stripping to the release profile.
+6. **Release profile tuning.** `run_client.sh` now launches the release build;
+   the dev profile ran game logic about 1.7 times slower, though both held 60
+   frames per second. Link-time optimization and symbol stripping in the release
+   profile have not been tried.
 7. **Paced play uses about half a core.** With 0.3 ms of game logic per frame,
    the rest is Bevy extracting and preparing roughly 550 entities. One entity
    per model part, trail puff, skid mark and particle adds up; merging a clip
