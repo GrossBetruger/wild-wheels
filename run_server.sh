@@ -7,6 +7,7 @@ source "$project_dir/scripts/server/server-process.sh"
 server_log_file="$server_state_dir/server.log"
 export WILD_WHEELS_SESSION_FILE="${WILD_WHEELS_SESSION_FILE:-$server_state_dir/sessions.json}"
 export WILD_WHEELS_CHAT_FILE="${WILD_WHEELS_CHAT_FILE:-$server_state_dir/chat.json}"
+export WILD_WHEELS_STATS_FILE="${WILD_WHEELS_STATS_FILE:-$server_state_dir/stats.json}"
 export WILD_WHEELS_MANAGED=1
 server_lock
 if server_running; then printf 'Server already running (PID %s). Log: %s\n' "$server_pid" "$server_log_file"; exit 0; fi

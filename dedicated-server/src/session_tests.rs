@@ -2,6 +2,7 @@ use super::*;
 
 fn server(path: std::path::PathBuf) -> App {
     App {
+        stats: Default::default(),
         shutdown: tokio::sync::watch::channel(false).0,
         updates: Default::default(),
         sessions: Arc::new(tokio::sync::Mutex::new(

@@ -33,9 +33,27 @@ try{
   assert.equal((await post('/api/updates/check',player.value.token,{origin:'https://evil.invalid'})).status,403);
   assert.equal((await post('/api/updates/install',player.value.token)).status,409,'An update must be checked before installing');
   const update=await post('/api/updates/check',player.value.token);assert.equal(update.status,200);assert.equal(update.value.available,true);assert.match(update.value.description,/New release/);
+  const statsBefore=await (await fetch(`http://127.0.0.1:${port}/statsz`)).json();
+  assert.ok(statsBefore.total.ticks>0);assert.ok(statsBefore.currentCommit);
+  let checkpointed=false;
+  for(let tries=0;tries<350;tries++){
+    try{if(JSON.parse(await readFile(join(state,'stats.json'),'utf8')).total.ticks>=statsBefore.total.ticks){checkpointed=true;break;}}catch{}
+    await new Promise(r=>setTimeout(r,100));
+  }
+  assert.equal(checkpointed,true,'Stats must checkpoint while the server is still running');
+  // Waiting for the periodic save exceeds AFK timeout; resume as a real returning player.
+  const active=await post('/api/session',null,{cookie:player.cookie.split(';')[0]});assert.equal(active.status,200);Object.assign(player,active);
   const started=await post('/api/updates/install',player.value.token);assert.equal(started.status,200);assert.equal(started.value.updating,true);
   let restarted=false;for(let tries=0;tries<100;tries++){await new Promise(r=>setTimeout(r,100));try{if(await readFile(join(state,'server.pid'),'utf8')!==first&&await health()){try{await access(join(state,'lock'));}catch{restarted=true;break;}}}catch{}}
   assert.equal(restarted,true,'Web update must restart the managed native service');
+  const statsAfter=await (await fetch(`http://127.0.0.1:${port}/statsz`)).json();
+  const healthAfter=await (await fetch(`http://127.0.0.1:${port}/healthz`)).json();
+  assert.ok(statsAfter.total.ticks>statsBefore.total.ticks,'Historical ticks must continue across update');
+  assert.ok(statsAfter.total.ticks>healthAfter.ticks,'Historical totals must include the previous process');
+  assert.equal(statsAfter.byCommit[statsAfter.currentCommit].ticks,statsAfter.total.ticks,'Same-build restart must continue its commit bucket');
+  assert.equal(Object.values(statsAfter.byDate).reduce((sum,day)=>sum+day.ticks,0),statsAfter.total.ticks,'UTC date totals must reconcile with the grand total');
+  assert.ok(statsAfter.total.peakPlayers>=2,'Peak membership must survive update');
+  assert.equal(statsAfter.timezone,'UTC');
   assert.match(await readFile(join(state,'update.log'),'utf8'),/Installing [a-f0-9]+ — New release/);assert.equal(await readFile(join(repo,'release-marker'),'utf8'),'updated\n');
   const restoredPeer=await post('/api/session',null,{cookie:peer.cookie.split(';')[0]});assert.equal(restoredPeer.status,200);
   const restored=await post('/api/session',null,{cookie:player.cookie.split(';')[0]});assert.equal(restored.status,200);assert.equal(restored.value.world.name,'Updater');
@@ -48,5 +66,5 @@ try{
   shell('kill_server.sh');assert.equal(await health(),false);assert.match(shell('kill_server.sh'),/No managed server/);
   unrelated=spawn('sleep',['30']);await new Promise(r=>unrelated.once('spawn',r));await writeFile(join(state,'server.pid'),`${unrelated.pid}\n${join(target,'release/wild-wheels-server')}\n`);
   shell('kill_server.sh');assert.equal(unrelated.exitCode,null,'A stale PID must not kill an unrelated process');
-  console.log(JSON.stringify({pass:true,detached:true,survivesHangup:true,duplicatePrevented:true,updatePulledAndRestarted:true,chatRestored:true,privateChatProtected:true,cleanStop:true,stalePidSafe:true}));
+  console.log(JSON.stringify({pass:true,detached:true,survivesHangup:true,duplicatePrevented:true,updatePulledAndRestarted:true,chatRestored:true,privateChatProtected:true,statsCheckpointed:true,statsPersisted:true,cleanStop:true,stalePidSafe:true}));
 }finally{try{shell('kill_server.sh');}catch{}unrelated?.kill();}

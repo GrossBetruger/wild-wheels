@@ -3,6 +3,7 @@ mod chat;
 mod photos;
 mod room;
 mod sessions;
+mod stats;
 mod updates;
 use axum::{
     body::{Body, Bytes},
@@ -31,6 +32,7 @@ use tokio::{
 include!(concat!(env!("OUT_DIR"), "/assets.rs"));
 #[derive(Clone)]
 struct App {
+    stats: Arc<Mutex<stats::Stats>>,
     shutdown: tokio::sync::watch::Sender<bool>,
     updates: Arc<tokio::sync::Mutex<updates::Updates>>,
     sessions: Arc<tokio::sync::Mutex<sessions::Sessions>>,
@@ -188,6 +190,16 @@ async fn http(
         return error((405, "Use GET."));
     }
     match path {
+        "/statsz" => {
+            if !limit(&app, addr.ip(), "stats", 30, Duration::from_secs(60)) {
+                return error((429, "Too many stats requests."));
+            }
+            let mut report = app.stats.lock().unwrap().report();
+            report["currentCommit"] = json!(REVISION);
+            report["build"] = json!(BUILD);
+            report["timezone"] = json!("UTC");
+            response(200, report)
+        }
         "/build.json" => response(200, json!({"build":BUILD,"revision":REVISION})),
         "/healthz" => {
             let room = app.room.lock().unwrap();
@@ -199,7 +211,7 @@ async fn http(
                 .unwrap_or(0);
             response(
                 200,
-                json!({"status":"ok","players":room.count(),"maxPlayers":8,"ticks":room.ticks,"tickP99Us":p99,"overruns":room.overruns,"build":BUILD}),
+                json!({"status":"ok","players":room.count(),"maxPlayers":8,"ticks":room.ticks,"tickP99Us":p99,"overruns":room.overruns,"build":BUILD,"revision":REVISION}),
             )
         }
         _ => match ASSETS.iter().find(|a| a.0 == path) {
@@ -424,9 +436,12 @@ async fn main() {
     });
     let chat_path = std::env::var_os("WILD_WHEELS_CHAT_FILE").map(std::path::PathBuf::from)
         .unwrap_or_else(|| ".wild-wheels/chat.json".into());
+    let stats_path = std::env::var_os("WILD_WHEELS_STATS_FILE").map(std::path::PathBuf::from)
+        .unwrap_or_else(|| ".wild-wheels/stats.json".into());
     let mut room = Room::new(arena, bots);
     room.chat = chat::Chat::open(&chat_path).expect("Unable to load saved chat");
     let app = App {
+        stats: Arc::new(Mutex::new(stats::Stats::open(&stats_path).expect("Unable to load saved server stats"))),
         shutdown: tokio::sync::watch::channel(false).0,
         updates: Arc::new(tokio::sync::Mutex::new(updates::Updates::discover())),
         sessions: Arc::new(tokio::sync::Mutex::new(sessions::Sessions::open(
@@ -440,16 +455,37 @@ async fn main() {
         origin,
     };
     let clock = app.room.clone();
-    tokio::spawn(async move {
+    let tick_stats = app.stats.clone();
+    let commit = match REVISION.is_empty() {true=>format!("build:{BUILD}"),false=>REVISION.to_owned()};
+    let mut stop_clock = app.shutdown.subscribe();
+    let clock_task = tokio::spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_nanos(1_000_000_000 / 60));
         interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
         loop {
-            let deadline = interval.tick().await;
+            let deadline = tokio::select! {tick=interval.tick()=>tick,_=stop_clock.changed()=>break};
             let mut room = clock.lock().unwrap();
-            if deadline.elapsed() > Duration::from_millis(16) {
+            let overrun = deadline.elapsed() > Duration::from_millis(16);
+            if overrun {
                 room.overruns += 1;
             }
             room.tick();
+            tick_stats.lock().unwrap().record(&commit, sessions::now(), *room.tick_us.last().unwrap_or(&0), overrun, room.count());
+        }
+    });
+    let checkpoint_stats = app.stats.clone();
+    let checkpoint_path = stats_path.clone();
+    let mut stop_saving = app.shutdown.subscribe();
+    let checkpoint_task = tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(30));
+        interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+        loop {
+            tokio::select! {_=interval.tick()=>{},_=stop_saving.changed()=>break}
+            let snapshot = checkpoint_stats.lock().unwrap().clone();
+            let path = checkpoint_path.clone();
+            match tokio::task::spawn_blocking(move || snapshot.save(&path)).await {
+                Ok(Ok(())) => {},
+                _ => eprintln!("Unable to checkpoint server stats; will retry in 30 seconds."),
+            }
         }
     });
     let router = Router::new()
@@ -493,10 +529,18 @@ async fn main() {
     })
     .await
     .unwrap();
+    clock_task.await.expect("Server clock task failed");
+    checkpoint_task.await.expect("Stats checkpoint task failed");
     // All HTTP chat writes have drained before the final snapshot is taken.
-    tokio::task::spawn_blocking(move || app.room.lock().unwrap().chat.save(&chat_path))
-        .await.expect("Chat save task failed").expect("Unable to save chat during shutdown");
+    let final_stats = app.stats.lock().unwrap().clone();
+    tokio::task::spawn_blocking(move || {
+        let chat = app.room.lock().unwrap().chat.save(&chat_path);
+        let stats = final_stats.save(&stats_path);
+        chat.and(stats)
+    })
+        .await.expect("Server state save task failed").expect("Unable to save server state during shutdown");
     println!("Chat saved for the next server start.");
+    println!("Cumulative server stats saved for the next server start.");
 }
 
 #[cfg(test)]
