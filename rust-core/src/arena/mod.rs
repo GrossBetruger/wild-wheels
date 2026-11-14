@@ -13,6 +13,8 @@ pub use client::{NativeClient, ClientInput, ClientAction, ClientError, ClientVie
 mod presentation;
 mod control;
 pub mod native;
+#[cfg(test)]
+mod lethality;
 /// The most racers one room holds. This is the only place the limit is set; the
 /// server, native client and browser all follow it. Scenario builds override it
 /// without editing code: `WILD_WHEELS_MAX_PLAYERS=16 cargo build`.
