@@ -126,10 +126,8 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
             (
                 drive,
                 crate::scene::sync,
-                crate::scene::sync_pickups,
                 crate::ported::animate,
                 crate::sound::play,
-                crate::feedback::sync_effects,
                 crate::feedback::sync_match,
             )
                 .chain(),

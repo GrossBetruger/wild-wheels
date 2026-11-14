@@ -17,44 +17,12 @@ pub struct MatchText;
 pub struct DamageFlash;
 #[derive(Resource, Default)]
 pub struct FeedbackState {
-    pieces: Vec<Entity>,
     phase: String,
     go_until: f32,
     health: Option<f64>,
     flash: f32,
 }
-#[derive(Resource)]
-pub struct EffectAssets {
-    sphere: Handle<Mesh>,
-    debris: Handle<Mesh>,
-    ring: Handle<Mesh>,
-    fire: Handle<StandardMaterial>,
-    ember: Handle<StandardMaterial>,
-    smoke: Handle<StandardMaterial>,
-}
-fn setup(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-) {
-    commands.insert_resource(EffectAssets {
-        sphere: meshes.add(Sphere::new(1.0).mesh().uv(10, 8)),
-        debris: meshes.add(Cuboid::default()),
-        ring: meshes.add(Torus::new(0.92, 1.0)),
-        fire: materials.add(StandardMaterial {
-            base_color: Color::srgb(1.0, 0.42, 0.03),
-            emissive: LinearRgba::rgb(4.0, 1.0, 0.05),
-            unlit: true,
-            ..default()
-        }),
-        ember: materials.add(StandardMaterial {
-            base_color: Color::srgb(1.0, 0.85, 0.25),
-            emissive: LinearRgba::rgb(6.0, 3.0, 0.3),
-            unlit: true,
-            ..default()
-        }),
-        smoke: materials.add(Color::srgb(0.12, 0.13, 0.16)),
-    });
+fn setup(mut commands: Commands) {
     commands.spawn((
         Node {
             position_type: PositionType::Absolute,
@@ -204,123 +172,6 @@ pub fn sync_match(
     state.flash = (state.flash - dt).max(0.0);
     for mut flash in &mut flashes {
         flash.0 = Color::srgba(0.95, 0.04, 0.02, state.flash * 0.7);
-    }
-}
-
-pub fn sync_effects(
-    mut commands: Commands,
-    session: Res<GameSession>,
-    assets: Res<EffectAssets>,
-    mut state: ResMut<FeedbackState>,
-) {
-    let mut pieces = Vec::new();
-    if let Some(client) = session.client.as_ref() {
-        let view = client.view();
-        if view.arena == 0 {
-            for fx in view
-                .effects
-                .iter()
-                .filter(|fx| matches!(fx.kind.as_str(), "explosion" | "hit" | "ash" | "abomb"))
-                .take(16)
-            {
-                let age = fx.age as f32;
-                let remaining = (1.0 - age / fx.life.max(0.01) as f32).clamp(0.0, 1.0);
-                let origin = Vec3::new(fx.wx as f32, 1.3, fx.wz as f32);
-                let size = match fx.kind.as_str() {
-                    "hit" => 0.4,
-                    "abomb" => 5.0,
-                    _ => 1.0,
-                };
-                // Deterministic trajectories, independent of renderer frame rate.
-                for i in 0..18 {
-                    let angle = i as f32 * 2.399963;
-                    let direction = Vec3::new(angle.sin(), 0.0, angle.cos());
-                    let (mesh, material, position, scale) = match fx.kind.as_str() {
-                        "ash" => {
-                            let collapse = (age / 1.3).clamp(0.0, 1.0);
-                            let p = Vec3::new(
-                                (i % 3) as f32 - 1.0,
-                                ((i / 3) % 3) as f32 * (1.0 - collapse) * 0.9 + 0.25,
-                                (i / 9) as f32 * 1.8 - 0.9,
-                            );
-                            (
-                                &assets.debris,
-                                &assets.smoke,
-                                Vec3::new(origin.x, 0.0, origin.z) + p,
-                                Vec3::splat(0.65 * remaining.sqrt()),
-                            )
-                        }
-                        _ if i < 8 => {
-                            let p = origin
-                                + direction * age * (6.0 + i as f32 * 0.5) * size
-                                + Vec3::Y
-                                    * (age * (5.0 + (i % 3) as f32) - 5.0 * age * age).max(-1.0);
-                            (
-                                &assets.debris,
-                                &assets.ember,
-                                p,
-                                Vec3::splat(0.3 * remaining * size),
-                            )
-                        }
-                        _ if age < 0.55 => (
-                            &assets.sphere,
-                            &assets.fire,
-                            origin + direction * age * 5.0 * size,
-                            Vec3::splat((0.5 + age * 2.5) * remaining * size),
-                        ),
-                        _ => (
-                            &assets.sphere,
-                            &assets.smoke,
-                            origin + direction * (i % 4) as f32 * size + Vec3::Y * age * 3.0,
-                            Vec3::splat((0.4 + age) * remaining * size),
-                        ),
-                    };
-                    pieces.push((
-                        mesh.clone(),
-                        material.clone(),
-                        Transform::from_translation(position)
-                            .with_scale(scale)
-                            .with_rotation(Quat::from_euler(
-                                EulerRot::XYZ,
-                                age * 3.0 + angle,
-                                angle,
-                                age * 2.0,
-                            )),
-                    ));
-                }
-                if fx.kind != "ash" && age < 0.7 {
-                    pieces.push((
-                        assets.ring.clone(),
-                        assets.ember.clone(),
-                        Transform::from_xyz(origin.x, 0.15, origin.z).with_scale(Vec3::new(
-                            (1.0 + age * 12.0) * size,
-                            (1.0 - age / 0.7) * 0.6,
-                            (1.0 + age * 12.0) * size,
-                        )),
-                    ));
-                }
-            }
-        }
-    }
-    // A bounded pool reuses entities and shared GPU assets across explosions.
-    for (i, (mesh, material, transform)) in pieces.iter().enumerate() {
-        let entity = match state.pieces.get(i) {
-            Some(entity) => *entity,
-            None => {
-                let entity = commands.spawn_empty().id();
-                state.pieces.push(entity);
-                entity
-            }
-        };
-        commands.entity(entity).insert((
-            Mesh3d(mesh.clone()),
-            MeshMaterial3d(material.clone()),
-            *transform,
-            Visibility::Inherited,
-        ));
-    }
-    for entity in state.pieces.iter().skip(pieces.len()) {
-        commands.entity(*entity).insert(Visibility::Hidden);
     }
 }
 

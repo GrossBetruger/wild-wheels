@@ -12,8 +12,8 @@ WebGL runs in the native client.
    Building the native client therefore requires Node.js.
 2. `scripts/build/graphics-port.mjs` runs the unmodified `Renderer` against a
    recording WebGL context. It draws synthetic battles containing one subject at
-   the origin and records the vertex buffers and model instances the renderer
-   uploads.
+   the origin and records the vertex buffers, model instances and point sprites
+   the renderer uploads. A full port takes about 40 seconds.
 3. The result is a binary pack in Cargo's `OUT_DIR`, embedded with
    `include_bytes!`. It is a build product and is not committed.
 4. `native-client/src/ported.rs` parses the pack and plays clips as Bevy meshes
@@ -25,31 +25,54 @@ Run the port by hand with `npm run port:graphics -- /tmp/graphics.wwgp`.
 
 | Clip name | Source |
 | --- | --- |
-| `driver:<n>:idle`, `driver:<n>:boost` | Each racer for an eight-second loop at 24 frames per second, after a three-second warm-up that settles eased animation |
+| `driver:<n>:idle` | Each racer for an eight-second loop at 24 frames per second, after a three-second warm-up that settles eased animation |
+| `driver:<n>:boost` | The same loop while boosting, recorded with the racer driving so that trails stream behind |
+| `driver:<n>:celebrate` | The celebration after a kill, played by its timer |
+| `overlay:<n>:<state>` | What `shield`, `hedge`, `tehilim`, `dizzy`, `vulcan` and `special` add to a racer |
+| `overlay:xylophone`, `timestop` | Fourmidable's and the time-stop special, shown at other racers or the caster |
 | `shot:missile`, `shot:hedgehog`, `shot:vulcan:<n>` | Projectiles, including each racer's rapid-fire variant |
-| `pickup:<kind>` | Supply pads and their bobbing, spinning items |
+| `pickup:<kind>` | Supply pads and their bobbing, spinning items, including the bicycle |
 | `wreck`, `health:<1-6>` | The destroyed-racer marker and the health pips above a racer |
+| `effect:<type>`, `effect:ash:<n>`, `effect:default` | Explosions, ashes of each racer, atomic blasts, radiation, teleports, fire rings and the other world effects, played by age |
+| `bomb:<kind>`, `cloud:chaff`, `cloud:chaff:fairy`, `cloud:stink` | Falling bombs and lingering clouds, played by age |
+| `particle:smoke`, `particle:spark:<level>` | One drift particle over its life |
+| `locust`, `locust:jump` | Tammy's locusts |
 | Arenas | Static scenery and sky color for every entry in `arenas` |
 
-Additive geometry, such as boost flames, is kept as a separate glow layer.
-Triangles that take the racer's color are detected by drawing each racer twice,
-once in a marker color, and are recolored per player in the native client.
+Each frame holds solid models, additive glow geometry, and the browser's point
+sprites (additive sparks and alpha-blended smoke), which the native client draws
+as camera-facing quads with the particle shader's soft disc.
 
-To port another state, add a `record(...)` call in `buildGraphicsPack` and select
-the new clip name in `scene.rs`. State that only adds geometry can be isolated
-with `added(...)`, as the health pips are.
+Three techniques keep the recording automatic:
+
+- **Racer color.** Each racer is drawn twice, once in a marker color. Triangles
+  that change follow the racer's color and are recolored per player.
+- **Overlays.** A state is drawn with and without it; only the difference is
+  kept, so it layers over any racer clip. A state that swaps part of the racer's
+  own model keeps only its added geometry and particles.
+- **Model placement.** The vertex shader's yaw, pitch, roll and Pearococo's
+  feather fold are evaluated in the exporter and stored as one matrix.
+
+To port another state, add a recording in `buildGraphicsPack` and select the new
+clip name in `scene.rs`.
 
 ## Limits
 
-- Point-sprite particles (smoke, sparkles, halos) and shader-only effects
-  (Pearococo's feather motion and iridescence, fog, Dark Humor, X-ray) are not ported.
-- Clips are recorded with the racer stationary, so trails that depend on
-  movement, such as Fourmidable's receipts, do not stream behind the racer.
-- Ability, shield, celebration, rapid-fire mount and teleport visuals are not
-  yet recorded. Effects such as explosions remain native code in `feedback.rs`.
-- Loops whose browser period does not divide eight seconds restart with a small jump.
+- Shader-only effects are not ported: Pearococo's feather sway and iridescence,
+  distance fog, and KnowItOwl's Dark Humor darkness and X-ray.
+- Recorded states do not fade in or out, and combine by layering only. A boost
+  trail is the one recorded while driving straight.
+- Not recorded: projectile trails, skid marks, Master-Yuda's drift sparks,
+  Houston's flying helmet, muzzle flashes, Tammy's arrival scale-up, the dizzy
+  camera wobble and the bomber views.
+- Master-Yuda's drift lean is the one piece ported by hand, in `scene.rs`.
+- Fire rings are recorded at one radius and scaled, which also scales flame width.
+- Ashes, celebrations and fire rings are recorded at 12 frames per second to
+  bound the pack size, which is about 120 MiB.
+- Loops whose browser period does not divide their length restart with a small jump.
 - Native lighting approximates the browser's `0.62 + 0.38 * n·l` shading; the
   light levels in `scene.rs` were matched against screenshots, not derived exactly.
+  Additive colors are added in linear light, so glows differ slightly in strength.
 
 ## Pack layout
 
@@ -58,16 +81,19 @@ Little-endian. `WWGP`, `u32` version, then counted sections:
 - Palette: `u32` count, then sRGB `u8[3]` entries. Entry 0 means the racer's color.
 - Meshes: `u32` count; each is `f32` scale, `u32` triangle count, then per
   triangle nine `i16` coordinates (multiplied by the scale) and a `u16` palette index.
-- Clips: `u32` count; each is `f32` frames per second, `u32` frame count, then
-  per frame a `u16` part count and parts of `u32` mesh, `u32` layer (0 solid,
-  1 glow) and `f32` x, y, z, yaw, pitch, roll.
+- Clips: `u32` count; each is `f32` frames per second, `u32` mode (0 loop,
+  1 play once), `u32` frame count, then per frame:
+  - a `u16` part count and parts of `u32` mesh, `u32` layer (0 solid, 1 glow)
+    and twelve `f32` giving the images of the X, Y and Z axes and the origin;
+  - glow sprites, then smoke sprites: each a `u32` count and sprites of seven
+    `f32`: x, y, z, size, red, green, blue.
 - Names: `u32` count; each is `u16` length, UTF-8 name, `u32` clip.
 - Arenas: `u32` count; each is sky `u8[3]` and `u32` mesh.
 
 ## Checks
 
 - `node --test tests/client/graphics-port.test.js` ports one racer and checks the
-  pack contents, tinting, glow layer and determinism.
+  pack contents, tinting, glow and sprite layers, overlays and determinism.
 - `cargo test --manifest-path native-client/Cargo.toml ported` checks that the
   embedded pack contains every racer and arena and that placement matches the
   browser shader.
