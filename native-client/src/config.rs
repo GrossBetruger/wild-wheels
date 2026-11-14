@@ -5,6 +5,9 @@ use url::Url;
 pub struct Config {
     pub origin: Url,
     pub name: String,
+    pub driver: usize,
+    /// Join straight away instead of opening the menu; set by `--server`.
+    pub join: bool,
     pub headless: bool,
     pub seconds: f64,
     pub auto_start: bool,
@@ -16,6 +19,8 @@ impl Config {
         let mut config = Self {
             origin: Url::parse("http://localhost:5173")?,
             name: "Native Pip".into(),
+            driver: 0,
+            join: false,
             headless: false,
             seconds: 8.0,
             auto_start: false,
@@ -26,7 +31,8 @@ impl Config {
         while let Some(arg) = args.next() {
             match arg.as_str() {
                 "--server" => {
-                    config.origin = server_origin(&args.next().ok_or("--server requires a URL")?)?
+                    config.origin = server_origin(&args.next().ok_or("--server requires a URL")?)?;
+                    config.join = true;
                 }
                 "--name" => config.name = args.next().ok_or("--name requires a name")?,
                 "--headless" => config.headless = true,
@@ -46,22 +52,27 @@ impl Config {
                 }
                 "--help" => {
                     println!(
-                        "Wild Wheels native arena client\n--server URL --name NAME [--auto-start] [--headless --seconds 8]\nArrows/WASD: drive · Shift: drift · Space: fire · Tab/Command: weapon\nX: boost · C: chaff · Z: flip · Enter: start · Escape: AFK"
+                        "Wild Wheels native arena client\nRun without options to choose a server, name and racer in the menu.\nDeveloper options: --server URL --name NAME [--auto-start] [--headless --seconds 8]"
                     );
                     std::process::exit(0);
                 }
                 _ => return Err(format!("Unknown option: {arg}").into()),
             }
         }
-        config.name = config.name.trim().to_owned();
-        if config.name.is_empty() || config.name.encode_utf16().count() > 24 {
-            return Err("Name must have 1–24 characters".into());
-        }
+        config.name = player_name(&config.name)?;
         if !config.seconds.is_finite() || !(1.0..=300.0).contains(&config.seconds) {
             return Err("Duration must be 1–300 seconds".into());
         }
         Ok(config)
     }
+}
+/// The server's own rule for player names.
+pub fn player_name(value: &str) -> Result<String, Box<dyn Error>> {
+    let name = value.trim();
+    if name.is_empty() || name.encode_utf16().count() > 24 {
+        return Err("Name must have 1–24 characters".into());
+    }
+    Ok(name.to_owned())
 }
 pub fn server_origin(value: &str) -> Result<Url, Box<dyn Error>> {
     let mut url = Url::parse(value)?;

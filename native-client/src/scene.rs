@@ -108,7 +108,7 @@ fn setup(mut commands: Commands) {
         FollowCamera,
     ));
     commands.spawn((
-        Text::new("WILD WHEELS | NATIVE RUST\nConnecting to dedicated arena..."),
+        Text::default(),
         TextFont {
             font_size: FontSize::Px(22.0),
             ..default()
@@ -449,8 +449,15 @@ pub fn sync(
         time,
     } = assets;
     let Some(client) = session.client.as_ref() else {
+        // Outside a room the world is empty; the menus say what is happening.
         for mut text in &mut hud {
-            text.0 = format!("WILD WHEELS | NATIVE RUST\n{}", session.status);
+            text.0.clear();
+        }
+        for (_, entity) in cache.shown.drain() {
+            commands.entity(entity).despawn();
+        }
+        if let Some((_, scenery)) = cache.arena.take() {
+            commands.entity(scenery).despawn();
         }
         return;
     };
@@ -529,20 +536,8 @@ pub fn sync(
     }
     for mut text in &mut hud {
         text.0 = format!(
-            "WILD WHEELS | NATIVE RUST POC\n{} | {} | {:.0} KILLS\nHEALTH {:.0}   HEDGES {}   MISSILES {}   BOOST {}\n{} | {}\nWASD / arrows | Shift drift | Space fire | Tab weapon\nX boost | C chaff | Z flip | Enter start",
-            session.status,
-            view.phase,
-            p.kills,
-            p.health,
-            p.ammo,
-            p.missiles,
-            p.turbos,
-            p.item,
-            match view.phase {
-                "countdown" => format!("{:.0}", view.countdown.ceil()),
-                _ if p.destroyed > 0.0 => "RESPAWNING...".into(),
-                _ => String::new(),
-            }
+            "HEALTH {:.0}   HEDGES {}   MISSILES {}   BOOST {}\n{}   {:.0} KILLS",
+            p.health, p.ammo, p.missiles, p.turbos, p.item, p.kills,
         );
     }
 }

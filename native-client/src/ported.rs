@@ -12,7 +12,7 @@ use bevy::{
 use std::collections::HashMap;
 
 static PACK: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/graphics.wwgp"));
-const VERSION: u32 = 2;
+const VERSION: u32 = 3;
 const TRIANGLE_BYTES: usize = 20;
 const SPRITE_BYTES: usize = 28;
 /// The browser shader pitches models about this height and rolls them about `ROLL_PIVOT`.
@@ -36,6 +36,10 @@ impl<'a> Reader<'a> {
     }
     fn f32(&mut self) -> Option<f32> {
         Some(f32::from_le_bytes(self.take(4)?.try_into().ok()?))
+    }
+    fn text(&mut self) -> Option<String> {
+        let size = self.u16()?;
+        Some(std::str::from_utf8(self.take(size)?).ok()?.to_owned())
     }
     fn vec3(&mut self) -> Option<Vec3> {
         Some(Vec3::new(self.f32()?, self.f32()?, self.f32()?))
@@ -79,6 +83,13 @@ struct Clip {
 pub struct Arena {
     pub sky: Color,
     pub mesh: u32,
+    pub name: String,
+    pub description: String,
+}
+pub struct Racer {
+    pub name: String,
+    pub description: String,
+    pub color: Tint,
 }
 
 #[derive(Resource)]
@@ -88,6 +99,7 @@ pub struct Graphics {
     clips: Vec<Clip>,
     names: HashMap<String, usize>,
     arenas: Vec<Arena>,
+    racers: Vec<Racer>,
     built: HashMap<(u32, Tint, bool), Handle<Mesh>>,
     solid: Handle<StandardMaterial>,
     glow: Handle<StandardMaterial>,
@@ -173,6 +185,16 @@ impl Graphics {
             arenas.push(Arena {
                 sky: Color::srgb_u8(sky[0], sky[1], sky[2]),
                 mesh,
+                name: r.text()?,
+                description: r.text()?,
+            });
+        }
+        let mut racers = Vec::new();
+        for _ in 0..r.u32()? {
+            racers.push(Racer {
+                name: r.text()?,
+                description: r.text()?,
+                color: r.take(3)?.try_into().ok()?,
             });
         }
         Some(Self {
@@ -181,6 +203,7 @@ impl Graphics {
             clips,
             names,
             arenas,
+            racers,
             built: HashMap::new(),
             solid: Handle::default(),
             glow: Handle::default(),
@@ -192,6 +215,12 @@ impl Graphics {
     }
     pub fn arena(&self, index: usize) -> Option<&Arena> {
         self.arenas.get(index)
+    }
+    pub fn arenas(&self) -> &[Arena] {
+        &self.arenas
+    }
+    pub fn racers(&self) -> &[Racer] {
+        &self.racers
     }
     pub fn solid(&self) -> Handle<StandardMaterial> {
         self.solid.clone()
@@ -513,6 +542,8 @@ mod tests {
     fn embedded_pack_ports_every_racer_state_and_arena() {
         let graphics = Graphics::parse(PACK).expect("valid pack");
         assert_eq!(graphics.arenas.len(), 2);
+        assert_eq!(graphics.racers().len(), 15);
+        assert_eq!(graphics.racers()[0].name, "Pip the Panda");
         for driver in 0..15 {
             for state in ["idle", "boost", "celebrate"] {
                 let clip = graphics

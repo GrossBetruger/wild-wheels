@@ -14,7 +14,7 @@ pub struct GameSession {
     pub client: Option<NativeClient>,
     pub status: String,
     pub sounds: Vec<String>,
-    transport: Transport,
+    transport: Option<Transport>,
     epoch: Instant,
     last_send: f64,
     pub away: bool,
@@ -22,12 +22,12 @@ pub struct GameSession {
     metrics: crate::metrics::Metrics,
 }
 impl GameSession {
-    fn new(config: Config) -> Self {
+    fn new() -> Self {
         Self {
             client: None,
-            status: "Connecting...".into(),
+            status: String::new(),
             sounds: vec![],
-            transport: Transport::spawn(config),
+            transport: None,
             epoch: Instant::now(),
             last_send: 0.0,
             away: false,
@@ -35,8 +35,35 @@ impl GameSession {
             metrics: Default::default(),
         }
     }
+    /// Whether the player has asked to be in a room, connected yet or not.
+    pub fn joined(&self) -> bool {
+        self.transport.is_some()
+    }
+    pub fn join(&mut self, config: Config) {
+        self.leave();
+        self.status = "Connecting...".into();
+        self.transport = Some(Transport::spawn(config));
+    }
+    /// Gives up the seat in the room and returns to the menu.
+    pub fn leave(&mut self) {
+        if let Some(transport) = self.transport.take() {
+            let _ = transport.commands.try_send(Command::Leave);
+        }
+        self.client = None;
+        self.away = false;
+        self.status.clear();
+    }
+    /// Sends a room request; `false` when the network worker cannot take it now.
+    pub fn request(&mut self, command: Command) -> bool {
+        self.transport
+            .as_ref()
+            .is_some_and(|transport| transport.commands.try_send(command).is_ok())
+    }
     fn receive(&mut self, now: f64) {
-        while let Ok(event) = self.transport.events.try_recv() {
+        let Some(transport) = self.transport.as_ref() else {
+            return;
+        };
+        while let Ok(event) = transport.events.try_recv() {
             match event {
                 Event::Status(status) => {
                     self.status = status;
@@ -44,7 +71,7 @@ impl GameSession {
                 Event::Connected => {
                     self.metrics.connected();
                     self.client = None;
-                    self.status = "Connected | Enter to start".into();
+                    self.status = "Connected".into();
                 }
                 Event::Error(error) => {
                     self.status = error;
@@ -80,14 +107,17 @@ impl GameSession {
         }
     }
     fn send(&mut self, input: ClientInput, now: f64) {
-        if now - self.last_send < 1.0 / 30.0 || self.transport.commands.is_full() {
+        let Some(transport) = self.transport.as_ref() else {
+            return;
+        };
+        if now - self.last_send < 1.0 / 30.0 || transport.commands.is_full() {
             return;
         }
         let Some(client) = self.client.as_mut() else {
             return;
         };
         match client.outbound(input) {
-            Ok(bytes) => match self.transport.commands.try_send(Command::Input(bytes)) {
+            Ok(bytes) => match transport.commands.try_send(Command::Input(bytes)) {
                 Ok(()) => {
                     self.last_send = now;
                     self.metrics.sent(client.last_sent_movement(), now);
@@ -103,13 +133,21 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         return headless(config);
     }
     let screenshot = config.screenshot.clone();
+    let mut session = GameSession::new();
+    if config.join {
+        session.join(config.clone());
+    }
     App::new()
         .insert_resource(crate::scene::Capture(screenshot))
-        .insert_resource(GameSession::new(config))
+        .insert_resource(session)
+        .insert_resource(crate::gui::Menu::new(
+            config,
+            crate::prefs::Preferences::load(),
+        ))
         .insert_resource(ClearColor(Color::srgb(0.71, 0.83, 0.85)))
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
-                title: "Wild Wheels | Native Rust POC".into(),
+                title: "Wild Wheels".into(),
                 resolution: (1280, 800).into(),
                 ..default()
             }),
@@ -121,14 +159,19 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
             crate::sound::GameAudioPlugin,
             crate::feedback::FeedbackPlugin,
         ))
+        .add_systems(Startup, crate::gui::setup)
         .add_systems(
             Update,
             (
+                crate::gui::control,
                 drive,
                 crate::scene::sync,
+                crate::gui::preview,
                 crate::ported::animate,
                 crate::sound::play,
                 crate::feedback::sync_match,
+                crate::gui::draw,
+                crate::gui::hover,
             )
                 .chain(),
         )
@@ -137,13 +180,15 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 }
 fn drive(
     mut session: ResMut<GameSession>,
+    menu: Res<crate::gui::Menu>,
     keys: Res<ButtonInput<KeyCode>>,
     windows: Query<&Window>,
     time: Res<Time>,
 ) {
     let now = session.epoch.elapsed().as_secs_f64();
     session.receive(now);
-    let focused = windows.iter().any(|w| w.focused);
+    // Keys pressed while the menu is open belong to the menu.
+    let focused = windows.iter().any(|w| w.focused) && !menu.open;
     let held = |codes: &[KeyCode]| focused && codes.iter().any(|key| keys.pressed(*key));
     let input = ClientInput {
         keys: u32::from(held(&[KeyCode::ArrowUp, KeyCode::KeyW]))
@@ -153,30 +198,12 @@ fn drive(
             | (u32::from(held(&[KeyCode::ShiftLeft, KeyCode::ShiftRight])) << 4),
         steer: None,
     };
-    if focused && keys.just_pressed(KeyCode::Enter) {
-        let _ = session.transport.commands.try_send(Command::Start);
-    }
-    if focused && keys.just_pressed(KeyCode::Escape) {
-        let away = !session.away;
-        if session
-            .transport
-            .commands
-            .try_send(Command::Afk(away))
-            .is_ok()
-        {
-            session.away = away;
-        }
-    }
     if session.away {
         return;
     }
     let Some(client) = session.client.as_mut() else {
         return;
     };
-    if client.view().arena != 0 {
-        session.status = "POC supports Scrapyard only. Select it in the browser lobby.".into();
-        return;
-    }
     if let Err(error) = client.advance(time.delta_secs_f64().min(0.05), input, now) {
         session.status = error.to_string();
         return;
@@ -202,6 +229,10 @@ fn drive(
             focused && keys.just_pressed(KeyCode::KeyZ),
             ClientAction::Somersault,
         ),
+        (
+            focused && keys.just_pressed(KeyCode::KeyF),
+            ClientAction::Special,
+        ),
     ] {
         if trigger {
             let _ = client.action(action, now);
@@ -214,7 +245,8 @@ fn drive(
 fn headless(config: Config) -> Result<(), Box<dyn Error>> {
     let seconds = config.seconds;
     let sparring = config.sparring;
-    let mut session = GameSession::new(config);
+    let mut session = GameSession::new();
+    session.join(config);
     let start = Instant::now();
     let mut previous = start;
     let mut origin = None;

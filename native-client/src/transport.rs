@@ -13,8 +13,12 @@ use tokio_tungstenite::tungstenite::{Message, client::IntoClientRequest};
 type NetResult<T> = Result<T, Box<dyn Error + Send + Sync>>;
 pub enum Command {
     Input(Vec<u8>),
-    Start,
+    /// A room setting or match start for `/api/control`.
+    Control(Value),
+    Driver(usize),
     Afk(bool),
+    /// Give up the seat in the room, then stop.
+    Leave,
     Stop,
 }
 pub enum Event {
@@ -115,16 +119,13 @@ async fn worker(config: Config, commands: Receiver<Command>, events: Sender<Even
         }
         tokio::time::sleep(Duration::from_secs(delay)).await;
         delay = (delay * 2).min(10);
-        if matches!(
-            commands.try_recv(),
-            Ok(Command::Stop) | Err(crossbeam_channel::TryRecvError::Disconnected)
-        ) {
-            return;
-        }
         // Inputs from a dead session must not leak into the new session.
-        while let Ok(command) = commands.try_recv() {
-            if matches!(command, Command::Stop) {
-                return;
+        loop {
+            match commands.try_recv() {
+                Ok(Command::Stop | Command::Leave)
+                | Err(crossbeam_channel::TryRecvError::Disconnected) => return,
+                Ok(_) => {}
+                Err(crossbeam_channel::TryRecvError::Empty) => break,
             }
         }
     }
@@ -153,16 +154,17 @@ async fn connect(
             response = Some(restored);
         }
     }
-    let response = match response {
-        Some(r) => r,
-        None => {
-            client
+    let response =
+        match response {
+            Some(r) => r,
+            None => client
                 .post(config.origin.join("api/join")?)
-                .json(&json!({"code":"00","name":config.name,"driver":0,"role":"driver"}))
+                .json(
+                    &json!({"code":"00","name":config.name,"driver":config.driver,"role":"driver"}),
+                )
                 .send()
-                .await?
-        }
-    };
+                .await?,
+        };
     let expiration = response
         .cookies()
         .find(|c| c.name() == "wild-wheels-session")
@@ -190,7 +192,7 @@ async fn connect(
             client
                 .post(config.origin.join("api/driver")?)
                 .bearer_auth(&token)
-                .json(&json!({"driver":0}))
+                .json(&json!({"driver":config.driver}))
                 .send()
                 .await?,
         )
@@ -245,9 +247,7 @@ async fn connect(
                 .into(),
         ))
         .await?;
-    events.try_send(Event::Status(
-        "Connected | Enter to start | Escape for AFK".into(),
-    ))?;
+    events.try_send(Event::Status("Connected".into()))?;
     events.try_send(Event::Connected)?;
     loop {
         tokio::select! {
@@ -259,7 +259,9 @@ async fn connect(
             _=tokio::time::sleep(Duration::from_millis(2))=>{
                 for _ in 0..8 {match commands.try_recv(){
                     Ok(Command::Input(bytes))=>{let text=String::from_utf8(bytes)?;tokio::time::timeout(Duration::from_secs(2),socket.send(Message::Text(text.into()))).await??;},
-                    Ok(Command::Start)=>{let result=body(client.post(config.origin.join("api/control")?).bearer_auth(&token).json(&json!({"action":"start"})).send().await?).await;if let Err(e)=result{let _=events.try_send(Event::Status(e.to_string()));}},
+                    Ok(Command::Control(action))=>{let result=body(client.post(config.origin.join("api/control")?).bearer_auth(&token).json(&action).send().await?).await;if let Err(e)=result{let _=events.try_send(Event::Status(e.to_string()));}},
+                    Ok(Command::Driver(driver))=>{let result=body(client.post(config.origin.join("api/driver")?).bearer_auth(&token).json(&json!({"driver":driver})).send().await?).await;if let Err(e)=result{let _=events.try_send(Event::Status(e.to_string()));}},
+                    Ok(Command::Leave)=>{let _=client.post(config.origin.join("api/leave")?).bearer_auth(&token).json(&json!({})).send().await;let _=socket.close(None).await;return Ok(());},
                     Ok(Command::Afk(afk))=>{
                         if !afk{continue;}
                         let response=client.post(config.origin.join("api/afk")?).bearer_auth(&token).json(&json!({"afk":true})).send().await?;
@@ -267,9 +269,10 @@ async fn connect(
                         let reply=body(response).await?;
                         let resumed=reply["token"].as_str().ok_or("AFK response missing session")?;
                         store.remember(origin,Identity{token:resumed.into(),expires:now()+age})?;
-                        let _=socket.close(None).await;events.try_send(Event::Status("AFK | Escape to resume".into()))?;
+                        let _=socket.close(None).await;events.try_send(Event::Status("Sitting out".into()))?;
                         loop {match commands.try_recv(){
                             Ok(Command::Afk(false))=>break,
+                            Ok(Command::Leave)=>{let _=client.post(config.origin.join("api/leave")?).bearer_auth(resumed).json(&json!({})).send().await;return Ok(());},
                             Ok(Command::Stop)|Err(crossbeam_channel::TryRecvError::Disconnected)=>return Ok(()),
                             _=>{},
                         }tokio::time::sleep(Duration::from_millis(20)).await;}

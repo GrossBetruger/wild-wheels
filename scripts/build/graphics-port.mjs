@@ -13,7 +13,7 @@ globalThis.devicePixelRatio??=1;
 // Reduced motion keeps the dizzy camera wobble out of recordings.
 globalThis.matchMedia??=()=>({matches:true});
 
-export const PACK_VERSION=2;
+export const PACK_VERSION=3;
 // Fire rings are recorded at this radius and scaled by the native client.
 export const FIRE_RING_RADIUS=20;
 // Clips whose every frame is new geometry are recorded at the slower rate to bound the pack size.
@@ -159,13 +159,16 @@ class Pack {
   }
   encode(){
     const u32=value=>{const b=Buffer.alloc(4);b.writeUInt32LE(value);return b;},names=[...this.names].sort(([a],[b])=>a<b?-1:1);
+    const text=value=>{const bytes=Buffer.from(value),size=Buffer.alloc(2);size.writeUInt16LE(bytes.length);return Buffer.concat([size,bytes]);};
     return Buffer.concat([
       Buffer.from('WWGP'),u32(PACK_VERSION),
       u32(this.palette.length),Buffer.from(this.palette.flat()),
       u32(this.meshes.length),...this.meshes,
       u32(this.clips.length),...this.clips,
       u32(names.length),...names.flatMap(([name,clip])=>{const text=Buffer.from(name),size=Buffer.alloc(2);size.writeUInt16LE(text.length);return[size,text,u32(clip)];}),
-      u32(this.arenas.length),...this.arenas.flatMap(({sky,mesh})=>[Buffer.from(sky),u32(mesh)]),
+      u32(this.arenas.length),...this.arenas.flatMap(({sky,mesh,name,desc})=>[Buffer.from(sky),u32(mesh),text(name),text(desc)]),
+      // The menus name racers and arenas from the same data the browser shows.
+      u32(drivers.length),...drivers.flatMap(driver=>[text(driver.name),text(driver.desc),Buffer.from(hex(driver.color))]),
     ]);
   }
 }
@@ -196,7 +199,7 @@ export function buildGraphicsPack({only=[...drivers.keys()]}={}){
   };
   const once=(name,life,setup,each,options={})=>record(name,{frames:Math.ceil(life*FPS)+1,setup:r=>{hidden(r);setup?.(r);},each,...options},ONCE);
 
-  for(const index of arenas.keys())pack.arenas.push({sky:hex(arenas[index].sky),mesh:pack.mesh(draw(renderer(),Object.assign(world(0,index),{afk:true}),0).scenery)});
+  for(const index of arenas.keys())pack.arenas.push({name:arenas[index].name,desc:arenas[index].desc,sky:hex(arenas[index].sky),mesh:pack.mesh(draw(renderer(),Object.assign(world(0,index),{afk:true}),0).scenery)});
 
   const wreck=capture({setup:r=>{r.destroyed=1;}})[0];
   pack.clip('wreck',FPS,[pack.frame(wreck)]);

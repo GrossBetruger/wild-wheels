@@ -23,14 +23,18 @@ pub fn now() -> u64 {
         .unwrap_or_default()
         .as_secs()
 }
+/// Where this client keeps its private files; overridable for isolated tests.
+pub fn data_directory() -> io::Result<PathBuf> {
+    if let Some(directory) = std::env::var_os("WILD_WHEELS_NATIVE_DATA_DIR") {
+        return Ok(PathBuf::from(directory));
+    }
+    directories::ProjectDirs::from("games", "WildWheels", "NativeClient")
+        .map(|project| project.data_local_dir().to_owned())
+        .ok_or_else(|| io::Error::other("No application data directory"))
+}
 impl Store {
     pub fn open() -> io::Result<Self> {
-        if let Some(directory) = std::env::var_os("WILD_WHEELS_NATIVE_DATA_DIR") {
-            return Self::at(PathBuf::from(directory).join("sessions.json"));
-        }
-        let project = directories::ProjectDirs::from("games", "WildWheels", "NativeClient")
-            .ok_or_else(|| io::Error::other("No application data directory"))?;
-        Self::at(project.data_local_dir().join("sessions.json"))
+        Self::at(data_directory()?.join("sessions.json"))
     }
     fn at(path: PathBuf) -> io::Result<Self> {
         let identities: BTreeMap<String, Identity> = match fs::File::open(&path) {

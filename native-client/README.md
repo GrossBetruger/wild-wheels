@@ -6,10 +6,23 @@ server only; no Grand Prix, bomber client, or mobile controls.
 From the repository root:
 
 ```sh
-./run_client.sh --server http://localhost:5173 --name "Native Pip"
+./run_client.sh
 ```
 
-For a non-graphical network smoke test against an isolated dedicated server:
+The game opens on a menu: enter the server address and your name, choose a
+racer, and join. In the room you can pick the arena, the number of bots, special
+abilities and your racer, then start the match. Escape opens the in-game menu to
+sit out, leave the room or quit. The last server, name and racer are remembered.
+Chat is not available in the native client yet.
+
+In a match: Arrows/WASD drive; Shift drifts; Space fires; Tab/Command switches
+weapons; X boosts; C deploys chaff; Z flips; F uses the special ability.
+
+### Developer options
+
+`--server URL` joins that server straight away, skipping the menu, and
+`--name NAME` sets the name used. For a non-graphical network smoke test against
+an isolated dedicated server:
 
 ```sh
 ./run_client.sh --server http://localhost:5189 --name "Native Pip" --headless --auto-start --seconds 10
@@ -21,8 +34,6 @@ normal room start API; use it only on a test server. Native session cookies are
 stored privately per origin in application data; `WILD_WHEELS_NATIVE_DATA_DIR`
 overrides the directory for isolated tests.
 
-Arrows/WASD drive; Shift drifts; Space fires; Tab/Command switches weapons;
-X boosts; C deploys chaff; Z flips; Enter starts; Escape toggles AFK.
 `--screenshot /absolute/path.png` captures the focused, visible window periodically
 for inspection. Bring the native window to the foreground before inspecting a
 capture: macOS can return black frames for fully occluded windows.
@@ -76,7 +87,7 @@ can override paths. Reports default to the OS temporary directory.
 ## Boundaries
 
 `rust-core` owns simulation and client prediction. The native package separates
-configuration, private sessions, transport, application coordination, scene, and
-sound. Scene/audio consume core state; transport never invokes the simulation.
+configuration, private sessions, transport, application coordination, menus,
+scene, and sound. Scene/audio consume core state; transport never invokes the simulation.
 The existing kernel guard is shared across owned native arena/client operations.
 Keep future browser/Wasm networking and storage adapters outside presentation.

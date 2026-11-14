@@ -1,9 +1,11 @@
 mod app;
 mod config;
 mod feedback;
+mod gui;
 mod metrics;
 mod pilot;
 mod ported;
+mod prefs;
 mod scene;
 mod session;
 mod sound;

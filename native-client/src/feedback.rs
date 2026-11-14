@@ -90,6 +90,7 @@ fn notice(
 
 pub fn sync_match(
     session: Res<GameSession>,
+    menu: Res<crate::gui::Menu>,
     time: Res<Time>,
     mut state: ResMut<FeedbackState>,
     mut panels: Query<&mut Node, With<MatchPanel>>,
@@ -98,7 +99,9 @@ pub fn sync_match(
 ) {
     let now = time.elapsed_secs();
     let dt = time.delta_secs().min(0.1);
-    let mut message = Some(session.status.clone());
+    // Outside a room, and wherever a menu is showing, the menus speak instead.
+    let mut message = None;
+    let mut finished = false;
     let mut countdown = false;
     match session.client.as_ref() {
         None => {
@@ -127,6 +130,7 @@ pub fn sync_match(
                 now < state.go_until,
             );
             countdown = view.phase == "countdown";
+            finished = view.phase == "finished";
             if view.phase == "finished" && !session.away && !view.player.afk {
                 let winner = view
                     .winner
@@ -156,7 +160,20 @@ pub fn sync_match(
             }
         }
     }
+    if menu.screen(&session) == crate::gui::Screen::Menu
+        || session
+            .client
+            .as_ref()
+            .is_some_and(|c| c.view().phase == "ready")
+    {
+        message = None;
+    }
     for mut panel in &mut panels {
+        // The final standings make room for the lobby on the right.
+        (panel.left, panel.right) = match finished {
+            true => (percent(4), px(426)),
+            false => (percent(22), percent(22)),
+        };
         panel.display = match message {
             Some(_) => Display::Flex,
             None => Display::None,

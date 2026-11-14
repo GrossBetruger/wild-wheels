@@ -40,6 +40,7 @@ pub enum ClientAction {
     Boost,
     Chaff,
     Somersault,
+    Special,
 }
 
 /// A borrowed presentation view. Consumers cannot mutate simulation authority.
@@ -64,6 +65,7 @@ pub struct ClientView<'a> {
     pub locusts: &'a [Locust],
     pub time_stop: f64,
     pub time_owner: Option<usize>,
+    pub special_abilities: bool,
     pub blocks: &'static [[f64; 4]],
     pub movement_ack: i64,
     pub action_ack: i64,
@@ -138,6 +140,7 @@ impl NativeClient {
             ClientAction::Boost => "turbo",
             ClientAction::Chaff => "chaff",
             ClientAction::Somersault => "somersault",
+            ClientAction::Special => "special",
         };
         let accepted = self.inner.do_action(
             Action {
@@ -191,6 +194,7 @@ impl NativeClient {
             locusts: &g.locusts,
             time_stop: g.time_stop,
             time_owner: g.time_owner,
+            special_abilities: g.special_abilities,
             blocks: super::super::blocks(g.arena),
             movement_ack: game.movement_ack[you],
             action_ack: game.action_ack[you],
