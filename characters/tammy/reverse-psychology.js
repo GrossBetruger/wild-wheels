@@ -1,4 +1,4 @@
-export const REVERSE_RADIUS=85;
+export const REVERSE_RADIUS=100;
 export const REVERSE_WAVE_LIFE=2.2;
 
 // A suspended cricket, its limbs tugged in opposite directions by a wooden

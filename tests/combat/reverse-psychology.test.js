@@ -5,17 +5,17 @@ import {useSpecial,characterAbilities} from '../../gameplay/special-abilities.js
 import {ArenaCore,ArenaClient} from '../../gameplay/arena-core.js';
 
 for(const engine of ['JavaScript','Rust']){
-  test(`${engine}: the green shockwave reverses racers inside and on its 85-unit radius, leaving racers outside unaffected`,()=>{
-    const world=createBattle(5);Object.assign(world,{phase:'racing',human:true,wx:0,wz:0,supplies:[]});
-    for(const [index,bot] of world.bots.entries())Object.assign(bot,{driver:0,human:true,inactive:false,destroyed:0,wx:[0,0,0,60,61][index],wz:[84.9,85,85.1,60,61][index]});
+  test(`${engine}: the green shockwave reverses racers inside and on its 100-unit radius, leaving racers outside unaffected`,()=>{
+    const world=createBattle(5);Object.assign(world,{phase:'racing',human:true,wx:0,wz:-10,supplies:[]});
+    for(const [index,bot] of world.bots.entries())Object.assign(bot,{driver:0,human:true,inactive:false,destroyed:0,wx:[0,0,0,70,71][index],wz:[89.9,90,90.1,60,61][index]});
     const core=engine==='Rust'?new ArenaCore(world):null;
     if(core)core.step(0,[{actor:0,actions:[{type:'special'}]}]);
     if(!core)assert.equal(useSpecial(world),true);
     const state=core?core.snapshot():world;
     assert.deepEqual(state.bots.map(a=>a.reverseControls??0),[5,5,0,5,0]);assert.equal(state.reverseControls??0,0);
     const wave=state.effects.find(f=>f.type==='reverseShockwave');
-    assert.deepEqual([wave.wx,wave.wz,wave.radius,wave.life],[0,0,85,2.2]);
-    if(core){const client=new ArenaClient();client.accept(core.packet(0),0);client.frame(0,[],0);const visual=client.present().effects.find(f=>f.type==='reverseShockwave');assert.equal(visual.radius,85);}
+    assert.deepEqual([wave.wx,wave.wz,wave.radius,wave.life],[0,-10,100,2.2]);
+    if(core){const client=new ArenaClient();client.accept(core.packet(0),0);client.frame(0,[],0);const visual=client.present().effects.find(f=>f.type==='reverseShockwave');assert.equal(visual.radius,100);}
   });
   test(`${engine}: Reverse Psychology swaps both movement axes, including another Tammy, and leaves its caster alone`,()=>{
     for(const [key,axis,direction] of [['arrowup','speed',-1],['arrowdown','speed',1],['arrowleft','heading',-1],['arrowright','heading',1]]){
@@ -86,7 +86,7 @@ test('Tammy activates Reverse Psychology when every opponent is a server-control
   const client=new ArenaClient();client.accept(server.packet(),0);client.frame(0,[],0);
   assert.equal(client.action('special',undefined,0),true);server.step(.01,[{actor:0,...client.outbound([])}]);
   assert.equal(server.snapshot().locusts.length,0);
-  // Tammy starts at (0,78); bot 1 at (55,55) is within 85 units,
+  // Tammy starts at (0,78); bot 1 at (55,55) is within 100 units,
   // while bots 2 and 3 at (78,0) and (55,-55) are outside.
   client.accept(server.packet(),.02);client.frame(0,[],.02);assert.deepEqual(client.present().bots.map(a=>a.reverseControls>4),[true,false,false]);
 });

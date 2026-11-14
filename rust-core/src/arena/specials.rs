@@ -2,9 +2,9 @@ use super::*;
 impl Game{
     fn reverse_psychology(&mut self,id:usize){
         let a=&mut self.actors[id];a.special_active=5.0;let (wx,wz)=(a.wx,a.wz);
-        self.global.effects.push(Effect{kind:"reverseShockwave".into(),owner:Some(id),wx,wz,life:2.2,radius:Some(85.0),..Effect::default()});
+        self.global.effects.push(Effect{kind:"reverseShockwave".into(),owner:Some(id),wx,wz,life:2.2,radius:Some(100.0),..Effect::default()});
         for target in &mut self.actors{
-            if target.id==id||target.inactive||target.afk||target.bomber||target.destroyed>0.0||distance(wx,wz,target.wx,target.wz)>85.0{continue;}
+            if target.id==id||target.inactive||target.afk||target.bomber||target.destroyed>0.0||distance(wx,wz,target.wx,target.wz)>100.0{continue;}
             target.reverse_controls=5.0;
         }
     }
