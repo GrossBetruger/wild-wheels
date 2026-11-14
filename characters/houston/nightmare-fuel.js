@@ -38,25 +38,17 @@ export function tickNightmare(world,dt){
 
 // Shared by the browser renderer and the native graphics exporter. Everything
 // repeats every four seconds, the length of the native client's recorded loop.
-export function drawNightmareFuel(glow,smoke,p,heading,time,jump=null,ground=null){
+export function drawNightmareFuel(glow,smoke,p,heading,time,jump=null){
   const L=NIGHTMARE_LENGTH,y=1.45,z0=-3.55,height=.13+(jump?.height??0);
   for(const mesh of [glow,smoke]){mesh.at(p.x,height,p.z,heading);mesh.pitch=jump?.pitch??0;mesh.pivot=1.87;}
   const turn=time*Math.PI/2,frac=v=>v-Math.floor(v),hash=(i,k)=>frac(Math.sin(i*127.1+k*311.7)*43758.5453),flicker=time*Math.PI*27/86;
   const around=(a,r)=>[Math.cos(a)*r,Math.max(.15,y+Math.sin(a)*r*.55)];
-  // The ground beneath is charred black, so the light burns against any arena.
-  if(ground){
-    ground.at(p.x,0,p.z,heading);
-    ground.disc(0,.03,z0-L*.5,3.1,L*.55,'#2a2136',20);ground.disc(0,.04,z0-L*.48,2,L*.5,'#140d1f',20);
-  }
   // The plume: a white-hot core inside magenta inside deep ultraviolet, fed by the side engines.
   const breathe=1+.03*Math.sin(turn*12);
   glow.flame(0,y,z0,1.25,L*breathe,[.13,.01,.36],flicker);
   glow.flame(0,y,z0,.72,L*.94*breathe,[.45,.03,.9],flicker+1);
   glow.flame(0,y,z0,.3,L*.86,[.85,.55,1.3],flicker+2);
   for(const side of [-.55,.55])glow.flame(side,y,z0,.34,L*.3,[.5,.12,1],flicker+side);
-  // The char glows ultraviolet.
-  glow.disc(0,-.06,z0-L*.5,2.7,L*.53,[.16,.01,.36]);
-  glow.disc(0,-.05,z0-L*.45,1.2,L*.45,[.3,.04,.55].map(c=>c*(1+.25*Math.sin(turn*8))));
   // Shock diamonds standing in the exhaust, and pulses racing through them.
   for(let i=0;i<7;i++){
     const t=(i+.6)/7.6,pulse=1+.25*Math.sin(turn*16-i*1.3),fade=1-t*.75;
@@ -102,8 +94,10 @@ export function drawNightmareFuel(glow,smoke,p,heading,time,jump=null,ground=nul
     smoke.particle(Math.cos(a)*r,Math.max(.4,y+Math.sin(a)*r*.6+life*1.5),z0-(.72+.4*life)*L,(2.2+2.6*life)*Math.sqrt(Math.sin(life*Math.PI)),[.15,.04,.24]);
   }
   for(let i=0;i<3;i++){
-    const open=Math.sin(turn*(2+i)+i*2.1);if(open<.15)continue;
+    // Closed eyes are still drawn, at no size: the native client blends particles
+    // between recorded frames only while their number stays the same.
+    const open=Math.max(0,Math.sin(turn*(2+i)+i*2.1)-.15);
     const x=(i-1)*1.5+Math.sin(turn*2+i)*.3,up=y+.9+.5*Math.sin(turn*3+i*1.7),z=z0-L*(.86+.05*i);
-    for(const side of [-.22,.22])glow.particle(x+side,up,z,.34*Math.min(1,open*2),[1.6,.25,.35]);
+    for(const side of [-.22,.22])glow.particle(x+side,up,z,.34*Math.min(1,open*2.4),[1.6,.25,.35]);
   }
 }

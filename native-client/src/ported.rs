@@ -20,7 +20,8 @@ use std::{
 
 static PACK: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/graphics.wwgp"));
 const VERSION: u32 = 7;
-/// Clip frames ahead of the one shown whose meshes are built in advance.
+/// Clip frames ahead of the one shown whose meshes are built in advance, at 24
+/// recorded frames a second; faster recordings look ahead as long in time.
 const LOOKAHEAD: usize = 4;
 /// Meshes unused for this long are released; one shown again is rebuilt.
 const KEEP_SECONDS: f32 = 12.0;
@@ -681,7 +682,8 @@ pub fn animate(
                 false => index % frames,
             };
             // Build the next few frames' meshes now, so they are ready when shown.
-            for ahead in 1..=LOOKAHEAD {
+            let lookahead = (LOOKAHEAD as f32 * graphics.clips[clip].fps / 24.0).ceil() as usize;
+            for ahead in 1..=lookahead.max(LOOKAHEAD) {
                 let parts = graphics.clips[clip].frames[at(index + ahead)].parts.len();
                 for slot in 0..parts {
                     let part = &graphics.clips[clip].frames[at(index + ahead)].parts[slot];

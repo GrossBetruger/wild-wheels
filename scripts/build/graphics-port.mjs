@@ -21,6 +21,8 @@ export const PACK_VERSION=7;
 export const FIRE_RING_RADIUS=20;
 // Clips whose every frame is new geometry are recorded at the slower rate to bound the pack size.
 const SLOW_FPS=12;
+// Effects whose geometry changes every frame are recorded at this rate.
+const SMOOTH_FPS=60;
 // Transitions between states are recorded for this long after the change.
 export const TRANSITION=1;
 // Seconds over which timed states fade out in the browser, by state.
@@ -244,7 +246,8 @@ export function buildGraphicsPack({only=[...drivers.keys()]}={}){
     const rapid=trail=>capture({driver,setup:r=>{hidden(r);r.projectiles=[{id:1,owner:r.id,kind:'hedgehog',vulcan:true,wx:0,wz:0,heading:0,height:0,age:1,trail}];}})[0];
     pack.clip(`trail:vulcan:${driver}`,FPS,[pack.overlay(rapid([]),rapid([{wx:0,wz:0,height:0}]))]);
     record(`shot:vulcan:${driver}`,{driver,frames:FPS,setup:r=>{hidden(r);r.projectiles=[{id:1,owner:r.id,kind:'hedgehog',vulcan:true,wx:0,wz:0,heading:0,height:0,age:1,trail:[]}];}});
-    if(driver===7){const shots=capture({driver,frames:OVERLAY_LOOP*FPS,warmup:1,setup:r=>{r.nightmareActive=12;r.boost=12;}});pack.clip('overlay:7:nightmare',FPS,shots.map((shot,i)=>pack.overlay(idle[i],shot)));}
+    // Nightmare Fuel's flames change shape every frame and cannot be blended, so it is recorded at the display's rate.
+    if(driver===7){const shots=capture({driver,fps:SMOOTH_FPS,frames:OVERLAY_LOOP*SMOOTH_FPS,warmup:1,setup:r=>{r.nightmareActive=12;r.boost=12;}});pack.clip('overlay:7:nightmare',SMOOTH_FPS,shots.map((shot,i)=>pack.overlay(idle[Math.floor(i*FPS/SMOOTH_FPS)%idle.length],shot)));}
     // States layered over the racer. KnowItOwl's special is a full-screen shader effect.
     const states={shield:r=>{r.shield=1;},hedge:r=>{r.hedgeShield=2;},tehilim:r=>{r.tehilim=2;},dizzy:r=>{r.dizzy=1;},vulcan:r=>{r.vulcan=3;r.fireCooldown=0;},...(driver===14?{}:{special:r=>{r.specialActive=4;}})};
     for(const [state,setup] of Object.entries(states)){

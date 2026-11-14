@@ -192,7 +192,7 @@ export class Renderer {
     if(driver===9){this.royalChariot(m,p,color,yaw,spin,boost,clock,celebrate,jump,gesture);return;}
     if(driver===8&&!this.buildingModel){this.pilotPlane(m,p,color,yaw,spin,boost,clock,celebrate,jump,gesture);return;}
     if(driver===6)color='#e8edf2';
-    if(!gesture&&!this.buildingModel&&(celebrate<=0||jump)){const angle=Math.atan2(p.tx,p.tz)-yaw+spin;m.at(p.x,.13,p.z,angle);m.disc(.2,0,.25,2.3,3,'#3a4147');this.model(`kart:${driver}:${color}${driver===7&&!helmet?':bare':''}`,p.x,jump?.height??0,p.z,angle,mesh=>this.kart(mesh,{x:0,z:0,tx:0,tz:1},color,driver,0,0,false,0,0,null,helmet),jump?.pitch??0);if(driver===7){this.starshipEngines(p,angle,clock,jump,boost,m);return;}if(boost||jump)this.afterburner(p,angle,clock,jump,driver);return;}
+    if(!gesture&&!this.buildingModel&&(celebrate<=0||jump)){const angle=Math.atan2(p.tx,p.tz)-yaw+spin;m.at(p.x,.13,p.z,angle);m.disc(.2,0,.25,2.3,3,'#3a4147');this.model(`kart:${driver}:${color}${driver===7&&!helmet?':bare':''}`,p.x,jump?.height??0,p.z,angle,mesh=>this.kart(mesh,{x:0,z:0,tx:0,tz:1},color,driver,0,0,false,0,0,null,helmet),jump?.pitch??0);if(driver===7){this.starshipEngines(p,angle,clock,jump,boost);return;}if(boost||jump)this.afterburner(p,angle,clock,jump,driver);return;}
     const angle=Math.atan2(p.tx,p.tz)-yaw+spin;m.at(p.x,.13,p.z,angle);if(!this.buildingModel)m.disc(.2,0,.25,2.3,3,'#3a4147');
     if(driver===6)drawRoadster(m);
     if(driver===7)drawStarship(m,color);
@@ -228,7 +228,7 @@ export class Renderer {
     m.at(p.x,.13,p.z,angle);
     if(turn>.7){this.glow.at(p.x,.13,p.z,angle);for(let i=0;i<3;i++){const a=progress*3+i*2.1;this.glow.particle(Math.cos(a)*1.9,5+Math.sin(a)*.25,Math.sin(a)*.5,.45,[.55,.35,.07]);}}
     if(driver===6){if(boost)this.afterburner(p,angle,clock,null,driver);return;}
-    if(driver===7){if(!this.buildingModel)this.starshipEngines(p,angle,clock,null,boost,m);return;}
+    if(driver===7){if(!this.buildingModel)this.starshipEngines(p,angle,clock,null,boost);return;}
     m.box(-1,1.15,-2.1,.55,.3,.12,'#ff765a');m.box(1,1.15,-2.1,.55,.3,.12,'#ff765a');
     m.box(0,1.2,-2.25,.8,.35,.12,'#f7edce');m.box(0,1.26,-2.33,.12,.25,.03,'#33364b');
     for(const side of [-1,1]){m.ball(side*1.2,.75,-2.45,.31,.31,.5,'#69788b',10,5);m.ball(side*1.2,.75,-2.85,.24,.24,.08,'#161d2a',10,4);}
@@ -377,8 +377,8 @@ export class Renderer {
     m.roll=roll;this.glow.roll=roll;
     for(const side of [-1,1]){m.box(side*.57,1.65,1.45,.25,.23,1.5,'#273a43');m.ball(side*.57,1.77,2.22,.12,.12,.04,'#8dfff0',8,4);if(actor.item==='hedgehog'&&actor.fireCooldown>.035)this.glow.particle(side*.57,1.77,2.4,.9,[.15,.8,.65]);}
   }
-  starshipEngines(p,angle,clock,jump=null,boost=false,ground=null){
-    if(p.nightmareActive>0){drawNightmareFuel(this.glow,this.smoke,p,angle,clock,jump,ground);return;}
+  starshipEngines(p,angle,clock,jump=null,boost=false){
+    if(p.nightmareActive>0){drawNightmareFuel(this.glow,this.smoke,p,angle,clock,jump);return;}
     drawStarshipThrust(this.glow,this.smoke,p,angle,clock,jump,boost);
   }
   houstonHelmet(p,actor,time,jump){
