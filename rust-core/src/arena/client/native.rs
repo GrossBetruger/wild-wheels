@@ -208,10 +208,22 @@ impl NativeClient {
             .into_iter()
             .filter_map(|v| v.as_str().map(str::to_owned))
             .collect();
-        self.inner.voice_output.clear();
         self.inner.display.global.events.clear();
         self.inner.display.global.voices.clear();
         events
+    }
+    /// Racer calls as (driver, cue, volume), consumed exactly once.
+    pub fn drain_voices(&mut self) -> Vec<(usize, String, f64)> {
+        std::mem::take(&mut self.inner.voice_output)
+            .into_iter()
+            .filter_map(|v| {
+                Some((
+                    v["driver"].as_u64()? as usize,
+                    v["cue"].as_str()?.to_owned(),
+                    v["volume"].as_f64().unwrap_or(1.0),
+                ))
+            })
+            .collect()
     }
 }
 

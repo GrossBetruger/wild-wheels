@@ -17,6 +17,7 @@
     "test:regression": "node scripts/checks/check-regressions.mjs",
     "build:core": "node scripts/build/build-rust-core.mjs",
     "port:graphics": "node scripts/build/port-graphics.mjs",
+    "port:sounds": "node scripts/build/port-sounds.mjs",
     "test:dedicated": "node scripts/checks/check-dedicated-server.mjs",
     "benchmark:dedicated": "node scripts/profiling/benchmark-dedicated.mjs",
     "test:dedicated-browser": "node scripts/checks/check-dedicated-browser.mjs",

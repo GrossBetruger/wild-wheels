@@ -51,8 +51,9 @@ native telemetry confirmed all three deaths and full-health respawns.
 The native Metal window renders every arena, racer, projectile, pickup, effect
 and particle from graphics ported automatically from the browser renderer at build time, so
 building needs Node.js. See [native graphics port](../docs/native-graphics-port.md)
-for what is and is not ported. Procedural engine audio changes pitch with speed;
-firing, missiles, hits, explosions, pickups and boost have sound cues. This is
+for what is and is not ported. Sound cues, racer voices and engine layers are
+ported the same way from the browser's audio code; see
+[native sound port](../docs/native-sound-port.md). This is
 not yet full browser visual or audio parity. See
 [results and remaining work](../docs/native-client-poc-results.md).
 

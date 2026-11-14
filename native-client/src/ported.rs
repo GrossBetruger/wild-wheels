@@ -510,8 +510,18 @@ pub fn animate(
         for layer in 0..2 {
             let sprites = frame.map(|f| f.sprites[layer]).unwrap_or_default();
             match &player.sprites[layer] {
-                Some((_, handle)) => {
-                    if let Some(mut mesh) = meshes.get_mut(handle) {
+                Some((child, handle)) => {
+                    // An empty mesh cannot be uploaded, so an idle layer is hidden instead.
+                    let wanted = match sprites.is_empty() {
+                        true => Visibility::Hidden,
+                        false => Visibility::Inherited,
+                    };
+                    if let Ok((_, _, _, mut visibility)) = parts.get_mut(*child) {
+                        visibility.set_if_neq(wanted);
+                    }
+                    if !sprites.is_empty()
+                        && let Some(mut mesh) = meshes.get_mut(handle)
+                    {
                         *mesh = billboards(sprites, layer == 1, right, up);
                     }
                 }

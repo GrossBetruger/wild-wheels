@@ -14,6 +14,8 @@ pub struct GameSession {
     pub client: Option<NativeClient>,
     pub status: String,
     pub sounds: Vec<String>,
+    /// Racer calls waiting to be heard: driver, cue and volume.
+    pub voices: Vec<(usize, String, f64)>,
     transport: Option<Transport>,
     epoch: Instant,
     last_send: f64,
@@ -27,6 +29,7 @@ impl GameSession {
             client: None,
             status: String::new(),
             sounds: vec![],
+            voices: vec![],
             transport: None,
             epoch: Instant::now(),
             last_send: 0.0,
@@ -238,8 +241,10 @@ fn drive(
             let _ = client.action(action, now);
         }
     }
+    let voices = client.drain_voices();
     let sounds = client.drain_audio();
     session.sounds.extend(sounds);
+    session.voices.extend(voices);
     session.send(input, now);
 }
 fn headless(config: Config) -> Result<(), Box<dyn Error>> {

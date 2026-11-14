@@ -1,6 +1,6 @@
 ---
 name: native-graphics-port
-description: Keep the native Rust client's graphics in step with the browser client. Use when adding or changing racers, arenas, effects, particles or other visuals in client/, characters/ or gameplay/, when a visual looks wrong or is missing in the native client, or when editing scripts/build/graphics-port.mjs, native-client/src/ported.rs or native-client/src/scene.rs.
+description: Keep the native Rust client's graphics and sounds in step with the browser client. Use when adding or changing racers, arenas, effects, particles, other visuals or sounds in client/, characters/, gameplay/ or audio/, when a visual or sound is wrong or missing in the native client, or when editing scripts/build/graphics-port.mjs, scripts/build/sound-port.mjs, or native-client/src/ported.rs, scene.rs or sound.rs.
 ---
 
 # Native graphics port
@@ -57,10 +57,23 @@ A new kind of visual is invisible natively until it is recorded:
 - Bump `PACK_VERSION` and `VERSION` in `ported.rs` together when the layout changes.
 - The pack is a build product in Cargo's `OUT_DIR`; never commit it.
 
+## Sounds
+
+Sounds are ported the same way; read `docs/native-sound-port.md`.
+
+- A change to how an existing cue, voice or engine layer sounds ports by itself.
+  So does a new `case` in `RaceAudio.event`.
+- A new sound started from `RaceAudio.update`, or a new voice cue, needs a line
+  in `buildSoundPack` in `scripts/build/sound-port.mjs` and a trigger in
+  `native-client/src/sound.rs`, which mirrors the browser's timing rules by hand.
+- If the audio code uses a Web Audio node or automation method the offline
+  renderer lacks, add it to `sound-port.mjs`; do not change `audio/audio.js`.
+- Recorded audio files are not ported.
+
 ## Checking a change
 
 ```sh
-node --test tests/client/graphics-port.test.js
+node --test tests/client/graphics-port.test.js tests/audio/sound-port.test.js
 cargo +1.97.1 clippy --locked --manifest-path native-client/Cargo.toml --all-targets -- -D warnings
 cargo +1.97.1 test --locked --manifest-path native-client/Cargo.toml
 ```
