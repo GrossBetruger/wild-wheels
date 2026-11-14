@@ -6,6 +6,17 @@ import {activateNightmare} from './nightmare-fuel.js';
 import {useSpecial} from '../../gameplay/special-abilities.js';
 
 for(const engine of ['JavaScript','Rust']){
+  test(`${engine}: Nightmare Fuel travels at 180 km/h while regular Houston boost still reaches 204 km/h`,()=>{
+    for(const [nightmareActive,startSpeed,expectedKmh,expectedZ] of [[12,740,180,41.0625],[12,850,180,41.0625],[0,850,204,41.204166666666666]]){
+      const world=createBattle(7);Object.assign(world,{phase:'racing',human:true,wx:65,wz:40,heading:0,motionHeading:0,cameraHeading:0,speed:startSpeed,boost:12,nightmareActive,supplies:[]});
+      for(const bot of world.bots)Object.assign(bot,{inactive:true,destroyed:999});
+      const core=engine==='Rust'?new ArenaCore(world):null;
+      if(core)core.step(1/60,[{actor:0,moves:[{sequence:0,keys:['arrowup']}]}]);
+      if(!core)tickBattle(world,new Set(['arrowup']),1/60);
+      const after=core?core.snapshot():world;
+      assert.equal(after.speed*.24,expectedKmh);assert.ok(Math.abs(after.wz-expectedZ)<1e-8);
+    }
+  });
   test(`${engine}: two Houstons caught in each other's flames trade kills and their flames stop on death`,()=>{
     const world=createBattle(7);Object.assign(world,{phase:'racing',human:true,wx:65,wz:70,heading:0,supplies:[],nightmareActive:12,nightmareCooldown:30,boost:12});
     for(const bot of world.bots)Object.assign(bot,{inactive:true,destroyed:999});
@@ -70,6 +81,12 @@ for(const engine of ['JavaScript','Rust']){
     }
   });
 }
+test('local multiplayer prediction immediately uses the 180 km/h Nightmare Fuel speed',()=>{
+  const world=createBattle(7);Object.assign(world,{phase:'racing',human:true,wx:65,wz:40,heading:0,motionHeading:0,cameraHeading:0,speed:850,boost:12,nightmareActive:12,supplies:[]});
+  for(const bot of world.bots)Object.assign(bot,{inactive:true,destroyed:999});
+  const core=new ArenaCore(world),client=new ArenaClient();client.accept(core.packet(0),0);client.frame(1/60,['arrowup'],1/60);
+  assert.equal(client.snapshot().speed*.24,180);
+});
 test('double-tapping X predicts Nightmare Fuel immediately and sends an authoritative action after a normal turbo',()=>{
   const world=createBattle(7);Object.assign(world,{phase:'racing',human:true,wx:65,wz:70,heading:0,supplies:[]});
   for(const bot of world.bots)Object.assign(bot,{inactive:true,destroyed:999});

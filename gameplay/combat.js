@@ -274,8 +274,9 @@ function moveActor(r, actor, steer, gas, brake, dt, handbrake = false) {
   }
   actor.wasDrifting = drifting;
   actor.heading -= steer * (drifting ? 4.8 : 1.7 + Math.min(1, Math.abs(actor.speed) / 300) * .7) * dt;
-  actor.speed = clamp(actor.speed + (gas ? (drifting ? 100 : 300) : drifting ? -90 : -170) * dt - (brake ? 400 * dt : 0), brake ? -160 : 0, drifting ? 400 : actor.boost > 0 ? 850 : 520);
-  if (actor.boost > 0 && !drifting) actor.speed = Math.min(850, actor.speed + 650 * dt);
+  const boostSpeed = actor.driver === 7 && actor.nightmareActive > 0 ? 750 : 850; // 180 km/h on the HUD.
+  actor.speed = clamp(actor.speed + (gas ? (drifting ? 100 : 300) : drifting ? -90 : -170) * dt - (brake ? 400 * dt : 0), brake ? -160 : 0, drifting ? 400 : actor.boost > 0 ? boostSpeed : 520);
+  if (actor.boost > 0 && !drifting) actor.speed = Math.min(boostSpeed, actor.speed + 650 * dt);
   actor.motionHeading += angleDelta(actor.heading, actor.motionHeading) * (1 - Math.exp(-(drifting ? 3.8 : 14) * dt));
   if (actor.somersault > 0) {
     const progress = clamp(1 - actor.somersault / SOMERSAULT_DURATION, 0, 1), turn = progress * progress * (3 - 2 * progress);

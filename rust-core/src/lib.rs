@@ -12,6 +12,7 @@ const TRAIL: u32 = 16;
 const CRASH: u32 = 32;
 const WALL: u32 = 64;
 const DRIFT_WALL: u32 = 128;
+pub(crate) const NIGHTMARE_DRIVE: u32 = 256;
 #[derive(Clone, Copy)]
 #[repr(C)]
 struct Kart { data: [f64; FIELDS] }
@@ -80,9 +81,11 @@ pub extern "C" fn step(slot: usize, arena_index: usize, steer: f64, dt: f64, fla
     }
     heading-=turn*match drifting { true=>4.8,false=>1.7+(speed.abs()/300.0).min(1.0)*0.7 }*dt;
     let acceleration=match (gas,drifting) { (true,true)=>100.0,(true,false)=>300.0,(false,true)=>-90.0,(false,false)=>-170.0 };
-    let maximum=match (drifting,boost>0.0) { (true,_)=>400.0,(false,true)=>850.0,_=>520.0 };
+    // The HUD converts speed to km/h by multiplying by 0.24: 750 = 180 km/h.
+    let boost_speed=match flags&NIGHTMARE_DRIVE!=0 {true=>750.0,false=>850.0};
+    let maximum=match (drifting,boost>0.0) { (true,_)=>400.0,(false,true)=>boost_speed,_=>520.0 };
     speed=(speed+acceleration*dt-match brake { true=>400.0*dt,false=>0.0 }).clamp(match brake { true=>-160.0,false=>0.0 },maximum);
-    if boost>0.0 && !drifting { speed=(speed+650.0*dt).min(850.0); }
+    if boost>0.0 && !drifting { speed=(speed+650.0*dt).min(boost_speed); }
     motion+=angle(heading,motion)*(1.0-(-match drifting { true=>3.8,false=>14.0 }*dt).exp());
     if flip>0.0 {
         let progress=(1.0-flip/0.55).clamp(0.0,1.0);let smooth=progress*progress*(3.0-2.0*progress);
