@@ -23,6 +23,12 @@ fn setup(mut commands: Commands, mut assets: ResMut<Assets<AudioSource>>) {
         ("hit", 90.0, 0.12),
         ("pickup", 700.0, 0.18),
         ("boost", 150.0, 0.3),
+        ("bombExplosion", 35.0, 0.8),
+        ("ash", 55.0, 0.6),
+        ("countdown", 440.0, 0.15),
+        ("go", 880.0, 0.35),
+        ("finish", 520.0, 0.6),
+        ("victory", 780.0, 0.8),
     ] {
         sounds.insert(
             name,

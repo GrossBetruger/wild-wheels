@@ -17,7 +17,7 @@ pub struct GameSession {
     transport: Transport,
     epoch: Instant,
     last_send: f64,
-    away: bool,
+    pub away: bool,
     observed: Option<(u32, u64)>,
     metrics: crate::metrics::Metrics,
 }
@@ -118,6 +118,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         .add_plugins((
             crate::scene::ArenaPresentationPlugin,
             crate::sound::GameAudioPlugin,
+            crate::feedback::FeedbackPlugin,
         ))
         .add_systems(
             Update,
@@ -127,6 +128,8 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
                 crate::scene::sync_pickups,
                 crate::scene::animate_wheels,
                 crate::sound::play,
+                crate::feedback::sync_effects,
+                crate::feedback::sync_match,
             )
                 .chain(),
         )

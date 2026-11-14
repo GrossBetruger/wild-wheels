@@ -1,5 +1,6 @@
 mod app;
 mod config;
+mod feedback;
 mod metrics;
 mod pilot;
 mod scene;
