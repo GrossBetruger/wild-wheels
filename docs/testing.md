@@ -119,6 +119,13 @@ abilities are off, and prints the native client's frame times by missiles in
 flight. It builds the server and client into `native-client/target/scenarios/`
 with build-time settings, leaving normal builds alone.
 
+`npm run scenario:lethality -- [--matches 6] [--target 50]` has bots play the
+racers whose special abilities deal damage (Tammy's locusts, Pearococo's
+Fashion-Statement, Master-Yuda's fire ring and Fourmidable's Tax-Audit), two
+seats each, in matches that run until a racer has `--target` kills. Every kill is
+credited to what dealt it, and the table ranks the abilities by their kills. It
+plays the real rules and bot AI with no rendering, in about a second.
+
 The room size is set in one place, `MAX_PLAYERS` in `rust-core/src/arena/mod.rs`
 (8 by default); the server, native client and browser follow it. A build can
 override it without editing code with `WILD_WHEELS_MAX_PLAYERS=16`, and
