@@ -14,19 +14,34 @@ impl Plugin for ArenaPresentationPlugin {
 }
 #[derive(Resource)]
 pub struct Capture(pub Option<String>);
-fn capture(mut commands: Commands, capture: Res<Capture>, time: Res<Time>, mut last: Local<f32>) {
+fn capture(
+    mut commands: Commands,
+    capture: Res<Capture>,
+    time: Res<Time>,
+    mut last: Local<f32>,
+    windows: Query<&Window>,
+) {
+    let Some(path) = capture.0.as_ref() else {
+        return;
+    };
+    // On macOS, a fully covered window can yield a valid but entirely black PNG.
+    // Wait for focus instead of overwriting a useful capture with that frame.
+    if !windows
+        .iter()
+        .any(|window| window.focused && window.visible)
+    {
+        return;
+    }
     if time.elapsed_secs() < 5.0 {
         return;
     }
     if time.elapsed_secs() - *last < 10.0 {
         return;
     }
-    if let Some(path) = capture.0.as_ref() {
-        *last = time.elapsed_secs();
-        commands
-            .spawn(bevy::render::view::screenshot::Screenshot::primary_window())
-            .observe(bevy::render::view::screenshot::save_to_disk(path.clone()));
-    }
+    *last = time.elapsed_secs();
+    commands
+        .spawn(bevy::render::view::screenshot::Screenshot::primary_window())
+        .observe(bevy::render::view::screenshot::save_to_disk(path.clone()));
 }
 #[derive(Resource, Default)]
 pub struct SceneCache {
@@ -87,7 +102,7 @@ fn setup(
         FollowCamera,
     ));
     commands.spawn((
-        Text::new("WILD WHEELS · NATIVE RUST\nConnecting to dedicated arena…"),
+        Text::new("WILD WHEELS | NATIVE RUST\nConnecting to dedicated arena..."),
         TextFont {
             font_size: FontSize::Px(22.0),
             ..default()
@@ -264,7 +279,7 @@ pub fn sync(
     } = assets;
     let Some(client) = session.client.as_ref() else {
         for mut text in &mut hud {
-            text.0 = format!("WILD WHEELS · NATIVE RUST\n{}", session.status);
+            text.0 = format!("WILD WHEELS | NATIVE RUST\n{}", session.status);
         }
         return;
     };
@@ -391,7 +406,7 @@ pub fn sync(
     }
     for mut text in &mut hud {
         text.0 = format!(
-            "WILD WHEELS · NATIVE RUST POC\n{} · {} · {:.0} KILLS\nHEALTH {:.0}   HEDGES {}   MISSILES {}   BOOST {}\n{} · {}\nWASD / arrows · Shift drift · Space fire · Tab weapon\nX boost · C chaff · Z flip · Enter start",
+            "WILD WHEELS | NATIVE RUST POC\n{} | {} | {:.0} KILLS\nHEALTH {:.0}   HEDGES {}   MISSILES {}   BOOST {}\n{} | {}\nWASD / arrows | Shift drift | Space fire | Tab weapon\nX boost | C chaff | Z flip | Enter start",
             session.status,
             view.phase,
             p.kills,
@@ -402,7 +417,7 @@ pub fn sync(
             p.item,
             match view.phase {
                 "countdown" => format!("{:.0}", view.countdown.ceil()),
-                _ if p.destroyed > 0.0 => "RESPAWNING…".into(),
+                _ if p.destroyed > 0.0 => "RESPAWNING...".into(),
                 _ => String::new(),
             }
         );

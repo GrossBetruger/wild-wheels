@@ -101,7 +101,7 @@ async fn worker(config: Config, commands: Receiver<Command>, events: Sender<Even
     };
     let mut delay = 1;
     loop {
-        let _ = events.try_send(Event::Status("Connecting to dedicated arena…".into()));
+        let _ = events.try_send(Event::Status("Connecting to dedicated arena...".into()));
         match connect(&config, &client, &mut store, &commands, &events).await {
             Ok(()) => return,
             Err(error) => {
@@ -246,7 +246,7 @@ async fn connect(
         ))
         .await?;
     events.try_send(Event::Status(
-        "Connected · Enter to start · Escape for AFK".into(),
+        "Connected | Enter to start | Escape for AFK".into(),
     ))?;
     events.try_send(Event::Connected)?;
     loop {
@@ -267,7 +267,7 @@ async fn connect(
                         let reply=body(response).await?;
                         let resumed=reply["token"].as_str().ok_or("AFK response missing session")?;
                         store.remember(origin,Identity{token:resumed.into(),expires:now()+age})?;
-                        let _=socket.close(None).await;events.try_send(Event::Status("AFK · Escape to resume".into()))?;
+                        let _=socket.close(None).await;events.try_send(Event::Status("AFK | Escape to resume".into()))?;
                         loop {match commands.try_recv(){
                             Ok(Command::Afk(false))=>break,
                             Ok(Command::Stop)|Err(crossbeam_channel::TryRecvError::Disconnected)=>return Ok(()),

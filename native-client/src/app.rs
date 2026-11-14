@@ -24,7 +24,7 @@ impl GameSession {
     fn new(config: Config) -> Self {
         Self {
             client: None,
-            status: "Connecting…".into(),
+            status: "Connecting...".into(),
             sounds: vec![],
             transport: Transport::spawn(config),
             epoch: Instant::now(),
@@ -41,7 +41,7 @@ impl GameSession {
                 }
                 Event::Connected => {
                     self.client = None;
-                    self.status = "Connected · Enter to start".into();
+                    self.status = "Connected | Enter to start".into();
                 }
                 Event::Error(error) => {
                     self.status = error;
@@ -99,7 +99,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         .insert_resource(ClearColor(Color::srgb(0.71, 0.83, 0.85)))
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
-                title: "Wild Wheels · Native Rust POC".into(),
+                title: "Wild Wheels | Native Rust POC".into(),
                 resolution: (1280, 800).into(),
                 ..default()
             }),

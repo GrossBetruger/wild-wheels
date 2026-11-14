@@ -23,7 +23,9 @@ overrides the directory for isolated tests.
 
 Arrows/WASD drive; Shift drifts; Space fires; Tab/Command switches weapons;
 X boosts; C deploys chaff; Z flips; Enter starts; Escape toggles AFK.
-`--screenshot /absolute/path.png` captures the window periodically for inspection.
+`--screenshot /absolute/path.png` captures the focused, visible window periodically
+for inspection. Bring the native window to the foreground before inspecting a
+capture: macOS can return black frames for fully occluded windows.
 `--sparring --seconds 180` runs a developer input controller instead of a window;
 it uses normal movement/fire commands and stops after two additional kills.
 
@@ -35,10 +37,11 @@ An automated 10-second dedicated-server test observed 69 units of movement,
 In a zero-bot manual test, a browser player whacked the native Panda three times;
 native telemetry confirmed all three deaths and full-health respawns.
 
-The Bevy scene and procedural sound code compile, and Metal initializes, but
-window captures are currently black. This is a networking/combat skeleton, not
-a verified graphical playable build. Fix and validate rendering next. The engine
-loop, richer visuals, broader parity checks, and browser/Wasm adapter remain future work.
+The native Metal window now visibly renders Scrapyard, Pip's kart/panda model,
+and the HUD. The earlier black screenshots came from capturing an occluded window,
+not from the camera or scene failing to render. Foreground capture was visually
+checked. The engine loop, richer visuals, broader graphical/audio parity checks,
+and browser/Wasm adapter remain future work.
 
 ## Boundaries
 
