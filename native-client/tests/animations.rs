@@ -1,6 +1,6 @@
 //! Watches every ported animation transition play live, in isolation, and checks
 //! that each one really runs. `cargo test` builds the client and opens a showcase
-//! window for each, one at a time; the whole file takes about 20 minutes. Run part
+//! window for each, one at a time; the whole file takes about 17 minutes. Run part
 //! of it by name, such as `cargo test --test animations boost_` or `fade_hedge_`.
 //!
 //! The showcase cycles a racer through a state change with no server and saves
@@ -148,21 +148,13 @@ macro_rules! animations {
 }
 
 animations! {
-    // Boosting in and out. Eased: Pearococo's tail folds, Master-Yuda's stunts,
-    // R-yeah's rotors tilt, Fourmidable's receipts spring out, KnowItOwl takes off.
+    // Boosting in and out: Pip stands for the racers whose boost simply switches on;
+    // the rest ease in: Pearococo's tail folds, Master-Yuda's stunts, R-yeah's rotors
+    // tilt, Fourmidable's receipts spring out, KnowItOwl takes off.
     boost_00_pip: "boost:0", false;
-    boost_01_rocco: "boost:1", false;
-    boost_02_felix: "boost:2", false;
-    boost_03_benny: "boost:3", false;
-    boost_04_ellie: "boost:4", false;
-    boost_05_tammy: "boost:5", false;
-    boost_06_elon: "boost:6", false;
-    boost_07_houston: "boost:7", false;
-    boost_08_avita_jas: "boost:8", false;
     boost_09_pearococo: "boost:9", true;
     boost_10_master_yuda: "boost:10", true;
     boost_11_r_yeah: "boost:11", true;
-    boost_12_catheterpillar: "boost:12", false;
     boost_13_fourmidable: "boost:13", true;
     boost_14_knowitowl: "boost:14", true;
     // Rapid fire starting. Eased: KnowItOwl's bat flies in, and away again after.

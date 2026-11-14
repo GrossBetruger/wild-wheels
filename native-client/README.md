@@ -89,9 +89,10 @@ Scenes are `boost:N`, `rapid-fire:N`, `fade:shield:N`, `fade:hedge:N`,
 blending between recorded frames, to compare it with the 24 recorded frames a
 second; Escape quits.
 
-`cargo test` also runs every one of these 77 transitions in turn, in a window
+`cargo test` also runs these transitions in turn (one plain boost, every eased
+boost, and all the rest), in a window
 that stays on top without taking focus (`tests/animations.rs`). The whole file
-takes about 20 minutes; run part of it by name, such as
+takes about 17 minutes; run part of it by name, such as
 `cargo test --test animations boost_`. Each test holds steady loops still and
 checks from screenshots that the state change is visible and its transition has
 begun; eased transitions must also look unlike the state they lead to. A blank
