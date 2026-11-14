@@ -15,8 +15,10 @@ abilities and your racer, then start the match. Escape opens the in-game menu to
 sit out, leave the room or quit. The last server, name and racer are remembered.
 Chat is not available in the native client yet.
 
-In a match: Arrows/WASD drive; Shift drifts; Space fires; Tab/Command switches
-weapons; X boosts; C deploys chaff; Z flips; F uses the special ability.
+In a match: Arrows/WASD drive; Shift drifts; Space fires; Tab, Q or Command
+switches weapons; X boosts; C deploys chaff; Z flips; F uses the special ability.
+The weapon cards and action buttons on screen show counts and cooldowns and can
+be clicked instead.
 
 ### Developer options
 

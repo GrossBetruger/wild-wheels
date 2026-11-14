@@ -1,8 +1,17 @@
 //! Presentation-only entities. All gameplay state comes from the core client.
 use crate::app::GameSession;
-use crate::ported::{Graphics, Ported, Tint, placement, tint};
+use crate::ported::{Graphics, Look, Ported, Tint, placement, tint};
 use bevy::ecs::system::SystemParam;
-use bevy::{core_pipeline::tonemapping::Tonemapping, prelude::*, text::FontSize};
+use bevy::{
+    asset::RenderAssetUsages,
+    camera::{ClearColorConfig, visibility::RenderLayers},
+    core_pipeline::tonemapping::{DebandDither, Tonemapping},
+    image::Image,
+    prelude::*,
+    render::render_resource::{Extent3d, TextureDimension, TextureFormat},
+    text::FontSize,
+    ui::{IsDefaultUiCamera, UiTargetCamera},
+};
 use std::collections::{HashMap, HashSet};
 use std::f32::consts::{PI, TAU};
 use wild_wheels_core::ClientView;
@@ -53,6 +62,8 @@ enum Role {
     Health,
     Overlay(usize),
     Xylophone,
+    /// A racer's silhouette seen through Dark Humor.
+    Ghost,
     Shot,
     Trail,
     Skid,
@@ -74,7 +85,8 @@ const FIRE_RING_RADIUS: f32 = 20.0;
 pub struct SceneCache {
     shown: HashMap<(Role, u64), Entity>,
     live: HashSet<(Role, u64)>,
-    arena: Option<(usize, Entity)>,
+    /// The arena shown, its scenery and its X-ray outlines.
+    arena: Option<(usize, Entity, Entity)>,
     /// Master-Yuda's eased drift lean and the side he last leaned to, per racer.
     leans: HashMap<usize, (f32, f32)>,
 }
@@ -82,8 +94,74 @@ pub struct SceneCache {
 pub struct FollowCamera;
 #[derive(Component)]
 pub struct Hud;
+/// Draws what KnowItOwl sees through the dark, over the fog and under the menus.
+#[derive(Component)]
+pub struct XrayCamera;
+#[derive(Component)]
+pub struct DarkFog;
 
-fn setup(mut commands: Commands) {
+/// One frame of the browser's Dark Humor fog shader: violet clouds with pale tendrils.
+fn fog_texture() -> Image {
+    const WIDTH: u32 = 256;
+    const HEIGHT: u32 = 160;
+    let hash = |p: Vec2| {
+        ((p.dot(Vec2::new(127.1, 311.7))).sin() * 43_758.547)
+            .fract()
+            .abs()
+    };
+    let noise = |p: Vec2| {
+        let (i, f) = (p.floor(), p.fract_gl());
+        let f = f * f * (Vec2::splat(3.0) - 2.0 * f);
+        let low = hash(i).lerp(hash(i + Vec2::X), f.x);
+        let high = hash(i + Vec2::Y).lerp(hash(i + Vec2::ONE), f.x);
+        low.lerp(high, f.y)
+    };
+    let fbm = |mut p: Vec2| {
+        let (mut sum, mut weight) = (0.0, 0.5);
+        for _ in 0..4 {
+            sum += noise(p) * weight;
+            p = Vec2::new(1.6 * p.x - 1.2 * p.y, 1.2 * p.x + 1.6 * p.y);
+            weight *= 0.5;
+        }
+        sum
+    };
+    let mut data = Vec::with_capacity((WIDTH * HEIGHT * 4) as usize);
+    for y in 0..HEIGHT {
+        for x in 0..WIDTH {
+            let uv = Vec2::new(x as f32 / WIDTH as f32, y as f32 / HEIGHT as f32);
+            let p = (uv - 0.5) * Vec2::new(WIDTH as f32 / HEIGHT as f32, 1.0) * 3.0;
+            let q = Vec2::new(fbm(p), fbm(p + Vec2::new(4.1, 0.0)));
+            let clouds = fbm(p * 1.8 + q * 3.0);
+            let tendrils = (1.0 - (clouds - 0.48).abs() * 7.0).max(0.0).powi(3);
+            let pulse = 0.72 + 0.28 * (clouds * 11.0).sin();
+            let edge = (((uv - 0.5) * Vec2::new(1.1, 1.4)).length() - 0.1) / 1.1;
+            let edge = edge.clamp(0.0, 1.0);
+            let shade = 1.0 - edge * edge * (3.0 - 2.0 * edge) * 0.65;
+            let color = (Vec3::new(0.008, 0.004, 0.022)
+                + Vec3::new(0.09, 0.015, 0.18) * clouds
+                + Vec3::new(0.035, 0.12, 0.13) * tendrils * pulse)
+                * shade;
+            // The browser blends in display space; this is the same cover in linear light.
+            let alpha = 1.0 - (0.10 - 0.025 * clouds).max(0.0).powf(2.2);
+            data.extend(
+                [color.x, color.y, color.z, alpha].map(|v| (v.clamp(0.0, 1.0) * 255.0) as u8),
+            );
+        }
+    }
+    Image::new(
+        Extent3d {
+            width: WIDTH,
+            height: HEIGHT,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        data,
+        TextureFormat::Rgba8UnormSrgb,
+        RenderAssetUsages::RENDER_WORLD,
+    )
+}
+
+fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     // The browser shades as color * (0.62 + 0.38 * n·l) in display space with no
     // tone mapping. These light levels were matched to it against screenshots.
     commands.insert_resource(GlobalAmbientLight {
@@ -97,17 +175,48 @@ fn setup(mut commands: Commands) {
         },
         Transform::from_xyz(-50.0, 100.0, 30.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
+    let lens = Projection::Perspective(PerspectiveProjection {
+        fov: 1.07,
+        near: 0.3,
+        far: 1600.0,
+        ..default()
+    });
+    let world = commands
+        .spawn((
+            Camera3d::default(),
+            lens.clone(),
+            Tonemapping::None,
+            DebandDither::Disabled,
+            Transform::from_xyz(0.0, 65.0, -75.0).looking_at(Vec3::ZERO, Vec3::Y),
+            FollowCamera,
+        ))
+        .id();
+    // Dark Humor: fog covers the world, then X-ray silhouettes are drawn over the
+    // fog with no walls in the way, and the menus and HUD come last.
     commands.spawn((
         Camera3d::default(),
-        Projection::Perspective(PerspectiveProjection {
-            fov: 1.07,
-            near: 0.3,
-            far: 1600.0,
+        Camera {
+            order: 1,
+            clear_color: ClearColorConfig::None,
             ..default()
-        }),
+        },
+        lens,
         Tonemapping::None,
-        Transform::from_xyz(0.0, 65.0, -75.0).looking_at(Vec3::ZERO, Vec3::Y),
-        FollowCamera,
+        DebandDither::Disabled,
+        RenderLayers::layer(1),
+        IsDefaultUiCamera,
+        XrayCamera,
+    ));
+    commands.spawn((
+        Node {
+            position_type: PositionType::Absolute,
+            width: percent(100),
+            height: percent(100),
+            ..default()
+        },
+        ImageNode::new(images.add(fog_texture())).with_color(Color::NONE),
+        UiTargetCamera(world),
+        DarkFog,
     ));
     commands.spawn((
         Text::default(),
@@ -151,6 +260,37 @@ pub struct SceneAssets<'w> {
     sky: ResMut<'w, ClearColor>,
     time: Res<'w, Time>,
 }
+#[derive(SystemParam)]
+pub struct Darkness<'w, 's> {
+    fog: Query<'w, 's, &'static mut ImageNode, With<DarkFog>>,
+    xray: Query<'w, 's, Lens, (With<XrayCamera>, Without<FollowCamera>)>,
+    hud: Query<'w, 's, &'static mut Text, With<Hud>>,
+}
+type Lens = (&'static mut Transform, &'static mut Projection);
+/// How dark KnowItOwl's special makes the arena, and whether the viewer cast it.
+fn dark_humor(view: &ClientView) -> (f32, bool) {
+    if !view.special_abilities || view.phase != "racing" {
+        return (0.0, false);
+    }
+    let owls = || {
+        view.actors.iter().filter(|a| {
+            a.driver == 14
+                && a.special_active > 0.0
+                && a.destroyed <= 0.0
+                && !a.inactive
+                && !a.afk
+                && !a.bomber
+        })
+    };
+    let strength = owls()
+        .map(|a| {
+            ((7.0 - a.special_active) / 0.4)
+                .min(a.special_active / 0.6)
+                .min(1.0)
+        })
+        .fold(0.0, f64::max);
+    (strength as f32, owls().any(|a| a.id == view.you))
+}
 /// Shows ported clips, reusing one entity per role and key from frame to frame.
 struct Stage<'a, 'w, 's, 'q, 'qw, 'qs, 'p> {
     commands: &'a mut Commands<'w, 's>,
@@ -162,6 +302,7 @@ struct Play {
     clip: Option<usize>,
     tint: Tint,
     time: Option<f32>,
+    ghost: bool,
 }
 impl Stage<'_, '_, '_, '_, '_, '_, '_> {
     fn clip(&self, name: &str) -> Play {
@@ -169,6 +310,7 @@ impl Stage<'_, '_, '_, '_, '_, '_, '_> {
             clip: self.graphics.clip(name),
             tint: [255; 3],
             time: None,
+            ghost: false,
         }
     }
     /// A clip that plays once, `age` seconds in.
@@ -193,7 +335,8 @@ impl Stage<'_, '_, '_, '_, '_, '_, '_> {
                 }
             }
             None => {
-                let player = Ported::new(play.clip, play.tint, play.time);
+                let mut player = Ported::new(play.clip, play.tint, play.time);
+                player.ghost = play.ghost;
                 let entity = self
                     .commands
                     .spawn((transform, Visibility::default(), player))
@@ -219,7 +362,7 @@ fn at(wx: f64, height: f64, wz: f64, heading: f64) -> Transform {
         .with_rotation(Quat::from_rotation_y(heading as f32))
 }
 
-fn racers(stage: &mut Stage, view: &ClientView, dt: f32) {
+fn racers(stage: &mut Stage, view: &ClientView, dt: f32, xray: bool) {
     let auditing = |id: usize| {
         view.actors
             .iter()
@@ -275,6 +418,13 @@ fn racers(stage: &mut Stage, view: &ClientView, dt: f32) {
             pitch,
             roll,
         );
+        if xray && !wrecked {
+            let ghost = Play {
+                ghost: true,
+                ..play
+            };
+            stage.show(Role::Ghost, a.id, ghost, body);
+        }
         stage.show(Role::Racer, a.id, play, body);
         if wrecked {
             continue;
@@ -442,7 +592,7 @@ pub fn sync(
     mut cache: ResMut<SceneCache>,
     mut players: Query<&mut Ported>,
     mut cameras: Query<(&mut Transform, &mut Projection), With<FollowCamera>>,
-    mut hud: Query<&mut Text, With<Hud>>,
+    mut darkness: Darkness,
 ) {
     let SceneAssets {
         mut graphics,
@@ -452,34 +602,58 @@ pub fn sync(
     } = assets;
     let Some(client) = session.client.as_ref() else {
         // Outside a room the world is empty; the menus say what is happening.
-        for mut text in &mut hud {
+        for mut text in &mut darkness.hud {
             text.0.clear();
         }
         for (_, entity) in cache.shown.drain() {
             commands.entity(entity).despawn();
         }
-        if let Some((_, scenery)) = cache.arena.take() {
+        if let Some((_, scenery, outlines)) = cache.arena.take() {
             commands.entity(scenery).despawn();
+            commands.entity(outlines).despawn();
+        }
+        for mut fog in &mut darkness.fog {
+            fog.color = Color::NONE;
         }
         return;
     };
     let view = client.view();
-    if cache.arena.is_none_or(|(arena, _)| arena != view.arena) {
-        if let Some((_, old)) = cache.arena.take() {
+    if cache.arena.is_none_or(|(arena, ..)| arena != view.arena) {
+        if let Some((_, old, outlines)) = cache.arena.take() {
             commands.entity(old).despawn();
+            commands.entity(outlines).despawn();
         }
         if let Some(arena) = graphics.arena(view.arena) {
-            let (mesh, color) = (arena.mesh, arena.sky);
+            let (mesh, xray, color) = (arena.mesh, arena.xray, arena.sky);
             sky.0 = color;
             let scenery = commands
                 .spawn((
-                    Mesh3d(graphics.mesh(mesh, [0; 3], false, &mut meshes)),
-                    MeshMaterial3d(graphics.solid()),
+                    Mesh3d(graphics.mesh(mesh, [0; 3], Look::Solid, &mut meshes)),
+                    MeshMaterial3d(graphics.surface(Look::Solid)),
                     Transform::default(),
                 ))
                 .id();
-            cache.arena = Some((view.arena, scenery));
+            let outlines = commands
+                .spawn((
+                    Mesh3d(graphics.mesh(xray, [0; 3], Look::Flat, &mut meshes)),
+                    MeshMaterial3d(graphics.surface(Look::Flat)),
+                    Transform::default(),
+                    RenderLayers::layer(1),
+                    Visibility::Hidden,
+                ))
+                .id();
+            cache.arena = Some((view.arena, scenery, outlines));
         }
+    }
+    let (dark, xray) = dark_humor(&view);
+    for mut fog in &mut darkness.fog {
+        fog.color = Color::srgba(1.0, 1.0, 1.0, dark);
+    }
+    if let Some((.., outlines)) = cache.arena {
+        commands.entity(outlines).insert(match xray && dark > 0.0 {
+            true => Visibility::Inherited,
+            false => Visibility::Hidden,
+        });
     }
     let mut stage = Stage {
         commands: &mut commands,
@@ -487,7 +661,12 @@ pub fn sync(
         players: &mut players,
         graphics: &graphics,
     };
-    racers(&mut stage, &view, time.delta_secs().min(0.05));
+    racers(
+        &mut stage,
+        &view,
+        time.delta_secs().min(0.05),
+        xray && dark > 0.0,
+    );
     for p in view.projectiles {
         let owner = view.actors.get(p.owner).map_or(0, |a| a.driver);
         let play = match (p.kind.as_str(), p.vulcan) {
@@ -570,11 +749,15 @@ pub fn sync(
                 _ => 1.07,
             };
         }
+        for (mut xray, mut lens) in &mut darkness.xray {
+            *xray = *camera;
+            *lens = projection.clone();
+        }
     }
-    for mut text in &mut hud {
+    for mut text in &mut darkness.hud {
         text.0 = format!(
-            "HEALTH {:.0}   HEDGES {}   MISSILES {}   BOOST {}\n{}   {:.0} KILLS",
-            p.health, p.ammo, p.missiles, p.turbos, p.item, p.kills,
+            "HEALTH {:.0}   KILLS {:.0}   DEATHS {}",
+            p.health, p.kills, p.deaths,
         );
     }
 }

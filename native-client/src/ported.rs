@@ -3,7 +3,7 @@
 //! all come from the JavaScript client. See docs/native-graphics-port.md.
 use bevy::{
     asset::RenderAssetUsages,
-    camera::visibility::NoFrustumCulling,
+    camera::visibility::{NoFrustumCulling, RenderLayers},
     image::Image,
     mesh::{Indices, PrimitiveTopology},
     prelude::*,
@@ -12,7 +12,7 @@ use bevy::{
 use std::collections::HashMap;
 
 static PACK: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/graphics.wwgp"));
-const VERSION: u32 = 3;
+const VERSION: u32 = 4;
 const TRIANGLE_BYTES: usize = 20;
 const SPRITE_BYTES: usize = 28;
 /// The browser shader pitches models about this height and rolls them about `ROLL_PIVOT`.
@@ -83,6 +83,8 @@ struct Clip {
 pub struct Arena {
     pub sky: Color,
     pub mesh: u32,
+    /// Outlines of the arena that KnowItOwl sees through Dark Humor.
+    pub xray: u32,
     pub name: String,
     pub description: String,
 }
@@ -90,6 +92,21 @@ pub struct Racer {
     pub name: String,
     pub description: String,
     pub color: Tint,
+    /// The special ability's name; empty for racers without one.
+    pub ability: String,
+}
+/// How a mesh is colored and shaded.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
+pub enum Look {
+    /// Lit, in the browser's colors.
+    #[default]
+    Solid,
+    /// Added to the picture unlit, such as flames.
+    Glow,
+    /// Unlit, in the browser's colors.
+    Flat,
+    /// One flat color: a racer seen through Dark Humor.
+    Silhouette,
 }
 
 #[derive(Resource)]
@@ -100,9 +117,9 @@ pub struct Graphics {
     names: HashMap<String, usize>,
     arenas: Vec<Arena>,
     racers: Vec<Racer>,
-    built: HashMap<(u32, Tint, bool), Handle<Mesh>>,
-    solid: Handle<StandardMaterial>,
-    glow: Handle<StandardMaterial>,
+    built: HashMap<(u32, Tint, Look), Handle<Mesh>>,
+    /// One material per `Look`, in declaration order.
+    surfaces: [Handle<StandardMaterial>; 4],
     /// Additive sparks and alpha-blended smoke, in the browser's draw order.
     sprites: [Handle<StandardMaterial>; 2],
 }
@@ -179,12 +196,14 @@ impl Graphics {
         for _ in 0..r.u32()? {
             let sky = r.take(3)?;
             let mesh = r.u32()?;
-            if mesh as usize >= meshes.len() {
+            let xray = r.u32()?;
+            if mesh.max(xray) as usize >= meshes.len() {
                 return None;
             }
             arenas.push(Arena {
                 sky: Color::srgb_u8(sky[0], sky[1], sky[2]),
                 mesh,
+                xray,
                 name: r.text()?,
                 description: r.text()?,
             });
@@ -195,6 +214,7 @@ impl Graphics {
                 name: r.text()?,
                 description: r.text()?,
                 color: r.take(3)?.try_into().ok()?,
+                ability: r.text()?,
             });
         }
         Some(Self {
@@ -205,8 +225,7 @@ impl Graphics {
             arenas,
             racers,
             built: HashMap::new(),
-            solid: Handle::default(),
-            glow: Handle::default(),
+            surfaces: Default::default(),
             sprites: [Handle::default(), Handle::default()],
         })
     }
@@ -222,12 +241,12 @@ impl Graphics {
     pub fn racers(&self) -> &[Racer] {
         &self.racers
     }
-    pub fn solid(&self) -> Handle<StandardMaterial> {
-        self.solid.clone()
+    pub fn surface(&self, look: Look) -> Handle<StandardMaterial> {
+        self.surfaces[look as usize].clone()
     }
     /// Triangles with palette entry 0 follow the racer's color. Glow colors are
     /// added to the picture as they are, as the browser's additive pass does.
-    fn geometry(&self, mesh: u32, tint: Tint, glow: bool) -> Mesh {
+    fn geometry(&self, mesh: u32, tint: Tint, look: Look) -> Mesh {
         let data = &self.meshes[mesh as usize];
         let count = data.triangles.len() / TRIANGLE_BYTES * 3;
         let mut positions = Vec::with_capacity(count);
@@ -248,9 +267,10 @@ impl Graphics {
                 0 => tint,
                 index => self.palette[usize::from(index)],
             };
-            let color = match glow {
-                true => [red, green, blue, 255].map(|c| f32::from(c) / 255.0),
-                false => Color::srgb_u8(red, green, blue).to_linear().to_f32_array(),
+            let color = match look {
+                Look::Glow => [red, green, blue, 255].map(|c| f32::from(c) / 255.0),
+                Look::Silhouette => [1.0; 4],
+                _ => Color::srgb_u8(red, green, blue).to_linear().to_f32_array(),
             };
             for point in [a, b, c] {
                 positions.push(point.to_array());
@@ -270,14 +290,14 @@ impl Graphics {
         &mut self,
         mesh: u32,
         tint: Tint,
-        glow: bool,
+        look: Look,
         meshes: &mut Assets<Mesh>,
     ) -> Handle<Mesh> {
-        if let Some(handle) = self.built.get(&(mesh, tint, glow)) {
+        if let Some(handle) = self.built.get(&(mesh, tint, look)) {
             return handle.clone();
         }
-        let handle = meshes.add(self.geometry(mesh, tint, glow));
-        self.built.insert((mesh, tint, glow), handle.clone());
+        let handle = meshes.add(self.geometry(mesh, tint, look));
+        self.built.insert((mesh, tint, look), handle.clone());
         handle
     }
 }
@@ -367,6 +387,8 @@ pub struct Ported {
     pub tint: Tint,
     /// Seconds into the clip; `None` follows the shared animation clock.
     pub time: Option<f32>,
+    /// Drawn as a flat silhouette on the X-ray layer instead of in the world.
+    pub ghost: bool,
     parts: Vec<Entity>,
     sprites: [Option<(Entity, Handle<Mesh>)>; 2],
 }
@@ -398,9 +420,19 @@ impl Plugin for PortedGraphicsPlugin {
             cull_mode: None,
             ..default()
         };
-        graphics.glow = materials.add(StandardMaterial {
+        let glow = materials.add(StandardMaterial {
             unlit: true,
             alpha_mode: AlphaMode::Add,
+            ..surface.clone()
+        });
+        let flat = materials.add(StandardMaterial {
+            unlit: true,
+            ..surface.clone()
+        });
+        // The browser's X-ray tint, between its facing and rim colors.
+        let silhouette = materials.add(StandardMaterial {
+            unlit: true,
+            base_color: Color::srgb(0.26, 0.74, 0.79),
             ..surface.clone()
         });
         graphics.sprites = [AlphaMode::Add, AlphaMode::Blend].map(|alpha_mode| {
@@ -411,7 +443,7 @@ impl Plugin for PortedGraphicsPlugin {
                 ..surface.clone()
             })
         });
-        graphics.solid = materials.add(surface);
+        graphics.surfaces = [materials.add(surface), glow, flat, silhouette];
         app.insert_resource(graphics);
     }
 }
@@ -425,10 +457,14 @@ type PartQuery<'w, 's> = Query<
         &'static mut Transform,
         &'static mut Visibility,
     ),
-    (Without<Ported>, Without<Camera3d>),
+    (Without<Ported>, Without<crate::scene::FollowCamera>),
 >;
-type CameraQuery<'w, 's> =
-    Single<'w, 's, (&'static Transform, &'static Projection), (With<Camera3d>, Without<Ported>)>;
+type CameraQuery<'w, 's> = Single<
+    'w,
+    's,
+    (&'static Transform, &'static Projection),
+    (With<crate::scene::FollowCamera>, Without<Ported>),
+>;
 
 pub fn animate(
     mut commands: Commands,
@@ -457,19 +493,21 @@ pub fn animate(
         });
         let shown = frame.map(|f| f.parts.as_slice()).unwrap_or_default();
         for (slot, part) in shown.iter().enumerate() {
-            let key = (part.mesh, player.tint, part.glow);
+            let look = match (player.ghost, part.glow) {
+                (_, true) => Look::Glow,
+                (true, false) => Look::Silhouette,
+                (false, false) => Look::Solid,
+            };
+            let key = (part.mesh, player.tint, look);
             let mesh = match graphics.built.get(&key) {
                 Some(handle) => handle.clone(),
                 None => {
-                    let handle = meshes.add(graphics.geometry(part.mesh, player.tint, part.glow));
+                    let handle = meshes.add(graphics.geometry(part.mesh, player.tint, look));
                     graphics.built.insert(key, handle.clone());
                     handle
                 }
             };
-            let material = match part.glow {
-                true => graphics.glow.clone(),
-                false => graphics.solid.clone(),
-            };
+            let material = graphics.surface(look);
             match player.parts.get(slot) {
                 Some(child) => {
                     let Ok((mut shown, mut surface, mut transform, mut visibility)) =
@@ -492,6 +530,7 @@ pub fn animate(
                             Mesh3d(mesh),
                             MeshMaterial3d(material),
                             part.transform,
+                            RenderLayers::layer(usize::from(player.ghost)),
                             ChildOf(entity),
                         ))
                         .id();
@@ -508,7 +547,10 @@ pub fn animate(
         let facing = root.rotation.inverse() * view.rotation;
         let (right, up) = (facing * Vec3::X * reach, facing * Vec3::Y * reach);
         for layer in 0..2 {
-            let sprites = frame.map(|f| f.sprites[layer]).unwrap_or_default();
+            let sprites = match player.ghost {
+                true => &[][..],
+                false => frame.map(|f| f.sprites[layer]).unwrap_or_default(),
+            };
             match &player.sprites[layer] {
                 Some((child, handle)) => {
                     // An empty mesh cannot be uploaded, so an idle layer is hidden instead.
@@ -554,6 +596,8 @@ mod tests {
         assert_eq!(graphics.arenas.len(), 2);
         assert_eq!(graphics.racers().len(), 15);
         assert_eq!(graphics.racers()[0].name, "Pip the Panda");
+        assert_eq!(graphics.racers()[14].ability, "DARK HUMOR");
+        assert!(graphics.racers()[0].ability.is_empty());
         for driver in 0..15 {
             for state in ["idle", "boost", "celebrate"] {
                 let clip = graphics
@@ -626,7 +670,7 @@ mod tests {
         let graphics = Graphics::parse(PACK).expect("valid pack");
         let clip = &graphics.clips[graphics.clip("driver:0:idle").unwrap()];
         let colors = |tint| {
-            let mesh = graphics.geometry(clip.frames[0].parts[0].mesh, tint, false);
+            let mesh = graphics.geometry(clip.frames[0].parts[0].mesh, tint, Look::Solid);
             let Some(bevy::mesh::VertexAttributeValues::Float32x4(colors)) =
                 mesh.attribute(Mesh::ATTRIBUTE_COLOR)
             else {

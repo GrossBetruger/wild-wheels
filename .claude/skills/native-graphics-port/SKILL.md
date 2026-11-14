@@ -26,7 +26,8 @@ something already recorded:
 A new kind of visual is invisible natively until it is recorded:
 
 1. Add a recording in `buildGraphicsPack` in `scripts/build/graphics-port.mjs`.
-   Build a world containing only the subject, at the origin facing +Z.
+   Build a world containing only the subject, facing +Z. Racers stand at `HOME`,
+   in open ground; world effects are recorded at the origin with the racer hidden.
    - A looping subject: `record(name, {setup})`.
    - Something that plays by age: `once(name, life, setup, each)`.
    - A state layered on a racer: record with and without it and keep
@@ -41,10 +42,12 @@ A new kind of visual is invisible natively until it is recorded:
 
 ## What never ports
 
-- GLSL changes. Shader-only effects (feather sway and iridescence, fog, Dark
-  Humor, X-ray) need Bevy shaders written by hand.
-- HTML and CSS. The native menus and HUD in `native-client/src/gui.rs`,
-  `scene.rs` and `feedback.rs` are hand-written Bevy UI.
+- GLSL changes. Shader-only effects need native code written by hand: Dark
+  Humor's fog and X-ray live in `scene.rs`; feather sway, iridescence and
+  distance fog are still missing.
+- HTML and CSS. The native menus, weapon cards, action buttons and leaderboard
+  in `native-client/src/gui.rs`, and the notices in `feedback.rs`, are
+  hand-written Bevy UI that mirrors the browser's labels and enabling rules.
 - Per-frame browser state that depends on a racer's history, such as
   Master-Yuda's drift lean. Port the formula by hand in `scene.rs`.
 

@@ -41,6 +41,8 @@ pub enum ClientAction {
     Chaff,
     Somersault,
     Special,
+    SelectHedgehog,
+    SelectMissile,
 }
 
 /// A borrowed presentation view. Consumers cannot mutate simulation authority.
@@ -142,10 +144,17 @@ impl NativeClient {
             ClientAction::Chaff => "chaff",
             ClientAction::Somersault => "somersault",
             ClientAction::Special => "special",
+            ClientAction::SelectHedgehog | ClientAction::SelectMissile => "select",
+        };
+        let item = match action {
+            ClientAction::SelectHedgehog => "hedgehog",
+            ClientAction::SelectMissile => "missile",
+            _ => "",
         };
         let accepted = self.inner.do_action(
             Action {
                 kind: kind.into(),
+                item: item.into(),
                 ..Action::default()
             },
             now,

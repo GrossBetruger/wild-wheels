@@ -8,16 +8,20 @@ import {createHash} from 'node:crypto';
 import {Renderer} from '../../client/renderer.js';
 import {createBattle,arenas,BOMB_FALL_TIME,RADIATION_DURATION} from '../../gameplay/combat.js';
 import {drivers} from '../../gameplay/engine.js';
+import {abilityNames} from '../../gameplay/special-abilities.js';
 
 globalThis.devicePixelRatio??=1;
 // Reduced motion keeps the dizzy camera wobble out of recordings.
 globalThis.matchMedia??=()=>({matches:true});
 
-export const PACK_VERSION=3;
+export const PACK_VERSION=4;
 // Fire rings are recorded at this radius and scaled by the native client.
 export const FIRE_RING_RADIUS=20;
 // Clips whose every frame is new geometry are recorded at the slower rate to bound the pack size.
 const SLOW_FPS=12;
+// Racers are recorded in open ground: at the arena's center an obstacle would
+// change anything that looks for free space, such as KnowItOwl's bat companion.
+const HOME=[0,60];
 const VERTICES=27,SPRITE=7,FPS=24,LOOP=8,OVERLAY_LOOP=4,WARMUP=3,BOOST_SPEED=40,MARKER='#fe01fd',SOLID=0,GLOW=1,REPEAT=0,ONCE=1;
 const hex=color=>[1,3,5].map(i=>parseInt(color.slice(i,i+2),16));
 const byte=value=>Math.max(0,Math.min(255,Math.round(value*255)));
@@ -41,16 +45,16 @@ function renderer(){
   gl.smokeFlag=view.particleSmoke;
   return view;
 }
-// One racer at the origin facing +Z, with every other actor and pickup removed.
+// One racer at `HOME` facing +Z, with every other actor and pickup removed.
 function world(driver=0,arena=0){
   const r=createBattle(driver,arena,()=>.5);
-  Object.assign(r,{wx:0,wz:0,heading:0,cameraHeading:0,health:0,supplies:[]});
+  Object.assign(r,{wx:HOME[0],wz:HOME[1],heading:0,cameraHeading:0,health:0,supplies:[]});
   for(const bot of r.bots)bot.inactive=true;
   return r;
 }
 // The vertex shader's rigid placement of one model instance, as a 3x4 matrix.
 // Pearococo's feather fold is rigid and is kept; the feather sway is not.
-function placement(instance,shift){
+function placement(instance,[dx,dz]){
   const point=([x,y,z])=>{
     const plumage=instance.plumage;
     if(plumage){
@@ -63,15 +67,15 @@ function placement(instance,shift){
     let c=Math.cos(instance.roll??0),s=Math.sin(instance.roll??0);[x,y]=[x*c-(y-.9)*s,x*s+(y-.9)*c+.9];
     c=Math.cos(instance.pitch??0);s=Math.sin(instance.pitch??0);[y,z]=[(y-2)*c-z*s+2,(y-2)*s+z*c];
     c=Math.cos(instance.angle);s=Math.sin(instance.angle);
-    return [x*c+z*s+instance.x,y+instance.y,-x*s+z*c+instance.z-shift];
+    return [x*c+z*s+instance.x-dx,y+instance.y,-x*s+z*c+instance.z-dz];
   };
   const origin=point([0,0,0]);
   return [...[[1,0,0],[0,1,0],[0,0,1]].flatMap(axis=>point(axis).map((v,i)=>v-origin[i])),...origin];
 }
-const moved=(data,stride,shift)=>{if(!shift)return data;const out=Float32Array.from(data);for(let i=2;i<out.length;i+=stride)out[i]-=shift;return out;};
+const moved=(data,stride,[dx,dz])=>{if(!dx&&!dz)return data;const out=Float32Array.from(data);for(let i=0;i<out.length;i+=stride){out[i]-=dx;out[i+2]-=dz;}return out;};
 const join=arrays=>{const out=new Float32Array(arrays.reduce((sum,a)=>sum+a.length,0));let at=0;for(const a of arrays){out.set(a,at);at+=a.length;}return out;};
-// `shift` removes the distance a moving subject has travelled along +Z.
-function draw(view,r,time,shift=0){
+// `shift` is where the subject stands, so that recordings are relative to it.
+function draw(view,r,time,shift=[0,0]){
   view.particleBuffer.uploads=[];
   view.draw(r,time);
   const sprites=smoke=>moved(join(view.particleBuffer.uploads.filter(u=>u.smoke===smoke).map(u=>u.data)),SPRITE,shift);
@@ -166,9 +170,9 @@ class Pack {
       u32(this.meshes.length),...this.meshes,
       u32(this.clips.length),...this.clips,
       u32(names.length),...names.flatMap(([name,clip])=>{const text=Buffer.from(name),size=Buffer.alloc(2);size.writeUInt16LE(text.length);return[size,text,u32(clip)];}),
-      u32(this.arenas.length),...this.arenas.flatMap(({sky,mesh,name,desc})=>[Buffer.from(sky),u32(mesh),text(name),text(desc)]),
+      u32(this.arenas.length),...this.arenas.flatMap(({sky,mesh,xray,name,desc})=>[Buffer.from(sky),u32(mesh),u32(xray),text(name),text(desc)]),
       // The menus name racers and arenas from the same data the browser shows.
-      u32(drivers.length),...drivers.flatMap(driver=>[text(driver.name),text(driver.desc),Buffer.from(hex(driver.color))]),
+      u32(drivers.length),...drivers.flatMap((driver,index)=>[text(driver.name),text(driver.desc),Buffer.from(hex(driver.color)),text(abilityNames[index]??'')]),
     ]);
   }
 }
@@ -179,14 +183,15 @@ function capture({driver=0,frames=1,fps=FPS,warmup=0,speed=0,setup,each}){
   const view=renderer(),r=world(driver),start=LOOP*2,shots=[];
   setup?.(r);
   for(let i=-Math.round(warmup*fps);i<frames;i++){
-    const seconds=i/fps;if(speed)r.wz=speed*(seconds+warmup);
+    const seconds=i/fps;if(speed)r.wz=HOME[1]+speed*(seconds+warmup);
     each?.(r,seconds);
-    const shot=draw(view,r,start+seconds,speed?r.wz:0);
+    const shot=draw(view,r,start+seconds,[r.wx,r.wz]);
     if(i>=0)shots.push(shot);
   }
   return shots;
 }
-const hidden=r=>{r.afk=true;};
+// World effects are recorded at the origin with the racer out of sight.
+const hidden=r=>{r.afk=true;r.wx=0;r.wz=0;};
 
 export function buildGraphicsPack({only=[...drivers.keys()]}={}){
   const pack=new Pack();
@@ -199,7 +204,12 @@ export function buildGraphicsPack({only=[...drivers.keys()]}={}){
   };
   const once=(name,life,setup,each,options={})=>record(name,{frames:Math.ceil(life*FPS)+1,setup:r=>{hidden(r);setup?.(r);},each,...options},ONCE);
 
-  for(const index of arenas.keys())pack.arenas.push({name:arenas[index].name,desc:arenas[index].desc,sky:hex(arenas[index].sky),mesh:pack.mesh(draw(renderer(),Object.assign(world(0,index),{afk:true}),0).scenery)});
+  for(const index of arenas.keys()){
+    const view=renderer(),scenery=draw(view,Object.assign(world(0,index),{afk:true}),0).scenery;
+    // KnowItOwl's X-ray outlines of the arena are built the first time Dark Humor is drawn for its caster.
+    view.draw(Object.assign(world(14,index),{phase:'racing',specialActive:3}),1);
+    pack.arenas.push({name:arenas[index].name,desc:arenas[index].desc,sky:hex(arenas[index].sky),mesh:pack.mesh(scenery),xray:pack.mesh(view.models.get(`dark:arena:${index}`).buffer.data)});
+  }
 
   const wreck=capture({setup:r=>{r.destroyed=1;}})[0];
   pack.clip('wreck',FPS,[pack.frame(wreck)]);
@@ -220,7 +230,7 @@ export function buildGraphicsPack({only=[...drivers.keys()]}={}){
       pack.clip(`overlay:${driver}:${state}`,FPS,shots.map((shot,i)=>pack.overlay(idle[i],shot)));
     }
     // Ashes collapse from the body that was last drawn alive at that spot.
-    const ash=capture({driver,fps:SLOW_FPS,frames:Math.ceil(4.3*SLOW_FPS)+1,warmup:2/SLOW_FPS,each:(r,t)=>{if(t<0)return;r.destroyed=1;r.effects=[{type:'ash',wx:0,wz:0,age:t,life:4.3}];}});
+    const ash=capture({driver,fps:SLOW_FPS,frames:Math.ceil(4.3*SLOW_FPS)+1,warmup:2/SLOW_FPS,each:(r,t)=>{if(t<0)return;r.destroyed=1;r.effects=[{type:'ash',wx:r.wx,wz:r.wz,age:t,life:4.3}];}});
     pack.clip(`effect:ash:${driver}`,SLOW_FPS,ash.map(shot=>pack.overlay(wreck,shot)),ONCE);
   }
 
@@ -242,8 +252,8 @@ export function buildGraphicsPack({only=[...drivers.keys()]}={}){
   const turn={frames:150,fps:150/(2*Math.PI)};
   for(const kind of ['missile','hedgehog','boost','health','hedgeproof','tehilim'])record(`pickup:${kind}`,{...turn,setup:r=>{hidden(r);r.supplies=[{id:0,version:0,wx:0,wz:0,kind,cooldown:0}];}});
   record('pickup:bicycle',{...turn,setup:r=>{hidden(r);r.supplies=[{id:1000,version:0,owner:99,kind:'bicycle',cooldown:0,age:5,heading:0,wx:0,wz:0,dropWx:0,dropWz:0,dropHeight:0}];}});
-  const bare=draw(renderer(),world(0),LOOP*2);
-  for(let health=1;health<=6;health++)pack.clip(`health:${health}`,FPS,[pack.overlay(bare,draw(renderer(),Object.assign(world(0),{health}),LOOP*2))]);
+  const bare=draw(renderer(),world(0),LOOP*2,HOME);
+  for(let health=1;health<=6;health++)pack.clip(`health:${health}`,FPS,[pack.overlay(bare,draw(renderer(),Object.assign(world(0),{health}),LOOP*2,HOME))]);
 
   // World effects play once, frame by frame of their age.
   const effect=(type,life,extra={})=>(r,t)=>{r.effects=[{type,owner:r.id,wx:0,wz:0,age:Math.max(0,t),life,...extra}];};

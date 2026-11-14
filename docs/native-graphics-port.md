@@ -38,11 +38,16 @@ Run the port by hand with `npm run port:graphics -- /tmp/graphics.wwgp`.
 | `bomb:<kind>`, `cloud:chaff`, `cloud:chaff:fairy`, `cloud:stink` | Falling bombs and lingering clouds, played by age |
 | `particle:smoke`, `particle:spark:<level>` | One drift particle over its life |
 | `locust`, `locust:jump` | Tammy's locusts |
-| Arenas | Static scenery and sky color for every entry in `arenas` |
+| Arenas | Static scenery, sky color, name, description and Dark Humor X-ray outlines for every entry in `arenas` |
+| Racers | Name, description, color and special ability name for the menus and HUD |
 
 Each frame holds solid models, additive glow geometry, and the browser's point
 sprites (additive sparks and alpha-blended smoke), which the native client draws
 as camera-facing quads with the particle shader's soft disc.
+
+Racers are recorded standing in open ground rather than at the arena's center,
+where an obstacle would change anything that looks for free space, such as
+KnowItOwl's bat companion.
 
 Three techniques keep the recording automatic:
 
@@ -59,8 +64,12 @@ clip name in `scene.rs`.
 
 ## Limits
 
-- Shader-only effects are not ported: Pearococo's feather sway and iridescence,
-  distance fog, and KnowItOwl's Dark Humor darkness and X-ray.
+- Shader-only effects are not ported automatically. Pearococo's feather sway and
+  iridescence and distance fog are missing. KnowItOwl's Dark Humor is written by
+  hand in `scene.rs`: one still frame of the fog shader covers the world, and the
+  caster sees the recorded arena outlines and flat racer silhouettes through it.
+  The fog does not drift, bomb flashes do not light it, and nearby objects are
+  not brightened.
 - Recorded states do not fade in or out, and combine by layering only. A boost
   trail is the one recorded while driving straight.
 - Not recorded: Master-Yuda's drift sparks,

@@ -56,6 +56,13 @@ impl GameSession {
         self.away = false;
         self.status.clear();
     }
+    /// Performs one of the racer's actions, as a key press or a HUD button would.
+    pub fn act(&mut self, action: ClientAction) {
+        let now = self.epoch.elapsed().as_secs_f64();
+        if let Some(client) = self.client.as_mut() {
+            let _ = client.action(action, now);
+        }
+    }
     /// Sends a room request; `false` when the network worker cannot take it now.
     pub fn request(&mut self, command: Command) -> bool {
         self.transport
@@ -162,7 +169,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
             crate::sound::GameAudioPlugin,
             crate::feedback::FeedbackPlugin,
         ))
-        .add_systems(Startup, crate::gui::setup)
+        .add_systems(Startup, (crate::gui::setup, crate::gui::setup_hud))
         .add_systems(
             Update,
             (
@@ -174,6 +181,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
                 crate::sound::play,
                 crate::feedback::sync_match,
                 crate::gui::draw,
+                crate::gui::hud,
                 crate::gui::hover,
             )
                 .chain(),
@@ -215,9 +223,14 @@ fn drive(
         (held(&[KeyCode::Space]), ClientAction::Fire),
         (
             focused
-                && [KeyCode::Tab, KeyCode::SuperLeft, KeyCode::SuperRight]
-                    .iter()
-                    .any(|k| keys.just_pressed(*k)),
+                && [
+                    KeyCode::Tab,
+                    KeyCode::KeyQ,
+                    KeyCode::SuperLeft,
+                    KeyCode::SuperRight,
+                ]
+                .iter()
+                .any(|k| keys.just_pressed(*k)),
             ClientAction::CycleWeapon,
         ),
         (
