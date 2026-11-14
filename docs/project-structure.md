@@ -29,6 +29,7 @@ Start with `client/game.js` to follow the browser game, `server.js` for the Node
 | `track.js` | Track geometry shared by driving, camera positioning, and the minimap. |
 | `special-abilities.js` | Ability descriptions, activation, cooldowns, and shared ability behavior. |
 | `bicycle-pickup.js` | Shared bicycle pickup animation and landing calculations. |
+| `supply-spawns.js` | Seeded random power-up placement with wall, character, and pickup clearances. |
 | `arena-core.js` | Loads WebAssembly and exposes Rust arena and client simulation operations to JavaScript. |
 | `core-view.js` | Reads live simulation data from WebAssembly memory for JavaScript consumers. |
 
@@ -37,6 +38,7 @@ Start with `client/game.js` to follow the browser game, `server.js` for the Node
 | File in `client/` | Purpose |
 | --- | --- |
 | `game.js` | Connects menus, input, rendering, audio, networking, and the game loop. |
+| `keyboard.js` | Maps physical keyboard keys to game controls, with a Hebrew fallback when key codes are unavailable. |
 | `renderer.js` | WebGL rendering, cameras, vehicles, characters, and effects. |
 | `characters.js` | Shared procedural character, vehicle, and projectile models. Some character models still live here. |
 | `character-preview.js` | Character selection preview display. |
@@ -155,6 +157,7 @@ Use `npm run test:netcode` for the network checks, `npm run build:core` to rebui
 | `src/arena/specials.rs` | Special ability behavior. |
 | `src/arena/fire_ring.rs` | Master-Yuda fire ring simulation. |
 | `src/arena/bat.rs` | Bat companion simulation. |
+| `src/arena/supplies.rs` | Safe random initial power-up positions and respawns in the Rust simulation. |
 | `src/arena/bicycles.rs` | Bicycle drops and pickups. |
 | `src/arena/client.rs` | Rust client prediction and reconciliation. |
 | `src/arena/client/feedback.rs` | Immediate client action feedback. |

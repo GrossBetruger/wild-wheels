@@ -24,7 +24,7 @@ try{
   git('init','--initial-branch=main');git('add','.');git('commit','-m','Initial launcher');git('init','--bare',join(root,'remote.git'));git('remote','add','origin',join(root,'remote.git'));git('push','origin','main');
   git('clone','--branch','main',join(root,'remote.git'),join(root,'publisher'));await writeFile(join(root,'publisher','release-marker'),'updated\n');
   execFileSync('git',['-C',join(root,'publisher'),'add','release-marker'],{env});execFileSync('git',['-C',join(root,'publisher'),'commit','-m','New release'],{env});execFileSync('git',['-C',join(root,'publisher'),'push','origin','main'],{env});
-  const post=async(path,token,extra={},body=path==='/api/join'?{code:'00',name:'Updater',driver:0}:{})=>{const response=await fetch(`http://127.0.0.1:${port}`+path,{method:'POST',headers:{'content-type':'application/json',...(token?{authorization:`Bearer ${token}`}:{}) ,...extra},body:JSON.stringify(body),signal:AbortSignal.timeout(30000)});return {status:response.status,value:await response.json(),cookie:response.headers.get('set-cookie')};};
+  const post=async(path,token,extra={},body=path==='/api/join'?{code:'00',name:'Updater',driver:0}:{})=>{const response=await fetch(`http://127.0.0.1:${port}`+path,{method:'POST',headers:{'content-type':'application/json',origin:`http://127.0.0.1:${port}`,...(token?{authorization:`Bearer ${token}`}:{}) ,...extra},body:JSON.stringify(body),signal:AbortSignal.timeout(30000)});return {status:response.status,value:await response.json(),cookie:response.headers.get('set-cookie')};};
   assert.equal((await post('/api/updates/check')).status,401);
   const player=await post('/api/join');assert.equal(player.status,200);
   const peer=await post('/api/join',null,{}, {code:'00',name:'Friend',driver:1});assert.equal(peer.status,200);
@@ -42,6 +42,7 @@ try{
   }
   assert.equal(checkpointed,true,'Stats must checkpoint while the server is still running');
   // Waiting for the periodic save exceeds AFK timeout; resume as a real returning player.
+  assert.equal((await post('/api/session',null,{cookie:player.cookie.split(';')[0],origin:''})).status,403,'Cookie-only requests without a valid origin must stay blocked');
   const active=await post('/api/session',null,{cookie:player.cookie.split(';')[0]});assert.equal(active.status,200);Object.assign(player,active);
   const started=await post('/api/updates/install',player.value.token);assert.equal(started.status,200);assert.equal(started.value.updating,true);
   let restarted=false;for(let tries=0;tries<100;tries++){await new Promise(r=>setTimeout(r,100));try{if(await readFile(join(state,'server.pid'),'utf8')!==first&&await health()){try{await access(join(state,'lock'));}catch{restarted=true;break;}}}catch{}}

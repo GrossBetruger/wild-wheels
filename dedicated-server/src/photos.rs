@@ -75,7 +75,7 @@ fn valid(bytes: &[u8]) -> bool {
     false
 }
 pub async fn upload(State(app): State<App>, h: HeaderMap, body: Bytes) -> Response {
-    if !same_origin(&h) {
+    if !same_origin(&app, &h) {
         return error((403, "Use the game from the same server."));
     }
     if h.get(header::CONTENT_TYPE)
@@ -123,7 +123,7 @@ pub async fn upload(State(app): State<App>, h: HeaderMap, body: Bytes) -> Respon
     response(200, json!({"ok":true,"id":index}))
 }
 pub async fn list(State(app): State<App>, h: HeaderMap) -> Response {
-    if !same_origin(&h) {
+    if !same_origin(&app, &h) {
         return error((403, "Use the game from the same server."));
     }
     let room = app.room.lock().unwrap();
@@ -148,7 +148,7 @@ pub async fn image(
     Path((epoch, id)): Path<(u64, usize)>,
     h: HeaderMap,
 ) -> Response {
-    if !same_origin(&h) {
+    if !same_origin(&app, &h) {
         return error((403, "Use the game from the same server."));
     }
     let room = app.room.lock().unwrap();
@@ -209,6 +209,8 @@ mod tests {
             limits: Default::default(),
             sockets: Arc::new(Semaphore::new(32)),
             origin: None,
+            trust_proxy: false,
+            invite_secret: None,
         };
         let headers = |token: &str| {
             let mut h = HeaderMap::new();

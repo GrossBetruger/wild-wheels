@@ -5,6 +5,8 @@ mod room;
 mod sessions;
 mod stats;
 mod updates;
+mod security;
+use security::same_origin;
 use axum::{
     body::{Body, Bytes},
     extract::{
@@ -41,6 +43,8 @@ struct App {
     limits: Arc<Mutex<HashMap<(IpAddr, String), (Instant, u32)>>>,
     sockets: Arc<Semaphore>,
     origin: Option<String>,
+    trust_proxy: bool,
+    invite_secret: Option<String>,
 }
 fn response(status: u16, value: Value) -> Response {
     (StatusCode::from_u16(status).unwrap(), Json(value)).into_response()
@@ -64,23 +68,10 @@ fn session(h: &HeaderMap) -> &str {
         })
         .unwrap_or("")
 }
-fn same_origin(h: &HeaderMap) -> bool {
-    if h.get("sec-fetch-site").is_some_and(|v| v == "cross-site") {
-        return false;
-    }
-    let Some(origin) = h.get(header::ORIGIN) else {
-        return true;
-    };
-    let Some(uri) = origin.to_str().ok().and_then(|s| s.parse::<Uri>().ok()) else {
-        return false;
-    };
-    matches!(uri.scheme_str(), Some("http" | "https"))
-        && uri.authority().map(|v| v.as_str()) == h.get(header::HOST).and_then(|v| v.to_str().ok())
-}
 fn limit(app: &App, ip: IpAddr, path: &str, max: u32, period: Duration) -> bool {
     let mut limits = app.limits.lock().unwrap();
     limits.retain(|_, (at, _)| at.elapsed() < Duration::from_secs(60));
-    if limits.len() > 4096 {
+    if limits.len() >= 4096 && !limits.contains_key(&(ip, path.into())) {
         return false;
     }
     let record = limits
@@ -92,13 +83,20 @@ fn limit(app: &App, ip: IpAddr, path: &str, max: u32, period: Duration) -> bool 
     record.1 += 1;
     record.1 <= max
 }
-async fn headers(request: axum::extract::Request, next: axum::middleware::Next) -> Response {
+async fn headers(State(app): State<App>, request: axum::extract::Request, next: axum::middleware::Next) -> Response {
+    let peer = request.extensions().get::<ConnectInfo<SocketAddr>>().map(|p| p.0.ip());
+    if !peer.is_some_and(|peer| security::transport(&app, request.headers(), peer)) {
+        return error((403, "Use the configured HTTPS game origin."));
+    }
+    let secure = app.origin.as_ref().is_some_and(|o| o.starts_with("https://"));
     let seconds = match request.uri().path() {"/api/updates/check" => 30, _ => 10};
     let mut r = match timeout(Duration::from_secs(seconds), next.run(request)).await {
         Ok(r) => r,
         Err(_) => return error((408, "Request timed out.")),
     };
     let h = r.headers_mut();
+    h.insert("referrer-policy", "no-referrer".parse().unwrap());
+    if secure { h.insert("strict-transport-security", "max-age=31536000".parse().unwrap()); }
     h.insert(header::CACHE_CONTROL, "no-store".parse().unwrap());
     h.insert("x-content-type-options", "nosniff".parse().unwrap());
     h.insert(header::CONTENT_SECURITY_POLICY,"default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'".parse().unwrap());
@@ -114,13 +112,13 @@ async fn http(
 ) -> Response {
     let path = uri.path();
     if path.starts_with("/api/") {
-        if !same_origin(&h) {
+        if !same_origin(&app, &h) {
             return error((403, "Use the game from the same server."));
         }
         if !limit(
             &app,
             addr.ip(),
-            path,
+            if matches!(path, "/api/input" | "/api/join" | "/api/updates/check" | "/api/updates/install") { path } else { "api" },
             match path {
                 "/api/input" => 180,
                 "/api/join" => 20,
@@ -229,14 +227,21 @@ async fn http(
     }
 }
 async fn control(app: &App, path: &str, token: &str, body: &Value) -> room::Result<Value> {
-    let persist = matches!(path, "/api/join" | "/api/session" | "/api/afk" | "/api/name" | "/api/driver");
+    let persist = matches!(path, "/api/join" | "/api/session" | "/api/afk" | "/api/name" | "/api/driver" | "/api/color");
     let mut saved = match persist {
         true => Some(app.sessions.lock().await),
         false => None,
     };
     let at = sessions::now();
-    let (value, record) = {
+    let (value, record, previous_color) = {
         let mut room = app.room.lock().unwrap();
+        let known = room.find(token).is_some() || saved.as_deref().is_some_and(|store| store.find(token, at).is_some());
+        if path == "/api/join" && !known && app.invite_secret.as_ref().is_some_and(|secret| body["invite"].as_str() != Some(secret.as_str())) {
+            return Err((403, "Open the complete invitation link."));
+        }
+        let previous_color = if path == "/api/color" {
+            room.find(token).map(|id| { let p = room.members[id].as_ref().unwrap(); (p.color.clone(), p.preferred_color.clone()) })
+        } else { None };
         let value = dispatch(&mut room, saved.as_deref(), path, token, body, at)?;
         let record = saved.as_ref().map(|store| {
             let current_token = value["token"].as_str().unwrap_or(token);
@@ -246,15 +251,22 @@ async fn control(app: &App, path: &str, token: &str, body: &Value) -> room::Resu
                 true => at + sessions::LIFETIME,
                 false => store.find(current_token, at).map_or(at + sessions::LIFETIME, |p| p.expires),
             };
-            sessions::Session {identity:p.identity.clone(), token:p.token.clone(), name:p.name.clone(), driver:p.driver, role:p.role.clone(), expires}
+            sessions::Session {identity:p.identity.clone(), token:p.token.clone(), name:p.name.clone(), driver:p.driver, role:p.role.clone(), color:p.preferred_color.clone(), chat_color:Some(p.chat_color.clone()), expires}
         });
-        (value, record)
+        (value, record, previous_color)
     };
     if let Some(record) = record {
-        saved.as_mut().unwrap().remember(record, at).await.map_err(|error| {
+        if let Err(error) = saved.as_mut().unwrap().remember(record, at).await {
+            if let Some((color, preferred)) = previous_color {
+                let mut room = app.room.lock().unwrap();
+                if let Some(id) = room.find(token) {
+                    let member = room.members[id].as_mut().unwrap(); member.color = color; member.preferred_color = preferred;
+                    room.broadcast();
+                }
+            }
             eprintln!("Unable to save player session: {error}");
-            (503, "Unable to save your session. Please retry.")
-        })?;
+            return Err((503, "Unable to save your session. Please retry."));
+        }
     }
     Ok(value)
 }
@@ -262,6 +274,7 @@ fn dispatch(room: &mut Room, saved: Option<&sessions::Sessions>, path: &str, tok
     if path == "/api/join" && body["code"] != "00" {
         return Err((404, "Room not found. Use room 00."));
     }
+    let preference = if matches!(path, "/api/join" | "/api/session") { room::color_preference(body)? } else { None };
     let mut existing = room.find(token);
     if existing.is_none() && matches!(path, "/api/session" | "/api/join") {
         if let Some(profile) = saved.and_then(|store| store.find(token, at)) {
@@ -269,7 +282,10 @@ fn dispatch(room: &mut Room, saved: Option<&sessions::Sessions>, path: &str, tok
         }
     }
     match (path, existing) {
-        ("/api/join", Some(id)) => Ok(room.resume(id, false)),
+        ("/api/join", Some(id)) => {
+            if let Some(color) = preference { room.prefer_color(id, &color)?; }
+            Ok(room.resume(id, false))
+        },
         ("/api/join", None) => room.join(body),
         (_, Some(id)) => room.control(id, path, body),
         (_, None) => Err((401, "Rejoin the room to reconnect.")),
@@ -281,7 +297,7 @@ async fn upgrade(
     h: HeaderMap,
     ws: WebSocketUpgrade,
 ) -> Response {
-    if !h.contains_key(header::ORIGIN) || !same_origin(&h) {
+    if !h.contains_key(header::ORIGIN) || !same_origin(&app, &h) {
         return error((403, "Use the game from the same server."));
     }
     if !limit(&app, addr.ip(), "socket", 16, Duration::from_secs(1)) {
@@ -343,7 +359,7 @@ async fn connection(app: App, mut socket: WebSocket) {
         let mut since = Instant::now();
         let mut count = 0;
         loop {
-            let Some(Ok(message)) = stream.next().await else {
+            let Ok(Some(Ok(message))) = timeout(Duration::from_secs(30), stream.next()).await else {
                 break;
             };
             if since.elapsed() >= Duration::from_secs(1) {
@@ -432,7 +448,8 @@ async fn main() {
                 && uri.query().is_none(),
             "PUBLIC_ORIGIN must be an HTTP(S) origin"
         );
-        s
+        assert!(uri.scheme_str() == Some("https") || security::local_host(uri.authority().unwrap().as_str()), "Public hosting requires HTTPS");
+        s.trim_end_matches('/').to_owned()
     });
     let chat_path = std::env::var_os("WILD_WHEELS_CHAT_FILE").map(std::path::PathBuf::from)
         .unwrap_or_else(|| ".wild-wheels/chat.json".into());
@@ -440,6 +457,10 @@ async fn main() {
         .unwrap_or_else(|| ".wild-wheels/stats.json".into());
     let mut room = Room::new(arena, bots);
     room.chat = chat::Chat::open(&chat_path).expect("Unable to load saved chat");
+    let invite_secret = std::env::var("INVITE_SECRET").ok();
+    if origin.as_ref().is_some_and(|o| o.starts_with("https://")) {
+        assert!(invite_secret.as_ref().is_some_and(|v| v.len() >= 32), "Set INVITE_SECRET to at least 32 random characters for public hosting");
+    }
     let app = App {
         stats: Arc::new(Mutex::new(stats::Stats::open(&stats_path).expect("Unable to load saved server stats"))),
         shutdown: tokio::sync::watch::channel(false).0,
@@ -453,6 +474,8 @@ async fn main() {
         limits: Default::default(),
         sockets: Arc::new(Semaphore::new(32)),
         origin,
+        trust_proxy: std::env::var("TRUST_PROXY").is_ok_and(|v| v == "1"),
+        invite_secret,
     };
     let clock = app.room.clone();
     let tick_stats = app.stats.clone();
@@ -499,7 +522,7 @@ async fn main() {
         .route("/api/photos/{epoch}/{id}", get(photos::image))
         .fallback(http)
         .layer(DefaultBodyLimit::max(2048))
-        .layer(axum::middleware::from_fn(headers))
+        .layer(axum::middleware::from_fn_with_state(app.clone(), headers))
         .with_state(app.clone());
     let listener = tokio::net::TcpListener::bind((bind, port))
         .await

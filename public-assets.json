@@ -27,12 +27,14 @@
   "gameplay/arena-core.js",
   "gameplay/core-view.js",
   "client/game.js",
+  "client/keyboard.js",
   "gameplay/engine.js",
   "client/renderer.js",
   "audio/audio.js",
   "audio/recorded-laughter.js",
   "gameplay/track.js",
   "gameplay/combat.js",
+  "gameplay/supply-spawns.js",
   "networking/network.js",
   "client/playback.js",
   "client/prediction.js",
@@ -52,5 +54,6 @@
   "photos/photography.js",
   "photos/photo-protocol.js",
   "characters/knowitowl/dark-bomb-light.js",
+  "gameplay/player-colors.js",
   "gameplay/bicycle-pickup.js"
 ]

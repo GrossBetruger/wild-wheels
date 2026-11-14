@@ -16,7 +16,7 @@ const origin=`http://127.0.0.1:${port}`;let logs='';
 const start=()=>{const server=spawn(binary,[],{cwd:stateDirectory,env:{...process.env,WILD_WHEELS_SESSION_FILE:join(stateDirectory,'sessions.json'),BIND:'127.0.0.1',PORT:String(port),BOTS:'0'},stdio:['ignore','pipe','pipe']});server.stdout.on('data',b=>logs+=b);server.stderr.on('data',b=>logs+=b);return server;};
 const stop=async server=>{if(server.exitCode!==null||server.signalCode!==null)return;const exited=new Promise(resolve=>server.once('exit',resolve));server.kill('SIGTERM');await exited;};
 let child=start();const peers=[],errors=[];let timer,frameTimer;
-const request=async(path,body,token,extra={})=>{const response=await fetch(origin+path,{method:body===undefined?'GET':'POST',headers:{'content-type':'application/json',...(token?{authorization:`Bearer ${token}`}:{}) ,...extra},body:body===undefined?undefined:JSON.stringify(body)});return {status:response.status,value:await response.text().then(text=>{try{return JSON.parse(text);}catch{return text;}}),headers:response.headers};};
+const request=async(path,body,token,extra={})=>{const response=await fetch(origin+path,{method:body===undefined?'GET':'POST',headers:{'content-type':'application/json',origin,...(token?{authorization:`Bearer ${token}`}:{}) ,...extra},body:body===undefined?undefined:JSON.stringify(body)});return {status:response.status,value:await response.text().then(text=>{try{return JSON.parse(text);}catch{return text;}}),headers:response.headers};};
 const wait=async(predicate,message,ms=5000)=>{const end=performance.now()+ms;while(performance.now()<end){if(await predicate())return;await sleep(20);}throw new Error(message);};
 async function connect(peer){
   peer.socket=new WebSocket(origin.replace('http','ws')+'/api/socket',{origin});peer.socket.on('error',e=>errors.push(e.message));
@@ -58,6 +58,7 @@ try{
   await wait(async()=>{try{return(await request('/healthz')).status===200;}catch{return false;}},'Rust server failed to restart');
   assert.equal((await request('/healthz')).value.players,0,'Saved identities must not reserve active game slots');
   const previousCookie=`wild-wheels-session=${peers[7].token}`;
+  assert.equal((await request('/api/session',{},null,{cookie:previousCookie,origin:''})).status,403);
   const restored=await request('/api/session',{},null,{cookie:previousCookie});
   assert.equal(restored.status,200);assert.equal(restored.value.you,0);assert.equal(restored.value.world.name,'Friend 7');assert.equal(restored.value.world.driver,7);assert.equal(restored.value.world.phase,'ready');assert.equal(restored.value.world.kills,0);
   assert.equal((await request('/api/session',{},null,{cookie:previousCookie})).status,401);

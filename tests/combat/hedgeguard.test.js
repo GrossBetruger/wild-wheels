@@ -8,11 +8,12 @@ for(const engine of ['solo','Rust multiplayer']){
     for(const arena of [0,1]){
       const seed=createBattle(0,arena),rare=seed.supplies.filter(s=>s.kind==='hedgeproof');
       assert.equal(rare.length,1);assert.equal(rare[0].cooldown,30);assert.equal(blocked(arenas[arena],rare[0].wx,rare[0].wz,4),false);
+      rare[0].randomSpawn=false; // Keep this timing fixture stationary; placement has separate coverage.
       Object.assign(seed,{phase:'racing',human:true,wx:rare[0].wx,wz:rare[0].wz});for(const bot of seed.bots)Object.assign(bot,{inactive:true,destroyed:1e9});
       const core=engine==='solo'?null:new ArenaCore(seed),step=()=>core?core.step(1/60):tickBattle(seed,new Set(),1/60),read=()=>core?core.snapshot():seed;
       for(let i=0;i<1799;i++)step();assert.equal(read().hedgeShield,0);
       // Floating point summation can leave the initial cooldown above zero for one tick.
-      step();step();const after=read();assert.ok(after.hedgeShield>24.97&&after.hedgeShield<=25);assert.equal(after.item,'hedgehog');assert.ok(after.supplies.find(s=>s.kind==='hedgeproof').cooldown>44.9);
+      step();step();const after=read();assert.ok(after.hedgeShield>24.97&&after.hedgeShield<=25);assert.equal(after.item,'hedgehog');assert.ok(after.supplies.find(s=>s.kind==='hedgeproof').cooldown>49.9);
     }
   });
 
@@ -58,6 +59,6 @@ test('a client receives Hedgeguard immediately on contact and both players see t
   const server=new ArenaCore(seed),local=new ArenaClient(),observer=new ArenaClient();local.accept(server.packet(),0);local.frame(1/60,[],1/60);
   assert.equal(local.present().hedgeShield,25);assert.equal(local.snapshot().hedgeShield,25);assert.equal(server.snapshot().hedgeShield,0);
   server.step(1/60,[{actor:0,...local.outbound([])}]);local.accept(server.packet(),1/60);local.frame(0,[],1/60);observer.accept(server.packet(1),1/60);observer.frame(0,[],1/60);
-  assert.equal(local.present().hedgeShield,25);assert.equal(observer.present().bots.find(a=>a.id===0).hedgeShield,25);assert.equal(server.snapshot().supplies[0].cooldown,45);
-  assert.equal(local.present().supplies[0].kind,'hedgeproof');assert.equal(local.present().supplies[0].cooldown,45);
+  assert.equal(local.present().hedgeShield,25);assert.equal(observer.present().bots.find(a=>a.id===0).hedgeShield,25);assert.equal(server.snapshot().supplies[0].cooldown,50);
+  assert.equal(local.present().supplies[0].kind,'hedgeproof');assert.equal(local.present().supplies[0].cooldown,50);
 });

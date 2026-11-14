@@ -27,7 +27,7 @@ for(const engine of ['JavaScript','Rust']){
     assert.equal(state.locusts.length,6);assert.equal(state.effects.filter(f=>f.type==='locustSpawn').length,2);
     assert.ok(state.locusts.slice(0,4).every(b=>Math.abs(b.wx+65)<2&&Math.abs(b.wz+65)<2));
     assert.ok(state.locusts.slice(4).every(b=>Math.abs(b.wx-65)<2&&Math.abs(b.wz-65)<2));
-    assert.equal(state.specialCooldown,20);
+    assert.equal(state.specialCooldown,30);
     if(core){const client=new ArenaClient();client.accept(core.packet(),0);client.frame(0,[],0);assert.equal(client.present().locusts.length,6);}
   });
   test(`${engine}: every exploding locust deals one damage and disappears only after hitting`,()=>{
@@ -67,14 +67,14 @@ test('Tammy deploys Low-Cost Locust when every opponent is a server-controlled b
   assert.equal(server.snapshot().locusts.length,6);
   client.accept(server.packet(),.02);client.frame(0,[],.02);assert.equal(client.present().locusts.length,6);
 });
-test('Low-Cost Locust recharges in twenty seconds even while surviving locusts keep hunting',()=>{
+test('Low-Cost Locust recharges in thirty seconds even while surviving locusts keep hunting',()=>{
   const config={code:'00',maxPlayers:8,dedicated:true,host:null,arena:0,bots:3,epoch:1,players:[{id:0,name:'Tammy',driver:5,role:'driver'}]};
   const server=ArenaCore.room(config);server.start();for(let i=0;i<181;i++)server.step(1/60);
-  server.step(0,[{actor:0,actions:[{type:'special'}]}]);assert.equal(server.snapshot().specialCooldown,20);
+  server.step(0,[{actor:0,actions:[{type:'special'}]}]);assert.equal(server.snapshot().specialCooldown,30);
   server.configure({...config,bots:0});for(let i=0;i<60;i++)server.step(1/60);
-  assert.ok(Math.abs(server.snapshot().specialCooldown-19)<1e-7);assert.equal(server.snapshot().locusts.length,6);
+  assert.ok(Math.abs(server.snapshot().specialCooldown-29)<1e-7);assert.equal(server.snapshot().locusts.length,6);
   const client=new ArenaClient();client.accept(server.packet(),1);client.frame(0,[],1);assert.equal(client.action('special',undefined,1),false);
-  for(let i=0;i<1141;i++)server.step(1/60);
+  for(let i=0;i<1741;i++)server.step(1/60);
   assert.equal(server.snapshot().specialCooldown,0);assert.equal(server.snapshot().locusts.length,6);
-  client.accept(server.packet(),21);client.frame(0,[],21);assert.equal(client.action('special',undefined,21),true);
+  client.accept(server.packet(),31);client.frame(0,[],31);assert.equal(client.action('special',undefined,31),true);
 });

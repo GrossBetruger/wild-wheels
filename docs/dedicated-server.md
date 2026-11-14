@@ -41,7 +41,7 @@ Run alongside the development server:
 PORT=5174 ./dedicated-server/target/release/wild-wheels-server
 ```
 
-Visit `http://localhost:5174`. On GCP, allow inbound TCP to the chosen game port in the VM’s VPC firewall (the console’s “Allow HTTP traffic” checkbox only opens port 80). Use the VM’s external IP to connect directly, or an HTTPS proxy for a domain. For internet play, run the binary on a reachable machine and put an HTTPS reverse proxy in front of its port, or run `ngrok http 5174` locally. Forward WebSocket upgrades. Set `PUBLIC_ORIGIN=https://your-game.example` to put the public address in invitations and issue Secure session cookies. The built-in Node ngrok control is not part of this service.
+Visit `http://localhost:5174`. On GCP, allow inbound TCP to the chosen game port in the VM’s VPC firewall (the console’s “Allow HTTP traffic” checkbox only opens port 80). Use an HTTPS reverse proxy for a public domain; direct public HTTP is rejected. For internet play, run the binary on a reachable machine and put an HTTPS reverse proxy in front of its port, or run `ngrok http 5174` locally. Forward WebSocket upgrades. Set `PUBLIC_ORIGIN=https://your-game.example`, `TRUST_PROXY=1`, `BIND=127.0.0.1`, and a random `INVITE_SECRET` of at least 32 characters. The proxy must run on loopback, preserve Host, and overwrite X-Forwarded-Proto. Share `https://your-game.example/?room=00#invite=YOUR_RANDOM_SECRET`. See [security configuration and tests](security.md). The built-in Node ngrok control is not part of this service.
 
 Configuration is through environment variables:
 
@@ -49,7 +49,9 @@ Configuration is through environment variables:
 | --- | --- | --- |
 | `BIND` | `0.0.0.0` | Listening IP; use `127.0.0.1` behind a local proxy |
 | `PORT` | `5173` | HTTP/WebSocket port |
-| `PUBLIC_ORIGIN` | unset | Public HTTP(S) origin, without a path |
+| `PUBLIC_ORIGIN` | unset | Exact HTTPS origin for public hosting; HTTP is limited to local development |
+| `TRUST_PROXY` | unset | Set to `1` to trust HTTPS forwarding from a loopback proxy |
+| `INVITE_SECRET` | unset | Random invitation credential, at least 32 characters; required with a public HTTPS origin |
 | `ARENA` | `0` | Initial arena, 0 or 1 |
 | `BOTS` | `1` | Initial bots, 0–7; humans replace bot slots |
 | `WILD_WHEELS_SESSION_FILE` | `.wild-wheels/sessions.json` | Private saved sessions; the launcher puts it in its state directory |
@@ -58,7 +60,7 @@ Configuration is through environment variables:
 
 ## Arena and connection lifecycle
 
-One shared arena uses invitation `?room=00`, with eight combined human/bot slots. The page displays a connection screen until the first shared-arena frame is ready, with a retry action if joining fails. There is no host or captain: every active player has the same room controls, and no browser drives the simulation. Refresh preserves your identity, character, scores and acknowledged movement while rotating your session token. Disconnected places expire after 15 minutes. A connected AFK player retains their place.
+One shared arena uses invitation `?room=00`, with eight combined human/bot slots. The page displays a connection screen until the first shared-arena frame is ready, with a retry action if joining fails. There is no host or captain: every active player has the same room controls, and no browser drives the simulation. Refresh preserves your identity, character, scores and acknowledged movement while rotating your session token. Places expire after 15 minutes without API/socket activity, even if the socket never closed. An actively polling AFK player retains their place.
 
 Session cookies and their saved server records last 30 days from issuance. Sessions use random tokens, independently of player names. The server saves identity, name, character and driver/bomber role in a private file with atomic replacement before issuing a new cookie. Disk writes run outside the simulation thread. Restarting or updating the server keeps those saved sessions; returning players reclaim an available slot with their saved choices. Saved sessions do not reserve the eight active slots. Current matches, scores and inventory remain in memory and start fresh after a restart or released slot. Keep the session file on persistent storage when using a container; deleting it or clearing browser cookies loses the saved association.
 

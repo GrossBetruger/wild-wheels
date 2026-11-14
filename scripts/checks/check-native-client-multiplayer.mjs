@@ -16,7 +16,13 @@ async function wait(check,message,ms=15000){const end=performance.now()+ms;while
 const directory=await mkdtemp(join(tmpdir(),'wild-wheels-native-poc-'));
 const probe=createServer();await new Promise(resolve=>probe.listen(0,'127.0.0.1',resolve));const port=probe.address().port;await new Promise(resolve=>probe.close(resolve));
 const origin=`http://127.0.0.1:${port}`;
-function startServer(label){return spawn(binary,[],{cwd:directory,env:{...process.env,PORT:String(port),BIND:'127.0.0.1',BOTS:'0',PUBLIC_ORIGIN:origin,WILD_WHEELS_SESSION_FILE:join(directory,`${label}-sessions.json`),WILD_WHEELS_CHAT_FILE:join(directory,`${label}-chat.json`),WILD_WHEELS_STATS_FILE:join(directory,`${label}-stats.json`)},stdio:['ignore','ignore','pipe']});}
+function startServer(label){
+  const env={...process.env,PORT:String(port),BIND:'127.0.0.1',BOTS:'0',WILD_WHEELS_SESSION_FILE:join(directory,`${label}-sessions.json`),WILD_WHEELS_CHAT_FILE:join(directory,`${label}-chat.json`),WILD_WHEELS_STATS_FILE:join(directory,`${label}-stats.json`)};
+  // Each latency bridge has its own local origin and preserves Host/Origin.
+  // Exercise LAN development policy instead of pinning the upstream port.
+  delete env.PUBLIC_ORIGIN;delete env.TRUST_PROXY;delete env.INVITE_SECRET;
+  return spawn(binary,[],{cwd:directory,env,stdio:['ignore','ignore','pipe']});
+}
 let server=startServer('local');
 let serverLog='',chromeLog='',socket,sequence=0,currentNative;
 server.stderr.on('data',data=>serverLog+=data);

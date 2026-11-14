@@ -7,6 +7,7 @@
     "start": "node server.js",
     "dev": "node server.js",
     "test": "node --test",
+    "test:colors": "node --test tests/multiplayer/player-colors.test.js tests/ui/player-colors.test.js",
     "test:chat": "node --test tests/multiplayer/chat.test.js",
     "test:chat-browser": "node scripts/checks/check-chat-browser.mjs",
     "test:netcode": "node scripts/checks/check-netcode.mjs",
@@ -22,7 +23,10 @@
     "benchmark:dedicated": "node scripts/profiling/benchmark-dedicated.mjs",
     "test:dedicated-browser": "node scripts/checks/check-dedicated-browser.mjs",
     "test:server-commands": "node scripts/checks/check-server-commands.mjs",
-    "test:photos": "node scripts/checks/check-photo-browser.mjs"
+    "test:photos": "node scripts/checks/check-photo-browser.mjs",
+    "test:security": "node --test tests/multiplayer/security.test.js tests/multiplayer/chat.test.js tests/ui/chat.test.js",
+    "test:security-browser": "node scripts/checks/check-chat-browser.mjs",
+    "test:dedicated-security": "cargo build --locked --manifest-path dedicated-server/Cargo.toml && node scripts/checks/check-dedicated-security.mjs"
   },
   "dependencies": {
     "ws": "8.22.2"

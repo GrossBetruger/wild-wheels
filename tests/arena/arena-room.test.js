@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {ArenaCore} from '../../gameplay/arena-core.js';
 import {decodeBinarySnapshot} from '../../networking/binary-wire.js';
 import {ArenaClient} from '../../gameplay/arena-core.js';
+import {playerColors} from '../../gameplay/player-colors.js';
 
 test('a Rust-created multiplayer room spawns distinct drivers and two of each bomb for its bomber',()=>{
   const core=ArenaCore.room({code:'07',host:0,arena:1,bots:2,epoch:3,seed:41,players:[{id:0,name:'Oren',driver:0,role:'driver'},{id:1,name:'Bomber',driver:2,role:'bomber'}]});
@@ -71,10 +72,11 @@ test('elephant, cricket, Roadster, astronaut sloth, worm pilot and Pearococo sur
   assert.throws(()=>core.configure({code:'11',host:0,arena:0,bots:0,epoch:1,players:[{id:0,name:'Invalid',driver:15,role:'driver'}]}),/Invalid Rust room/);
 });
 
-test('every Roadster and its chaff remain white across room slots and character changes',()=>{
+test('Roadsters get distinct player colors that persist across character changes and color their chaff',()=>{
   const config={code:'11',host:0,arena:0,bots:0,epoch:1,players:[{id:0,name:'First Roadster',driver:6,role:'driver'},{id:1,name:'Second Roadster',driver:6,role:'driver'}]};
   const core=ArenaCore.room(config);const first=decodeBinarySnapshot(core.packet(0)),second=decodeBinarySnapshot(core.packet(1));
-  assert.equal(first.world.color,'#e8edf2');assert.equal(second.world.color,'#e8edf2');assert.deepEqual(first.players.map(player=>player.color),['#e8edf2','#e8edf2']);
-  core.configure({...config,players:[{...config.players[0],driver:0},config.players[1]]});assert.equal(core.snapshot(0).color,'#8456cf');assert.equal(core.snapshot(1).color,'#e8edf2');
-  core.start();for(let i=0;i<181;i++)core.step(1/60);core.step(1/60,[{actor:1,keys:[],actions:[{type:'chaff'}]}]);assert.equal(core.snapshot(1).chaffClouds[0].color,'#e8edf2');
+  const firstColor=playerColors[0][1],secondColor=playerColors[1][1];
+  assert.equal(first.world.color,firstColor);assert.equal(second.world.color,secondColor);assert.deepEqual(first.players.map(player=>player.color),[firstColor,secondColor]);
+  core.configure({...config,players:[{...config.players[0],driver:0},config.players[1]]});assert.equal(core.snapshot(0).color,firstColor);assert.equal(core.snapshot(1).color,secondColor);
+  core.start();for(let i=0;i<181;i++)core.step(1/60);core.step(1/60,[{actor:1,keys:[],actions:[{type:'chaff'}]}]);assert.equal(core.snapshot(1).chaffClouds[0].color,secondColor);
 });

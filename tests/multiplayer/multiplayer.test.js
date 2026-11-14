@@ -9,10 +9,10 @@ import {ArenaClient} from '../../gameplay/arena-core.js';
 import {savedPlayerName} from '../../networking/network.js';
 
 async function serverFor(t){
-  const app=createGameServer({fixtureWorld:arenaFixture});clearInterval(app.multiplayer.timer);await new Promise(resolve=>app.server.listen(0,'127.0.0.1',resolve));
+  const app=createGameServer({fixtureWorld:arenaFixture,trustProxy:true});clearInterval(app.multiplayer.timer);await new Promise(resolve=>app.server.listen(0,'127.0.0.1',resolve));
   t.after(()=>{app.multiplayer.close();app.server.closeAllConnections();app.server.close();});
   const origin=`http://127.0.0.1:${app.server.address().port}`;
-  const post=async(path,body,token,headers={})=>{const response=await fetch(origin+path,{method:'POST',headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`} :{}),...headers},body:JSON.stringify(body),signal:AbortSignal.timeout(3000)});return {status:response.status,cookie:response.headers.get('set-cookie'),...await response.json()};};
+  const post=async(path,body,token,headers={})=>{const response=await fetch(origin+path,{method:'POST',headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`} :{}),...(headers.Cookie?{Origin:origin}:{}),...headers},body:JSON.stringify(body),signal:AbortSignal.timeout(3000)});return {status:response.status,cookie:response.headers.get('set-cookie'),...await response.json()};};
   return {...app,post,origin};
 }
 test('players can rename themselves in a room and names survive the next match',async t=>{

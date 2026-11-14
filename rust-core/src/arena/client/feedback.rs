@@ -123,7 +123,7 @@ impl Client{
             }
         }
         let a=&mut self.display.actors[id];a.intelligence_bonus=actor.intelligence_bonus;a.ammo=actor.ammo;a.missiles=actor.missiles;a.turbos=actor.turbos;a.health=actor.health;a.hedge_shield=actor.hedge_shield;a.tehilim=actor.tehilim;a.chaff=actor.chaff;a.item=actor.item;a.notice=actor.notice;a.notice_time=actor.notice_time;a.fire_cooldown=((self.fire_tick-sequence)as f64/60.0).max(0.0);
-        for supply in &mut self.display.global.supplies{if let Some(actual)=self.frames.back().unwrap().game.global.supplies.iter().find(|s|s.id==supply.id){supply.cooldown=actual.cooldown;}if self.ops.iter().any(|op|matches!(op,Op::Pickup{id,..}if *id==supply.id)){supply.cooldown=match supply.kind.as_str(){"hedgeproof"|"tehilim"=>45.0,_=>8.0};}}
+        for supply in &mut self.display.global.supplies{if let Some(actual)=self.frames.back().unwrap().game.global.supplies.iter().find(|s|s.id==supply.id){supply.cooldown=actual.cooldown;}if self.ops.iter().any(|op|matches!(op,Op::Pickup{id,..}if *id==supply.id)){supply.cooldown=match supply.kind.as_str(){"hedgeproof"|"tehilim"=>50.0,_=>10.0};}}
         self.display.global.projectiles.retain(|s|s.owner!=id||s.action_id.is_none_or(|id|!self.local_shots.iter().any(|entry|entry.id==id)));
         let mut models=Vec::new();for entry in &mut self.local_shots{
             let elapsed=(now-entry.updated).max(0.0);advance(&self.display,&mut entry.model,elapsed);entry.updated=now;let decay=(-elapsed*20.0).exp();entry.error[0]*=decay;entry.error[1]*=decay;

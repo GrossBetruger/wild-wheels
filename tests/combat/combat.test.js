@@ -180,7 +180,7 @@ test('refreshing Vulcan heals again but an intervening kill does not heal',()=>{
 });
 test('collecting health adds extra hearts one at a time up to six',()=>{
   const r=createBattle(0,0,()=>.5);Object.assign(r,{phase:'racing',wx:-70,wz:0,bots:[]});
-  const health=r.supplies.find(s=>s.kind==='health');
+  const health=r.supplies.find(s=>s.kind==='health');Object.assign(r,{wx:health.wx,wz:health.wz});
   tickBattle(r,new Set(),.05);assert.equal(r.health,4);
   health.cooldown=0;tickBattle(r,new Set(),.05);assert.equal(r.health,5);
   health.cooldown=0;tickBattle(r,new Set(),.05);assert.equal(r.health,6);
@@ -188,7 +188,8 @@ test('collecting health adds extra hearts one at a time up to six',()=>{
 });
 test('a health pickup heals one heart when injured and opponents can collect extra hearts',()=>{
   const r=createBattle(0,0,()=>.5);Object.assign(r,{phase:'racing',wx:-70,wz:0,health:1});
-  const rival=r.bots[0];rival.wx=70;rival.wz=0;rival.health=5;rival.speed=0;
+  const pickups=r.supplies.filter(s=>s.kind==='health');Object.assign(r,{wx:pickups[0].wx,wz:pickups[0].wz});
+  const rival=r.bots[0];rival.wx=pickups[1].wx;rival.wz=pickups[1].wz;rival.health=5;rival.speed=0;
   tickBattle(r,new Set(),.05);assert.equal(r.health,2);assert.equal(rival.health,6);
 });
 test('extra health absorbs missile damage and respawning returns to three hearts',()=>{

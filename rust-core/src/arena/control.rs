@@ -1,12 +1,14 @@
 use super::*;
 use serde::{Deserialize,Serialize};
 
-const COLORS:[&str;8]=["#8456cf","#df7053","#67a99c","#edb84f","#777cbb","#db8daf","#56bce0","#b5cc62"];
+use crate::PLAYER_COLORS;
 #[derive(Deserialize,Serialize)]
 #[serde(rename_all="camelCase",deny_unknown_fields)]
 struct Player {
     id:usize,name:String,driver:usize,role:String,
     #[serde(default)]afk:bool,#[serde(default)]wants_to_play:bool,#[serde(default)]play_request_refused:bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    color: Option<String>,
 }
 #[derive(Deserialize,Serialize)]
 #[serde(rename_all="camelCase",deny_unknown_fields)]
@@ -30,15 +32,21 @@ impl Room {
             _=>return false,
         }
         if self.start_request.as_ref().is_some_and(|r|r.id==0||!r.remaining_ms.is_finite()||!(0.0..=3000.0).contains(&r.remaining_ms)){return false;}
+        let mut chosen_colors = Vec::<&str>::new();
         let mut seen=[false;MAX_PLAYERS];
         for p in &self.players {
+            if let Some(color) = p.color.as_deref() {
+                if color.len() != 7 || !color.starts_with('#') || !color.as_bytes()[1..].iter().all(u8::is_ascii_hexdigit)
+                    || chosen_colors.iter().any(|taken| taken.eq_ignore_ascii_case(color)) { return false; }
+                chosen_colors.push(color);
+            }
             if p.id>=self.max_players||seen[p.id]||p.driver>=DRIVER_NAMES.len()||p.name.trim().is_empty()||p.name.encode_utf16().count()>24||!matches!(p.role.as_str(),"driver"|"bomber"){return false;}seen[p.id]=true;
         }true
     }
 }
 fn initial_actor(id:usize,skill:f64,capacity:usize)->Actor {
     let angle=(id*8/capacity)as f64*std::f64::consts::FRAC_PI_4;let x=angle.sin()*78.0;let z=angle.cos()*78.0;let heading=(-x).atan2(-z);
-    Actor{id,driver:id%DRIVER_NAMES.len(),color:COLORS[id].into(),wx:x,wz:z,heading,motion_heading:heading,camera_heading:heading,somersault_camera_start:heading,
+    Actor{id,driver:id%DRIVER_NAMES.len(),color:PLAYER_COLORS[id].into(),wx:x,wz:z,heading,motion_heading:heading,camera_heading:heading,somersault_camera_start:heading,
         health:3.0,shield:0.0,ammo:START_HEDGEHOGS,missiles:1,turbos:1,item:"hedgehog".into(),fire_cooldown:0.5,chaff:4,skill,..Actor::default()}
 }
 impl Game {
@@ -47,12 +55,42 @@ impl Game {
         let mut skills=[0.6;7];for (i,(low,high)) in [(0.94,1.0),(0.86,0.93),(0.70,0.83),(0.53,0.68),(0.35,0.51)].into_iter().enumerate(){skills[i]=low+random()*(high-low);}
         for i in (1..5).rev(){let j=(random()*(i+1)as f64).floor()as usize;skills.swap(i,j);}
         let global=Globals{special_abilities:room.special_abilities,mode:"combat".into(),phase:"ready".into(),arena:room.arena,countdown:3.0,duration:180.0,target_score:10.0,rank:6,multiplayer:true,sound_epoch:room.epoch as u64,
-            supplies:[(-70.0,-65.0,"missile"),(70.0,65.0,"missile"),(-65.0,70.0,"hedgehog"),(65.0,-70.0,"hedgehog"),(-12.0,48.0,"boost"),(12.0,-48.0,"boost"),(-70.0,0.0,"health"),(70.0,0.0,"health"),(-50.0,-50.0,"hedgeproof"),(50.0,50.0,"tehilim")].into_iter().enumerate().map(|(id,(wx,wz,kind))|Supply{id:id as u32,wx,wz,kind:kind.into(),cooldown:match kind{"hedgeproof"|"tehilim"=>30.0,_=>0.0},..Supply::default()}).collect(),..Globals::default()};
+            supplies:[(-70.0,-65.0,"missile"),(70.0,65.0,"missile"),(-65.0,70.0,"hedgehog"),(65.0,-70.0,"hedgehog"),(-12.0,48.0,"boost"),(12.0,-48.0,"boost"),(-70.0,0.0,"health"),(70.0,0.0,"health"),(-50.0,-50.0,"hedgeproof"),(50.0,50.0,"tehilim")].into_iter().enumerate().map(|(id,(wx,wz,kind))|Supply{random_spawn:true,id:id as u32,wx,wz,kind:kind.into(),cooldown:match kind{"hedgeproof"|"tehilim"=>30.0,_=>0.0},..Supply::default()}).collect(),..Globals::default()};
         let mut game=Self::from_seed(Seed{global,player:initial_actor(0,0.85,room.max_players),bots:(1..room.max_players).map(|id|initial_actor(id,skills[id-1],room.max_players)).collect()})?;
-        game.configure_room(room);Ok(game)
+        game.configure_room(room);game.global.supply_seed=state;for index in 0..game.global.supplies.len(){if !supplies::place(&mut game.global,&game.actors,index){game.global.supplies[index].cooldown=0.25;}}Ok(game)
     }
     pub(super) fn configure_room(&mut self,room:&Room){
         self.global.host=room.host;self.global.special_abilities=room.special_abilities;if !room.special_abilities{self.global.time_stop=0.0;self.global.time_owner=None;self.global.effects.retain(|f|f.kind!="yudaSmoke");for supply in &mut self.global.supplies{supply.restore_home();}for a in &mut self.actors{a.special_active=0.0;}}
+        // Reserve human colors first, so bots yield a swatch when a player
+        // chooses it. Retain existing colors whenever they remain available.
+        let mut colors = vec![String::new(); room.max_players];
+        let mut used = Vec::<String>::new();
+        for player in &room.players {
+            if let Some(color) = &player.color {
+                colors[player.id] = color.to_ascii_lowercase();
+                used.push(color.to_ascii_lowercase());
+            }
+        }
+        let available = |previous: &str, used: &[String]| {
+            if PLAYER_COLORS.contains(&previous) && !used.iter().any(|color| color == previous) {
+                previous.to_owned()
+            } else {
+                PLAYER_COLORS.iter().find(|color| !used.iter().any(|taken| taken == **color))
+                    .expect("palette has at least MAX_PLAYERS colors").to_string()
+            }
+        };
+        for player in &room.players {
+            if colors[player.id].is_empty() {
+                let color = available(&self.actors[player.id].color, &used);
+                colors[player.id] = color.clone(); used.push(color);
+            }
+        }
+        for id in 0..room.max_players {
+            if colors[id].is_empty() {
+                let color = available(&self.actors[id].color, &used);
+                colors[id] = color.clone(); used.push(color);
+            }
+        }
         let mut bots=room.bots;
         for id in 0..room.max_players {
             let person=room.players.iter().find(|p|p.id==id);
@@ -63,7 +101,8 @@ impl Game {
             let active=person.is_some()||bots>0;
             if person.is_none()&&active{bots-=1;}
             if active&&actor.inactive{actor.destroyed=0.0;actor.health=3.0;actor.shield=0.0;actor.speed=0.0;}
-            actor.human=person.is_some();actor.inactive=!active;actor.afk=person.is_some_and(|p|p.afk);if actor.afk{actor.speed=0.0;actor.boost=0.0;actor.was_drifting=false;actor.drift=0.0;actor.somersault=0.0;}actor.color=match person.map_or(actor.driver,|p|p.driver){6=>"#e8edf2",_=>COLORS[id]}.into();
+            actor.human=person.is_some();actor.inactive=!active;actor.afk=person.is_some_and(|p|p.afk);if actor.afk{actor.speed=0.0;actor.boost=0.0;actor.was_drifting=false;actor.drift=0.0;actor.somersault=0.0;}
+            actor.color = colors[id].clone();
             if !active{actor.destroyed=1e9;actor.speed=0.0;}
             match person {
                 Some(p)=>{

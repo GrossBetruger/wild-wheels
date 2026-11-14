@@ -1,3 +1,4 @@
+include!(concat!(env!("OUT_DIR"), "/player_colors.rs"));
 const SLOTS: usize = 128;
 mod arena;
 pub use arena::native::NativeArena;
