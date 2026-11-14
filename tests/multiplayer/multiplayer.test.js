@@ -179,7 +179,8 @@ test('socket connections with an invalid room token are closed',async t=>{
 });
 test('irrelevant action fields cannot corrupt a match and action identifiers stay in range',async t=>{
   const {multiplayer,post}=await serverFor(t);const host=await post('/api/rooms',{name:'Host',driver:0,arena:0,bots:0});const room=multiplayer.rooms.get(host.code);
-  Object.assign(room.world,{phase:'racing',fireCooldown:0});
+  // Isolate action validation from randomly placed ammunition pickups.
+  Object.assign(room.world,{phase:'racing',fireCooldown:0,supplies:[]});
   assert.equal((await post('/api/input',{sequence:0,keys:[],actions:[{type:'fire',wx:'unused',wz:{},item:42}]},host.token)).status,200);
   multiplayer.step(1/60);assert.equal(room.world.ammo,9);assert.equal(room.world.projectiles.length,1);
   assert.equal((await post('/api/input',{sequence:1,keys:[],actions:[{type:'fire',id:4294967296,afterMove:-1}]},host.token)).status,400);

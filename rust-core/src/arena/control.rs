@@ -76,7 +76,19 @@ impl Game {
                 previous.to_owned()
             } else {
                 PLAYER_COLORS.iter().find(|color| !used.iter().any(|taken| taken == **color))
-                    .expect("palette has at least MAX_PLAYERS colors").to_string()
+                    .map(|color| color.to_string()).unwrap_or_else(|| {
+                        // Large stress-test rooms can outnumber the chooser's
+                        // swatches. Generate additional automatic colors without
+                        // changing the user-selectable palette.
+                        for index in 0..160 {
+                            let color = format!("#{:02x}{:02x}{:02x}",
+                                48 + index * 73 % 160,
+                                48 + index * 97 % 160,
+                                48 + index * 131 % 160);
+                            if !used.contains(&color) { return color; }
+                        }
+                        unreachable!("stress-test capacity is at most 64 racers")
+                    })
             }
         };
         for player in &room.players {
@@ -149,4 +161,31 @@ static mut STATUS:[f64;5]=[0.0;5];
     if let Some(game)=unsafe{&*core::ptr::addr_of!(super::WORLD)} {
         unsafe{*core::ptr::addr_of_mut!(STATUS)=[match game.global.phase.as_str(){"ready"=>0.0,"countdown"=>1.0,"racing"=>2.0,"paused"=>3.0,"finished"=>4.0,_=>0.0},game.global.sound_epoch as f64,game.global.arena as f64,game.network_time,game.global.elapsed];}
     }core::ptr::addr_of!(STATUS).cast()
+}
+
+#[cfg(test)]
+mod color_tests {
+    use super::*;
+
+    #[test]
+    fn configured_capacity_keeps_human_and_bot_colors_unique_across_syncs() {
+        let room: Room = serde_json::from_value(json!({
+            "maxPlayers":MAX_PLAYERS,"dedicated":true,"code":"00","host":null,
+            "arena":0,"bots":MAX_PLAYERS-1,"epoch":1,
+            "players":[{"id":MAX_PLAYERS-1,"name":"Human","driver":0,
+                "role":"driver","color":PLAYER_COLORS[0]}]
+        })).unwrap();
+        assert!(room.valid());
+        let mut game = Game::create_room(&room).unwrap();
+        let colors: Vec<_> = game.actors.iter().map(|actor| actor.color.clone()).collect();
+        assert_eq!(colors.len(), MAX_PLAYERS);
+        assert_eq!(colors.iter().collect::<std::collections::HashSet<_>>().len(), MAX_PLAYERS);
+        assert_eq!(colors[MAX_PLAYERS-1], PLAYER_COLORS[0]);
+        assert!(colors.iter().all(|color| color.len() == 7 && color.starts_with('#')
+            && color.as_bytes()[1..].iter().all(u8::is_ascii_hexdigit)));
+        assert_eq!(colors.iter().filter(|color| !PLAYER_COLORS.contains(&color.as_str())).count(),
+            MAX_PLAYERS.saturating_sub(PLAYER_COLORS.len()));
+        game.configure_room(&room);
+        assert_eq!(game.actors.iter().map(|actor| actor.color.clone()).collect::<Vec<_>>(), colors);
+    }
 }

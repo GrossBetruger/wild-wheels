@@ -4,6 +4,8 @@ The browser, Node server, native Rust server and Wasm simulation use the literal
 
 Players receive an unused color automatically. Human colors are reserved before bot allocation, so bots yield their colors to humans when necessary. Changing character, starting a new match, or reconnecting does not reset the assigned color. The palette highlights the actual assigned color and disables colors occupied by other humans; bot colors remain available to humans. Taken vehicle colors keep their original appearance with a diagonal line and a “Color taken” tooltip, while remaining disabled.
 
+Optional large stress-test builds can have more racers than palette swatches. Extra bots receive generated automatic colors once the palette is exhausted; these colors are not added to the chooser. Normal eight-player rooms continue to use only the existing palette.
+
 Colors can be chosen only before a match (`ready`) or after it ends (`finished`). During countdown, play and pause, every swatch is disabled; the compact match layout keeps the selected vehicle color visible. Both servers reject live `/api/color` changes with 409; reconnecting preserves the current assignment and preference even if a different preference is submitted. New players joining a running match still receive an unused color.
 
 ## Preference versus assignment
