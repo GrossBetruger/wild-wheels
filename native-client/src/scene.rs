@@ -102,6 +102,8 @@ pub struct SceneCache {
     changes: HashMap<(usize, u8), (bool, f32)>,
     /// Each racer's tail, swinging behind their turns.
     tails: HashMap<usize, Tail>,
+    /// Smoothly frame Houston's full exhaust weapon, matching the browser camera.
+    nightmare_zoom: f32,
 }
 /// A damped spring that trails a racer's turning, and how hard speed presses on it.
 /// The browser's plumage only sways on its own; this response is native.
@@ -733,6 +735,7 @@ pub fn sync(
         time,
     } = assets;
     let Some(client) = session.client.as_ref() else {
+        cache.nightmare_zoom = 0.0;
         // Outside a room the world is empty; the menus say what is happening.
         for (_, entity) in cache.shown.drain() {
             commands.entity(entity).despawn();
@@ -749,6 +752,7 @@ pub fn sync(
     };
     let view = client.view();
     if cache.arena.is_none_or(|(arena, ..)| arena != view.arena) {
+        cache.nightmare_zoom = 0.0;
         if let Some((_, old, outlines)) = cache.arena.take() {
             commands.entity(old).despawn();
             commands.entity(outlines).despawn();
@@ -869,19 +873,34 @@ pub fn sync(
     stage.retire();
     // The browser's chase camera, including its wider view while boosting or drifting.
     let p = view.player;
+    let nightmare = match (
+        p.driver,
+        p.nightmare_active > 0.0,
+        p.boost > 0.0,
+        p.destroyed > 0.0,
+    ) {
+        (7, true, true, false) => 1.0,
+        _ => 0.0,
+    };
+    cache.nightmare_zoom +=
+        (nightmare - cache.nightmare_zoom) * (1.0 - (-time.delta_secs().min(0.1) * 5.0).exp());
+    let zoom = cache.nightmare_zoom;
+    let distance = 17.0 + 35.0 * zoom;
+    let ahead = 18.0 - 24.0 * zoom;
     let facing = Vec3::new(
         p.camera_heading.sin() as f32,
         0.0,
         p.camera_heading.cos() as f32,
     );
     let center = Vec3::new(p.wx as f32, 0.0, p.wz as f32);
-    let height = match p.destroyed > 0.0 {
-        true => 15.0,
-        false => 10.0,
-    };
+    let height = 22.0 * zoom
+        + match p.destroyed > 0.0 {
+            true => 15.0,
+            false => 10.0,
+        };
     for (mut camera, mut projection) in &mut cameras {
-        *camera = Transform::from_translation(center - facing * 17.0 + Vec3::Y * height)
-            .looking_at(center + facing * 18.0 + Vec3::Y * 1.5, Vec3::Y);
+        *camera = Transform::from_translation(center - facing * distance + Vec3::Y * height)
+            .looking_at(center + facing * ahead + Vec3::Y * 1.5, Vec3::Y);
         if let Projection::Perspective(perspective) = &mut *projection {
             perspective.fov = match (p.boost > 0.0, p.was_drifting) {
                 (true, _) => 1.2,

@@ -601,6 +601,8 @@ export class Renderer {
     this.activeArena=r.arena;this.arenaExhaust=true;this.yudaExhaust.update(`${r.arena}:${r.soundEpoch}:${r.id}`,time);
     this.yudaDrift.update(r,time);
     const helmetScene=`${r.arena}:${r.soundEpoch}:${r.id}`;
+    const cameraDt=this.helmetScene===helmetScene?Math.max(0,Math.min(.1,time-(this.helmetTime??time))):0;
+    if(this.helmetScene!==helmetScene||time<(this.helmetTime??0))this.nightmareZoom=0;
     if(this.helmetScene!==helmetScene||time<(this.helmetTime??0)){this.helmetScene=helmetScene;this.helmetFlights=new Map();this.tailFolds.clear();this.receiptRolls.rolls.clear();this.owlFlight.riders.clear();this.batSummons.clear();this.owlFlight.feathers=[];this.yudaJackets.riders.clear();this.yudaStunts.riders.clear();this.lastBodies.clear();this.ashBodies.clear();}this.helmetTime=time;
     if(this.track!==`arena-${r.arena}`)this.arenaScenery(r.arena);
     const gl=this.gl,canvas=this.canvas,width=Math.round(canvas.clientWidth*this.pixelRatio()),height=Math.round(canvas.clientHeight*this.pixelRatio());if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;}gl.viewport(0,0,width,height);
@@ -612,7 +614,11 @@ export class Renderer {
       this.bomberFocus??={wx:target?.wx??0,wz:target?.wz??0};this.bomberElapsed=r.elapsed;
     }
     const wobble=r.dizzy>0&&!matchMedia('(prefers-reduced-motion: reduce)').matches?Math.sin((DIZZY_DURATION-r.dizzy)*(r.boost>0?14:10))*(r.boost>0?.24:.14):0;
-    const p=combatPose(r),cx=Math.sin(r.cameraHeading+wobble),cz=Math.cos(r.cameraHeading+wobble),overview=r.bomber?bomberCamera(width,height,arenas[r.arena].size,this.bomberView??'3d',this.bomberFocus,this.bomberZoom??1):null,eye=overview?.eye??[p.x-cx*17,10+(r.destroyed?5:0),p.z-cz*17],view=overview?.matrix??cameraMatrix(eye,[p.x+cx*18,1.5,p.z+cz*18],width/height,r.boost>0?1.2:r.wasDrifting?1.13:1.07);
+    // Pull behind the entire 29-unit flame and frame the ground it can hit.
+    const nightmare=!r.bomber&&r.driver===7&&r.nightmareActive>0&&r.boost>0&&!r.destroyed?1:0;
+    this.nightmareZoom??=0;this.nightmareZoom+=(nightmare-this.nightmareZoom)*(1-Math.exp(-cameraDt*5));
+    const zoom=this.nightmareZoom,distance=17+35*zoom,cameraHeight=10+22*zoom+(r.destroyed?5:0),ahead=18-24*zoom;
+    const p=combatPose(r),cx=Math.sin(r.cameraHeading+wobble),cz=Math.cos(r.cameraHeading+wobble),overview=r.bomber?bomberCamera(width,height,arenas[r.arena].size,this.bomberView??'3d',this.bomberFocus,this.bomberZoom??1):null,eye=overview?.eye??[p.x-cx*distance,cameraHeight,p.z-cz*distance],view=overview?.matrix??cameraMatrix(eye,[p.x+cx*ahead,1.5,p.z+cz*ahead],width/height,r.boost>0?1.2:r.wasDrifting?1.13:1.07);
     this.bicycleDrops=new Map();this.drawnBicycles=new Set();for(const s of r.supplies)if(s.kind==='bicycle'&&s.cooldown<=0&&s.age<2)this.bicycleDrops.set(s.owner,s);
     this.bomberMatrix=overview?.matrix??null;
     gl.uniform1f(this.fogScale,overview?.fogScale??1);const dark=darkHumorState(r),bombLights=darkBombLights(r,dark.strength);gl.uniform1f(this.darknessUniform,dark.strength);gl.uniform4fv(this.bombLightsUniform,lightUniforms(bombLights));
