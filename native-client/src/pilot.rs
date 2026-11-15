@@ -48,6 +48,10 @@ pub fn drive(client: &mut NativeClient, now: f64) -> ClientInput {
     if shoot {
         let _ = client.action(ClientAction::Fire, now);
     }
+    // A developer run can have the pilot use its special ability whenever it is ready.
+    if std::env::var_os("WILD_WHEELS_PILOT_SPECIAL").is_some() {
+        let _ = client.action(ClientAction::Special, now);
+    }
     if chaff {
         let _ = client.action(ClientAction::Chaff, now);
     }

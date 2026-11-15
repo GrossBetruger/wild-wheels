@@ -2,6 +2,7 @@
 //! Nothing here is drawn by hand: models, animation frames, particles and arenas
 //! all come from the JavaScript client. See docs/native-graphics-port.md.
 use crate::plumage::{PlumageMaterial, Wind};
+use crate::xray::XrayMaterial;
 use bevy::{
     asset::RenderAssetUsages,
     camera::visibility::{NoFrustumCulling, RenderLayers},
@@ -155,7 +156,7 @@ pub enum Look {
     Glow,
     /// Unlit, in the browser's colors.
     Flat,
-    /// One flat color: a racer seen through Dark Humor.
+    /// One color with a rim light, by the X-ray material: what is seen through Dark Humor.
     Silhouette,
     /// Pearococo's feathers, swayed and shaded by the plumage material.
     Plumage,
@@ -179,6 +180,7 @@ pub struct Graphics {
     /// One material for each `Look` up to `Silhouette`, in declaration order.
     surfaces: [Handle<StandardMaterial>; 4],
     plumage: Handle<PlumageMaterial>,
+    xray: Handle<XrayMaterial>,
     /// Additive sparks and alpha-blended smoke, in the browser's draw order.
     sprites: [Handle<SpriteMaterial>; 2],
 }
@@ -304,6 +306,7 @@ impl Graphics {
             now: 0.0,
             surfaces: Default::default(),
             plumage: Handle::default(),
+            xray: Handle::default(),
             sprites: [Handle::default(), Handle::default()],
         })
     }
@@ -449,7 +452,8 @@ fn geometry(source: &Source, (mesh, tint, look): Key) -> Mesh {
             // Added to the picture, or shaded by the plumage shader, as the browser
             // writes them to the screen.
             Look::Glow | Look::Plumage => [red, green, blue, 255].map(|c| f32::from(c) / 255.0),
-            Look::Silhouette => [1.0; 4],
+            // The X-ray material draws a whole shape in its player's color.
+            Look::Silhouette => [tint[0], tint[1], tint[2], 255].map(|c| f32::from(c) / 255.0),
             _ => Color::srgb_u8(red, green, blue).to_linear().to_f32_array(),
         };
         for point in [a, b, c] {
@@ -539,6 +543,8 @@ pub struct Ported {
     parts: Vec<Entity>,
     /// Parts drawn by the plumage material, which is a different component.
     plumes: Vec<Entity>,
+    /// Parts drawn by the X-ray material.
+    shades: Vec<Entity>,
     /// The child drawing each particle layer, glow then smoke.
     sprites: [Option<Entity>; 2],
 }
@@ -559,6 +565,11 @@ impl Plugin for PortedGraphicsPlugin {
         let mut graphics = Graphics::parse(PACK).expect("the ported graphics pack is valid");
         crate::plumage::build(app);
         crate::sprite::build(app);
+        crate::xray::build(app);
+        graphics.xray = app
+            .world_mut()
+            .resource_mut::<Assets<XrayMaterial>>()
+            .add(XrayMaterial::default());
         graphics.plumage = app
             .world_mut()
             .resource_mut::<Assets<PlumageMaterial>>()
@@ -635,6 +646,23 @@ type ParticleQuery<'w, 's> = Query<
         Without<crate::scene::FollowCamera>,
         Without<MeshMaterial3d<StandardMaterial>>,
         Without<MeshMaterial3d<PlumageMaterial>>,
+        Without<MeshMaterial3d<XrayMaterial>>,
+    ),
+>;
+type ShadeQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static mut Mesh3d,
+        &'static mut Transform,
+        &'static mut Visibility,
+    ),
+    (
+        With<MeshMaterial3d<XrayMaterial>>,
+        Without<Ported>,
+        Without<crate::scene::FollowCamera>,
+        Without<MeshMaterial3d<StandardMaterial>>,
+        Without<MeshMaterial3d<PlumageMaterial>>,
     ),
 >;
 /// The child entities that draw clips: ordinary parts and plumage.
@@ -642,6 +670,7 @@ type ParticleQuery<'w, 's> = Query<
 pub struct Pools<'w, 's> {
     parts: PartQuery<'w, 's>,
     plumes: PlumeQuery<'w, 's>,
+    shades: ShadeQuery<'w, 's>,
     particles: ParticleQuery<'w, 's>,
 }
 
@@ -656,6 +685,7 @@ pub fn animate(
     let Pools {
         mut parts,
         mut plumes,
+        mut shades,
         mut particles,
     } = pools;
     let still = STILL.load(Ordering::Relaxed);
@@ -703,7 +733,7 @@ pub fn animate(
         });
         // Ordinary parts and plumage are drawn by different materials, so each
         // has its own pool of child entities, filled in the clip's order.
-        let (mut drawn, mut feathered) = (0, 0);
+        let (mut drawn, mut feathered, mut shaded) = (0, 0, 0);
         for slot in 0..shown {
             let (clip, index, next, between) = position.unwrap_or_default();
             let (key, transform) = {
@@ -764,6 +794,38 @@ pub fn animate(
                 }
                 continue;
             }
+            if key.2 == Look::Silhouette {
+                shaded += 1;
+                match player.shades.get(shaded - 1) {
+                    Some(child) => {
+                        let (Ok((mut shown, mut placed, mut visibility)), Some(mesh)) =
+                            (shades.get_mut(*child), mesh)
+                        else {
+                            continue;
+                        };
+                        if shown.0 != mesh {
+                            shown.0 = mesh;
+                        }
+                        *placed = transform;
+                        visibility.set_if_neq(Visibility::Inherited);
+                    }
+                    None => {
+                        let child = commands
+                            .spawn((
+                                Mesh3d(mesh.unwrap_or_default()),
+                                MeshMaterial3d(graphics.xray.clone()),
+                                transform,
+                                visibility,
+                                RenderLayers::layer(1),
+                                NoFrustumCulling,
+                                ChildOf(entity),
+                            ))
+                            .id();
+                        player.shades.push(child);
+                    }
+                }
+                continue;
+            }
             drawn += 1;
             let material = graphics.surface(key.2);
             match player.parts.get(drawn - 1) {
@@ -793,6 +855,10 @@ pub fn animate(
                             transform,
                             visibility,
                             RenderLayers::layer(usize::from(player.ghost)),
+                            // Meshes leave main memory once drawn, so a part given one
+                            // built earlier cannot have its bounds recomputed and would
+                            // be culled by those of the mesh it showed before.
+                            NoFrustumCulling,
                             ChildOf(entity),
                         ))
                         .id();
@@ -805,6 +871,11 @@ pub fn animate(
                 visibility.set_if_neq(Visibility::Hidden);
             }
         }
+        for child in player.shades.iter().skip(shaded) {
+            if let Ok((_, _, mut visibility)) = shades.get_mut(*child) {
+                visibility.set_if_neq(Visibility::Hidden);
+            }
+        }
         for child in player.plumes.iter().skip(feathered) {
             if let Ok((_, _, mut visibility, _)) = plumes.get_mut(*child) {
                 visibility.set_if_neq(Visibility::Hidden);
@@ -813,8 +884,8 @@ pub fn animate(
         // Particles face the camera in the sprite shader, so a recorded frame's
         // particles are one mesh, built once and shared by everything showing it.
         for layer in 0..2 {
-            let (sprites, after, key) = match (player.ghost, position) {
-                (false, Some((clip, index, next, between))) => {
+            let (sprites, after, key) = match position {
+                Some((clip, index, next, between)) => {
                     let (sprites, after) = (
                         graphics.clips[clip].frames[index].sprites[layer],
                         graphics.clips[clip].frames[next].sprites[layer],
@@ -855,6 +926,7 @@ pub fn animate(
                             Mesh3d(handle),
                             MeshMaterial3d(graphics.sprites[layer].clone()),
                             Transform::default(),
+                            RenderLayers::layer(usize::from(player.ghost)),
                             NoFrustumCulling,
                             ChildOf(entity),
                         ))

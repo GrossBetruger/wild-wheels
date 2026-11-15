@@ -291,6 +291,11 @@ pub(crate) fn drive(
     let Some(client) = session.client.as_mut() else {
         return;
     };
+    // A developer run can hand the controls to the sparring pilot.
+    let input = match std::env::var_os("WILD_WHEELS_PILOT_SPECIAL").is_some() {
+        true => crate::pilot::drive(client, now),
+        false => input,
+    };
     if let Err(error) = client.advance(time.delta_secs_f64().min(0.05), input, now) {
         session.status = error.to_string();
         return;

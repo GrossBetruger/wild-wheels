@@ -91,11 +91,14 @@ clip name in `scene.rs`.
 ## Limits
 
 - Shader-only effects are not ported automatically. Pearococo's plumage shader is
-  ported by hand (see Plumage above); distance fog is missing. KnowItOwl's Dark Humor is written by
-  hand in `scene.rs`: one still frame of the fog shader covers the world, and the
-  caster sees the recorded arena outlines and flat racer silhouettes through it.
-  The fog does not drift, bomb flashes do not light it, and nearby objects are
-  not brightened.
+  ported by hand (see Plumage above); distance fog is missing. KnowItOwl's Dark Humor is ported
+  by hand, in `native-client/src/xray.rs`: `fog.wesl` is the browser's drifting fog
+  shader, and `xray.wesl` its rim-lit X-ray shading. Through the fog the caster
+  sees the recorded arena outlines, racers in cyan, their own shots and bombs in
+  green and everyone else's in pink, with trails, and effects such as explosions.
+  The browser draws shots as darts and bombs as spheres there; natively they are
+  the ported models in those colors. The browser also warms the fog around
+  falling bombs and brightens nearby objects; neither is ported.
 - Transitions are recorded from a settled state, so a state that changes again
   within a second restarts its transition. States combine by layering only. A
   boost trail is the one recorded while driving straight.

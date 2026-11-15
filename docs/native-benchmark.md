@@ -138,6 +138,13 @@ regression above.
 WILD_WHEELS_BENCH_VSYNC=1 ./native-client/target/release/wild-wheels-native --server http://localhost:5197 --name Bench --auto-start --benchmark 25
 ```
 
+Developer runs can also pick a racer with `--driver N`, hand the controls to the
+sparring pilot and have it use its special whenever ready with
+`WILD_WHEELS_PILOT_SPECIAL=1`, and, offscreen, save the picture twice a second
+into a folder with `WILD_WHEELS_OFFSCREEN_SHOTS=DIR`. `WILD_WHEELS_XRAY_AUDIT=1`
+reports every frame in which a racer drawn in the world is missing from
+KnowItOwl's X-ray view.
+
 Keep the window visible and in front. `--offscreen` with `--benchmark` plays
 the match with no window instead: every camera draws into a 2560×1600 image and
 each frame waits for the GPU to finish the one before, so frame times include
