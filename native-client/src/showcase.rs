@@ -88,6 +88,7 @@ impl Scene {
         let (kind, driver, state) = match parts.as_slice() {
             ["boost"] => ("boost", 9, None),
             ["nightmare"] => ("nightmare", 7, None),
+            ["reverse-psychology"] => ("reverse-psychology", 0, None),
             ["plumage"] => ("plumage", 9, None),
             ["rapid-fire"] => ("rapid-fire", 14, None),
             [kind, driver] => (*kind, racer(driver)?, None),
@@ -96,6 +97,30 @@ impl Scene {
         };
         let step = Step::new;
         let steps = match (kind, state) {
+            ("reverse-psychology", None) => vec![
+                step("normal controls", 2.0, "idle", None, false),
+                step(
+                    "cricket marionette tugging",
+                    1.0,
+                    "idle",
+                    Some("overlay:reversePsychology"),
+                    true,
+                ),
+                step(
+                    "controls reversed",
+                    3.6,
+                    "idle",
+                    Some("overlay:reversePsychology"),
+                    false,
+                ),
+                step(
+                    "controls recovering",
+                    0.4,
+                    "idle",
+                    Some("overlay:reversePsychology:end"),
+                    true,
+                ),
+            ],
             ("nightmare", None) if driver == 7 => vec![
                 step("normal engines", 2.0, "idle", None, false),
                 step(
@@ -179,6 +204,7 @@ impl Scene {
     fn required(&self) -> String {
         let step = &self.steps[1];
         match &step.overlay {
+            Some(overlay) if overlay.starts_with("overlay:") => overlay.clone(),
             Some(overlay) => format!("overlay:{}:{overlay}", self.driver),
             None => format!("driver:{}:{}", self.driver, step.racer),
         }
@@ -357,6 +383,13 @@ fn viewpoint(scene: &Scene, turned: f32) -> (Vec3, Vec3) {
     if scene
         .steps
         .iter()
+        .any(|step| step.overlay.as_deref() == Some("overlay:reversePsychology"))
+    {
+        return (Vec3::new(13.0, 12.0, 18.0), Vec3::Y * 6.0);
+    }
+    if scene
+        .steps
+        .iter()
         .any(|step| step.overlay.as_deref() == Some("nightmare"))
     {
         return (Vec3::new(32.0, 22.0, -16.0), Vec3::new(0.0, 1.5, -13.0));
@@ -400,10 +433,11 @@ fn play(
     let (step, into) = step_at(&show.scene, time.elapsed_secs());
     let driver = show.scene.driver;
     let racer = graphics.clip(&format!("driver:{driver}:{}", step.racer));
-    let layer = step
-        .overlay
-        .as_ref()
-        .and_then(|overlay| graphics.clip(&format!("overlay:{driver}:{overlay}")));
+    let layer = step.overlay.as_ref().and_then(|overlay| {
+        graphics
+            .clip(overlay)
+            .or_else(|| graphics.clip(&format!("overlay:{driver}:{overlay}")))
+    });
     // When capturing, steady loops hold still so screenshots differ only by the
     // transition under test; transitions always play.
     let held = show.capture.is_some().then_some(0.0);
@@ -509,6 +543,7 @@ mod tests {
         assert_eq!((step.label.as_str(), (into * 10.0).round()), ("boost", 5.0));
         // Each capture lands inside the step it is meant to show, for every kind.
         for name in [
+            "reverse-psychology",
             "plumage",
             "boost:0",
             "rapid-fire:14",
