@@ -83,6 +83,14 @@ pub struct NativeClient {
     input: ClientInput,
 }
 impl NativeClient {
+    /// Where a KnowItOwl's bat hovers and the way it faces: x, z and heading.
+    pub fn bat_aim(&self, owl: usize) -> Option<[f64; 3]> {
+        let _guard = super::super::native::KERNEL.lock().ok()?;
+        self.inner
+            .display
+            .bat_aim(owl)
+            .map(|(x, z, heading, _)| [x, z, heading])
+    }
     /// Navigation for developer-controlled native sparring; no authority changes.
     pub fn route_to(&self, target: usize) -> Vec<[f64; 2]> {
         let game = &self.inner.display;
