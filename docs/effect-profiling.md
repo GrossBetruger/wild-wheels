@@ -6,6 +6,13 @@ effect. Reports are written to `.wild-wheels/reports/effect-costs.json`, `.md`, 
 and a static server bound to localhost. It does not start a multiplayer match or
 modify game state outside the profiling process.
 
+The standalone HTML dashboard opens automatically after a successful run. It shows
+separate CPU/GPU rankings and a searchable table with category filters and sortable
+columns. Use `--no-open` for unattended runs. Run
+`npm run profile:effects -- --report-only` to rebuild and open the dashboard from
+the saved JSON without repeating the measurements. `--out` selects the same report
+basename in this mode. The dashboard works offline without external assets.
+
 Use `npm run profile:effects -- --samples 60 --out /private/tmp/effect-costs` for
 longer sampling or a different destination. `--limit 3` runs only the first three
 scenarios for a harness smoke check. Set `CHROME_PATH` to use a different local

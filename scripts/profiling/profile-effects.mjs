@@ -5,13 +5,22 @@ import {tmpdir,cpus,platform,release} from 'node:os';
 import {spawn,spawnSync} from 'node:child_process';
 import {parseArgs} from 'node:util';
 import WebSocket from 'ws';
+import {renderEffectCostReport,openEffectReport} from './effect-report.mjs';
 
 const root=resolve(import.meta.dirname,'../..');
-const {values}=parseArgs({options:{samples:{type:'string',default:'30'},out:{type:'string',default:join(root,'.wild-wheels/reports/effect-costs')},limit:{type:'string'},filter:{type:'string'},resume:{type:'boolean',default:false}}});
+const {values}=parseArgs({options:{samples:{type:'string',default:'30'},out:{type:'string',default:join(root,'.wild-wheels/reports/effect-costs')},limit:{type:'string'},filter:{type:'string'},resume:{type:'boolean',default:false},'no-open':{type:'boolean',default:false},'report-only':{type:'boolean',default:false}}});
 const samples=Number(values.samples),limit=values.limit===undefined?Infinity:Number(values.limit);
 if(!Number.isInteger(samples)||samples<10||samples>600)throw new Error('--samples must be an integer from 10 to 600.');
 if(limit!==Infinity&&(!Number.isInteger(limit)||limit<1))throw new Error('--limit must be a positive integer.');
 const output=resolve(values.out);await mkdir(resolve(output,'..'),{recursive:true});
+if(values['report-only']){
+  const report=JSON.parse(await readFile(output+'.json','utf8'));
+  if(report.errors?.length)throw new Error('The saved measurements contain browser errors. Run the profiler again.');
+  await writeFile(output+'.html',renderEffectCostReport(report));
+  console.log(`HTML report: ${output}.html`);
+  openEffectReport(output+'.html',{disabled:values['no-open']});
+  process.exit(0);
+}
 const errors=[];
 let interrupted=false;
 process.once('SIGINT',()=>{interrupted=true;});
@@ -41,7 +50,6 @@ function call(method,params={},sessionId){return new Promise((done,reject)=>{
   pending.set(id,{done,reject,timer});ws.send(JSON.stringify({id,method,params,...(sessionId?{sessionId}:{})}));
 });}
 async function evaluate(sessionId,expression){const result=await call('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true},sessionId);if(result.exceptionDetails)throw new Error(result.exceptionDetails.exception?.description??result.exceptionDetails.text);return result.result.value;}
-const escape=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const number=(value,digits=3)=>value===null?'unavailable':value.toFixed(digits);
 try{
   await waitFor(()=>/DevTools listening on (ws:\/\/\S+)/.test(chromeLog),'Chrome startup');
@@ -76,10 +84,10 @@ try{
   const markdown=`# Visual effect costs\n\nMeasured ${report.generatedAt} on ${report.machine.cpu}; ${metadata.gpu}.\n\n${report.scope}\n\n${report.results.length} scenarios; ${samples} measured frames and 12 warm-up frames each for baseline and effect. GPU timer support: ${metadata.gpuSupported}. Raw results retain baseline and effect means, p95, sample counts and disjoint events. CPU timers include geometry construction, instrumentation and WebGL submission. GPU timers use asynchronous disjoint queries without gl.finish.\n\n## Highest measured CPU additions\n\n${table(sorted.slice(0,10))}\n\n## All effects\n\n${table(sorted)}\n\n## Interpretation\n\nPrioritize repeatable large CPU additions and geometry/upload growth. Small differences are noisy at browser timer precision. These are single-machine samples, not proof of mobile performance, and not safe to sum across simultaneous effects. Some gameplay effects have no separate visible rendering: locustSpawn, locustBurst and yudaSmoke are deliberately skipped by the renderer; their corresponding swarm or exhaust is measured separately. Some racer special states also have no persistent visual; their world effects appear separately. The 12-frame warm-up does not cover every animation phase; p95 may include phase-specific cache misses. Results do not measure activation spikes, native clip memory, audio, network, simulation, or all lifetime peaks.\n`;
   const gpuTable=table([...report.results].sort((a,b)=>(b.delta.gpuMs??-Infinity)-(a.delta.gpuMs??-Infinity)).slice(0,5));
   await writeFile(output+'.md',markdown.replace('\n## All effects\n',`\n## Highest measured GPU additions\n\n${gpuTable}\n\n## All effects\n`));
-  const htmlRows=sorted.map(row=>`<tr><td>${escape(row.name)}</td><td>${number(row.delta.cpuMs)}</td><td>${number(row.effect.cpuMs.p95)}</td><td>${number(row.delta.gpuMs)}</td><td>${number(row.delta.draws,1)}</td><td>${number(row.delta.triangles,0)}</td><td>${number(row.delta.points,0)}</td><td>${number(row.delta.uploadBytes/1024,1)}</td></tr>`).join('');
-  await writeFile(output+'.html',`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Wild Wheels · Effect costs</title><style>:root{color-scheme:dark;font:14px system-ui;background:#0a1020;color:#e2eaf5}body{margin:40px auto;padding:24px;max-width:1500px}h1{font-size:54px;letter-spacing:-2px}h1 span{color:#5ce4c0}p{color:#a7b7cd;line-height:1.7;max-width:1000px}.scroll{overflow:auto;border:1px solid #30405a;border-radius:16px}table{border-collapse:collapse;width:100%;white-space:nowrap}th,td{padding:13px;border-bottom:1px solid #26334a;text-align:right}th{position:sticky;top:0;background:#18263b;color:#5ce4c0}td:first-child,th:first-child{text-align:left}tbody tr:hover{background:#1a2b42}small{color:#8fa8c5}</style><small>WILD WHEELS / GRAPHICS BUDGET</small><h1>What does each<br><span>effect cost?</span></h1><p>${escape(report.scope)}</p><p>${report.results.length} scenarios · ${samples} samples per phase · ${escape(metadata.gpu)}<br>${escape(report.generatedAt)} · Ranked by added CPU milliseconds per frame. GPU and CPU overlap.</p><div class="scroll"><table><thead><tr>${['Effect','CPU Δ ms','Total CPU p95 ms','GPU Δ ms','Calls Δ','Triangles Δ','Particles Δ','Upload Δ KiB'].map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${htmlRows}</tbody></table></div><p>Small and negative differences can be measurement noise. Single-machine warmed scenes; excludes simulation, audio, activation spikes and native playback. Some states have no independent visual. Raw JSON and Markdown are saved alongside this report.</p></html>`);
-  console.log(`Reports: ${output}.{json,md,html}`);
   if(errors.length)throw new Error(`Browser reported errors: ${errors.join('; ')}`);
+  await writeFile(output+'.html',renderEffectCostReport(report));
+  openEffectReport(output+'.html',{disabled:values['no-open']});
+  console.log(`Reports: ${output}.{json,md,html}`);
 }finally{
   for(const task of pending.values()){clearTimeout(task.timer);task.reject(new Error('Profiler shutting down'));}
   ws?.close();chrome.kill('SIGTERM');server.closeAllConnections();await new Promise(done=>server.close(done));
