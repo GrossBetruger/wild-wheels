@@ -15,6 +15,7 @@
     "test:native-multiplayer": "node scripts/checks/check-native-client-multiplayer.mjs",
     "test:browser-netcode": "node scripts/checks/check-browser-netcode.mjs",
     "profile:network": "node scripts/profiling/profile-network.mjs",
+    "profile:effects": "node scripts/profiling/profile-effects.mjs",
     "test:regression": "node scripts/checks/check-regressions.mjs",
     "scenario:missile-stress": "node scripts/scenarios/missile-stress.mjs",
     "scenario:lethality": "node scripts/scenarios/lethality.mjs",
