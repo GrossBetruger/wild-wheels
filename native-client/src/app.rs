@@ -11,6 +11,7 @@ use wild_wheels_core::{ClientAction, ClientInput, NativeClient};
 
 #[derive(Resource)]
 pub struct GameSession {
+    pub colors: crate::colors::Selection,
     pub chat: crate::chat::Chat,
     pub client: Option<NativeClient>,
     pub status: String,
@@ -27,6 +28,7 @@ pub struct GameSession {
 impl GameSession {
     pub(crate) fn new() -> Self {
         Self {
+            colors: Default::default(),
             chat: Default::default(),
             client: None,
             status: String::new(),
@@ -46,11 +48,16 @@ impl GameSession {
     }
     pub fn join(&mut self, config: Config) {
         self.leave();
+        self.colors = crate::colors::Selection {
+            preferred: config.color.clone(),
+            ..Default::default()
+        };
         self.status = "Connecting...".into();
         self.transport = Some(Transport::spawn(config));
     }
     /// Gives up the seat in the room and returns to the menu.
     pub fn leave(&mut self) {
+        self.colors.pending = false;
         self.chat.clear();
         if let Some(transport) = self.transport.take() {
             let _ = transport.commands.try_send(Command::Leave);
@@ -72,17 +79,46 @@ impl GameSession {
             .as_ref()
             .is_some_and(|transport| transport.commands.try_send(command).is_ok())
     }
+    pub fn choose_color(&mut self, color: &str) {
+        let Some(client) = self.client.as_ref() else {
+            return;
+        };
+        let view = client.view();
+        if self.colors.pending
+            || !crate::colors::editable(view.phase)
+            || !crate::colors::valid(color)
+            || crate::colors::occupied(&view, color)
+        {
+            return;
+        }
+        if self.request(Command::Color(color.into())) {
+            self.colors.pending = true;
+            self.colors.message = "Saving color...".into();
+        }
+    }
     fn receive(&mut self, now: f64) {
         let Some(transport) = self.transport.as_ref() else {
             return;
         };
         while let Ok(event) = transport.events.try_recv() {
             match event {
+                Event::ColorPreference(color) => self.colors.preferred = color,
+                Event::ColorResult(result) => {
+                    self.colors.pending = false;
+                    match result {
+                        Ok(color) => {
+                            self.colors.preferred = Some(color);
+                            self.colors.message.clear();
+                        }
+                        Err(error) => self.colors.message = error,
+                    }
+                }
                 Event::Session { origin, token } => self.chat.connect(origin, token),
                 Event::Status(status) => {
                     self.status = status;
                 }
                 Event::Connected => {
+                    self.colors.pending = false;
                     self.metrics.connected();
                     self.client = None;
                     self.status = "Connected".into();
@@ -148,7 +184,12 @@ impl GameSession {
 /// Worker threads for Bevy's task pools in total: input/output, async compute
 /// (where pack meshes are built) and compute.
 const THREADS: usize = 4;
-pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
+pub fn run(mut config: Config) -> Result<(), Box<dyn Error>> {
+    if config.color.is_none() {
+        config.color = crate::prefs::Preferences::load()
+            .color
+            .filter(|c| crate::colors::valid(c));
+    }
     if config.headless {
         return headless(config);
     }

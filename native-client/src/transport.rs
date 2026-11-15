@@ -16,6 +16,7 @@ pub enum Command {
     /// A room setting or match start for `/api/control`.
     Control(Value),
     Driver(usize),
+    Color(String),
     Afk(bool),
     /// Give up the seat in the room, then stop.
     Leave,
@@ -25,6 +26,8 @@ pub enum Event {
     Session { origin: url::Url, token: String },
     Status(String),
     Connected,
+    ColorPreference(Option<String>),
+    ColorResult(Result<String, String>),
     Packet(Vec<u8>),
     Error(String),
 }
@@ -85,7 +88,7 @@ pub(crate) async fn body(mut response: reqwest::Response) -> NetResult<Value> {
     }
     Ok(value)
 }
-async fn worker(config: Config, commands: Receiver<Command>, events: Sender<Event>) {
+async fn worker(mut config: Config, commands: Receiver<Command>, events: Sender<Event>) {
     let client = match Client::builder()
         .timeout(Duration::from_secs(10))
         .redirect(reqwest::redirect::Policy::none())
@@ -107,7 +110,7 @@ async fn worker(config: Config, commands: Receiver<Command>, events: Sender<Even
     let mut delay = 1;
     loop {
         let _ = events.try_send(Event::Status("Connecting to dedicated arena...".into()));
-        match connect(&config, &client, &mut store, &commands, &events).await {
+        match connect(&mut config, &client, &mut store, &commands, &events).await {
             Ok(()) => return,
             Err(error) => {
                 if events
@@ -131,8 +134,30 @@ async fn worker(config: Config, commands: Receiver<Command>, events: Sender<Even
         }
     }
 }
+pub(crate) async fn set_color(
+    client: &Client,
+    origin: &url::Url,
+    token: &str,
+    color: &str,
+) -> NetResult<String> {
+    if !crate::colors::valid(color) {
+        return Err("Choose a color from the player palette".into());
+    }
+    let response = client
+        .post(origin.join("api/color")?)
+        .header("Origin", origin.origin().ascii_serialization())
+        .bearer_auth(token)
+        .json(&json!({"color":color}))
+        .send()
+        .await?;
+    if response.status() == StatusCode::NOT_FOUND {
+        return Err("This server needs an update to support choosing colors. Your current color is unchanged.".into());
+    }
+    body(response).await?;
+    Ok(color.into())
+}
 async fn connect(
-    config: &Config,
+    config: &mut Config,
     client: &Client,
     store: &mut Store,
     commands: &Receiver<Command>,
@@ -148,7 +173,8 @@ async fn connect(
         let restored = client
             .post(config.origin.join("api/session")?)
             .header("Cookie", format!("wild-wheels-session={}", identity.token))
-            .json(&json!({}))
+            .header("Origin", config.origin.origin().ascii_serialization())
+            .json(&json!({"color":config.color}))
             .send()
             .await?;
         if restored.status() != StatusCode::UNAUTHORIZED {
@@ -161,7 +187,7 @@ async fn connect(
             None => client
                 .post(config.origin.join("api/join")?)
                 .json(
-                    &json!({"code":"00","name":config.name,"driver":config.driver,"role":"driver"}),
+                    &json!({"code":"00","name":config.name,"driver":config.driver,"role":"driver","color":config.color}),
                 )
                 .send()
                 .await?,
@@ -172,6 +198,13 @@ async fn connect(
         .and_then(|c| c.max_age())
         .map(|age| now() + age.as_secs());
     let joined = body(response).await?;
+    if let Some(color) = joined["preferredColor"]
+        .as_str()
+        .filter(|c| crate::colors::valid(c))
+    {
+        config.color = Some(color.into());
+    }
+    events.try_send(Event::ColorPreference(config.color.clone()))?;
     let token = joined["token"]
         .as_str()
         .filter(|s| s.len() == 64 && s.bytes().all(|b| b.is_ascii_hexdigit()))
@@ -266,6 +299,11 @@ async fn connect(
                     Ok(Command::Input(bytes))=>{let text=String::from_utf8(bytes)?;tokio::time::timeout(Duration::from_secs(2),socket.send(Message::Text(text.into()))).await??;},
                     Ok(Command::Control(action))=>{let result=body(client.post(config.origin.join("api/control")?).bearer_auth(&token).json(&action).send().await?).await;if let Err(e)=result{let _=events.try_send(Event::Status(e.to_string()));}},
                     Ok(Command::Driver(driver))=>{let result=body(client.post(config.origin.join("api/driver")?).bearer_auth(&token).json(&json!({"driver":driver})).send().await?).await;if let Err(e)=result{let _=events.try_send(Event::Status(e.to_string()));}},
+                    Ok(Command::Color(color))=>{
+                        let result=set_color(client,&config.origin,&token,&color).await.map_err(|e|e.to_string());
+                        if let Ok(color)=&result { config.color=Some(color.clone()); }
+                        events.try_send(Event::ColorResult(result))?;
+                    },
                     Ok(Command::Leave)=>{let _=client.post(config.origin.join("api/leave")?).bearer_auth(&token).json(&json!({})).send().await;let _=socket.close(None).await;return Ok(());},
                     Ok(Command::Afk(afk))=>{
                         if !afk{continue;}

@@ -6,6 +6,7 @@ pub struct Config {
     pub origin: Url,
     pub name: String,
     pub driver: usize,
+    pub color: Option<String>,
     /// Join straight away instead of opening the menu; set by `--server`.
     pub join: bool,
     pub headless: bool,
@@ -31,6 +32,7 @@ impl Config {
             origin: Url::parse("http://localhost:5173")?,
             name: "Native Pip".into(),
             driver: 0,
+            color: None,
             join: false,
             headless: false,
             seconds: 8.0,
@@ -51,6 +53,13 @@ impl Config {
                     config.join = true;
                 }
                 "--name" => config.name = args.next().ok_or("--name requires a name")?,
+                "--color" => {
+                    let color = args.next().ok_or("--color requires a palette hex color")?;
+                    if !crate::colors::valid(&color) {
+                        return Err("Choose a color from the player palette".into());
+                    }
+                    config.color = Some(color);
+                }
                 "--headless" => config.headless = true,
                 "--sparring" => {
                     config.sparring = true;

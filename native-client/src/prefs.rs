@@ -9,6 +9,7 @@ pub struct Preferences {
     pub server: Option<String>,
     pub name: Option<String>,
     pub driver: Option<usize>,
+    pub color: Option<String>,
 }
 impl Preferences {
     /// Unreadable or oversized preferences are ignored; they are only conveniences.
@@ -54,6 +55,7 @@ mod tests {
             server: Some("http://localhost:5173/".into()),
             name: Some("Pip".into()),
             driver: Some(9),
+            color: Some("#e72845".into()),
         };
         chosen.write(&path);
         assert_eq!(Preferences::read(&path), chosen);

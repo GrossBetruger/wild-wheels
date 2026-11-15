@@ -53,6 +53,7 @@ pub enum Act {
     Game(ClientAction),
     Edit(Field),
     Racer(usize),
+    Color(usize),
     Join,
     Start,
     Arena(usize),
@@ -78,6 +79,7 @@ pub struct Menu {
     server: String,
     name: String,
     driver: usize,
+    color: Option<String>,
     field: Field,
     /// The in-game menu is open; driving input is ignored meanwhile.
     pub open: bool,
@@ -93,6 +95,10 @@ impl Menu {
             false => saved.unwrap_or(given),
         };
         Self {
+            color: base
+                .color
+                .clone()
+                .or(saved.color.filter(|c| crate::colors::valid(c))),
             server: chosen(base.join, saved.server, base.origin.to_string()),
             name: chosen(base.join, saved.name, base.name.clone()),
             driver: match base.join {
@@ -131,6 +137,7 @@ impl Menu {
                     origin,
                     name,
                     driver: self.driver,
+                    color: self.color.clone(),
                     ..self.base.clone()
                 });
             }
@@ -141,6 +148,7 @@ impl Menu {
             server: Some(self.server.clone()),
             name: Some(self.name.clone()),
             driver: Some(self.driver),
+            color: self.color.clone(),
         }
         .save();
     }
@@ -251,6 +259,19 @@ pub fn control(
             session.request(Command::Control(action));
         };
         match act {
+            Act::Color(index) => {
+                let Some(swatch) = crate::colors::palette().get(index) else {
+                    continue;
+                };
+                match screen {
+                    Screen::Join => {
+                        menu.color = Some(swatch.hex.into());
+                        menu.remember();
+                    }
+                    Screen::Lobby => session.choose_color(swatch.hex),
+                    _ => {}
+                }
+            }
             Act::Game(action) => session.act(action),
             Act::Edit(field) => menu.field = field,
             Act::Racer(driver) => {
@@ -290,6 +311,97 @@ pub fn control(
 /// Spawns menu widgets beneath a parent node.
 struct Builder<'a, 'w, 's>(&'a mut Commands<'w, 's>);
 impl Builder<'_, '_, '_> {
+    fn colors(
+        &mut self,
+        root: Entity,
+        preferred: Option<&str>,
+        view: Option<&wild_wheels_core::ClientView>,
+        pending: bool,
+        message: &str,
+    ) {
+        let panel = self.column(
+            root,
+            Node {
+                position_type: PositionType::Absolute,
+                left: match view.is_some() {
+                    true => px(14),
+                    false => Val::Auto,
+                },
+                right: match view.is_some() {
+                    true => Val::Auto,
+                    false => px(14),
+                },
+                bottom: match view.is_some() {
+                    true => px(96),
+                    false => px(14),
+                },
+                width: px(510),
+                ..default()
+            },
+        );
+        self.text(panel, "YOUR COLOR", 13.0, MUTED);
+        let assigned = view.map(|v| v.player.color.as_str());
+        let selected = assigned
+            .or(preferred)
+            .unwrap_or(crate::colors::palette()[0].hex);
+        let row = self.row(panel);
+        for (index, swatch) in crate::colors::palette().iter().enumerate() {
+            let taken = view.is_some_and(|v| crate::colors::occupied(v, swatch.hex));
+            let locked = pending || view.is_some_and(|v| !crate::colors::editable(v.phase));
+            let chosen = selected == swatch.hex;
+            let color = Color::srgb_u8(swatch.rgb[0], swatch.rgb[1], swatch.rgb[2]);
+            let tile = self.node(
+                row,
+                Node {
+                    width: px(27),
+                    height: px(30),
+                    border: UiRect::all(px(if chosen { 3.0 } else { 1.0 })),
+                    align_items: AlignItems::Center,
+                    justify_content: JustifyContent::Center,
+                    ..default()
+                },
+                color,
+            );
+            self.0
+                .entity(tile)
+                .insert(BorderColor::all(if chosen { Color::WHITE } else { MUTED }));
+            if !taken && !locked {
+                self.0.entity(tile).insert((
+                    RelativeCursorPosition::default(),
+                    Act::Color(index),
+                    Tone(color),
+                ));
+            }
+            self.text(
+                tile,
+                if taken {
+                    "X"
+                } else if chosen {
+                    "*"
+                } else {
+                    ""
+                },
+                17.0,
+                Color::WHITE,
+            );
+        }
+        let label = crate::colors::palette()
+            .iter()
+            .find(|s| s.hex == selected)
+            .map_or(selected, |s| s.name);
+        let fallback = preferred
+            .filter(|c| *c != selected)
+            .and_then(|c| crate::colors::palette().iter().find(|s| s.hex == c));
+        let hint = match (message.is_empty(), fallback) {
+            (false, _) => message.to_owned(),
+            (_, Some(swatch)) => format!(
+                "Preferred {} | Currently {label}. X = taken by another player.",
+                swatch.name
+            ),
+            _ => format!("{label} | X = taken by another player. Choose between matches."),
+        };
+        self.text(panel, &hint, 12.0, MUTED);
+    }
     fn node(&mut self, parent: Entity, node: Node, color: Color) -> Entity {
         self.0
             .spawn((node, BackgroundColor(color), ChildOf(parent)))
@@ -365,27 +477,39 @@ pub fn draw(
     session: Res<GameSession>,
     graphics: Res<Graphics>,
 ) {
+    if session.joined() && session.colors.preferred != menu.color {
+        menu.color = session.colors.preferred.clone();
+        menu.remember();
+    }
     let screen = menu.screen(&session);
     let view = session.client.as_ref().map(|client| client.view());
     // Everything a screen shows; the widgets are rebuilt only when this changes.
     let drawn = match (screen, view.as_ref()) {
         (Screen::Join, _) => format!(
-            "join|{}|{}|{:?}|{}|{}",
-            menu.server, menu.name, menu.field, menu.driver, menu.notice
+            "join|{}|{}|{:?}|{}|{}|{:?}",
+            menu.server, menu.name, menu.field, menu.driver, menu.notice, menu.color
         ),
         (Screen::Lobby, Some(view)) => format!(
-            "lobby|{}|{}|{}|{}|{}|{}",
+            "lobby|{}|{}|{}|{}|{}|{}|{:?}|{}|{}",
             view.arena,
             view.actors
                 .iter()
                 .filter(|a| !a.inactive)
-                .map(|a| format!("{}{}", a.name.as_deref().unwrap_or("bot"), a.human))
+                .map(|a| format!(
+                    "{}{}{}",
+                    a.name.as_deref().unwrap_or("bot"),
+                    a.human,
+                    a.color
+                ))
                 .collect::<Vec<_>>()
                 .join(","),
             view.special_abilities,
             view.player.driver,
             view.phase,
-            session.status
+            session.status,
+            menu.color,
+            session.colors.pending,
+            session.colors.message
         ),
         _ => format!("{screen:?}|{}|{}", session.away, session.status),
     };
@@ -441,6 +565,7 @@ pub fn draw(
             }
             ui.text(panel, "RACER", 13.0, MUTED);
             ui.racers(panel, &graphics, menu.driver, 166.0);
+            ui.colors(root, menu.color.as_deref(), None, false, "");
             if let Some(racer) = graphics.racers().get(menu.driver) {
                 ui.text(panel, &racer.description, 15.0, Color::WHITE);
             }
@@ -496,6 +621,13 @@ pub fn draw(
             }
             ui.text(panel, "RACER", 13.0, MUTED);
             ui.racers(panel, &graphics, view.player.driver, 175.0);
+            ui.colors(
+                root,
+                menu.color.as_deref(),
+                Some(view),
+                session.colors.pending,
+                &session.colors.message,
+            );
             let names: Vec<_> = racers()
                 .filter(|a| a.human)
                 .map(|a| a.name.as_deref().unwrap_or("Racer"))
@@ -571,11 +703,17 @@ pub fn preview(
         };
         if preview.clip != clip {
             preview.clip = clip;
-            preview.tint = graphics
-                .racers()
-                .get(menu.driver)
-                .map_or([255; 3], |racer| racer.color);
         }
+        preview.tint = menu
+            .color
+            .as_deref()
+            .and_then(crate::ported::tint)
+            .unwrap_or_else(|| {
+                graphics
+                    .racers()
+                    .get(menu.driver)
+                    .map_or([255; 3], |racer| racer.color)
+            });
     }
     if !choosing {
         return;
@@ -609,6 +747,7 @@ mod tests {
             server: Some("https://play.example.test/".into()),
             name: Some("Pearl".into()),
             driver: Some(9),
+            color: Some("#e72845".into()),
         };
         let remembered = menu(&[], saved.clone());
         assert_eq!(

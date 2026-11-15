@@ -3,6 +3,8 @@
 macOS Apple Silicon developer POC. Arena racers against the dedicated Rust
 server only; no Grand Prix, bomber client, or mobile controls.
 
+Choose **Your Color** before joining or between matches. The picker shares the browser palette, marks colors reserved by other humans, saves your preference, and previews it on your racer. Servers with color selection honor it; older servers keep assigning colors and explain when a change is unavailable. Developer joins can pass `--color '#e72845'`.
+
 From the repository root:
 
 ```sh
