@@ -25,6 +25,10 @@ pub struct Session {
     pub name: String,
     pub driver: usize,
     pub role: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chat_color: Option<String>,
     pub expires: u64,
 }
 
@@ -35,7 +39,7 @@ pub struct Sessions {
 
 impl Sessions {
     pub fn open(path: PathBuf, at: u64) -> io::Result<Self> {
-        let records: Vec<Session> = match fs::File::open(&path) {
+        let mut records: Vec<Session> = match fs::File::open(&path) {
             Ok(file) => {
                 let mut bytes = Vec::new();
                 file.take(MAX_BYTES + 1).read_to_end(&mut bytes)?;
@@ -54,11 +58,18 @@ impl Sessions {
                     || !valid_key(&p.token)
                     || p.name.trim().is_empty()
                     || p.name.encode_utf16().count() > 24
+                    || p.color.as_ref().is_some_and(|color| color.len() != 7 || !color.starts_with('#') || !color.as_bytes()[1..].iter().all(u8::is_ascii_hexdigit))
+                    || p.chat_color.as_ref().is_some_and(|color| color.len() != 7 || !color.starts_with('#') || !color.as_bytes()[1..].iter().all(u8::is_ascii_hexdigit))
                     || p.driver >= 15
                     || !matches!(p.role.as_str(), "driver" | "bomber")
             })
         {
             return Err(io::Error::other("Invalid saved sessions"));
+        }
+        // A removed swatch should not invalidate a player's identity or cookie.
+        for profile in &mut records {
+            if profile.color.as_deref().is_some_and(|color| !wild_wheels_core::PLAYER_COLORS.contains(&color)) { profile.color = None; }
+            if profile.chat_color.as_deref().is_some_and(|color| !wild_wheels_core::PLAYER_COLORS.contains(&color)) { profile.chat_color = None; }
         }
         Ok(Self {
             path,
@@ -146,6 +157,8 @@ mod tests {
             name: "Same name".into(),
             driver: 7,
             role: "bomber".into(),
+            color: None,
+            chat_color: None,
             expires: 100 + LIFETIME,
         };
         let bob = Session {
@@ -154,6 +167,8 @@ mod tests {
             name: "Same name".into(),
             driver: 10,
             role: "driver".into(),
+            color: None,
+            chat_color: None,
             expires: 100 + LIFETIME,
         };
         store.remember(alice.clone(), 100).await.unwrap();
@@ -188,5 +203,23 @@ mod tests {
             );
         }
         fs::remove_dir_all(path.parent().unwrap()).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod color_migration_tests {
+    use super::*;
+    #[test]
+    fn removed_swatches_do_not_lose_identity_and_malformed_colors_do_not_overwrite_the_file() {
+        let directory=std::env::temp_dir().join(format!("wild-wheels-removed-color-{}",crate::room::token()));
+        fs::create_dir_all(&directory).unwrap();let path=directory.join("sessions.json");
+        let mut profile=serde_json::json!([{"identity":"a".repeat(64),"token":"b".repeat(64),"name":"Existing","driver":0,"role":"driver","expires":100+LIFETIME,"color":"#ffffff"}]);
+        fs::write(&path,profile.to_string()).unwrap();
+        let stored=Sessions::open(path.clone(),100).unwrap();
+        let saved=stored.find(&"b".repeat(64),100).unwrap();assert_eq!(saved.name,"Existing");assert!(saved.color.is_none());
+        profile[0]["color"]=serde_json::json!("url(https://attacker.invalid)");
+        let bad=profile.to_string();fs::write(&path,&bad).unwrap();
+        assert!(Sessions::open(path.clone(),100).is_err());assert_eq!(fs::read_to_string(&path).unwrap(),bad);
+        fs::remove_dir_all(directory).unwrap();
     }
 }

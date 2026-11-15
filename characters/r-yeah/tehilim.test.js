@@ -13,9 +13,10 @@ for (const engine of ['solo', 'Rust']) {
   test(`${engine}: Tehilim books have the same rarity, duration and refill as Hedgeguard`, () => {
     for (const arena of [0, 1]) {
       const seed = createBattle(0, arena), books = seed.supplies.filter(s => s.kind === 'tehilim'); assert.equal(books.length, 1); assert.equal(books[0].cooldown, 30); assert.equal(blocked(arenas[arena], books[0].wx, books[0].wz, 4), false);
-      Object.assign(seed, { phase: 'racing', human: true, wx: 50, wz: 50 }); for (const bot of seed.bots) Object.assign(bot, { inactive: true, destroyed: 999 });
+      books[0].randomSpawn=false; // Isolate timing from randomized spawn placement.
+      Object.assign(seed, { phase: 'racing', human: true, wx: books[0].wx, wz: books[0].wz }); for (const bot of seed.bots) Object.assign(bot, { inactive: true, destroyed: 999 });
       const core = engine === 'Rust' ? new ArenaCore(seed) : null, step = () => core ? core.step(1 / 60) : tickBattle(seed, new Set(), 1 / 60), read = () => core ? core.snapshot() : seed;
-      for (let i = 0; i < 1799; i++)step(); assert.equal(read().tehilim, 0); step(); step(); assert.ok(read().tehilim > 24.97); assert.ok(read().supplies.find(s => s.kind === 'tehilim').cooldown > 44.9); assert.equal(read().item, 'hedgehog');
+      for (let i = 0; i < 1799; i++)step(); assert.equal(read().tehilim, 0); step(); step(); assert.ok(read().tehilim > 24.97); assert.ok(read().supplies.find(s => s.kind === 'tehilim').cooldown > 49.9); assert.equal(read().item, 'hedgehog');
     }
   });
   test(`${engine}: Tehilim repels a halfway missile without transferring ownership or targeting its shooter`, () => {
@@ -41,7 +42,7 @@ test('collecting books is immediate for the client and the aura is replicated to
   const seed = createBattle(); Object.assign(seed, { phase: 'racing', human: true, multiplayer: true, wx: -65, wz: 0, supplies: [{ id: 9, kind: 'tehilim', wx: -65, wz: 0, version: 0, cooldown: 0 }] }); for (const bot of seed.bots) Object.assign(bot, { inactive: true, destroyed: 999 });
   const server = new ArenaCore(seed), local = new ArenaClient(), peer = new ArenaClient(); local.accept(server.packet(), 0); local.frame(1 / 60, [], 1 / 60); assert.equal(local.present().tehilim, 25); assert.equal(server.snapshot().tehilim, 0);
   server.step(1 / 60, [{ actor: 0, ...local.outbound([]) }]); local.accept(server.packet(), 1 / 60); local.frame(0, [], 1 / 60); peer.accept(server.packet(1), 1 / 60); peer.frame(0, [], 1 / 60);
-  assert.equal(local.present().tehilim, 25); assert.equal(peer.present().bots.find(a => a.id === 0).tehilim, 25); assert.equal(local.present().supplies[0].kind, 'tehilim'); assert.equal(local.present().supplies[0].cooldown, 45);
+  assert.equal(local.present().tehilim, 25); assert.equal(peer.present().bots.find(a => a.id === 0).tehilim, 25); assert.equal(local.present().supplies[0].kind, 'tehilim'); assert.equal(local.present().supplies[0].cooldown, 50);
 });
 
 for (const engine of ['solo', 'Rust']) for (const shooterAlive of [true, false]) test(`${engine}: books repel a point-blank locked missile even when shooter alive is ${shooterAlive}`, () => {

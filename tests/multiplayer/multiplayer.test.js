@@ -9,10 +9,10 @@ import {ArenaClient} from '../../gameplay/arena-core.js';
 import {savedPlayerName} from '../../networking/network.js';
 
 async function serverFor(t){
-  const app=createGameServer({fixtureWorld:arenaFixture});clearInterval(app.multiplayer.timer);await new Promise(resolve=>app.server.listen(0,'127.0.0.1',resolve));
+  const app=createGameServer({fixtureWorld:arenaFixture,trustProxy:true});clearInterval(app.multiplayer.timer);await new Promise(resolve=>app.server.listen(0,'127.0.0.1',resolve));
   t.after(()=>{app.multiplayer.close();app.server.closeAllConnections();app.server.close();});
   const origin=`http://127.0.0.1:${app.server.address().port}`;
-  const post=async(path,body,token,headers={})=>{const response=await fetch(origin+path,{method:'POST',headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`} :{}),...headers},body:JSON.stringify(body),signal:AbortSignal.timeout(3000)});return {status:response.status,cookie:response.headers.get('set-cookie'),...await response.json()};};
+  const post=async(path,body,token,headers={})=>{const response=await fetch(origin+path,{method:'POST',headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`} :{}),...(headers.Cookie?{Origin:origin}:{}),...headers},body:JSON.stringify(body),signal:AbortSignal.timeout(3000)});return {status:response.status,cookie:response.headers.get('set-cookie'),...await response.json()};};
   return {...app,post,origin};
 }
 test('players can rename themselves in a room and names survive the next match',async t=>{
@@ -179,7 +179,8 @@ test('socket connections with an invalid room token are closed',async t=>{
 });
 test('irrelevant action fields cannot corrupt a match and action identifiers stay in range',async t=>{
   const {multiplayer,post}=await serverFor(t);const host=await post('/api/rooms',{name:'Host',driver:0,arena:0,bots:0});const room=multiplayer.rooms.get(host.code);
-  Object.assign(room.world,{phase:'racing',fireCooldown:0});
+  // Isolate action validation from randomly placed ammunition pickups.
+  Object.assign(room.world,{phase:'racing',fireCooldown:0,supplies:[]});
   assert.equal((await post('/api/input',{sequence:0,keys:[],actions:[{type:'fire',wx:'unused',wz:{},item:42}]},host.token)).status,200);
   multiplayer.step(1/60);assert.equal(room.world.ammo,9);assert.equal(room.world.projectiles.length,1);
   assert.equal((await post('/api/input',{sequence:1,keys:[],actions:[{type:'fire',id:4294967296,afterMove:-1}]},host.token)).status,400);

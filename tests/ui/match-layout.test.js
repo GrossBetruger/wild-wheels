@@ -23,11 +23,13 @@ test('moving chat and the live map preserves their nodes and restores their orig
   t.after(()=>{if(original===undefined)delete globalThis.document;else globalThis.document=original;});
   const layout=new Node(),column=new Node(),sidebar=new Node(),viewport=new Node(),game=new Node(),chat=new Node(),playground=new Node(),map=new Node(),driver=new Node();
   layout.append(column);layout.append(sidebar);column.append(game);column.append(chat);sidebar.append(driver);sidebar.append(playground);playground.append(map);
-  const controller=new MatchLayout({layout,sidebar,chat,map,playground,viewport});
+  const transitions=[];
+  const controller=new MatchLayout({layout,sidebar,chat,map,playground,viewport,onChange:active=>transitions.push(active)});
   controller.update('ready','combat');assert.equal(chat.parent,column);assert.equal(map.parent,playground);
   controller.update('countdown','combat');assert.equal(chat.parent,sidebar);assert.equal(sidebar.children[0],chat);assert.equal(map.parent,controller.minimap);assert.equal(playground.classes.has('hidden'),true);
   const children=[...sidebar.children];controller.update('racing','combat');assert.deepEqual(sidebar.children,children);
   controller.update('paused','combat');assert.equal(map.parent,controller.minimap);
   controller.update('finished','combat');assert.equal(chat.parent,column);assert.equal(map.parent,playground);assert.equal(playground.classes.has('hidden'),false);assert.equal(layout.classes.has('match-layout'),false);
   controller.update('racing','race');assert.equal(controller.minimap.classes.has('combat-minimap'),false);assert.equal(map.parent,controller.minimap);
+  assert.deepEqual(transitions,[true,false,true]);
 });

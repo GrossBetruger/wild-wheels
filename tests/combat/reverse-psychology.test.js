@@ -27,7 +27,7 @@ for(const engine of ['JavaScript','Rust']){
       if(!core){assert.equal(useSpecial(world,world.bots[0]),true);tickBattle(world,new Set([key]),.05);}
       const after=core?core.snapshot():world;
       assert.equal(Math.sign(after[axis]),direction,key);assert.ok(after.reverseControls>4.9);assert.equal(after.bots[0].reverseControls??0,0);
-      assert.equal(after.locusts.length,0);assert.equal(after.bots[0].specialCooldown,19.95);
+      assert.equal(after.locusts.length,0);assert.equal(after.bots[0].specialCooldown,29.95);
     }
   });
   test(`${engine}: server bot AI has its steering and accelerator reversed after deciding how to chase`,()=>{
@@ -90,14 +90,14 @@ test('Tammy activates Reverse Psychology when every opponent is a server-control
   // while bots 2 and 3 at (78,0) and (55,-55) are outside.
   client.accept(server.packet(),.02);client.frame(0,[],.02);assert.deepEqual(client.present().bots.map(a=>a.reverseControls>4),[true,false,false]);
 });
-test('Reverse Psychology recharges in twenty seconds after its five-second effect',()=>{
+test('Reverse Psychology recharges in thirty seconds after its five-second effect',()=>{
   const config={code:'00',maxPlayers:8,dedicated:true,host:null,arena:0,bots:3,epoch:1,players:[{id:0,name:'Tammy',driver:5,role:'driver'}]};
   const server=ArenaCore.room(config);server.start();for(let i=0;i<181;i++)server.step(1/60);
-  server.step(0,[{actor:0,actions:[{type:'special'}]}]);assert.equal(server.snapshot().specialCooldown,20);
+  server.step(0,[{actor:0,actions:[{type:'special'}]}]);assert.equal(server.snapshot().specialCooldown,30);
   server.configure({...config,bots:0});for(let i=0;i<60;i++)server.step(1/60);
-  assert.ok(Math.abs(server.snapshot().specialCooldown-19)<1e-7);assert.equal(server.snapshot().locusts.length,0);
+  assert.ok(Math.abs(server.snapshot().specialCooldown-29)<1e-7);assert.equal(server.snapshot().locusts.length,0);
   const client=new ArenaClient();client.accept(server.packet(),1);client.frame(0,[],1);assert.equal(client.action('special',undefined,1),false);
-  for(let i=0;i<1141;i++)server.step(1/60);
+  for(let i=0;i<1741;i++)server.step(1/60);
   assert.equal(server.snapshot().specialCooldown,0);assert.equal(server.snapshot().locusts.length,0);
-  client.accept(server.packet(),21);client.frame(0,[],21);assert.equal(client.action('special',undefined,21),true);
+  client.accept(server.packet(),31);client.frame(0,[],31);assert.equal(client.action('special',undefined,31),true);
 });

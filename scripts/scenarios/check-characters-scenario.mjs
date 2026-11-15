@@ -8,6 +8,10 @@ export async function checkCharacters(evaluate,app,room,id,sleep,capture){
   const menuPass=['Ellie the Elephant','Tammy the Cricket','Elon Musk','Houston the RTPL','Avita-Jas','Pearococo','Master-Yuda','R-yeah','Catheterpillar','Fourmidable','KnowItOwl'].every(name=>menu.includes(name))&&menu.length===15;
   if(room.members.size<2)app.join(room,{name:'Observer',driver:1});
   const observer=[...room.members.values()].find(member=>member.id!==id),characters=[];
+  // This observer has no browser polling/input loop. Keep its session active
+  // while the fixture temporarily swaps its rendered character mid-match.
+  const observerHeartbeat=setInterval(()=>{observer.lastSeen=Date.now();},1000);
+  try {
   const preview=await checkPreview(evaluate,app,room,id,sleep,capture);
   await evaluate(`{
     __game.characterAngle=Math.PI;
@@ -33,7 +37,7 @@ export async function checkCharacters(evaluate,app,room,id,sleep,capture){
     const helmet=renderer.houstonHelmet.bind(renderer);__game.helmetTrace=[];
     renderer.houstonHelmet=(pose,actor,...args)=>{
       const start=renderer.instances.length,result=helmet(pose,actor,...args);if(actor.id!==__game.helmetTarget)return result;
-      const flying=renderer.models.get('houston:helmet'),part=renderer.instances.slice(start).find(instance=>instance.buffer===flying?.buffer),worn=renderer.models.get('kart:7:'+actor.color),bare=renderer.models.get('kart:7:'+actor.color+':bare');
+      const flying=renderer.models.get('houston:helmet:'+actor.color),part=renderer.instances.slice(start).find(instance=>instance.buffer===flying?.buffer),worn=renderer.models.get('kart:7:'+actor.color),bare=renderer.models.get('kart:7:'+actor.color+':bare');
       const body=model=>renderer.instances.some(instance=>instance.buffer===model?.buffer&&Math.abs(instance.x-pose.x)<.01&&Math.abs(instance.z-pose.z)<.01);
       __game.helmetTrace.push({vulcan:actor.vulcan,height:part?.y??null,angle:part?.angle??null,worn:body(worn),bare:body(bare)});__game.helmetTrace=__game.helmetTrace.slice(-180);return result;
     };
@@ -59,7 +63,8 @@ export async function checkCharacters(evaluate,app,room,id,sleep,capture){
     const pixels=await evaluate('__game.characterPixels');
     const remote=app.snapshot(room,observer).world.bots.find(actor=>actor.id===id);
     await capture(name.split(' ')[0].toLowerCase());
-    const paint=driver!==6||remote?.color==='#e8edf2'&&pixels.white>30&&await evaluate("__game.race.color==='#e8edf2'");
+    const selectedColor=[...room.members.values()].find(member=>member.id===id).color;
+    const paint=remote?.color===selectedColor&&await evaluate(`__game.race.color===${JSON.stringify(selectedColor)}`)&&(driver!==6||pixels.white>30);
     const cutenessStat=await evaluate(`document.querySelectorAll('#cuteness-stat i.on').length===${cuteness}&&document.getElementById('cuteness-stat').parentElement.title.includes('every ${recoverySeconds} seconds')`);
     const intelligenceStat=await evaluate(`document.querySelectorAll('#intelligence-stat i.on').length===${({4:4,5:3,7:5,8:5,9:4,10:5,11:4,12:5,13:5,14:5,6:4})[driver]}&&document.getElementById('intelligence-stat').parentElement.title.includes('Carrying limits')`);
     const fuelStat=await evaluate(`document.querySelectorAll('#fuel-stat i.on').length===${driver===7?5:(driver===5||driver===13)?2:3}&&document.getElementById('fuel-stat').parentElement.title.includes('${driver===7?5.2:(driver===5||driver===13)?2.8:3.6} seconds')`);
@@ -161,8 +166,11 @@ export async function checkCharacters(evaluate,app,room,id,sleep,capture){
   const remoteFlip=await wait(()=>{const actor=app.snapshot(room,observer).world.bots.find(actor=>actor.id===id);return actor?.driver===6&&actor.somersault>0;});
   await capture('roadster-flip');
   const voicePass=await evaluate("[4,5,6,7,8,9,10,11,12,13,14].every(driver=>__game.audio.voice({driver,cue:'win'}))");
-  // Restore the simulated observer's actual selection before room teardown.
-  // Mid-match roster updates correctly reject the test's temporary character swap.
-  Object.assign([room.world,...room.world.bots].find(actor=>actor.id===observer.id),{driver:observer.driver,bomber:observer.role==='bomber'});
   return {menuPass,preview,characters,boostAccepted,boostVapor,flipAccepted,flipVapor,remoteFlip,voicePass,pass:menuPass&&preview.pass&&characters.every(character=>character.ryeah.pass&&character.yuda.pass&&character.fuelStat&&character.starshipBoost&&character.starshipFlip&&character.remoteStarship&&character.pearococo.pass&&character.selected&&character.previewStopped&&character.rendered&&character.remote&&character.paint&&character.cutenessStat&&character.intelligenceStat&&character.recovery&&character.ammoRecovery&&character.aura&&character.auraModel&&character.auraExpired&&character.boostHaze&&character.flipHaze&&character.cricketVulcan&&character.remoteCrickets&&character.helmetAnimation&&character.remoteHelmet&&character.helmetRestored&&character.dollarVulcan&&character.remoteDollars&&character.propellerAnimation&&character.wormFlex&&character.electronVulcan&&character.remoteElectrons)&&boostAccepted&&boostVapor&&flipAccepted&&flipVapor&&remoteFlip&&voicePass};
+  } finally {
+    clearInterval(observerHeartbeat);
+    // Restore the roster's character even when an assertion or browser command
+    // fails, so an AFK update or room teardown cannot reject the test fixture.
+    Object.assign([room.world,...room.world.bots].find(actor=>actor.id===observer.id),{driver:observer.driver,bomber:observer.role==='bomber'});
+  }
 }
