@@ -178,8 +178,18 @@ export async function checkControls(evaluate,app,room,id,sleep,captureFlip,captu
     return {background:getComputedStyle(card).backgroundImage,text:banner.textContent,visible:!banner.classList.contains('hidden'),jumps:matchMedia('(prefers-reduced-motion: reduce)').matches||peak<start-5,aboveAction:card?.getBoundingClientRect().bottom<viewport.top+viewport.height*.4,safe:!banner.querySelector('img')};
   })()`);
   if(captureNotices)await captureNotices();
-  await sleep(2100);
-  const whackPass=whack.visible&&whack.text.includes('YOU WHACKED')&&whack.text.includes('Rival <img>')&&whack.jumps&&whack.aboveAction&&whack.safe&&await evaluate("document.getElementById('whack-banner').classList.contains('hidden')&&document.getElementById('averted-notice').classList.contains('hidden')");
+  // Notices last two seconds, but dismissal needs a HUD frame. Local frame-gap
+  // measurements reproduced the 2.1s race; allow scheduling slack and retain a
+  // bounded failure for notices that really stay stuck.
+  const dismissalStarted=performance.now(),dismissalDeadline=dismissalStarted+3000;
+  let whackDismissal;
+  while(true){
+    whackDismissal=await evaluate("({whackHidden:document.getElementById('whack-banner').classList.contains('hidden'),avertedHidden:document.getElementById('averted-notice').classList.contains('hidden')})");
+    if(whackDismissal.whackHidden&&whackDismissal.avertedHidden||performance.now()>=dismissalDeadline)break;
+    await sleep(25);
+  }
+  whackDismissal.waitMs=Math.round(performance.now()-dismissalStarted);
+  const whackPass=whack.visible&&whack.text.includes('YOU WHACKED')&&whack.text.includes('Rival <img>')&&whack.jumps&&whack.aboveAction&&whack.safe&&whackDismissal.whackHidden&&whackDismissal.avertedHidden;
   room.world.killFeed.unshift({id:++room.world.killSequence,attacker:id,victim:other.id,victimName:other.name,assist:true,time:room.world.elapsed});
   for(let i=0;i<100;i++){if(await evaluate("document.getElementById('whack-banner').textContent.includes('CO-WHACKED')"))break;await sleep(10);}
   const coWhackPass=await evaluate("(()=>{const banner=document.getElementById('whack-banner'),card=banner.firstElementChild;return !banner.classList.contains('hidden')&&banner.textContent.includes('CO-WHACKED')&&banner.textContent.includes('Rival <img>')&&!banner.querySelector('img')&&getComputedStyle(card).backgroundImage!=="+JSON.stringify(whack.background)+"})()");
@@ -202,6 +212,6 @@ export async function checkControls(evaluate,app,room,id,sleep,captureFlip,captu
   for(let i=0;i<100;i++){if(await evaluate("document.querySelector('#match-results caption').textContent==='TIE ON POINTS · HOST WINS'"))break;await sleep(25);}
   const tiedRows=await evaluate("[...document.querySelectorAll('#match-results tbody tr')].map(row=>[...row.cells].map(cell=>cell.textContent))");
   const tiePass=tiedRows[0]?.[1]===hostActor.name+(id===room.host?' · YOU':'')&&tiedRows[0]?.[2]==='7'&&tiedRows[0]?.[3]==='9'&&tiedRows[1]?.[2]==='7'&&tiedRows[1]?.[3]==='1'&&await evaluate("document.querySelector('#match-results caption').textContent==='TIE ON POINTS · HOST WINS'");
-  return {readyPass,readyCleared,readyUI,popupPass,popup,refusalPass,autoStartPass,namePass,pickupKeptVulcan,commandPass,turboPass,flipPass,flipTimedOut,cameraPass,remoteSawFlip,flipTrace,desktopManual,warningPass,warning,chaffPass,chaffColor:ownCloud?.color,chaffSoundCount,greenNoticePass,orbitPass,orbitRotation,orbitTrace,desktopBombPass,stinkPass,stinkResult,whackPass,coWhackPass,whack,endingPass,resultsPass,leaderboard,tiePass,tiedRows,pass:readyPass&&readyCleared&&popupPass&&refusalPass&&autoStartPass&&namePass&&pickupKeptVulcan&&commandPass&&turboPass&&flipPass&&desktopManual&&warningPass&&chaffPass&&greenNoticePass&&orbitPass&&desktopBombPass&&stinkPass&&whackPass&&coWhackPass&&endingPass&&resultsPass&&tiePass,trace};
+  return {readyPass,readyCleared,readyUI,popupPass,popup,refusalPass,autoStartPass,namePass,pickupKeptVulcan,commandPass,turboPass,flipPass,flipTimedOut,cameraPass,remoteSawFlip,flipTrace,desktopManual,warningPass,warning,chaffPass,chaffColor:ownCloud?.color,chaffSoundCount,greenNoticePass,orbitPass,orbitRotation,orbitTrace,desktopBombPass,stinkPass,stinkResult,whackPass,coWhackPass,whack,whackDismissal,endingPass,resultsPass,leaderboard,tiePass,tiedRows,pass:readyPass&&readyCleared&&popupPass&&refusalPass&&autoStartPass&&namePass&&pickupKeptVulcan&&commandPass&&turboPass&&flipPass&&desktopManual&&warningPass&&chaffPass&&greenNoticePass&&orbitPass&&desktopBombPass&&stinkPass&&whackPass&&coWhackPass&&endingPass&&resultsPass&&tiePass,trace};
   }finally{clearInterval(fixtureHeartbeat);}
 }
