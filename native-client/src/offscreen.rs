@@ -32,7 +32,7 @@ impl Plugin for OffscreenPlugin {
         );
         let canvas = app.world_mut().resource_mut::<Assets<Image>>().add(image);
         app.insert_resource(Canvas(canvas))
-            .add_systems(PostUpdate, retarget);
+            .add_systems(PostUpdate, (retarget, snapshot));
         app.sub_app_mut(RenderApp).add_systems(
             Render,
             finish_on_gpu
@@ -52,6 +52,27 @@ fn retarget(mut commands: Commands, canvas: Res<Canvas>, cameras: Query<Entity, 
                 scale_factor: SCALE,
             }));
     }
+}
+
+/// Developer aid: with WILD_WHEELS_OFFSCREEN_SHOTS set to a folder, saves the
+/// picture there twice a second, so a run with no window can still be looked at.
+fn snapshot(mut commands: Commands, canvas: Res<Canvas>, time: Res<Time>, mut taken: Local<u32>) {
+    let Some(folder) = std::env::var_os("WILD_WHEELS_OFFSCREEN_SHOTS") else {
+        return;
+    };
+    if time.elapsed_secs() < *taken as f32 * 0.5 {
+        return;
+    }
+    *taken += 1;
+    let file = std::path::PathBuf::from(folder).join(format!("shot-{:04}.png", *taken));
+    commands
+        .spawn(bevy::render::view::screenshot::Screenshot(
+            RenderTarget::Image(ImageRenderTarget {
+                handle: canvas.0.clone(),
+                scale_factor: SCALE,
+            }),
+        ))
+        .observe(bevy::render::view::screenshot::save_to_disk(file));
 }
 
 /// Runs just before a frame is sent to the GPU and waits until the GPU has drawn

@@ -2,14 +2,12 @@
 use crate::app::GameSession;
 use crate::plumage::Wind;
 use crate::ported::{Graphics, Look, Ported, Tint, placement, tint};
+use crate::xray::FogMaterial;
 use bevy::ecs::system::SystemParam;
 use bevy::{
-    asset::RenderAssetUsages,
     camera::{ClearColorConfig, visibility::RenderLayers},
     core_pipeline::tonemapping::{DebandDither, Tonemapping},
-    image::Image,
     prelude::*,
-    render::render_resource::{Extent3d, TextureDimension, TextureFormat},
     ui::{IsDefaultUiCamera, UiTargetCamera},
 };
 use std::collections::{HashMap, HashSet};
@@ -20,6 +18,7 @@ pub struct ArenaPresentationPlugin;
 impl Plugin for ArenaPresentationPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<SceneCache>()
+            .add_systems(Last, audit_xray)
             .add_systems(Startup, setup)
             .add_systems(Update, capture);
     }
@@ -61,9 +60,16 @@ enum Role {
     Racer,
     Health,
     Overlay(usize),
+    Nightmare,
+    CricketPuppet,
     Xylophone,
     /// A racer's silhouette seen through Dark Humor.
     Ghost,
+    /// Projectiles, their trails, bombs and effects seen through Dark Humor.
+    GhostShot,
+    GhostTrail,
+    GhostBomb,
+    GhostEffect,
     Shot,
     Trail,
     Skid,
@@ -101,6 +107,69 @@ pub struct SceneCache {
     changes: HashMap<(usize, u8), (bool, f32)>,
     /// Each racer's tail, swinging behind their turns.
     tails: HashMap<usize, Tail>,
+    /// Smoothly frame Houston's full exhaust weapon, matching the browser camera.
+    nightmare_zoom: f32,
+}
+/// Developer check, on with WILD_WHEELS_XRAY_AUDIT: reports every frame in which
+/// a racer's X-ray silhouette exists but none of it is drawn, and why.
+fn audit_xray(
+    cache: Res<SceneCache>,
+    time: Res<Time>,
+    ghosts: Query<(&Ported, Option<&Children>)>,
+    parts: Query<(&Visibility, &ViewVisibility)>,
+    xray: Query<&Camera, With<XrayCamera>>,
+    mut frames: Local<(u32, u32)>,
+) {
+    // Silhouettes are kept ready between casts; they only count while X-ray is on.
+    if std::env::var_os("WILD_WHEELS_XRAY_AUDIT").is_none() || !xray.iter().any(|c| c.is_active) {
+        return;
+    }
+    let mut any = false;
+    // How many of an entity's parts are shown, and how many of those are drawn.
+    let drawn = |entity: Entity| {
+        let (mut shown, mut seen) = (0, 0);
+        if let Ok((_, children)) = ghosts.get(entity) {
+            for child in children.into_iter().flatten() {
+                if let Ok((visibility, view)) = parts.get(*child) {
+                    shown += u32::from(*visibility != Visibility::Hidden);
+                    seen += u32::from(*visibility != Visibility::Hidden && view.get());
+                }
+            }
+        }
+        (shown, seen)
+    };
+    for ((role, id), entity) in &cache.shown {
+        if *role != Role::Ghost {
+            continue;
+        }
+        any = true;
+        let Some(body) = cache.shown.get(&(Role::Racer, *id)) else {
+            continue;
+        };
+        // A racer drawn in the world, from the same viewpoint, must be drawn in X-ray.
+        let ((_, world), (shown, seen)) = (drawn(*body), drawn(*entity));
+        if world > 0 && seen == 0 {
+            frames.1 += 1;
+            let clip = ghosts
+                .get(*entity)
+                .map(|(player, _)| player.clip)
+                .ok()
+                .flatten();
+            eprintln!(
+                "xray-audit t={:.2} racer={id} clip={clip:?} world-parts-drawn={world} ghost-parts-shown={shown} drawn={seen}",
+                time.elapsed_secs()
+            );
+        }
+    }
+    if any {
+        frames.0 += 1;
+        if frames.0.is_multiple_of(240) {
+            eprintln!(
+                "xray-audit frames={} empty-silhouettes={}",
+                frames.0, frames.1
+            );
+        }
+    }
 }
 /// A damped spring that trails a racer's turning, and how hard speed presses on it.
 /// The browser's plumage only sways on its own; this response is native.
@@ -166,68 +235,7 @@ pub struct XrayCamera;
 #[derive(Component)]
 pub struct DarkFog;
 
-/// One frame of the browser's Dark Humor fog shader: violet clouds with pale tendrils.
-fn fog_texture() -> Image {
-    const WIDTH: u32 = 256;
-    const HEIGHT: u32 = 160;
-    let hash = |p: Vec2| {
-        ((p.dot(Vec2::new(127.1, 311.7))).sin() * 43_758.547)
-            .fract()
-            .abs()
-    };
-    let noise = |p: Vec2| {
-        let (i, f) = (p.floor(), p.fract_gl());
-        let f = f * f * (Vec2::splat(3.0) - 2.0 * f);
-        let low = hash(i).lerp(hash(i + Vec2::X), f.x);
-        let high = hash(i + Vec2::Y).lerp(hash(i + Vec2::ONE), f.x);
-        low.lerp(high, f.y)
-    };
-    let fbm = |mut p: Vec2| {
-        let (mut sum, mut weight) = (0.0, 0.5);
-        for _ in 0..4 {
-            sum += noise(p) * weight;
-            p = Vec2::new(1.6 * p.x - 1.2 * p.y, 1.2 * p.x + 1.6 * p.y);
-            weight *= 0.5;
-        }
-        sum
-    };
-    let mut data = Vec::with_capacity((WIDTH * HEIGHT * 4) as usize);
-    for y in 0..HEIGHT {
-        for x in 0..WIDTH {
-            let uv = Vec2::new(x as f32 / WIDTH as f32, y as f32 / HEIGHT as f32);
-            let p = (uv - 0.5) * Vec2::new(WIDTH as f32 / HEIGHT as f32, 1.0) * 3.0;
-            let q = Vec2::new(fbm(p), fbm(p + Vec2::new(4.1, 0.0)));
-            let clouds = fbm(p * 1.8 + q * 3.0);
-            let tendrils = (1.0 - (clouds - 0.48).abs() * 7.0).max(0.0).powi(3);
-            let pulse = 0.72 + 0.28 * (clouds * 11.0).sin();
-            let edge = (((uv - 0.5) * Vec2::new(1.1, 1.4)).length() - 0.1) / 1.1;
-            let edge = edge.clamp(0.0, 1.0);
-            let shade = 1.0 - edge * edge * (3.0 - 2.0 * edge) * 0.65;
-            let color = (Vec3::new(0.008, 0.004, 0.022)
-                + Vec3::new(0.09, 0.015, 0.18) * clouds
-                + Vec3::new(0.035, 0.12, 0.13) * tendrils * pulse)
-                * shade;
-            // The browser blends in display space; this is the same cover in linear light.
-            let alpha = 1.0 - (0.10 - 0.025 * clouds).max(0.0).powf(2.2);
-            data.extend(
-                [color.x, color.y, color.z, alpha].map(|v| (v.clamp(0.0, 1.0) * 255.0) as u8),
-            );
-        }
-    }
-    Image::new(
-        Extent3d {
-            width: WIDTH,
-            height: HEIGHT,
-            depth_or_array_layers: 1,
-        },
-        TextureDimension::D2,
-        data,
-        TextureFormat::Rgba8UnormSrgb,
-        RenderAssetUsages::RENDER_WORLD,
-    )
-}
-
-fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
+fn setup(mut commands: Commands, mut fogs: ResMut<Assets<FogMaterial>>) {
     // The browser shades as color * (0.62 + 0.38 * n·l) in display space with no
     // tone mapping. These light levels were matched to it against screenshots.
     commands.insert_resource(GlobalAmbientLight {
@@ -282,7 +290,7 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
             height: percent(100),
             ..default()
         },
-        ImageNode::new(images.add(fog_texture())).with_color(Color::NONE),
+        MaterialNode(fogs.add(FogMaterial::default())),
         UiTargetCamera(world),
         DarkFog,
     ));
@@ -314,7 +322,8 @@ pub struct SceneAssets<'w> {
 }
 #[derive(SystemParam)]
 pub struct Darkness<'w, 's> {
-    fog: Query<'w, 's, &'static mut ImageNode, With<DarkFog>>,
+    fog: Query<'w, 's, &'static MaterialNode<FogMaterial>, With<DarkFog>>,
+    fogs: ResMut<'w, Assets<FogMaterial>>,
     xray: Query<'w, 's, Lens, (With<XrayCamera>, Without<FollowCamera>)>,
     world: Query<'w, 's, Entity, With<FollowCamera>>,
 }
@@ -325,6 +334,19 @@ type Lens = (
     &'static mut Projection,
 );
 impl Darkness<'_, '_> {
+    /// Sets how dark the fog is. The material is touched only when that changes.
+    fn darken(&mut self, strength: f32) {
+        for fog in &self.fog {
+            if self
+                .fogs
+                .get(&fog.0)
+                .is_some_and(|m| m.strength.x != strength)
+                && let Some(mut material) = self.fogs.get_mut(&fog.0)
+            {
+                material.strength.x = strength;
+            }
+        }
+    }
     /// Turns the X-ray camera on or off, with the HUD drawn by whichever camera is last.
     fn see_through(&mut self, commands: &mut Commands, seeing: bool) {
         for (xray, mut camera, ..) in &mut self.xray {
@@ -469,6 +491,7 @@ fn racers(stage: &mut Stage, view: &ClientView, dt: f32, now: f32, xray: bool) {
         // Recorded transitions carry the browser's easing between idle and boost.
         let mut play = match (wrecked, boosting, a.celebrate > 0.0) {
             (true, ..) => stage.clip("wreck"),
+            (false, ..) if a.nightmare_active > 0.0 => stage.clip(&racer("idle")),
             (false, true, _) if shifting => {
                 stage.transition(&racer("boost:in"), &racer("boost"), changed)
             }
@@ -524,6 +547,7 @@ fn racers(stage: &mut Stage, view: &ClientView, dt: f32, now: f32, xray: bool) {
         if xray && !wrecked {
             let ghost = Play {
                 ghost: true,
+                tint: crate::xray::RACER,
                 ..play
             };
             stage.show(Role::Ghost, a.id, ghost, body);
@@ -532,7 +556,27 @@ fn racers(stage: &mut Stage, view: &ClientView, dt: f32, now: f32, xray: bool) {
         if wrecked {
             continue;
         }
+        if view.special_abilities && a.driver == 7 && a.nightmare_active > 0.0 {
+            let nightmare = stage.clip("overlay:7:nightmare");
+            stage.show(Role::Nightmare, a.id, nightmare, body);
+        }
         // Health pips face along the viewer's heading, as in the browser.
+        if view.special_abilities && a.reverse_controls > 0.0 {
+            let puppet = match a.reverse_controls < 0.4 {
+                true => stage.aged("overlay:reversePsychology:end", 0.4 - a.reverse_controls),
+                false => stage.clip("overlay:reversePsychology"),
+            };
+            let height = match a.driver {
+                11 => 3.0,
+                _ => 0.0,
+            };
+            stage.show(
+                Role::CricketPuppet,
+                a.id,
+                puppet,
+                at(a.wx, height, a.wz, a.heading),
+            );
+        }
         let pips = stage.clip(&format!("health:{}", (a.health.max(0.0) as usize).min(6)));
         stage.show(
             Role::Health,
@@ -599,7 +643,12 @@ fn racers(stage: &mut Stage, view: &ClientView, dt: f32, now: f32, xray: bool) {
     }
 }
 
-fn effects(stage: &mut Stage, view: &ClientView) {
+fn effects(stage: &mut Stage, view: &ClientView, xray: bool) {
+    // In X-ray, the viewer's own bombs and everyone else's are told apart by color.
+    let side = |owner: usize| match owner == view.you {
+        true => crate::xray::OWN,
+        false => crate::xray::RIVAL,
+    };
     for (index, fx) in view.effects.iter().enumerate() {
         let mut transform = at(fx.wx, 0.0, fx.wz, 0.0);
         let play = match fx.kind.as_str() {
@@ -644,6 +693,14 @@ fn effects(stage: &mut Stage, view: &ClientView) {
                 }
             }
         };
+        if xray {
+            let ghost = Play {
+                ghost: true,
+                tint: crate::xray::BLAST,
+                ..play
+            };
+            stage.show(Role::GhostEffect, index, ghost, transform);
+        }
         stage.show(Role::Effect, index, play, transform);
     }
     for (index, bomb) in view.bombs.iter().enumerate() {
@@ -652,6 +709,19 @@ fn effects(stage: &mut Stage, view: &ClientView) {
             _ => "bomb:bomb",
         };
         let play = stage.aged(name, bomb.age);
+        if xray {
+            let ghost = Play {
+                ghost: true,
+                tint: side(bomb.owner),
+                ..play
+            };
+            stage.show(
+                Role::GhostBomb,
+                index,
+                ghost,
+                at(bomb.wx, 0.0, bomb.wz, 0.0),
+            );
+        }
         stage.show(Role::Bomb, index, play, at(bomb.wx, 0.0, bomb.wz, 0.0));
     }
     for (index, cloud) in view.chaff_clouds.iter().enumerate() {
@@ -727,6 +797,7 @@ pub fn sync(
         time,
     } = assets;
     let Some(client) = session.client.as_ref() else {
+        cache.nightmare_zoom = 0.0;
         // Outside a room the world is empty; the menus say what is happening.
         for (_, entity) in cache.shown.drain() {
             commands.entity(entity).despawn();
@@ -735,14 +806,13 @@ pub fn sync(
             commands.entity(scenery).despawn();
             commands.entity(outlines).despawn();
         }
-        for mut fog in &mut darkness.fog {
-            fog.color = Color::NONE;
-        }
+        darkness.darken(0.0);
         darkness.see_through(&mut commands, false);
         return;
     };
     let view = client.view();
     if cache.arena.is_none_or(|(arena, ..)| arena != view.arena) {
+        cache.nightmare_zoom = 0.0;
         if let Some((_, old, outlines)) = cache.arena.take() {
             commands.entity(old).despawn();
             commands.entity(outlines).despawn();
@@ -770,9 +840,7 @@ pub fn sync(
         }
     }
     let (dark, xray) = dark_humor(&view);
-    for mut fog in &mut darkness.fog {
-        fog.color = Color::srgba(1.0, 1.0, 1.0, dark);
-    }
+    darkness.darken(dark);
     darkness.see_through(&mut commands, xray && dark > 0.0);
     if let Some((.., outlines)) = cache.arena {
         commands.entity(outlines).insert(match xray && dark > 0.0 {
@@ -786,12 +854,16 @@ pub fn sync(
         players: &mut players,
         graphics: &graphics,
     };
+    let seeing = xray && dark > 0.0;
+    // A KnowItOwl keeps the silhouettes ready between casts, unseen, so they are
+    // there the moment the dark falls instead of a few frames later.
+    let owl = view.special_abilities && view.player.driver == 14;
     racers(
         &mut stage,
         &view,
         time.delta_secs().min(0.05),
         time.elapsed_secs(),
-        xray && dark > 0.0,
+        seeing || owl,
     );
     crate::bench::PROJECTILES.store(
         view.projectiles.len() as u64,
@@ -808,6 +880,23 @@ pub fn sync(
             (_, true) => stage.clip(&format!("shot:vulcan:{owner}")),
             _ => stage.clip("shot:hedgehog"),
         };
+        if seeing {
+            // The browser marks the viewer's own shots green and the rest pink.
+            let ghost = Play {
+                ghost: true,
+                tint: match p.owner == view.you {
+                    true => crate::xray::OWN,
+                    false => crate::xray::RIVAL,
+                },
+                ..play
+            };
+            stage.show(
+                Role::GhostShot,
+                p.id as usize,
+                ghost,
+                at(p.wx, p.height, p.wz, p.heading),
+            );
+        }
         stage.show(
             Role::Shot,
             p.id as usize,
@@ -831,6 +920,13 @@ pub fn sync(
             let play = stage.clip(&name);
             let key = p.id as usize * 16 + index / 3;
             let puff = at(sample.wx, sample.height, sample.wz, 0.0).with_scale(Vec3::splat(size));
+            if seeing {
+                let ghost = Play {
+                    ghost: true,
+                    ..play
+                };
+                stage.show(Role::GhostTrail, key, ghost, puff);
+            }
             stage.show(Role::Trail, key, play, puff);
         }
     }
@@ -859,23 +955,38 @@ pub fn sync(
             at(supply.wx, 0.0, supply.wz, 0.0),
         );
     }
-    effects(&mut stage, &view);
+    effects(&mut stage, &view, seeing);
     stage.retire();
     // The browser's chase camera, including its wider view while boosting or drifting.
     let p = view.player;
+    let nightmare = match (
+        p.driver,
+        p.nightmare_active > 0.0,
+        p.boost > 0.0,
+        p.destroyed > 0.0,
+    ) {
+        (7, true, true, false) => 1.0,
+        _ => 0.0,
+    };
+    cache.nightmare_zoom +=
+        (nightmare - cache.nightmare_zoom) * (1.0 - (-time.delta_secs().min(0.1) * 5.0).exp());
+    let zoom = cache.nightmare_zoom;
+    let distance = 17.0 + 25.0 * zoom;
+    let ahead = 18.0 - 32.0 * zoom;
     let facing = Vec3::new(
         p.camera_heading.sin() as f32,
         0.0,
         p.camera_heading.cos() as f32,
     );
     let center = Vec3::new(p.wx as f32, 0.0, p.wz as f32);
-    let height = match p.destroyed > 0.0 {
-        true => 15.0,
-        false => 10.0,
-    };
+    let height = 16.0 * zoom
+        + match p.destroyed > 0.0 {
+            true => 15.0,
+            false => 10.0,
+        };
     for (mut camera, mut projection) in &mut cameras {
-        *camera = Transform::from_translation(center - facing * 17.0 + Vec3::Y * height)
-            .looking_at(center + facing * 18.0 + Vec3::Y * 1.5, Vec3::Y);
+        *camera = Transform::from_translation(center - facing * distance + Vec3::Y * height)
+            .looking_at(center + facing * ahead + Vec3::Y * 1.5, Vec3::Y);
         if let Projection::Perspective(perspective) = &mut *projection {
             perspective.fov = match (p.boost > 0.0, p.was_drifting) {
                 (true, _) => 1.2,

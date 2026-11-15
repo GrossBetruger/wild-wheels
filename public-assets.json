@@ -1,4 +1,5 @@
 [
+  "characters/tammy/reverse-psychology.js",
   "index.html",
   "assets/favicon.svg",
   "ui/ability-announcements.js",
@@ -55,5 +56,6 @@
   "photos/photo-protocol.js",
   "characters/knowitowl/dark-bomb-light.js",
   "gameplay/player-colors.js",
-  "gameplay/bicycle-pickup.js"
+  "gameplay/bicycle-pickup.js",
+  "characters/houston/nightmare-fuel.js"
 ]

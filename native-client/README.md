@@ -13,7 +13,11 @@ The game opens on a menu: enter the server address and your name, choose a
 racer, and join. In the room you can pick the arena, the number of bots, special
 abilities and your racer, then start the match. Escape opens the in-game menu to
 sit out, leave the room or quit. The last server, name and racer are remembered.
-Chat is not available in the native client yet.
+Press **T** or click **CHAT** to open room chat, **Enter** to send and **Escape**
+to return to driving. Choose Everyone or a player for a private conversation;
+messages support replies and deleting your own messages. Tabs show unread counts.
+Scroll or use Page Up/Down to browse history. Chat uses the same server history
+and permissions as the browser; typing suppresses driving and weapon controls.
 
 In a match: Arrows/WASD drive; Shift drifts; Space fires; Tab, Q or Command
 switches weapons; X boosts; C deploys chaff; Z flips; F uses the special ability.
@@ -23,6 +27,13 @@ cooldowns, which can be clicked; rivals' nameplates; missile warnings; kill,
 ability and reward announcements; the drift meter; and the final results.
 
 ### Developer options
+
+The native chat interoperability test starts its own isolated server. After
+building the dedicated server, run from the repository root:
+
+```sh
+WILD_WHEELS_TEST_SERVER="$PWD/dedicated-server/target/release/wild-wheels-server" cargo +1.97.1 test --locked --manifest-path native-client/Cargo.toml --lib chat::integration -- --ignored
+```
 
 `--server URL` joins that server straight away, skipping the menu, and
 `--name NAME` sets the name used. For a non-graphical network smoke test against
@@ -83,7 +94,7 @@ cargo +1.97.1 build --release --locked --manifest-path native-client/Cargo.toml
 ./native-client/target/release/wild-wheels-native --showcase boost:9
 ```
 
-Scenes are `plumage` (Pearococo's tail from behind, swaying and swinging
+Scenes include `nightmare` (Houston's ultraviolet exhaust), `plumage` (Pearococo's tail from behind, swaying and swinging
 through turns, with the camera circling to show its iridescence), `boost:N`, `rapid-fire:N`, `fade:shield:N`, `fade:hedge:N`,
 `fade:tehilim:N`, `special-start:11` and `special-end:11`, for racer N from 0
 (Pip) to 14 (KnowItOwl). Each cycles through a state change and back. B toggles

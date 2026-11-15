@@ -1,5 +1,6 @@
 use super::*;
 impl Game {
+    #[allow(dead_code)] // Retained while Low-Cost Locust is temporarily disabled.
     pub(super) fn spawn_locusts(&mut self,owner:usize){
         let count=self.actors.iter().filter(|a|a.driver!=5&&!a.inactive&&!a.afk&&!a.bomber).count()*2;
         let centers=[(-65.0,-65.0),(65.0,65.0),(-65.0,65.0),(65.0,-65.0),(0.0,78.0),(78.0,0.0),(0.0,-78.0),(-78.0,0.0)];

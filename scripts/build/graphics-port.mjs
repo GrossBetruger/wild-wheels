@@ -21,6 +21,8 @@ export const PACK_VERSION=7;
 export const FIRE_RING_RADIUS=20;
 // Clips whose every frame is new geometry are recorded at the slower rate to bound the pack size.
 const SLOW_FPS=12;
+// Effects whose geometry changes every frame are recorded at this rate.
+const SMOOTH_FPS=60;
 // Transitions between states are recorded for this long after the change.
 export const TRANSITION=1;
 // Seconds over which timed states fade out in the browser, by state.
@@ -187,7 +189,7 @@ class Pack {
       u32(drivers.length),...drivers.flatMap((driver,index)=>{
         // The announcement shown when a racer's special ability is used.
         const card=abilityCards[index];
-        return[text(driver.name),text(driver.desc),Buffer.from(hex(driver.color)),text(abilityNames[index]??''),Buffer.from([driver.intelligence]),text(card?.title??''),text(card?.detail??''),Buffer.from(hex(card?.color??'#ffffff'))];
+        return[text(driver.name),text(driver.desc),Buffer.from(hex(driver.color)),text(index===7?`${abilityNames[index]}\nNIGHTMARE FUEL · XX · 12s / 30s recharge`:abilityNames[index]??''),Buffer.from([driver.intelligence]),text(card?.title??''),text(card?.detail??''),Buffer.from(hex(card?.color??'#ffffff'))];
       }),
     ]);
   }
@@ -244,6 +246,8 @@ export function buildGraphicsPack({only=[...drivers.keys()]}={}){
     const rapid=trail=>capture({driver,setup:r=>{hidden(r);r.projectiles=[{id:1,owner:r.id,kind:'hedgehog',vulcan:true,wx:0,wz:0,heading:0,height:0,age:1,trail}];}})[0];
     pack.clip(`trail:vulcan:${driver}`,FPS,[pack.overlay(rapid([]),rapid([{wx:0,wz:0,height:0}]))]);
     record(`shot:vulcan:${driver}`,{driver,frames:FPS,setup:r=>{hidden(r);r.projectiles=[{id:1,owner:r.id,kind:'hedgehog',vulcan:true,wx:0,wz:0,heading:0,height:0,age:1,trail:[]}];}});
+    // Nightmare Fuel's flames change shape every frame and cannot be blended, so it is recorded at the display's rate.
+    if(driver===7){const shots=capture({driver,fps:SMOOTH_FPS,frames:OVERLAY_LOOP*SMOOTH_FPS,warmup:1,setup:r=>{r.nightmareActive=12;r.boost=12;}});pack.clip('overlay:7:nightmare',SMOOTH_FPS,shots.map((shot,i)=>pack.overlay(idle[Math.floor(i*FPS/SMOOTH_FPS)%idle.length],shot)));}
     // States layered over the racer. KnowItOwl's special is a full-screen shader effect.
     const states={shield:r=>{r.shield=1;},hedge:r=>{r.hedgeShield=2;},tehilim:r=>{r.tehilim=2;},dizzy:r=>{r.dizzy=1;},vulcan:r=>{r.vulcan=3;r.fireCooldown=0;},...(driver===14?{}:{special:r=>{r.specialActive=4;}})};
     for(const [state,setup] of Object.entries(states)){
@@ -291,10 +295,15 @@ export function buildGraphicsPack({only=[...drivers.keys()]}={}){
   record('pickup:bicycle',{...turn,setup:r=>{hidden(r);r.supplies=[{id:1000,version:0,owner:99,kind:'bicycle',cooldown:0,age:5,heading:0,wx:0,wz:0,dropWx:0,dropWz:0,dropHeight:0}];}});
   const bare=draw(renderer(),world(0),LOOP*2,HOME);
   for(let health=1;health<=6;health++)pack.clip(`health:${health}`,FPS,[pack.overlay(bare,draw(renderer(),Object.assign(world(0),{health}),LOOP*2,HOME))]);
+  const puppetBase=capture({frames:OVERLAY_LOOP*FPS});
+  const puppet=capture({frames:OVERLAY_LOOP*FPS,setup:r=>{r.reverseControls=5;}});
+  pack.clip('overlay:reversePsychology',FPS,puppet.map((shot,i)=>pack.overlay(puppetBase[i],shot)));
+  const puppetEnd=capture({frames:Math.ceil(.4*FPS)+1,each:(r,t)=>{r.reverseControls=Math.max(.001,.4-t);}});
+  pack.clip('overlay:reversePsychology:end',FPS,puppetEnd.map((shot,i)=>pack.overlay(puppetBase[i],shot)),ONCE);
 
   // World effects play once, frame by frame of their age.
   const effect=(type,life,extra={})=>(r,t)=>{r.effects=[{type,owner:r.id,wx:0,wz:0,age:Math.max(0,t),life,...extra}];};
-  for(const [type,life] of [['explosion',2.5],['abomb',3],['radiation',RADIATION_DURATION],['fashionSnap',1.2],['heartbeat',.7],['taxAudit',2.5],['teleportOut',1.35],['teleportIn',1.35],['locustSpawn',1.2],['locustBurst',.7]])once(`effect:${type}`,life,null,effect(type,life,{heading:0}));
+  for(const [type,life] of [['reverseShockwave',2.2],['explosion',2.5],['abomb',3],['radiation',RADIATION_DURATION],['fashionSnap',1.2],['heartbeat',.7],['taxAudit',2.5],['teleportOut',1.35],['teleportIn',1.35],['locustSpawn',1.2],['locustBurst',.7]])once(`effect:${type}`,life,null,effect(type,life,{heading:0}));
   once('effect:default',.65,null,effect('pickup',.65));
   once('effect:fireRingOut',2.4,null,effect('fireRingOut',2.4,{radius:FIRE_RING_RADIUS,color:'#ff631c'}));
   for(const [name,color] of [['orange','#ff631c'],['blue','#4abaff']])record(`effect:fireRing:${name}`,{fps:SLOW_FPS,frames:OVERLAY_LOOP*SLOW_FPS,setup:hidden,each:effect('fireRing',.1,{radius:FIRE_RING_RADIUS,color})});

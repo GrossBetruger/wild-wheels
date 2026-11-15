@@ -10,4 +10,5 @@
 
 # Native client graphics
 
+- Whenever creating a new animation, include the exact command to run its animation unit test in the response and copy the complete command to the user's clipboard using `pbcopy`. Present the command as one copy-pasteable physical line.
 - The native client's graphics are ported from the browser renderer at build time. Before adding or changing visuals, or when one is missing natively, follow `.claude/skills/native-graphics-port/SKILL.md` and `docs/native-graphics-port.md`. Do not hand-model in the native client what the browser already draws.

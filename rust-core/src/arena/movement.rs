@@ -38,10 +38,13 @@ impl Game{
         let dt=dt*match self.frozen(id){true=>0.025,false=>1.0};
         if self.actors[id].destroyed>0.0||self.actors[id].prediction_crash{return;}
         let g=&mut self.global;let a=&mut self.actors[id];let wx=a.wx;let wz=a.wz;
+        // Rewire after humans or AI choose their controls, including analog steering.
+        let (steer,keys)=match g.special_abilities&&a.reverse_controls>0.0{true=>(-steer,(keys&!3)|((keys&1)<<1)|((keys&2)>>1)),false=>(steer,keys)};
         let data=[a.wx,a.wz,a.heading,a.motion_heading,a.camera_heading,a.speed,a.drift,a.boost,a.somersault,a.somersault_cooldown,a.dizzy,a.somersault_camera_start,a.yaw,f64::from(a.was_drifting),a.wall_cooldown,0.0];
         // This is entirely inside Wasm: no actor objects cross the JS boundary.
         unsafe{(*core::ptr::addr_of_mut!(crate::KARTS).cast::<crate::Kart>().add(id)).data=data;}
         let flags=u32::from(advance)|u32::from(keys&1!=0)*2|u32::from(keys&2!=0)*4|u32::from(keys&16!=0)*8|u32::from(advance||id==0||a.human)*16|u32::from(g.phase=="racing")*32|u32::from(id==0)*64;
+        let flags=flags|match a.driver==7&&a.nightmare_active>0.0{true=>crate::NIGHTMARE_DRIVE,false=>0};
         let events=crate::step(id,g.arena,steer,dt,flags);
         let d=unsafe{(*core::ptr::addr_of!(crate::KARTS).cast::<crate::Kart>().add(id)).data};
         a.wx=d[0];a.wz=d[1];a.heading=d[2];a.motion_heading=d[3];a.camera_heading=d[4];a.speed=d[5];a.drift=d[6];a.boost=d[7];a.somersault=d[8];a.somersault_cooldown=d[9];a.dizzy=d[10];a.somersault_camera_start=d[11];a.yaw=d[12];a.was_drifting=d[13]!=0.0;
@@ -57,7 +60,7 @@ impl Game{
         let mut candidates:Vec<_>=(0..8).map(|i|{let angle=i as f64*std::f64::consts::PI/4.0;Point{wx:angle.sin()*78.0,wz:angle.cos()*78.0}}).collect();
         let nearest=|point:&Point|self.actors.iter().filter(|a|a.id!=id&&a.destroyed==0.0).map(|a|distance(a.wx,a.wz,point.wx,point.wz)).fold(999.0,f64::min);
         candidates.sort_by(|a,b|nearest(b).total_cmp(&nearest(a)));let p=&candidates[0];let a=&mut self.actors[id];
-        a.wx=p.wx;a.wz=p.wz;a.heading=(-p.wx).atan2(-p.wz);a.speed=0.0;a.health=3.0;a.heal_timer=0.0;a.destroyed=0.0;a.shield=0.0;a.hedge_shield=0.0;a.tehilim=0.0;a.ammo=START_HEDGEHOGS;a.missiles=1;a.turbos=1;a.item="hedgehog".into();a.fire_cooldown=0.5;a.boost=0.0;a.path.clear();
+        a.wx=p.wx;a.wz=p.wz;a.heading=(-p.wx).atan2(-p.wz);a.speed=0.0;a.reverse_controls=0.0;a.health=3.0;a.heal_timer=0.0;a.destroyed=0.0;a.shield=0.0;a.hedge_shield=0.0;a.tehilim=0.0;a.ammo=START_HEDGEHOGS;a.missiles=1;a.turbos=1;a.item="hedgehog".into();a.fire_cooldown=0.5;a.boost=0.0;a.nightmare_active=0.0;a.path.clear();
         a.motion_heading=a.heading;a.camera_heading=a.heading;a.drift=0.0;a.was_drifting=false;a.drift_trail=None;a.drift_emit=0.0;a.owl_boosting=false;a.kill_streak=0;a.bat_cooldown=0.0;a.vulcan=0.0;a.chaff=4;a.chaff_cooldown=0.0;a.somersault=0.0;a.somersault_cooldown=0.0;a.somersault_camera_start=a.camera_heading;a.dizzy=0.0;a.credits.clear();
     }
     pub(super) fn collect(&mut self,id:usize){

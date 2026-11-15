@@ -22,6 +22,7 @@ pub enum Command {
     Stop,
 }
 pub enum Event {
+    Session { origin: url::Url, token: String },
     Status(String),
     Connected,
     Packet(Vec<u8>),
@@ -62,7 +63,7 @@ impl Transport {
         }
     }
 }
-async fn body(mut response: reqwest::Response) -> NetResult<Value> {
+pub(crate) async fn body(mut response: reqwest::Response) -> NetResult<Value> {
     if response.content_length().is_some_and(|n| n > 1_048_576) {
         return Err("Server response is too large".into());
     }
@@ -249,6 +250,10 @@ async fn connect(
         .await?;
     events.try_send(Event::Status("Connected".into()))?;
     events.try_send(Event::Connected)?;
+    events.try_send(Event::Session {
+        origin: config.origin.clone(),
+        token: token.clone(),
+    })?;
     loop {
         tokio::select! {
             message=socket.next()=>match message {
@@ -269,6 +274,7 @@ async fn connect(
                         let reply=body(response).await?;
                         let resumed=reply["token"].as_str().ok_or("AFK response missing session")?;
                         store.remember(origin,Identity{token:resumed.into(),expires:now()+age})?;
+                        events.try_send(Event::Session { origin:config.origin.clone(), token:resumed.into() })?;
                         let _=socket.close(None).await;events.try_send(Event::Status("Sitting out".into()))?;
                         loop {match commands.try_recv(){
                             Ok(Command::Afk(false))=>break,

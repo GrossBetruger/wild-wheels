@@ -1,4 +1,5 @@
 import {placeSupply,tickSupplySpawns} from './supply-spawns.js';
+import {tapNightmare,tickNightmare} from '../characters/houston/nightmare-fuel.js';
 import { tickBicycles } from './bicycle-pickup.js';
 import {tickLocusts} from './locusts.js';
 import { tickFireRings, fireRingBlocks } from '../characters/master-yuda/fire-ring.js';
@@ -38,7 +39,7 @@ function clearShot(arena, a, b) { const d = distance(a, b); for (let t = 3; t < 
 function spawn(r, actor, initial = false) {
   const actors = [r, ...r.bots], candidates = Array.from({ length: 8 }, (_, i) => { const angle = i * Math.PI / 4; return { wx: Math.sin(angle) * 78, wz: Math.cos(angle) * 78 }; });
   const choice = initial ? candidates[Math.floor(actor.id * 8 / 6)] : candidates.sort((a, b) => Math.min(...actors.filter(k => k !== actor && !k.destroyed).map(k => distance(b, k)), 999) - Math.min(...actors.filter(k => k !== actor && !k.destroyed).map(k => distance(a, k)), 999))[0];
-  actor.wx = choice.wx; actor.wz = choice.wz; actor.heading = Math.atan2(-choice.wx, -choice.wz); actor.speed = 0; actor.health = 3; actor.destroyed = 0; actor.shield = 0; actor.ammo = START_HEDGEHOGS; actor.missiles = 1; actor.turbos = 1; actor.item = 'hedgehog'; actor.fireCooldown = .5; actor.vx = 0; actor.boost = 0; actor.path = [];
+  actor.wx = choice.wx; actor.wz = choice.wz; actor.heading = Math.atan2(-choice.wx, -choice.wz); actor.speed = 0; actor.health = 3; actor.reverseControls = 0; actor.destroyed = 0; actor.shield = 0; actor.ammo = START_HEDGEHOGS; actor.missiles = 1; actor.turbos = 1; actor.item = 'hedgehog'; actor.fireCooldown = .5; actor.vx = 0; actor.boost = 0; actor.nightmareActive = 0; actor.nightmareCooldown ??= 0; actor.path = [];
   actor.motionHeading = actor.heading; actor.cameraHeading = actor.heading; actor.drift = 0; actor.wasDrifting = false; actor.driftTrail = null; actor.driftEmit = 0;
   actor.intelligenceBonus ??= 0; actor.owlBoosting = false; actor.killStreak = 0; actor.batCooldown = 0; actor.vulcan = 0; actor.healTimer = 0; actor.hedgeShield = 0; actor.tehilim = 0;
   actor.chaff = 4; actor.chaffCooldown = 0;
@@ -107,7 +108,9 @@ export function targetAhead(world, actor = world, cone = .65) {
 }
 export function commandKeys(command) { const keys = new Set(command.keys); if (Number.isFinite(command.steer)) keys.steer = command.steer; return keys; }
 export function useBattleTurbo(r, actor = r, actionId) {
-  if (!canAct(r, actor) || actor.turbos <= 0 || actor.boost > 0) return false;
+  if (!canAct(r, actor)) return false;
+  if (tapNightmare(r, actor)) return true;
+  if (actor.turbos <= 0 || actor.boost > 0) return false;
   actor.turbos--; actor.boost = boostDuration(actor.driver); fx(r, 'boost', actor, actionId == null ? undefined : `action:${actionId}`); return true;
 }
 export function somersaultBattle(world, actor = world) {
@@ -210,7 +213,7 @@ export function advanceProjectile(r, shot, dt) {
   return { impact, victim, decoy };
 }
 export function damageBattle(r, victim, owner, amount, kind = 'hedgehog') {
-  if (victim.bomber || victim.inactive || !battleActive(r) || victim.destroyed > 0 || victim.shield > 0 && kind !== 'wall' && kind !== 'tax' || victim.hedgeShield > 0 && kind !== 'missile' && kind !== 'wall' && kind !== 'tax' || victim.id === owner) return false;
+  if (victim.bomber || victim.inactive || !battleActive(r) || victim.destroyed > 0 || victim.shield > 0 && kind !== 'wall' && kind !== 'tax' && kind !== 'nightmare' || victim.hedgeShield > 0 && kind !== 'missile' && kind !== 'wall' && kind !== 'tax' && kind !== 'nightmare' || victim.id === owner) return false;
   victim.health = Math.max(0, victim.health - amount); victim.healTimer = 0; voice(r, victim, 'hurt');
   if (victim === r) r.shake = .5;
   const attacker = [r, ...r.bots].find(k => k.id === owner);
@@ -222,7 +225,7 @@ export function damageBattle(r, victim, owner, amount, kind = 'hedgehog') {
     if (bomber && bomber !== victim) credited.add(bomber);
   }
   victim.stinkContributors = new Map();
-  victim.destroyed = 3; victim.speed = 0; victim.boost = 0; if (r.finishCountdown === null) victim.deaths++; fx(r, kind === 'abomb' || kind === 'radiation' ? 'ash' : 'explosion', victim);
+  victim.destroyed = 3; victim.reverseControls = 0; victim.nightmareActive = 0; victim.speed = 0; victim.boost = 0; if (r.finishCountdown === null) victim.deaths++; fx(r, ['abomb', 'radiation', 'nightmare'].includes(kind) ? 'ash' : 'explosion', victim);
   victim.owlBoosting = false; victim.drift = 0; victim.wasDrifting = false; victim.driftTrail = null; victim.killStreak = 0; victim.batCooldown = 0; victim.vulcan = 0; victim.hedgeShield = 0; victim.tehilim = 0; victim.specialActive = 0; victim.somersault = 0; victim.dizzy = 0;
   if (r.finishCountdown !== null) return true;
   for (const scorer of credited) { const full = kind === 'wall' || scorer === attacker; scorer.kills += full ? 1 : .5; scorer.celebrate = 1.6; voice(r, scorer, 'cheer'); r.killFeed.unshift({ id: r.killSequence = (r.killSequence ?? 0) + 1, attacker: scorer.id, kind, assist: !full, radiation: kind === 'radiation' && scorer === attacker, victim: victim.id, victimName: victim.name ?? drivers[victim.driver].name, victimColor: victim.color ?? drivers[victim.driver].color, text: `${scorer === r ? 'YOU' : scorer.name ?? drivers[scorer.driver].name.split(' ')[0]} → ${victim === r ? 'YOU' : victim.name ?? drivers[victim.driver].name.split(' ')[0]}`, time: r.elapsed }); r.killFeed = r.killFeed.slice(0, 16); }
@@ -263,6 +266,7 @@ export function ageDriftEffects(r, dt) {
   r.driftParticles = r.driftParticles.filter(p => p.age < p.life).slice(-240);
 }
 function moveActor(r, actor, steer, gas, brake, dt, handbrake = false) {
+  if(r.specialAbilities!==false&&actor.reverseControls>0){steer=-steer;[gas,brake]=[brake,gas];}
   if (actor.dizzy > 0) { const wild = actor.boost > 0; steer = clamp(steer * (wild ? .25 : .4) + Math.sin((DIZZY_DURATION - actor.dizzy) * (wild ? 14 : 10)) * (wild ? 1.65 : .95), -1, 1); }
   // Chassis rotation and travel direction separate while the rear tires slide.
   const drifting = handbrake && !(actor.somersault > 0) && !brake && Math.abs(steer) > .1 && actor.speed > (actor.wasDrifting ? 70 : 110);
@@ -274,8 +278,9 @@ function moveActor(r, actor, steer, gas, brake, dt, handbrake = false) {
   }
   actor.wasDrifting = drifting;
   actor.heading -= steer * (drifting ? 4.8 : 1.7 + Math.min(1, Math.abs(actor.speed) / 300) * .7) * dt;
-  actor.speed = clamp(actor.speed + (gas ? (drifting ? 100 : 300) : drifting ? -90 : -170) * dt - (brake ? 400 * dt : 0), brake ? -160 : 0, drifting ? 400 : actor.boost > 0 ? 850 : 520);
-  if (actor.boost > 0 && !drifting) actor.speed = Math.min(850, actor.speed + 650 * dt);
+  const boostSpeed = actor.driver === 7 && actor.nightmareActive > 0 ? 750 : 850; // 180 km/h on the HUD.
+  actor.speed = clamp(actor.speed + (gas ? (drifting ? 100 : 300) : drifting ? -90 : -170) * dt - (brake ? 400 * dt : 0), brake ? -160 : 0, drifting ? 400 : actor.boost > 0 ? boostSpeed : 520);
+  if (actor.boost > 0 && !drifting) actor.speed = Math.min(boostSpeed, actor.speed + 650 * dt);
   actor.motionHeading += angleDelta(actor.heading, actor.motionHeading) * (1 - Math.exp(-(drifting ? 3.8 : 14) * dt));
   if (actor.somersault > 0) {
     const progress = clamp(1 - actor.somersault / SOMERSAULT_DURATION, 0, 1), turn = progress * progress * (3 - 2 * progress);
@@ -298,8 +303,8 @@ export function predictKartMovement(world, actor, keys, dt) {
   if (frozen(world, actor.id)) return;
   if (actor.bomber || !battleActive(world) || actor.destroyed > 0) return;
   // Reuse movement and wall collisions, without running weapons, damage or AI.
-  const scene = { prediction: true, mode: 'combat', phase: world.phase, arena: world.arena, elapsed: world.elapsed, finishCountdown: null, events: [], effects: [], skids: [], driftParticles: [] };
-  advanceKartMovement(scene, actor, keys, dt); return scene.events;
+  const scene = { specialAbilities: world.specialAbilities, prediction: true, mode: 'combat', phase: world.phase, arena: world.arena, elapsed: world.elapsed, finishCountdown: null, events: [], effects: [], skids: [], driftParticles: [] };
+  advanceKartMovement(scene, actor, keys, dt); actor.reverseControls=Math.max(0,(actor.reverseControls??0)-dt); return scene.events;
 }
 function advanceKartMovement(world, actor, keys, dt) {
   if (actor.destroyed > 0 || actor.predictedCrash) return;
@@ -313,7 +318,7 @@ function advanceKartMovement(world, actor, keys, dt) {
 export function tickBattle(r, keys, dt, inputs = null) {
   dt = clamp(dt, 0, .05); if (!['racing', 'countdown'].includes(r.phase)) return;
   if (r.phase === 'countdown') { r.countdown -= dt; if (r.countdown <= 0) { r.phase = 'racing'; r.notice = 'BATTLE ON! · FIRST TO 10 KILLS'; r.noticeTime = 3; } return; }
-  tickSpecials(r, dt);tickLocusts(r,dt); const worldDt = r.timeStop > 0 ? 0 : dt;
+  tickSpecials(r, dt);tickNightmare(r, dt);tickLocusts(r,dt); const worldDt = r.timeStop > 0 ? 0 : dt;
   const ending = r.finishCountdown !== null; if (ending) dt = Math.min(dt, r.finishCountdown);
   r.elapsed += dt; r.noticeTime = Math.max(0, r.noticeTime - dt); r.shake = Math.max(0, r.shake - dt * 2);
   tickSupplySpawns(r,arenas[r.arena],worldDt);

@@ -183,6 +183,8 @@ macro_rules! animations {
 // Racers that draw a transition through the same browser code, differing only in
 // color, share one test. The most interesting run first.
 animations! {
+    t00_houston_nightmare_fuel: 0, "nightmare", false;
+    t00_reverse_psychology_cricket_puppet: 0, "reverse-psychology", true;
     // Native only: Pearococo's tail sways, then swings behind turns.
     t00_pearococo_tail_sways_and_swings: 0, "plumage", true;
     // Eased: the browser moves gradually between the states.

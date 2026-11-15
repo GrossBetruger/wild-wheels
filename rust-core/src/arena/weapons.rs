@@ -1,6 +1,6 @@
 use super::*;
 impl Game{
-    fn active(&self,id:usize)->bool{let a=&self.actors[id];!self.frozen(id)&&self.combat_active()&&a.destroyed<=0.0&&!a.bomber&&!a.inactive&&!a.afk&&(self.global.finish_countdown.is_none()||self.human_controlled(id))}
+    pub(super) fn active(&self,id:usize)->bool{let a=&self.actors[id];!self.frozen(id)&&self.combat_active()&&a.destroyed<=0.0&&!a.bomber&&!a.inactive&&!a.afk&&(self.global.finish_countdown.is_none()||self.human_controlled(id))}
     pub(super) fn target(&self,id:usize)->Option<usize>{
         let a=&self.actors[id];self.actors.iter().filter(|b|b.id!=id&&!b.bomber&&!b.inactive&&!b.afk&&b.destroyed<=0.0&&b.shield<=0.0&&distance(a.wx,a.wz,b.wx,b.wz)<100.0&&angle((b.wx-a.wx).atan2(b.wz-a.wz),a.heading).abs()<0.65&&clear(self.global.arena,a.wx,a.wz,b.wx,b.wz)).map(|a|a.id).min_by(|&x,&y|distance(a.wx,a.wz,self.actors[x].wx,self.actors[x].wz).total_cmp(&distance(a.wx,a.wz,self.actors[y].wx,self.actors[y].wz)).then(x.cmp(&y)))
     }
@@ -22,7 +22,7 @@ impl Game{
     }
     pub(super) fn flip(&mut self,id:usize){
         if !self.active(id)||self.actors[id].somersault_cooldown>1e-8{return;}
-        if self.global.special_abilities&&self.actors[id].driver==5{
+        if self.global.special_abilities&&self.actors[id].driver==5&&ability_on(id,1){
             let a=&self.actors[id];let mut seed=(self.global.elapsed*1000000.0)as u64^(a.wx.to_bits().rotate_left(17))^a.wz.to_bits()^((id+1)as u64*7919);
             for _ in 0..128{seed=seed.wrapping_mul(6364136223846793005).wrapping_add(1);let x=((seed>>32)%17000)as f64/100.0-85.0;seed=seed.wrapping_mul(6364136223846793005).wrapping_add(1);let z=((seed>>32)%17000)as f64/100.0-85.0;if blocked(self.global.arena,x,z,4.0)||self.actors.iter().any(|b|b.id!=id&&!b.inactive&&b.destroyed<=0.0&&distance(x,z,b.wx,b.wz)<8.0){continue;}let a=&mut self.actors[id];self.global.effects.push(Effect{kind:"teleportOut".into(),owner:Some(id),wx:a.wx,wz:a.wz,heading:Some(a.heading),color:Some(a.color.clone()),life:1.35,..Effect::default()});sound(&mut self.global,"teleportOut",id,a.wx,a.wz,None);a.wx=x;a.wz=z;a.speed=0.0;self.global.effects.push(Effect{kind:"teleportIn".into(),owner:Some(id),wx:x,wz:z,heading:Some(a.heading+std::f64::consts::PI),color:Some(a.color.clone()),life:1.35,..Effect::default()});sound(&mut self.global,"teleportIn",id,x,z,None);break;}
         }
@@ -61,7 +61,7 @@ impl Game{
     }
     pub(super) fn damage(&mut self,victim:usize,owner:usize,amount:f64,kind:&str)->bool{
         let a=&self.actors[victim];
-        if a.bomber||a.inactive||a.afk||self.global.phase!="racing"||a.destroyed>0.0||a.shield>0.0&&kind!="wall"&&kind!="tax"||a.hedge_shield>0.0&&kind!="missile"&&kind!="wall"&&kind!="tax"||victim==owner{return false;}
+        if a.bomber||a.inactive||a.afk||self.global.phase!="racing"||a.destroyed>0.0||a.shield>0.0&&kind!="wall"&&kind!="tax"&&kind!="nightmare"||a.hedge_shield>0.0&&kind!="missile"&&kind!="wall"&&kind!="tax"&&kind!="nightmare"||victim==owner{return false;}
         let unscored=self.global.finish_countdown.is_some();
         let root_x=self.actors[0].wx;let g=&mut self.global;let a=&mut self.actors[victim];a.health=(a.health-amount).max(0.0);a.heal_timer=0.0;voice(g,a,"hurt",root_x);if victim==0{g.shake=0.5;}
         if a.health>0.0{
@@ -71,7 +71,7 @@ impl Game{
         let mut credit=Vec::new();if owner<self.actors.len(){credit.push(owner);}
         let a=&self.actors[victim];
         if a.dizzy>0.0{for(&id,&expires)in &a.credits{if expires>g.elapsed+1e-8&&self.actors.get(id).is_some_and(|b|b.bomber&&!b.inactive)&&id!=victim&&!credit.contains(&id){credit.push(id);}}}
-        let a=&mut self.actors[victim];a.credits.clear();a.owl_boosting=false;a.destroyed=3.0;a.speed=0.0;a.boost=0.0;if !unscored{a.deaths+=1;}effect(g,match kind{"abomb"|"radiation"=>"ash",_=>"explosion"},victim,a.wx,a.wz,None);a.drift=0.0;a.was_drifting=false;a.drift_trail=None;a.kill_streak=0;a.bat_cooldown=0.0;a.vulcan=0.0;a.hedge_shield=0.0;a.tehilim=0.0;a.special_active=0.0;a.somersault=0.0;a.dizzy=0.0;
+        let a=&mut self.actors[victim];a.credits.clear();a.owl_boosting=false;a.destroyed=3.0;a.reverse_controls=0.0;a.nightmare_active=0.0;a.speed=0.0;a.boost=0.0;if !unscored{a.deaths+=1;}effect(g,match kind{"abomb"|"radiation"|"nightmare"=>"ash",_=>"explosion"},victim,a.wx,a.wz,None);a.drift=0.0;a.was_drifting=false;a.drift_trail=None;a.kill_streak=0;a.bat_cooldown=0.0;a.vulcan=0.0;a.hedge_shield=0.0;a.tehilim=0.0;a.special_active=0.0;a.somersault=0.0;a.dizzy=0.0;
         if unscored{return true;}
         let victim_name=a.name.clone().unwrap_or_else(||driver_name(a.driver).into());let victim_color=a.color.clone();
         for scorer in credit{

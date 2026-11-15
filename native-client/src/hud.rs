@@ -147,7 +147,7 @@ pub struct Notices {
     averted: f64,
     burning: bool,
     ring: Option<(bool, f64)>,
-    abilities: HashMap<usize, (usize, f64, f64, f64)>,
+    abilities: HashMap<usize, (usize, f64, f64, f64, f64)>,
     ability: Option<Notice>,
     intelligence: Option<u32>,
     reward: Option<Notice>,
@@ -259,7 +259,13 @@ impl Notices {
         // AbilityUsage: a jump in a racer's cooldown means they just used their special.
         let mut used = None;
         for a in view.actors {
-            let state = (a.driver, a.special_cooldown, a.boost, a.somersault_cooldown);
+            let state = (
+                a.driver,
+                a.special_cooldown,
+                a.boost,
+                a.somersault_cooldown,
+                a.nightmare_cooldown,
+            );
             let before = self.abilities.insert(a.id, state);
             let Some(before) = before.filter(|before| before.0 == a.driver) else {
                 continue;
@@ -273,6 +279,13 @@ impl Notices {
                 Some((title.to_owned(), detail.to_owned(), color))
             };
             let mut card = None;
+            if state.4 > before.4 + 1.0 {
+                card = own(
+                    "NIGHTMARE FUEL",
+                    "HOUSTON, WE HAVE A PROBLEM",
+                    [0xd0, 0x68, 0xff],
+                );
+            }
             if state.1 > before.1 + 1.0 || (a.driver == 10 && state.2 > before.2 + 0.3) {
                 card = racer
                     .filter(|racer| !racer.card.0.is_empty())
@@ -471,6 +484,12 @@ fn readings(
     if !p.bomber && live && p.dizzy > 0.0 {
         text(Id::Dizzy, format!("\u{2726} DIZZY · {:.1}s", p.dizzy));
     }
+    if view.special_abilities && !p.bomber && live && p.reverse_controls > 0.0 {
+        text(
+            Id::Dizzy,
+            format!("⇄ CONTROLS REVERSED · {:.1}s", p.reverse_controls),
+        );
+    }
     // Missiles locked on the viewer that chaff has not yet drawn away.
     let threats = view
         .projectiles
@@ -664,8 +683,18 @@ fn readings(
     card(
         Id::Turbos,
         p.turbos.to_string(),
-        "X · TURBO".into(),
-        live && p.turbos > 0 && p.boost <= 0.0,
+        match (
+            p.driver == 7 && view.special_abilities,
+            p.nightmare_active > 0.0,
+            p.nightmare_cooldown > 0.0,
+        ) {
+            (true, true, _) => format!("NIGHTMARE {:.1}s", p.nightmare_active),
+            (true, false, true) => format!("X · TURBO / NF {:.0}s", p.nightmare_cooldown),
+            (true, false, false) => "XX · NIGHTMARE".into(),
+            _ => "X · TURBO".into(),
+        },
+        live && (p.turbos > 0 && p.boost <= 0.0
+            || p.driver == 7 && view.special_abilities && p.nightmare_cooldown <= 0.0),
         None,
     );
     card(
@@ -689,10 +718,8 @@ fn readings(
         .map(|racer| racer.ability.as_str())
         .filter(|_| SPECIALISTS.contains(&p.driver) && view.special_abilities && !p.bomber);
     if let Some(ability) = ability {
-        let hunting = view.locusts.iter().filter(|b| b.owner == view.you).count();
         let label = match (p.special_cooldown > 0.0, p.driver) {
             (true, _) => format!("F · RECHARGE {:.1}s", p.special_cooldown),
-            (false, 5) => format!("F · {ability} · {hunting} LOCUSTS"),
             _ => format!("F · {ability}"),
         };
         let ready = live && p.special_cooldown <= 0.0 && !(p.driver == 12 && p.health >= 6.0);

@@ -1,3 +1,5 @@
+import {drawReverseShockwave,drawCricketPuppet} from '../characters/tammy/reverse-psychology.js';
+import {drawNightmareFuel} from '../characters/houston/nightmare-fuel.js';
 import {darkBombLights,lightUniforms} from '../characters/knowitowl/dark-bomb-light.js';
 import {drawFireRing,drawFireRingOut} from '../characters/master-yuda/fire-ring-visual.js';
 import {bicyclePose} from '../gameplay/bicycle-pickup.js';
@@ -377,6 +379,7 @@ export class Renderer {
     for(const side of [-1,1]){m.box(side*.57,1.65,1.45,.25,.23,1.5,'#273a43');m.ball(side*.57,1.77,2.22,.12,.12,.04,'#8dfff0',8,4);if(actor.item==='hedgehog'&&actor.fireCooldown>.035)this.glow.particle(side*.57,1.77,2.4,.9,[.15,.8,.65]);}
   }
   starshipEngines(p,angle,clock,jump=null,boost=false){
+    if(p.nightmareActive>0){drawNightmareFuel(this.glow,this.smoke,p,angle,clock,jump);return;}
     drawStarshipThrust(this.glow,this.smoke,p,angle,clock,jump,boost);
   }
   houstonHelmet(p,actor,time,jump){
@@ -599,6 +602,8 @@ export class Renderer {
     this.activeArena=r.arena;this.arenaExhaust=true;this.yudaExhaust.update(`${r.arena}:${r.soundEpoch}:${r.id}`,time);
     this.yudaDrift.update(r,time);
     const helmetScene=`${r.arena}:${r.soundEpoch}:${r.id}`;
+    const cameraDt=this.helmetScene===helmetScene?Math.max(0,Math.min(.1,time-(this.helmetTime??time))):0;
+    if(this.helmetScene!==helmetScene||time<(this.helmetTime??0))this.nightmareZoom=0;
     if(this.helmetScene!==helmetScene||time<(this.helmetTime??0)){this.helmetScene=helmetScene;this.helmetFlights=new Map();this.tailFolds.clear();this.receiptRolls.rolls.clear();this.owlFlight.riders.clear();this.batSummons.clear();this.owlFlight.feathers=[];this.yudaJackets.riders.clear();this.yudaStunts.riders.clear();this.lastBodies.clear();this.ashBodies.clear();}this.helmetTime=time;
     if(this.track!==`arena-${r.arena}`)this.arenaScenery(r.arena);
     const gl=this.gl,canvas=this.canvas,width=Math.round(canvas.clientWidth*this.pixelRatio()),height=Math.round(canvas.clientHeight*this.pixelRatio());if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;}gl.viewport(0,0,width,height);
@@ -610,7 +615,11 @@ export class Renderer {
       this.bomberFocus??={wx:target?.wx??0,wz:target?.wz??0};this.bomberElapsed=r.elapsed;
     }
     const wobble=r.dizzy>0&&!matchMedia('(prefers-reduced-motion: reduce)').matches?Math.sin((DIZZY_DURATION-r.dizzy)*(r.boost>0?14:10))*(r.boost>0?.24:.14):0;
-    const p=combatPose(r),cx=Math.sin(r.cameraHeading+wobble),cz=Math.cos(r.cameraHeading+wobble),overview=r.bomber?bomberCamera(width,height,arenas[r.arena].size,this.bomberView??'3d',this.bomberFocus,this.bomberZoom??1):null,eye=overview?.eye??[p.x-cx*17,10+(r.destroyed?5:0),p.z-cz*17],view=overview?.matrix??cameraMatrix(eye,[p.x+cx*18,1.5,p.z+cz*18],width/height,r.boost>0?1.2:r.wasDrifting?1.13:1.07);
+    // Pull behind the entire 29-unit flame and frame the ground it can hit.
+    const nightmare=!r.bomber&&r.driver===7&&r.nightmareActive>0&&r.boost>0&&!r.destroyed?1:0;
+    this.nightmareZoom??=0;this.nightmareZoom+=(nightmare-this.nightmareZoom)*(1-Math.exp(-cameraDt*5));
+    const zoom=this.nightmareZoom,distance=17+25*zoom,cameraHeight=10+16*zoom+(r.destroyed?5:0),ahead=18-32*zoom;
+    const p=combatPose(r),cx=Math.sin(r.cameraHeading+wobble),cz=Math.cos(r.cameraHeading+wobble),overview=r.bomber?bomberCamera(width,height,arenas[r.arena].size,this.bomberView??'3d',this.bomberFocus,this.bomberZoom??1):null,eye=overview?.eye??[p.x-cx*distance,cameraHeight,p.z-cz*distance],view=overview?.matrix??cameraMatrix(eye,[p.x+cx*ahead,1.5,p.z+cz*ahead],width/height,r.boost>0?1.2:r.wasDrifting?1.13:1.07);
     this.bicycleDrops=new Map();this.drawnBicycles=new Set();for(const s of r.supplies)if(s.kind==='bicycle'&&s.cooldown<=0&&s.age<2)this.bicycleDrops.set(s.owner,s);
     this.bomberMatrix=overview?.matrix??null;
     gl.uniform1f(this.fogScale,overview?.fogScale??1);const dark=darkHumorState(r),bombLights=darkBombLights(r,dark.strength);gl.uniform1f(this.darknessUniform,dark.strength);gl.uniform4fv(this.bombLightsUniform,lightUniforms(bombLights));
@@ -632,7 +641,7 @@ export class Renderer {
     for(const actor of [r,...r.bots]){
       if(actor.destroyed||actor.bomber||actor.inactive||actor.afk)this.batSummons.delete(actor.id);
       if(actor.bomber||actor.inactive||actor.afk)continue;
-      const pose={...combatPose(actor),id:actor.id,vulcan:actor.vulcan,specialActive:actor.specialActive,bikeRoll:this.yudaDrift.roll(actor.id)};if(actor.destroyed){
+      const pose={...combatPose(actor),id:actor.id,vulcan:actor.vulcan,specialActive:actor.specialActive,nightmareActive:actor.nightmareActive,bikeRoll:this.yudaDrift.roll(actor.id)};if(actor.destroyed){
         const ash=r.effects.find(f=>f.type==='ash'&&Math.hypot(f.wx-pose.x,f.wz-pose.z)<.1),key=`${pose.x}:${pose.z}`;
         if(ash&&(!this.ashBodies.has(key)||ash.age<this.ashBodies.get(key).age)){
           if(!this.lastBodies.has(actor.id)){
@@ -652,6 +661,7 @@ export class Renderer {
       if(!arrival)this.kart(m,pose,actor.color??drivers[actor.driver].color,actor.driver,0,0,actor.boost>0,time,actor.celebrate,jump,actor.driver!==7||actor.vulcan<=0);
       if(actor.driver===14)this.batBuddy(pose,actor,r,time,jump);
       const parts=this.instances.slice(bodyStart);this.rememberBody(actor,parts,parts.length?[]:m.data.slice(dataStart));
+      if(r.specialAbilities!==false&&actor.reverseControls>0)drawCricketPuppet(m,this.glow,pose,time,actor.reverseControls,actor.heading,actor.driver===11?11:8);
       if(r.specialAbilities!==false&&[r,...r.bots].some(a=>a.id!==actor.id&&a.driver===13&&a.specialActive>0)){
         const facing=actor.cameraHeading??actor.heading,phase=Math.floor(time*8)%8;
         this.model('xylophone:'+phase,pose.x+Math.sin(facing)*5,0,pose.z+Math.cos(facing)*5,facing,mesh=>drawXylophone(mesh,phase));
@@ -713,7 +723,7 @@ export class Renderer {
       m.at(bomb.wx,height,bomb.wz,bomb.age*3);m.ball(0,0,0,2.2*scale,3.4*scale,2.2*scale,'#39334e',10,6);m.box(0,2.3*scale,0,5*scale,.5,.7*scale,'#ffdb69');m.box(0,2.3*scale,0,.7*scale,.5,5*scale,'#ffdb69');
       this.glow.at(bomb.wx,height+3,bomb.wz);this.glow.particle(0,0,0,3,[.8,.35,.03]);
     }
-    for(const effect of r.effects){if(effect.type==='locustSpawn'||effect.type==='locustBurst')continue;if(effect.type==='teleportOut'||effect.type==='teleportIn'){
+    for(const effect of r.effects){if(effect.type==='reverseShockwave'){drawReverseShockwave(this.glow,this.smoke,effect);continue;}if(effect.type==='locustSpawn'||effect.type==='locustBurst')continue;if(effect.type==='teleportOut'||effect.type==='teleportIn'){
       if(effect.type==='teleportOut'){const pose=departurePose(effect.age);this.teleportKart({x:effect.wx,z:effect.wz},effect.color??drivers[5].color,effect.heading??0,pose.scale,pose.height,pose.pitch);}
       drawTeleportHaze(this,effect,time);continue;
     }if(effect.type==='taxAudit'){drawTaxAudit(m,effect,r.cameraHeading);continue;}if(effect.type==='heartbeat'){const actor=[r,...r.bots].find(a=>a.id===effect.owner),x=actor?.wx??effect.wx,z=actor?.wz??effect.wz,t=effect.age,fade=1-t/effect.life,size=(1+.35*Math.exp(-t*18)+.3*Math.exp(-(((t-.18)*20)**2)))*fade;m.at(x,7+t*.6,z,r.cameraHeading);m.ball(-.28*size,.18*size,0,.38*size,.38*size,.24*size,'#ff779d',10,6);m.ball(.28*size,.18*size,0,.38*size,.38*size,.24*size,'#ff779d',10,6);m.cone(0,.1*size,0,.6*size,-.85*size,'#e94c7f',12);this.glow.at(x,7,z);this.glow.particle(0,0,0,size*1.4,[.5*fade,.08*fade,.17*fade]);continue;}if(effect.type==='fashionSnap'){this.fashionSnap(m,effect,time);continue;}if(effect.type==='fireRingOut'){drawFireRingOut(m,this.glow,this.smoke,effect,time);continue;}if(effect.type==='fireRing'){drawFireRing(m,this.glow,effect,time);continue;}if(effect.type==='yudaSmoke')continue;if(effect.type==='radiation'){this.radiationZone(m,effect,time);continue;}if(effect.type==='ash'){this.ashRemains(m,effect);continue;}if(effect.type==='abomb'){this.atomicExplosion(m,effect);continue;}if(effect.type==='explosion'){this.explosion(m,effect);continue;}for(let i=0;i<10;i++){const a=i*2.4,t=effect.age;m.at(effect.wx+Math.cos(a)*t*8,1+t*4,effect.wz+Math.sin(a)*t*8);m.ball(0,0,0,.12,.12,.12,'#f4dc8b',5,3);}}

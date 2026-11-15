@@ -34,11 +34,12 @@ Run the port by hand with `npm run port:graphics -- /tmp/graphics.wwgp`.
 | `overlay:11:special:start`, `overlay:11:special:end` | R-yeah's archangels descending and rising |
 | `overlay:<n>:<state>` | What `shield`, `hedge`, `tehilim`, `dizzy`, `vulcan` and `special` add to a racer |
 | `overlay:xylophone`, `timestop` | Fourmidable's and the time-stop special, shown at other racers or the caster |
+| `overlay:reversePsychology`, `overlay:reversePsychology:end` | A cricket marionette above affected racers, with tugging strings, a wooden control cross and a fade at the end of reversed controls |
 | `shot:missile`, `shot:hedgehog`, `shot:vulcan:<n>` | Projectiles, including each racer's rapid-fire variant |
 | `trail:missile`, `trail:hedgehog`, `trail:vulcan:<n>`, `skid:<arena>` | One projectile trail puff, scaled along the trail, and a unit-length skid mark fading over six seconds |
 | `pickup:<kind>` | Supply pads and their bobbing, spinning items, including the bicycle |
 | `wreck`, `health:<1-6>` | The destroyed-racer marker and the health pips above a racer |
-| `effect:<type>`, `effect:ash:<n>`, `effect:default` | Explosions, ashes of each racer, atomic blasts, radiation, teleports, fire rings and the other world effects, played by age |
+| `effect:<type>`, `effect:ash:<n>`, `effect:default` | Explosions, ashes of each racer, atomic blasts, radiation, teleports, fire rings, Reverse Psychology’s 100-unit green haze shockwave and the other world effects, played by age |
 | `bomb:<kind>`, `cloud:chaff`, `cloud:chaff:fairy`, `cloud:stink` | Falling bombs and lingering clouds, played by age |
 | `particle:smoke`, `particle:spark:<level>` | One drift particle over its life |
 | `locust`, `locust:jump` | Tammy's locusts |
@@ -90,11 +91,14 @@ clip name in `scene.rs`.
 ## Limits
 
 - Shader-only effects are not ported automatically. Pearococo's plumage shader is
-  ported by hand (see Plumage above); distance fog is missing. KnowItOwl's Dark Humor is written by
-  hand in `scene.rs`: one still frame of the fog shader covers the world, and the
-  caster sees the recorded arena outlines and flat racer silhouettes through it.
-  The fog does not drift, bomb flashes do not light it, and nearby objects are
-  not brightened.
+  ported by hand (see Plumage above); distance fog is missing. KnowItOwl's Dark Humor is ported
+  by hand, in `native-client/src/xray.rs`: `fog.wesl` is the browser's drifting fog
+  shader, and `xray.wesl` its rim-lit X-ray shading. Through the fog the caster
+  sees the recorded arena outlines, racers in cyan, their own shots and bombs in
+  green and everyone else's in pink, with trails, and effects such as explosions.
+  The browser draws shots as darts and bombs as spheres there; natively they are
+  the ported models in those colors. The browser also warms the fog around
+  falling bombs and brightens nearby objects; neither is ported.
 - Transitions are recorded from a settled state, so a state that changes again
   within a second restarts its transition. States combine by layering only. A
   boost trail is the one recorded while driving straight.
