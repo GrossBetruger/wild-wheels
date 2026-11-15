@@ -41,7 +41,7 @@ Run alongside the development server:
 PORT=5174 ./dedicated-server/target/release/wild-wheels-server
 ```
 
-Visit `http://localhost:5174`. On GCP, allow inbound TCP to the chosen game port in the VM’s VPC firewall (the console’s “Allow HTTP traffic” checkbox only opens port 80). Use an HTTPS reverse proxy for a public domain; direct public HTTP is rejected. For internet play, run the binary on a reachable machine and put an HTTPS reverse proxy in front of its port, or run `ngrok http 5174` locally. Forward WebSocket upgrades. Set `PUBLIC_ORIGIN=https://your-game.example`, `TRUST_PROXY=1`, `BIND=127.0.0.1`, and a random `INVITE_SECRET` of at least 32 characters. The proxy must run on loopback, preserve Host, and overwrite X-Forwarded-Proto. Share `https://your-game.example/?room=00#invite=YOUR_RANDOM_SECRET`. See [security configuration and tests](security.md). The built-in Node ngrok control is not part of this service.
+Visit `http://localhost:5174`. On GCP, allow inbound TCP to the chosen game port in the VM’s VPC firewall (the console’s “Allow HTTP traffic” checkbox only opens port 80). Direct HTTP works with public hostnames such as DuckDNS without configuring a domain. To encrypt traffic, use an HTTPS reverse proxy. For internet play, run the binary on a reachable machine and put an HTTPS reverse proxy in front of its port, or run `ngrok http 5174` locally. Forward WebSocket upgrades. Set `PUBLIC_ORIGIN=https://your-game.example`, `TRUST_PROXY=1`, `BIND=127.0.0.1`, and a random `INVITE_SECRET` of at least 32 characters. The proxy must run on loopback, preserve Host, and overwrite X-Forwarded-Proto. Share `https://your-game.example/?room=00#invite=YOUR_RANDOM_SECRET`. See [security configuration and tests](security.md). The built-in Node ngrok control is not part of this service.
 
 Configuration is through environment variables:
 
@@ -49,7 +49,7 @@ Configuration is through environment variables:
 | --- | --- | --- |
 | `BIND` | `0.0.0.0` | Listening IP; use `127.0.0.1` behind a local proxy |
 | `PORT` | `5173` | HTTP/WebSocket port |
-| `PUBLIC_ORIGIN` | unset | Exact HTTPS origin for public hosting; HTTP is limited to local development |
+| `PUBLIC_ORIGIN` | unset | Optional exact HTTP(S) origin; otherwise inferred from the request Host |
 | `TRUST_PROXY` | unset | Set to `1` to trust HTTPS forwarding from a loopback proxy |
 | `INVITE_SECRET` | unset | Random invitation credential, at least 32 characters; required with a public HTTPS origin |
 | `ARENA` | `0` | Initial arena, 0 or 1 |

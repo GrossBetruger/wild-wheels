@@ -1,28 +1,10 @@
 use super::*;
 
-pub fn local_host(host: &str) -> bool {
-    let Ok(uri) = format!("http://{host}").parse::<Uri>() else {
-        return false;
-    };
-    if uri.path() != "/"
-        || uri.query().is_some()
-        || uri
-            .authority()
-            .is_none_or(|a| a.as_str() != host || host.contains('@'))
-    {
-        return false;
-    }
-    let Some(host) = uri.host() else {
-        return false;
-    };
-    if matches!(host, "localhost" | "[::1]" | "::1") {
-        return true;
-    }
-    host.parse::<IpAddr>().is_ok_and(|ip| match ip {
-        IpAddr::V4(ip) => ip.is_loopback() || ip.is_private(),
-        IpAddr::V6(ip) => ip.is_loopback(),
-    })
+fn valid_host(host:&str)->bool{
+    let Ok(uri)=format!("http://{host}").parse::<Uri>() else{return false;};
+    uri.path()=="/"&&uri.query().is_none()&&uri.host().is_some()&&uri.authority().is_some_and(|a|a.as_str()==host&&!host.contains('@'))
 }
+
 pub fn same_origin(app: &App, h: &HeaderMap) -> bool {
     if h.get("sec-fetch-site")
         .is_some_and(|v| v == "cross-site" || v == "same-site")
@@ -53,8 +35,8 @@ pub fn transport(app: &App, h: &HeaderMap, peer: IpAddr) -> bool {
         && h.get("x-forwarded-proto").is_some_and(|v| v == "https");
     let actual = format!("{}://{host}", if secure { "https" } else { "http" });
     match &app.origin {
-        Some(expected) => &actual == expected && (secure || local_host(host)),
-        None => local_host(host),
+        Some(expected) => &actual == expected,
+        None => valid_host(host),
     }
 }
 
@@ -118,6 +100,27 @@ mod tests {
         assert!(!transport(&app, &h, "203.0.113.7".parse().unwrap()));
         h.insert(header::HOST, "attacker.invalid".parse().unwrap());
         assert!(!transport(&app, &h, local));
+    }
+    #[test]
+    fn configured_duckdns_http_origin_accepts_remote_players_and_rejects_other_hosts_and_origins() {
+        let app=app(Some("http://wild-wheels.duckdns.org:5173"));
+        let peer="203.0.113.7".parse().unwrap();
+        let mut headers=HeaderMap::new();
+        headers.insert(header::HOST,"wild-wheels.duckdns.org:5173".parse().unwrap());
+        headers.insert(header::ORIGIN,"http://wild-wheels.duckdns.org:5173".parse().unwrap());
+        assert!(transport(&app,&headers,peer));assert!(same_origin(&app,&headers));
+        headers.insert(header::ORIGIN,"http://attacker.invalid".parse().unwrap());
+        assert!(!same_origin(&app,&headers));
+        headers.insert(header::HOST,"attacker.invalid:5173".parse().unwrap());
+        assert!(!transport(&app,&headers,peer));
+    }
+    #[test]
+    fn automatic_duckdns_http_origin_needs_no_domain_configuration_but_still_rejects_cross_origin_requests(){
+        let app=app(None);let peer="203.0.113.7".parse().unwrap();let mut headers=HeaderMap::new();
+        headers.insert(header::HOST,"wild-wheels.duckdns.org:5173".parse().unwrap());headers.insert(header::ORIGIN,"http://wild-wheels.duckdns.org:5173".parse().unwrap());
+        assert!(transport(&app,&headers,peer));assert!(same_origin(&app,&headers));
+        headers.insert(header::ORIGIN,"http://attacker.invalid".parse().unwrap());assert!(!same_origin(&app,&headers));
+        headers.insert(header::HOST,"wild-wheels.duckdns.org:5173/path".parse().unwrap());assert!(!transport(&app,&headers,peer));
     }
     #[test]
     fn rate_limit_bookkeeping_stays_bounded_without_blocking_existing_buckets() {

@@ -42,7 +42,9 @@ The Chrome check requires Google Chrome, or `CHROME_PATH` pointing to a compatib
 
 ## Public hosting
 
-Localhost and private IPv4 LAN addresses continue to support HTTP development. Public HTTP and arbitrary public Host headers are rejected. HTTPS is terminated by a reverse proxy, which must run on loopback next to the game server. For both servers configure:
+Plain HTTP works with localhost, LAN addresses, and public hostnames such as DuckDNS without domain configuration. Each request’s Host determines its origin by default; browser requests must match that origin. Session authentication and WebSocket origin checks still apply. HTTP traffic is unencrypted. PUBLIC_ORIGIN is optional and pins the exact hostname and scheme when set.
+
+For HTTPS, terminate TLS with a reverse proxy running on loopback next to the game server and configure:
 
 ```sh
 PUBLIC_ORIGIN=https://game.example
@@ -50,7 +52,7 @@ TRUST_PROXY=1
 BIND=127.0.0.1
 ```
 
-The proxy must preserve the public `Host`, overwrite `X-Forwarded-Proto` with `https` for HTTPS requests, forward WebSocket upgrades, and redirect HTTP visitors to HTTPS. Expose the proxy's TLS port, rather than the backend port. The game rejects insecure public requests instead of redirecting them, so it never processes credentials sent to an insecure endpoint. These changes do not install certificates, configure a proxy, or update a running deployment.
+The proxy must preserve the public `Host`, overwrite `X-Forwarded-Proto` with `https` for HTTPS requests, forward WebSocket upgrades, and redirect HTTP visitors to HTTPS. Expose the proxy's TLS port, rather than the backend port. With an HTTPS PUBLIC_ORIGIN configured, the game rejects requests that do not arrive over the trusted HTTPS transport. These changes do not install certificates, configure a proxy, or update a running deployment.
 
 For Node, the host creates the room and COPY INVITE includes a random 256-bit secret. The built-in START INTERNET LINK flow also works: the local ngrok agent must report an HTTPS tunnel forwarding to this game's port. Only that discovered hostname gets automatic loopback-proxy trust; arbitrary forwarded headers do not enable it.
 

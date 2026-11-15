@@ -12,7 +12,7 @@ export class RequestSecurity {
     this.trustProxy=trustProxy;
     if(publicOrigin){
       const url=new URL(publicOrigin);
-      if(url.username||url.password||url.pathname!=='/'||url.search||url.hash||!['http:','https:'].includes(url.protocol)||url.protocol!=='https:'&&!localHost(url.host))throw new Error('PUBLIC_ORIGIN must be an HTTPS origin (HTTP is allowed for local development).');
+      if(url.username||url.password||url.pathname!=='/'||url.search||url.hash||!['http:','https:'].includes(url.protocol))throw new Error('PUBLIC_ORIGIN must be an HTTP(S) origin without credentials, a path, query or fragment.');
       this.publicOrigin=url.origin;
     }
   }
@@ -26,8 +26,6 @@ export class RequestSecurity {
     if(!host||!/^[a-zA-Z0-9.\[\]:-]+$/.test(host))throw denied('Invalid host.');
     const origin=`${this.secure(req)?'https':'http'}://${host}`;
     if(this.publicOrigin){if(origin!==this.publicOrigin)throw denied('Use the configured game origin.');}
-    else if(origin!==this.tunnelOrigin&&!localHost(host))throw denied('Configure PUBLIC_ORIGIN before public hosting.');
-    if(!this.secure(req)&&!localHost(host))throw denied('HTTPS is required.');
     return new URL(origin).origin;
   }
   check(req,{websocket=false}={}){

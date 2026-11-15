@@ -66,6 +66,13 @@ try{
   const publicSocket=socket(publicServer.origin,{Host:'game.example','X-Forwarded-Proto':'https',Origin:'https://game.example'});await once(publicSocket,'open');const publicInitial=once(publicSocket,'message');publicSocket.send(JSON.stringify({type:'authenticate',token:allowed.value.token}));assert.equal((await publicInitial)[1],true);
   assert.equal((await publicServer.call('/api/chat',{},allowed.value.token,{'X-Forwarded-Proto':'http'})).status,403);
   assert.equal((await publicServer.call('/api/chat',{},allowed.value.token,{Origin:'http://game.example'})).status,403);
+  const duck=await start();
+  const duckHeaders={Host:'wild-wheels.duckdns.org:5173',Origin:'http://wild-wheels.duckdns.org:5173'};
+  const duckPlayer=await duck.call('/api/join',{code:'00',name:'DuckDNS Friend',driver:0},undefined,duckHeaders);
+  assert.equal(duckPlayer.status,200);assert.doesNotMatch(duckPlayer.headers['set-cookie'][0],/; Secure/);
+  assert.equal((await duck.call('/api/name',{name:'Still playing'},duckPlayer.value.token,duckHeaders)).status,200);
+  assert.equal((await duck.call('/api/name',{name:'Hacked'},duckPlayer.value.token,{...duckHeaders,Origin:'http://attacker.invalid'})).status,403);
+  const duckSocket=socket(duck.origin,duckHeaders);await once(duckSocket,'open');const duckInitial=once(duckSocket,'message');duckSocket.send(JSON.stringify({type:'authenticate',token:duckPlayer.value.token}));assert.equal((await duckInitial)[1],true);
   console.log('Dedicated security checks passed: IDOR, CSRF, authenticated color selection and collisions, injection-as-data, body limits, HTTP/WebSocket floods, hijacking, authentication deadlines, HTTPS and invitation secrets.');
 }finally{
   for(const ws of sockets)ws.terminate();

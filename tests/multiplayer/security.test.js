@@ -21,6 +21,18 @@ async function setup(t,options={}){
 }
 const joinBody=(code,name='Guest')=>({name,driver:null,code});
 
+test('automatic DuckDNS HTTP hosting supports sessions and WebSockets while rejecting foreign origins',async t=>{
+  const publicOrigin='http://wild-wheels.duckdns.org:5173';
+  const {post,origin}=await setup(t);
+  const headers={Host:'wild-wheels.duckdns.org:5173',Origin:publicOrigin};
+  const host=await post('/api/rooms',{name:'Host',driver:0,arena:0},undefined,headers);
+  assert.equal(host.status,200);assert.doesNotMatch(host.headers.get('set-cookie'),/; Secure/);
+  assert.equal((await post('/api/name',{name:'Safe'},host.token,headers)).status,200);
+  assert.equal((await post('/api/name',{name:'Hacked'},host.token,{...headers,Origin:'http://attacker.invalid'})).status,403);
+  assert.equal((await post('/api/name',{name:'Hacked'},host.token,{...headers,Host:'attacker.invalid:5173'})).status,403);
+  const ws=await openSocket(t,origin,{headers});await once(ws,'open');const initial=once(ws,'message');ws.send(JSON.stringify({type:'authenticate',token:host.token}));assert.equal((await initial)[1],true);
+});
+
 test('CSRF rejects hostile, sibling, wrong-scheme and missing origins for cookie authentication',async t=>{
   const {post,origin}=await setup(t);
   const host=await post('/api/rooms',{name:'Host',driver:0,arena:0});
@@ -42,8 +54,7 @@ test('public transport requires exact origin and explicitly trusted loopback pro
   assert.equal(security.check(request({origin:'https://game.example','x-forwarded-proto':'https'})),'https://game.example');
   for(const origin of ['http://game.example','https://game.example.attacker.invalid','null','https://game.example/'])assert.throws(()=>security.check(request({origin,'x-forwarded-proto':'https'})),{status:403});
   assert.throws(()=>security.check(request({origin:'https://game.example','x-forwarded-proto':'https'},'203.0.113.7')),{status:403});
-  assert.throws(()=>new RequestSecurity({publicOrigin:'http://game.example'}));
-  assert.throws(()=>new RequestSecurity().origin(request()));
+  assert.equal(new RequestSecurity().origin(request()),'http://game.example');
 });
 
 test('IDOR: forged sender, room, delete and reply IDs cannot disclose or modify private messages',async t=>{

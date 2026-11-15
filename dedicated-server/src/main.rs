@@ -448,7 +448,6 @@ async fn main() {
                 && uri.query().is_none(),
             "PUBLIC_ORIGIN must be an HTTP(S) origin"
         );
-        assert!(uri.scheme_str() == Some("https") || security::local_host(uri.authority().unwrap().as_str()), "Public hosting requires HTTPS");
         s.trim_end_matches('/').to_owned()
     });
     let chat_path = std::env::var_os("WILD_WHEELS_CHAT_FILE").map(std::path::PathBuf::from)
