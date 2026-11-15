@@ -32,6 +32,7 @@ Run the port by hand with `npm run port:graphics -- /tmp/graphics.wwgp`.
 | `overlay:<n>:vulcan:in`, `overlay:<n>:vulcan:out` | Rapid fire starting and ending, such as the bat flying in and away |
 | `overlay:<n>:<state>:end` | Shield, hedgeguard and tehilim fading over their last 1 to 1.5 seconds, played by the time remaining |
 | `overlay:11:special:start`, `overlay:11:special:end` | R-yeah's archangels descending and rising |
+| `overlay:7:nightmare`, `overlay:7:nightmare:end` | Houston's full ultraviolet plume and its one-second shortening wind-down, recorded from the browser at 60 fps |
 | `overlay:<n>:<state>` | What `shield`, `hedge`, `tehilim`, `dizzy`, `vulcan` and `special` add to a racer |
 | `overlay:xylophone`, `timestop` | Fourmidable's and the time-stop special, shown at other racers or the caster |
 | `overlay:reversePsychology`, `overlay:reversePsychology:end` | A cricket marionette above affected racers, with tugging strings, a wooden control cross and a fade at the end of reversed controls |

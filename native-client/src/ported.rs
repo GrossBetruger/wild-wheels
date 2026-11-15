@@ -1011,6 +1011,8 @@ mod tests {
             "skid:0",
             "skid:1",
             "overlay:7:special",
+            "overlay:7:nightmare",
+            "overlay:7:nightmare:end",
             "overlay:11:special",
             "overlay:11:special:start",
             "overlay:11:special:end",

@@ -151,6 +151,15 @@ override it without editing code with `WILD_WHEELS_MAX_PLAYERS=16`, and
 `WILD_WHEELS_MISSILES_ONLY=1` makes every shot a missile. The dedicated server's
 `SPECIAL_ABILITIES=off` starts its room with abilities off.
 
+Nightmare Fuel burns at full length for 12 seconds, then shortens and fades for one
+additional second. During that final second the chase camera returns toward Houston
+faster than the flame shrinks, so the last part remains visible in close-up. Its
+damage reach contracts with the visible plume; recharge remains 30 seconds from
+activation. Browser and native clients share the recorded flame animation.
+`node --test characters/houston/nightmare-fuel.test.js` checks timing, shrinking
+reach and camera return. `cargo +1.97.1 test --locked --manifest-path native-client/Cargo.toml --test animations t00_houston_nightmare_fuel_wind_down -- --exact --nocapture`
+plays and checks the native ending; use `--showcase nightmare-end` to watch it.
+
 ## Room chat
 
 The chat panel sits directly beneath the game in its column, without waiting for the sidebar to end. The conversation selector beneath the Pit stop chat heading switches between Everyone and individual private conversations. Each view shows only that conversation, with incoming and outgoing message bubbles and an arrow send button. Drafts are preserved separately while switching conversations; changing room or session clears the local history and drafts. The server stores separate histories for each room. It is available in the lobby, during a match, and while AFK. Bots do not receive chat. Messages are held in memory, with at most 200 retained per room; private history is filtered by player session rather than reusable player slot. Messages contain at most 500 UTF-16 code units and each player can send once every 500 milliseconds. The panel polls separately from gameplay updates.

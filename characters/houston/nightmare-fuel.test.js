@@ -2,10 +2,22 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createBattle,tickBattle,useBattleTurbo} from '../../gameplay/combat.js';
 import {ArenaCore,ArenaClient} from '../../gameplay/arena-core.js';
-import {activateNightmare} from './nightmare-fuel.js';
+import {activateNightmare,drawNightmareFuel,nightmareCameraZoom} from './nightmare-fuel.js';
 import {useSpecial} from '../../gameplay/special-abilities.js';
 
 for(const engine of ['JavaScript','Rust']){
+  test(`${engine}: the final half-second of Nightmare Fuel reaches ten units behind Houston but no longer twenty`,()=>{
+    const world=createBattle(7);Object.assign(world,{phase:'racing',human:true,wx:65,wz:70,heading:0,supplies:[],nightmareActive:.5,nightmareCooldown:17.5,boost:.5});
+    for(const bot of world.bots)Object.assign(bot,{inactive:true,destroyed:999});
+    Object.assign(world.bots[0],{inactive:false,destroyed:0,human:true,wx:65,wz:60,health:6});
+    Object.assign(world.bots[1],{inactive:false,destroyed:0,human:true,wx:65,wz:50,health:6});
+    const core=engine==='Rust'?new ArenaCore(world):null;
+    if(core)core.step(0);
+    if(!core)tickBattle(world,new Set(),0);
+    const after=core?core.snapshot():world;
+    assert.equal(after.bots[0].health,0);
+    assert.equal(after.bots[1].health,6);
+  });
   test(`${engine}: Nightmare Fuel travels at 180 km/h while regular Houston boost still reaches 204 km/h`,()=>{
     for(const [nightmareActive,startSpeed,expectedKmh,expectedZ] of [[12,740,180,41.0625],[12,850,180,41.0625],[0,850,204,41.204166666666666]]){
       const world=createBattle(7);Object.assign(world,{phase:'racing',human:true,wx:65,wz:40,heading:0,motionHeading:0,cameraHeading:0,speed:startSpeed,boost:12,nightmareActive,supplies:[]});
@@ -43,9 +55,9 @@ for(const engine of ['JavaScript','Rust']){
     assert.equal(ashes.length,1);assert.equal(ashes[0].wx,65);assert.equal(ashes[0].wz,50);assert.equal(ashes[0].life,4.3);
     assert.equal(after.effects.some(effect=>effect.type==='explosion'),false);
     if(core){const client=new ArenaClient();client.accept(core.packet(1),0);client.frame(0,[],0);assert.ok(client.present().effects.some(effect=>effect.type==='ash'));}
-    assert.equal(after.nightmareActive,12);assert.equal(after.boost,12);assert.equal(after.nightmareCooldown,30);
+    assert.equal(after.nightmareActive,13);assert.equal(after.boost,13);assert.equal(after.nightmareCooldown,30);
   });
-  test(`${engine}: Nightmare Fuel ends after twelve seconds and recharges thirty seconds from activation independently of the gravity well`,()=>{
+  test(`${engine}: Nightmare Fuel ends after thirteen seconds including its wind-down and recharges thirty seconds from activation independently of the gravity well`,()=>{
     const world=createBattle(7);Object.assign(world,{phase:'racing',human:true,wx:65,wz:70,heading:0,supplies:[]});
     for(const bot of world.bots)Object.assign(bot,{inactive:true,destroyed:999});
     const core=engine==='Rust'?new ArenaCore(world):null;
@@ -54,12 +66,12 @@ for(const engine of ['JavaScript','Rust']){
     const step=()=>core?core.step(.05):tickBattle(world,new Set(),.05);
     act('special');act('nightmare');
     assert.equal(read().specialActive,14);assert.equal(read().specialCooldown,25);
-    assert.equal(read().nightmareActive,12);assert.equal(read().nightmareCooldown,30);
-    for(let i=0;i<239;i++)step();assert.ok(read().nightmareActive>0);
+    assert.equal(read().nightmareActive,13);assert.equal(read().nightmareCooldown,30);
+    for(let i=0;i<259;i++)step();assert.ok(read().nightmareActive>0);
     for(let i=0;i<2;i++)step();assert.equal(read().nightmareActive,0);assert.equal(read().boost,0);
     act('nightmare');assert.equal(read().nightmareActive,0);
     for(let i=0;i<360;i++)step();assert.equal(read().nightmareCooldown,0);
-    act('nightmare');assert.equal(read().nightmareActive,12);assert.equal(read().nightmareCooldown,30);
+    act('nightmare');assert.equal(read().nightmareActive,13);assert.equal(read().nightmareCooldown,30);
   });
   test(`${engine}: arena walls block Nightmare Fuel`,()=>{
     const world=createBattle(7);Object.assign(world,{phase:'racing',human:true,wx:-20,wz:35,heading:Math.PI/2,supplies:[]});
@@ -87,18 +99,37 @@ test('local multiplayer prediction immediately uses the 180 km/h Nightmare Fuel 
   const core=new ArenaCore(world),client=new ArenaClient();client.accept(core.packet(0),0);client.frame(1/60,['arrowup'],1/60);
   assert.equal(client.snapshot().speed*.24,180);
 });
+
+test('Nightmare Fuel keeps its full plume for twelve seconds then shortens and fades continuously to zero',()=>{
+  for(const [remaining,expectedLength] of [[13,29],[1,29],[.75,21.75],[.5,14.5],[.25,7.25],[0,0]]){
+    const flames=[],particles=[];
+    const glow={at(){},flame(...args){flames.push(args);},particle(...args){particles.push(args);}};
+    const smoke={at(){},particle(){}};
+    drawNightmareFuel(glow,smoke,{x:0,z:0,nightmareActive:remaining},0,0);
+    assert.equal(flames[0]?.[4]??0,expectedLength);
+    assert.equal(flames[0]?.[5][2]??0,.36*Math.min(1,remaining));
+    if(remaining===0)assert.equal(particles.length,0);
+  }
+});
+
+test('Nightmare Fuel camera is mostly zoomed in while half of the ending flame is still visible',()=>{
+  assert.equal(nightmareCameraZoom(1,1,1/60),1);
+  assert.equal(nightmareCameraZoom(.5,1,1/60),.25);
+  assert.equal(nightmareCameraZoom(.25,.25,1/60),.0625);
+  assert.equal(nightmareCameraZoom(0,0,1/60),0);
+});
 test('double-tapping X predicts Nightmare Fuel immediately and sends an authoritative action after a normal turbo',()=>{
   const world=createBattle(7);Object.assign(world,{phase:'racing',human:true,wx:65,wz:70,heading:0,supplies:[]});
   for(const bot of world.bots)Object.assign(bot,{inactive:true,destroyed:999});
   const core=new ArenaCore(world),client=new ArenaClient();client.accept(core.packet(0),0);client.frame(1/60,[],.02);
   assert.equal(client.action('turbo',null,.05),true);assert.equal(client.action('turbo',null,.2),true);
-  assert.equal(client.snapshot().nightmareActive,12);assert.equal(client.snapshot().nightmareCooldown,30);assert.equal(client.snapshot().boost,12);
+  assert.equal(client.snapshot().nightmareActive,13);assert.equal(client.snapshot().nightmareCooldown,30);assert.equal(client.snapshot().boost,13);
   const input=client.outbound([]);assert.deepEqual(input.actions.map(a=>a.type),['turbo','nightmare']);
-  core.step(0,[{...input,actor:0}]);assert.equal(core.snapshot().nightmareActive,12);assert.equal(core.snapshot().nightmareCooldown,30);
+  core.step(0,[{...input,actor:0}]);assert.equal(core.snapshot().nightmareActive,13);assert.equal(core.snapshot().nightmareCooldown,30);
 });
 test('offline double-tap starts Nightmare Fuel, while two presses a second apart remain ordinary boosts',()=>{
   const world=createBattle(7);Object.assign(world,{phase:'racing',elapsed:1,human:true,supplies:[]});
-  assert.equal(useBattleTurbo(world),true);world.elapsed=1.2;assert.equal(useBattleTurbo(world),true);assert.equal(world.nightmareActive,12);
+  assert.equal(useBattleTurbo(world),true);world.elapsed=1.2;assert.equal(useBattleTurbo(world),true);assert.equal(world.nightmareActive,13);
   const other=createBattle(7);Object.assign(other,{phase:'racing',elapsed:1,human:true,supplies:[]});
   useBattleTurbo(other);other.elapsed=2;assert.equal(useBattleTurbo(other),false);assert.equal(other.nightmareActive??0,0);
 });

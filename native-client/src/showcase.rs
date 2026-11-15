@@ -88,6 +88,7 @@ impl Scene {
         let (kind, driver, state) = match parts.as_slice() {
             ["boost"] => ("boost", 9, None),
             ["nightmare"] => ("nightmare", 7, None),
+            ["nightmare-end"] => ("nightmare-end", 7, None),
             ["reverse-psychology"] => ("reverse-psychology", 0, None),
             ["plumage"] => ("plumage", 9, None),
             ["rapid-fire"] => ("rapid-fire", 14, None),
@@ -131,7 +132,25 @@ impl Scene {
                     false,
                 ),
                 step("Nightmare Fuel", 2.0, "idle", Some("nightmare"), false),
-                step("engines cooling", 1.0, "idle", None, false),
+                step(
+                    "flames shortening",
+                    1.0,
+                    "idle",
+                    Some("nightmare:end"),
+                    true,
+                ),
+                step("engines cool", 1.0, "idle", None, false),
+            ],
+            ("nightmare-end", None) if driver == 7 => vec![
+                step("Nightmare Fuel", 2.0, "idle", Some("nightmare"), false),
+                step(
+                    "flames shortening / camera closing",
+                    1.0,
+                    "idle",
+                    Some("nightmare:end"),
+                    true,
+                ),
+                step("engines cool", 2.0, "idle", None, false),
             ],
             ("boost", None) => vec![
                 step("idle", 2.0, "idle", None, false),
@@ -459,6 +478,25 @@ fn play(
         (player.clip, player.time) = (racer, at(step.once && step.overlay.is_none()));
         player.wind = wind;
     }
+    if show
+        .scene
+        .steps
+        .iter()
+        .any(|s| s.overlay.as_deref() == Some("nightmare:end"))
+    {
+        let wide = Vec3::new(32.0, 22.0, -16.0);
+        let close = Vec3::new(10.0, 7.0, -9.0);
+        let zoom = match step.overlay.as_deref() {
+            Some("nightmare") => 1.0,
+            Some("nightmare:end") => (1.0 - into).clamp(0.0, 1.0).powi(2),
+            _ => 0.0,
+        };
+        let eye = close.lerp(wide, zoom);
+        let focus = Vec3::new(0.0, 1.5, -2.0).lerp(Vec3::new(0.0, 1.5, -13.0), zoom);
+        for mut camera in &mut cameras {
+            *camera = Transform::from_translation(eye).looking_at(focus, Vec3::Y);
+        }
+    }
     if !capturing && show.scene.behind {
         let (eye, focus) = viewpoint(&show.scene, time.elapsed_secs() * 0.28);
         for mut camera in &mut cameras {
@@ -543,6 +581,7 @@ mod tests {
         assert_eq!((step.label.as_str(), (into * 10.0).round()), ("boost", 5.0));
         // Each capture lands inside the step it is meant to show, for every kind.
         for name in [
+            "nightmare-end",
             "reverse-psychology",
             "plumage",
             "boost:0",

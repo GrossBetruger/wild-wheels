@@ -42,3 +42,14 @@ test('the browser renderer ports to a native graphics pack',()=>{
   assert.ok(names.get('overlay:0:shield').frames.every(frame=>frame.parts.length===0&&frame.sprites[0]>0));
   assert.deepEqual(buildGraphicsPack({only:[0]}),pack);
 });
+
+test('Houston has a native full-burn loop and a one-second flame ending',()=>{
+  const {names}=read(buildGraphicsPack({only:[7]}));
+  const burning=names.get('overlay:7:nightmare');
+  const ending=names.get('overlay:7:nightmare:end');
+  assert.ok(burning.frames[0].sprites[0]>0);
+  assert.equal(burning.once,false);
+  assert.equal(ending.once,true);
+  assert.equal(ending.frames.length,61);
+  assert.ok(ending.frames[0].sprites[0]>0);
+});

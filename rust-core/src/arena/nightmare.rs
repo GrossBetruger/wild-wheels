@@ -1,6 +1,6 @@
 //! Houston's second ability. Damage is authoritative and independent of rendering.
 use super::*;
-pub(super) const NIGHTMARE_DURATION: f64 = 12.0;
+pub(super) const NIGHTMARE_DURATION: f64 = 13.0;
 pub(super) const NIGHTMARE_COOLDOWN: f64 = 30.0;
 pub(super) const NIGHTMARE_LENGTH: f64 = 29.0;
 impl Game {
@@ -58,8 +58,9 @@ impl Game {
                 let dz = target.wz - source.wz;
                 let behind = -dx * source.heading.sin() - dz * source.heading.cos();
                 let side = (dx * source.heading.cos() - dz * source.heading.sin()).abs();
-                if (3.5..=3.5 + NIGHTMARE_LENGTH).contains(&behind)
-                    && side <= 3.0
+                let strength = source.nightmare_active.clamp(0.0, 1.0);
+                if (3.5..=3.5 + NIGHTMARE_LENGTH * strength).contains(&behind)
+                    && side <= 3.0 * strength.sqrt()
                     && clear(
                         self.global.arena,
                         source.wx,

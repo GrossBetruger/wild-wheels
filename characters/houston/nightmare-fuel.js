@@ -1,6 +1,14 @@
 import {damageBattle,arenas,blocked} from '../../gameplay/combat.js';
 import {frozen} from '../../gameplay/special-abilities.js';
-export const NIGHTMARE_DURATION=12,NIGHTMARE_COOLDOWN=30,NIGHTMARE_LENGTH=29;
+export const NIGHTMARE_DURATION=13,NIGHTMARE_COOLDOWN=30,NIGHTMARE_LENGTH=29,NIGHTMARE_FADE=1;
+export const nightmareStrength=remaining=>Math.max(0,Math.min(1,remaining/NIGHTMARE_FADE));
+// Return to the close camera faster than the plume shrinks, so its last embers
+// can be seen up close before they disappear.
+export function nightmareCameraZoom(remaining,current,dt){
+  if(remaining>0&&remaining<=NIGHTMARE_FADE)return Math.min(current,nightmareStrength(remaining)**2);
+  const target=remaining>0?1:0;
+  return current+(target-current)*(1-Math.exp(-dt*5));
+}
 export function activateNightmare(world,actor=world){
   if(world.specialAbilities===false||world.phase!=='racing'||world.finishCountdown!==null||actor.driver!==7||actor.destroyed>0||actor.inactive||actor.afk||actor.bomber||frozen(world,actor.id)||(actor.nightmareCooldown??0)>1e-8)return false;
   actor.nightmareActive=NIGHTMARE_DURATION;actor.nightmareCooldown=NIGHTMARE_COOLDOWN;actor.boost=NIGHTMARE_DURATION;
@@ -22,7 +30,7 @@ export function tickNightmare(world,dt){
     for(const target of actors){
       if(target.id===source.id||target.destroyed>0||target.inactive||target.afk||target.bomber)continue;
       const dx=target.wx-source.wx,dz=target.wz-source.wz,behind=-dx*Math.sin(source.heading)-dz*Math.cos(source.heading),side=Math.abs(dx*Math.cos(source.heading)-dz*Math.sin(source.heading));
-      if(behind<3.5||behind>3.5+NIGHTMARE_LENGTH||side>3)continue;
+      if(behind<3.5||behind>3.5+NIGHTMARE_LENGTH*nightmareStrength(source.nightmareActive)||side>3*Math.sqrt(nightmareStrength(source.nightmareActive)))continue;
       const distance=Math.hypot(dx,dz);let clear=true;
       for(let along=3;along<distance;along+=3){if(blocked(arenas[world.arena],source.wx+dx*along/distance,source.wz+dz*along/distance,.4)){clear=false;break;}}
       if(clear)hits.push([target,source.id,Math.max(target.health,1)]);
@@ -39,8 +47,15 @@ export function tickNightmare(world,dt){
 // Shared by the browser renderer and the native graphics exporter. Everything
 // repeats every four seconds, the length of the native client's recorded loop.
 export function drawNightmareFuel(glow,smoke,p,heading,time,jump=null){
-  const L=NIGHTMARE_LENGTH,y=1.45,z0=-3.55,height=.13+(jump?.height??0);
+  const strength=nightmareStrength(p.nightmareActive??NIGHTMARE_FADE),width=Math.sqrt(strength);
+  if(strength<=0)return;
+  const L=NIGHTMARE_LENGTH*strength,y=1.45,z0=-3.55,height=.13+(jump?.height??0);
   for(const mesh of [glow,smoke]){mesh.at(p.x,height,p.z,heading);mesh.pitch=jump?.pitch??0;mesh.pivot=1.87;}
+  const fading=mesh=>({
+    flame:(x,up,z,r,length,color,phase)=>mesh.flame(x*width,y+(up-y)*width,z,r*width,length,color.map(c=>c*strength),phase),
+    particle:(x,up,z,size,color)=>mesh.particle(x*width,y+(up-y)*width,z,size*width,color.map(c=>c*strength)),
+  });
+  glow=fading(glow);smoke=fading(smoke);
   const turn=time*Math.PI/2,frac=v=>v-Math.floor(v),hash=(i,k)=>frac(Math.sin(i*127.1+k*311.7)*43758.5453),flicker=time*Math.PI*27/86;
   const around=(a,r)=>[Math.cos(a)*r,Math.max(.15,y+Math.sin(a)*r*.55)];
   // The plume: a white-hot core inside magenta inside deep ultraviolet, fed by the side engines.

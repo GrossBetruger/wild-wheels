@@ -564,7 +564,10 @@ fn racers(stage: &mut Stage, view: &ClientView, bats: &Bats, dt: f32, now: f32, 
             continue;
         }
         if view.special_abilities && a.driver == 7 && a.nightmare_active > 0.0 {
-            let nightmare = stage.clip("overlay:7:nightmare");
+            let nightmare = match a.nightmare_active <= 1.0 {
+                true => stage.aged("overlay:7:nightmare:end", 1.0 - a.nightmare_active),
+                false => stage.clip("overlay:7:nightmare"),
+            };
             stage.show(Role::Nightmare, a.id, nightmare, body);
         }
         // Health pips face along the viewer's heading, as in the browser.
@@ -999,6 +1002,11 @@ pub fn sync(
     };
     cache.nightmare_zoom +=
         (nightmare - cache.nightmare_zoom) * (1.0 - (-time.delta_secs().min(0.1) * 5.0).exp());
+    if nightmare > 0.0 && p.nightmare_active <= 1.0 {
+        cache.nightmare_zoom = cache
+            .nightmare_zoom
+            .min((p.nightmare_active as f32).powi(2));
+    }
     let zoom = cache.nightmare_zoom;
     let distance = 17.0 + 25.0 * zoom;
     let ahead = 18.0 - 32.0 * zoom;

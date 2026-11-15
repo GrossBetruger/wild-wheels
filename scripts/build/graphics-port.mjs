@@ -189,7 +189,7 @@ class Pack {
       u32(drivers.length),...drivers.flatMap((driver,index)=>{
         // The announcement shown when a racer's special ability is used.
         const card=abilityCards[index];
-        return[text(driver.name),text(driver.desc),Buffer.from(hex(driver.color)),text(index===7?`${abilityNames[index]}\nNIGHTMARE FUEL · XX · 12s / 30s recharge`:abilityNames[index]??''),Buffer.from([driver.intelligence]),text(card?.title??''),text(card?.detail??''),Buffer.from(hex(card?.color??'#ffffff'))];
+        return[text(driver.name),text(driver.desc),Buffer.from(hex(driver.color)),text(index===7?`${abilityNames[index]}\nNIGHTMARE FUEL · XX · 12s + 1s wind-down / 30s recharge`:abilityNames[index]??''),Buffer.from([driver.intelligence]),text(card?.title??''),text(card?.detail??''),Buffer.from(hex(card?.color??'#ffffff'))];
       }),
     ]);
   }
@@ -247,7 +247,12 @@ export function buildGraphicsPack({only=[...drivers.keys()]}={}){
     pack.clip(`trail:vulcan:${driver}`,FPS,[pack.overlay(rapid([]),rapid([{wx:0,wz:0,height:0}]))]);
     record(`shot:vulcan:${driver}`,{driver,frames:FPS,setup:r=>{hidden(r);r.projectiles=[{id:1,owner:r.id,kind:'hedgehog',vulcan:true,wx:0,wz:0,heading:0,height:0,age:1,trail:[]}];}});
     // Nightmare Fuel's flames change shape every frame and cannot be blended, so it is recorded at the display's rate.
-    if(driver===7){const shots=capture({driver,fps:SMOOTH_FPS,frames:OVERLAY_LOOP*SMOOTH_FPS,warmup:1,setup:r=>{r.nightmareActive=12;r.boost=12;}});pack.clip('overlay:7:nightmare',SMOOTH_FPS,shots.map((shot,i)=>pack.overlay(idle[Math.floor(i*FPS/SMOOTH_FPS)%idle.length],shot)));}
+    if(driver===7){
+      const shots=capture({driver,fps:SMOOTH_FPS,frames:OVERLAY_LOOP*SMOOTH_FPS,warmup:1,setup:r=>{r.nightmareActive=13;r.boost=13;}});
+      pack.clip('overlay:7:nightmare',SMOOTH_FPS,shots.map((shot,i)=>pack.overlay(idle[Math.floor(i*FPS/SMOOTH_FPS)%idle.length],shot)));
+      const ending=capture({driver,fps:SMOOTH_FPS,frames:SMOOTH_FPS+1,each:(r,t)=>{r.nightmareActive=Math.max(.000001,1-Math.max(0,t));r.boost=1;}});
+      pack.clip('overlay:7:nightmare:end',SMOOTH_FPS,ending.map((shot,i)=>pack.overlay(idle[Math.floor(i*FPS/SMOOTH_FPS)%idle.length],shot)),ONCE);
+    }
     // States layered over the racer. KnowItOwl's special is a full-screen shader effect.
     const states={shield:r=>{r.shield=1;},hedge:r=>{r.hedgeShield=2;},tehilim:r=>{r.tehilim=2;},dizzy:r=>{r.dizzy=1;},vulcan:r=>{r.vulcan=3;r.fireCooldown=0;},...(driver===14?{}:{special:r=>{r.specialActive=4;}})};
     for(const [state,setup] of Object.entries(states)){
