@@ -66,6 +66,8 @@ enum Role {
     /// A racer's silhouette seen through Dark Humor.
     Ghost,
     /// Projectiles, their trails, bombs and effects seen through Dark Humor.
+    /// KnowItOwl's bat seen through Dark Humor.
+    GhostBat,
     GhostShot,
     GhostTrail,
     GhostBomb,
@@ -472,7 +474,12 @@ fn at(wx: f64, height: f64, wz: f64, heading: f64) -> Transform {
         .with_rotation(Quat::from_rotation_y(heading as f32))
 }
 
-fn racers(stage: &mut Stage, view: &ClientView, dt: f32, now: f32, xray: bool) {
+/// The recorded bat hovers this far to its owl's right.
+const BAT_SIDE: f32 = 4.0;
+/// Each KnowItOwl's bat: where it hovers and the way it faces.
+type Bats = HashMap<usize, [f64; 3]>;
+
+fn racers(stage: &mut Stage, view: &ClientView, bats: &Bats, dt: f32, now: f32, xray: bool) {
     let auditing = |id: usize| {
         view.actors
             .iter()
@@ -619,12 +626,27 @@ fn racers(stage: &mut Stage, view: &ClientView, dt: f32, now: f32, xray: bool) {
             };
             {
                 let key = a.id * OVERLAYS.len() + index;
-                stage.show(
-                    Role::Overlay(index),
-                    key,
-                    overlay,
-                    at(a.wx, height as f64, a.wz, a.heading),
-                );
+                let mut place = at(a.wx, height as f64, a.wz, a.heading);
+                // KnowItOwl's rapid fire is his bat, recorded hovering at his right
+                // and facing ahead. It hovers where its shots come from and turns
+                // to its target, as the browser aims it.
+                if let Some([x, z, aim]) = bats.get(&a.id).filter(|_| *name == "vulcan") {
+                    let lift = match a.boost > 0.0 {
+                        true => 2.4,
+                        false => 0.0,
+                    };
+                    place = at(*x, f64::from(height) + lift, *z, *aim)
+                        * Transform::from_xyz(-BAT_SIDE, 0.0, 0.0);
+                    if xray {
+                        let ghost = Play {
+                            ghost: true,
+                            tint: crate::xray::RACER,
+                            ..overlay
+                        };
+                        stage.show(Role::GhostBat, a.id, ghost, place);
+                    }
+                }
+                stage.show(Role::Overlay(index), key, overlay, place);
             }
         }
         if auditing(a.id) {
@@ -858,9 +880,16 @@ pub fn sync(
     // A KnowItOwl keeps the silhouettes ready between casts, unseen, so they are
     // there the moment the dark falls instead of a few frames later.
     let owl = view.special_abilities && view.player.driver == 14;
+    let bats: Bats = view
+        .actors
+        .iter()
+        .filter(|a| a.driver == 14 && !a.inactive)
+        .filter_map(|a| Some((a.id, client.bat_aim(a.id)?)))
+        .collect();
     racers(
         &mut stage,
         &view,
+        &bats,
         time.delta_secs().min(0.05),
         time.elapsed_secs(),
         seeing || owl,
