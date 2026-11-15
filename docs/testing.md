@@ -130,12 +130,16 @@ Fourmidable's Tax-Audit), seated in turn, in matches that run until a racer has 
 credited to what dealt it, and the table ranks the abilities by their kills. It
 plays the real rules and bot AI with no rendering, in about a second.
 
-`npm run scenario:ability-importance -- [--matches 40] [--minutes 4] [--field plain|mixed|both] [--out FILE]`
+`npm run scenario:ability-importance -- [--matches 40] [--minutes 4] [--field plain|mixed|both] [--out FILE] [--no-open]`
 plays every racer with abilities (as `gameplay/special-abilities.js` lists them)
 with each subset of its abilities switched on, on the same seeds for every
 subset, against racers with no abilities (plain field) and against the other
-racers with abilities, all switched on (mixed field). Its Markdown report, in `.wild-wheels/reports/` by
-default, ranks each ability by its Shapley contribution to kills minus deaths
+racers with abilities, all switched on (mixed field). It writes Markdown and a standalone
+HTML dashboard to `.wild-wheels/reports/` by default and opens the dashboard in your
+default browser after a successful run. Use `--no-open` for unattended runs. `--out FILE`
+accepts a Markdown or HTML path; the companion report uses the same basename.
+The dashboard shows separate field rankings, contribution bars with confidence intervals,
+and expandable methodology and subset results. It ranks each ability by its Shapley contribution to kills minus deaths
 per match, with a 95% confidence interval, and flags abilities bots never
 trigger. Bots never press Nightmare Fuel themselves, so both simulations press
 it for every Houston whenever it is ready. The switches are `ability_on` in `rust-core/src/arena/abilities.rs`;
