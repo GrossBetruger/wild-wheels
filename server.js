@@ -4,12 +4,14 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { Multiplayer } from './server/multiplayer.js';
 import { createTunnelControl } from './server/tunnel-control.js';
-const files=new Map(JSON.parse(readFileSync(new URL('./public-assets.json',import.meta.url))).map(name=>[name==='index.html'?'/':'/'+name,[name,({'html':'text/html','css':'text/css','svg':'image/svg+xml','wasm':'application/wasm','ogg':'audio/ogg','flac':'audio/flac'})[name.split('.').at(-1)]??'text/javascript']]));
+const mime=name=>({'html':'text/html','css':'text/css','svg':'image/svg+xml','wasm':'application/wasm','ogg':'audio/ogg','flac':'audio/flac'})[name.split('.').at(-1)]??'text/javascript';
+const loadFiles=()=>new Map(JSON.parse(readFileSync(new URL('./public-assets.json',import.meta.url))).map(name=>[name==='index.html'?'/':'/'+name,[name,mime(name)]]));
+let files=loadFiles();
 export function createGameServer(options={}){
 const multiplayer=new Multiplayer(options);
 const runtimeHash=createHash('sha256');for(const name of ['server.js','server/chat.js','server/security.js','server/multiplayer.js','server/photo-album.js','server/ngrok.js','server/tunnel-control.js','gameplay/combat.js','gameplay/arena-core.js','gameplay/core-view.js','rust-core.wasm','gameplay/engine.js','gameplay/track.js','package-lock.json'])runtimeHash.update(name).update(readFileSync(new URL(name,import.meta.url)));const runtimeBuild=runtimeHash.digest('hex');
-let buildPromise;
-const build=()=>buildPromise??=(async()=>{const hash=createHash('sha256').update(runtimeBuild);for(const name of [...new Set([...files.values()].map(file=>file[0]))])hash.update(name).update(await readFile(new URL(name,import.meta.url)));return hash.digest('hex').slice(0,10).toUpperCase();})().catch(error=>{buildPromise=undefined;throw error;});
+let buildPromise,buildValue='',buildAt=-Infinity;
+const build=()=>{if(performance.now()-buildAt<500&&buildValue)return Promise.resolve(buildValue);return buildPromise??=(async()=>{files=loadFiles();const hash=createHash('sha256').update(runtimeBuild);for(const name of [...new Set([...files.values()].map(file=>file[0]))])hash.update(name).update(await readFile(new URL(name,import.meta.url)));buildValue=hash.digest('hex').slice(0,10).toUpperCase();buildAt=performance.now();buildPromise=undefined;return buildValue;})().catch(error=>{buildPromise=undefined;throw error;});};
 const server=createServer(async (req, res) => {
   try{multiplayer.security.origin(req);}catch(error){res.writeHead(403,{'Content-Type':'application/json'});res.end(JSON.stringify({error:error.message}));return;}
   res.setHeader('Referrer-Policy','no-referrer');
@@ -23,10 +25,12 @@ const server=createServer(async (req, res) => {
   }
   if(await multiplayer.handle(req,res))return;
   if(req.method!=='GET'&&req.method!=='HEAD'){res.writeHead(405);res.end('Method not allowed');return;}
-  const file = files.get((req.url || '/').split('?')[0]);
+  const route = (req.url || '/').split('?')[0];
+  const file = files.get(route) ?? (files = loadFiles()).get(route);
   if (!file) { res.writeHead(404); res.end('Not found'); return; }
   try {
-    const body = await readFile(new URL(file[0], import.meta.url));
+    const raw = await readFile(new URL(file[0], import.meta.url));
+    const body = file[0] === 'index.html' ? raw.toString().replace('<body>', `<body data-build="${await build()}">`) : raw;
     const host=/^[a-zA-Z0-9.\[\]:-]+$/.test(req.headers.host??'')?req.headers.host:'localhost';
     const local=['localhost',`localhost:${multiplayer.port}`,'127.0.0.1',`127.0.0.1:${multiplayer.port}`].includes(host);
     const control=local&&multiplayer.controlPort?` http://127.0.0.1:${multiplayer.controlPort}`:'';

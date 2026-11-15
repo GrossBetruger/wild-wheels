@@ -209,7 +209,7 @@ export class NetworkGame {
     if(this.restoring)return;this.restoring=true;
     this.connectionStatus();
     try{this.adopt(await this.request('/api/session',this.colorDirty&&isPlayerColor(this.preferredColor)?{color:this.preferredColor}:{}));}
-    catch(error){if(error.status!==401){this.status.textContent=error.message;this.connectionStatus(error.message);return;}if(this.active){this.leave('This room is no longer available.',false);return;}await this.infoReady;if(this.invitation)await this.connect('/api/join');}
+    catch(error){if(error.status!==401){this.status.textContent=error.message;this.connectionStatus(error.message);if(this.active){const token=this.token;setTimeout(()=>{if(this.token===token)this.restore();},1000);}return;}if(this.active){this.leave('This room is no longer available.',false);return;}await this.infoReady;if(this.invitation)await this.connect('/api/join');}
     finally{this.restoring=false;this.hostButton.disabled=this.active&&!this.isHost;}
   }
   async setAway(afk){

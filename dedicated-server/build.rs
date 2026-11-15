@@ -72,10 +72,13 @@ fn main() {
     }
     sources(root.join("dedicated-server/src"), &mut hash);
     sources(root.join("rust-core/src"), &mut hash);
-    code += &format!(
-        "];\npub const BUILD:&str={:?};",
-        format!("{:X}", hash.finalize())[..10].to_owned()
-    );
+    let build = format!("{:X}", hash.finalize())[..10].to_owned();
+    let dedicated_index = PathBuf::from(env::var("OUT_DIR").unwrap()).join("dedicated-index.html");
+    let stamped = fs::read_to_string(&dedicated_index)
+        .unwrap()
+        .replace("<body class=\"dedicated-server\">", &format!("<body class=\"dedicated-server\" data-build=\"{build}\">"));
+    fs::write(&dedicated_index, stamped).unwrap();
+    code += &format!("];\npub const BUILD:&str={build:?};");
     let git = |args: &[&str]| std::process::Command::new("git").args(args).current_dir(&root).output().ok().filter(|out|out.status.success()).map(|out|String::from_utf8_lossy(&out.stdout).trim().to_owned()).unwrap_or_default();
     let revision = git(&["rev-parse", "HEAD"]);
     for target in ["HEAD", "refs/heads/main"] {

@@ -28,6 +28,7 @@
   "gameplay/arena-core.js",
   "gameplay/core-view.js",
   "client/game.js",
+  "client/build-refresh.js",
   "client/keyboard.js",
   "gameplay/engine.js",
   "client/renderer.js",

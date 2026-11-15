@@ -1,0 +1,60 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { BUILD_REFRESH_MS, watchServerBuild } from '../../client/build-refresh.js';
+
+function harness({ served = '', builds, hidden = () => false }) {
+  const pending = [...builds];
+  let reloads = 0;
+  let hiddenNow = hidden();
+  const timers = [];
+  const listeners = new Map();
+  const watching = watchServerBuild({
+    served,
+    load: async () => pending.shift(),
+    reload: () => { reloads++; },
+    hidden: () => hiddenNow,
+    schedule: fn => { timers.push(fn); return timers.length; },
+    cancel() {},
+    listen: (type, listener) => listeners.set(type, listener),
+    unlisten: type => listeners.delete(type),
+  });
+  return {
+    watching, timers, reloads: () => reloads,
+    show() { hiddenNow = false; listeners.get('visibilitychange')?.(); },
+  };
+}
+
+test('an open page reloads as soon as the server build changes', async () => {
+  const page = harness({ served: 'AAAAAAAAAA', builds: ['AAAAAAAAAA', 'BBBBBBBBBB'] });
+  await page.watching;
+  assert.equal(page.reloads(), 0);
+  await page.timers[0]();
+  assert.equal(page.reloads(), 1);
+  assert.equal(BUILD_REFRESH_MS, 2000);
+});
+
+test('a page without a stamp adopts the first build and reloads on the next one', async () => {
+  const page = harness({ builds: ['CCCCCCCCCC', 'DDDDDDDDDD'] });
+  await page.watching;
+  assert.equal(page.reloads(), 0);
+  await page.timers[0]();
+  assert.equal(page.reloads(), 1);
+});
+
+test('a hidden tab waits until it is visible, then reloads immediately', async () => {
+  const page = harness({ served: 'AAAAAAAAAA', builds: ['EEEEEEEEEE'], hidden: () => true });
+  await page.watching;
+  await page.timers[0]();
+  assert.equal(page.reloads(), 0);
+  page.show();
+  await page.watching.catch(() => {});
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(page.reloads(), 1);
+});
+
+test('the same build leaves the page in place', async () => {
+  const page = harness({ served: 'AAAAAAAAAA', builds: ['AAAAAAAAAA', 'AAAAAAAAAA'] });
+  await page.watching;
+  await page.timers[0]();
+  assert.equal(page.reloads(), 0);
+});
