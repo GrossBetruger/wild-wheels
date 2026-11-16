@@ -126,6 +126,13 @@ Chrome contexts for three latency profiles. It leaves an existing game server al
 `CHROME_PATH` selects Chrome; `--server-binary`, `--client-binary` and `--output`
 can override paths. Reports default to the OS temporary directory.
 
+`npm run test:native-reconnect` drops a headless native client's connection once
+over a delayed link, on its own isolated server. The client must rejoin on its
+first reconnection, never be rejected by the server, and keep driving and firing.
+It uses the release builds of both binaries; `--server-binary` and
+`--client-binary` override them. The client prints a `connection-lost` line with
+the reason whenever its connection drops.
+
 ## Boundaries
 
 `rust-core` owns simulation and client prediction. The native package separates

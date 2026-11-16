@@ -12,7 +12,10 @@ use tokio_tungstenite::tungstenite::{Message, client::IntoClientRequest};
 
 type NetResult<T> = Result<T, Box<dyn Error + Send + Sync>>;
 pub enum Command {
-    Input(Vec<u8>),
+    /// Controls, and the connection they were made for. A racer keeps steering
+    /// while the link is down; the server rejects moves from before a reconnect
+    /// and closes the new connection, so those must never be sent on it.
+    Input(u64, Vec<u8>),
     /// A room setting or match start for `/api/control`.
     Control(Value),
     Driver(usize),
@@ -23,9 +26,13 @@ pub enum Command {
     Stop,
 }
 pub enum Event {
-    Session { origin: url::Url, token: String },
+    Session {
+        origin: url::Url,
+        token: String,
+    },
     Status(String),
-    Connected,
+    /// A connection is ready; inputs name it by this number.
+    Connected(u64),
     ColorPreference(Option<String>),
     ColorResult(Result<String, String>),
     Packet(Vec<u8>),
@@ -108,11 +115,27 @@ async fn worker(mut config: Config, commands: Receiver<Command>, events: Sender<
         }
     };
     let mut delay = 1;
+    let mut connection = 0;
     loop {
         let _ = events.try_send(Event::Status("Connecting to dedicated arena...".into()));
-        match connect(&mut config, &client, &mut store, &commands, &events).await {
+        connection += 1;
+        let mut established = false;
+        let link = Link {
+            number: connection,
+            established: &mut established,
+        };
+        match connect(&mut config, &client, &mut store, &commands, &events, link).await {
             Ok(()) => return,
             Err(error) => {
+                // Only repeated failures to connect wait longer; a link that was
+                // working and dropped is retried promptly.
+                if established {
+                    delay = 1;
+                }
+                println!(
+                    "{}",
+                    json!({"event":"connection-lost","connection":connection,"established":established,"reason":error.to_string(),"retrySeconds":delay})
+                );
                 if events
                     .try_send(Event::Status(format!("Reconnecting in {delay}s: {error}")))
                     .is_err()
@@ -156,12 +179,18 @@ pub(crate) async fn set_color(
     body(response).await?;
     Ok(color.into())
 }
+/// One attempt to connect: its number, and whether it got as far as a live socket.
+struct Link<'a> {
+    number: u64,
+    established: &'a mut bool,
+}
 async fn connect(
     config: &mut Config,
     client: &Client,
     store: &mut Store,
     commands: &Receiver<Command>,
     events: &Sender<Event>,
+    link: Link<'_>,
 ) -> NetResult<()> {
     let origin = config.origin.as_str();
     let info = body(client.get(config.origin.join("api/info")?).send().await?).await?;
@@ -282,7 +311,8 @@ async fn connect(
         ))
         .await?;
     events.try_send(Event::Status("Connected".into()))?;
-    events.try_send(Event::Connected)?;
+    *link.established = true;
+    events.try_send(Event::Connected(link.number))?;
     events.try_send(Event::Session {
         origin: config.origin.clone(),
         token: token.clone(),
@@ -296,7 +326,7 @@ async fn connect(
             },
             _=tokio::time::sleep(Duration::from_millis(2))=>{
                 for _ in 0..8 {match commands.try_recv(){
-                    Ok(Command::Input(bytes))=>{let text=String::from_utf8(bytes)?;tokio::time::timeout(Duration::from_secs(2),socket.send(Message::Text(text.into()))).await??;},
+                    Ok(Command::Input(made_for,bytes))=>{if made_for!=link.number{continue;}let text=String::from_utf8(bytes)?;tokio::time::timeout(Duration::from_secs(2),socket.send(Message::Text(text.into()))).await??;},
                     Ok(Command::Control(action))=>{let result=body(client.post(config.origin.join("api/control")?).bearer_auth(&token).json(&action).send().await?).await;if let Err(e)=result{let _=events.try_send(Event::Status(e.to_string()));}},
                     Ok(Command::Driver(driver))=>{let result=body(client.post(config.origin.join("api/driver")?).bearer_auth(&token).json(&json!({"driver":driver})).send().await?).await;if let Err(e)=result{let _=events.try_send(Event::Status(e.to_string()));}},
                     Ok(Command::Color(color))=>{

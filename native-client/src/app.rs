@@ -21,6 +21,8 @@ pub struct GameSession {
     transport: Option<Transport>,
     epoch: Instant,
     last_send: f64,
+    /// The connection the current client was built from; see `Command::Input`.
+    connection: u64,
     pub away: bool,
     observed: Option<(u32, u64)>,
     metrics: crate::metrics::Metrics,
@@ -37,6 +39,7 @@ impl GameSession {
             transport: None,
             epoch: Instant::now(),
             last_send: 0.0,
+            connection: 0,
             away: false,
             observed: None,
             metrics: Default::default(),
@@ -117,7 +120,8 @@ impl GameSession {
                 Event::Status(status) => {
                     self.status = status;
                 }
-                Event::Connected => {
+                Event::Connected(connection) => {
+                    self.connection = connection;
                     self.colors.pending = false;
                     self.metrics.connected();
                     self.client = None;
@@ -167,7 +171,10 @@ impl GameSession {
             return;
         };
         match client.outbound(input) {
-            Ok(bytes) => match transport.commands.try_send(Command::Input(bytes)) {
+            Ok(bytes) => match transport
+                .commands
+                .try_send(Command::Input(self.connection, bytes))
+            {
                 Ok(()) => {
                     self.last_send = now;
                     self.metrics.sent(client.last_sent_movement(), now);
