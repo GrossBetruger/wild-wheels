@@ -168,6 +168,23 @@ fn names(list: &[&str], on: usize) -> String {
     }
 }
 
+/// The complete ability set's paired effect relative to no abilities.
+fn combined_contribution(results: &[Vec<Outcome>]) -> Contribution {
+    let differences = |measure: fn(Outcome) -> f64| {
+        results.last().unwrap().iter().zip(&results[0])
+            .map(|(all, none)| measure(*all) - measure(*none)).collect::<Vec<_>>()
+    };
+    let (net, error) = spread(&differences(Outcome::net));
+    Contribution {
+        net,
+        error,
+        kills: spread(&differences(|o| o.kills)).0,
+        deaths: spread(&differences(|o| o.deaths)).0,
+        won: spread(&differences(|o| o.won)).0,
+        unused: false,
+    }
+}
+
 /// Plays every subset of one racer's abilities in one field, appends its tables
 /// to `details` and returns each ability's contribution.
 fn measure(field: Field, driver: usize, list: &[&str], matches: u32, minutes: f64, details: &mut String) -> Vec<Contribution> {
@@ -191,7 +208,7 @@ fn measure(field: Field, driver: usize, list: &[&str], matches: u32, minutes: f6
         );
     }
     let _ = writeln!(details);
-    (0..abilities)
+    let mut contributions: Vec<Contribution> = (0..abilities)
         .map(|i| {
             let (net, error) = spread(&shapley(&results, abilities, i, Outcome::net));
             // A deterministic match that never triggers the ability plays the same with or without it.
@@ -207,7 +224,29 @@ fn measure(field: Field, driver: usize, list: &[&str], matches: u32, minutes: f6
                 unused,
             }
         })
-        .collect()
+        .collect();
+    if abilities > 1 {
+        contributions.push(combined_contribution(&results));
+    }
+    contributions
+}
+
+#[test]
+fn both_together_compares_full_loadout_with_no_abilities_on_matching_seeds() {
+    // Neither: net 2 and 1. Both: net 7 and 6, a gain of 5 in each match.
+    // Singletons intentionally have very different scores: they are not the baseline.
+    let results = vec![
+        vec![Outcome { kills: 4.0, deaths: 2.0, won: 0.0 }, Outcome { kills: 5.0, deaths: 4.0, won: 0.0 }],
+        vec![Outcome { kills: 20.0, deaths: 0.0, won: 1.0 }; 2],
+        vec![Outcome { kills: 0.0, deaths: 20.0, won: 0.0 }; 2],
+        vec![Outcome { kills: 8.0, deaths: 1.0, won: 1.0 }, Outcome { kills: 9.0, deaths: 3.0, won: 0.0 }],
+    ];
+    let combined = combined_contribution(&results);
+    assert_eq!(combined.net, 5.0);
+    assert_eq!(combined.error, 0.0);
+    assert_eq!(combined.kills, 4.0);
+    assert_eq!(combined.deaths, -1.0);
+    assert_eq!(combined.won, 0.5);
 }
 
 #[test]
@@ -223,13 +262,17 @@ fn ability_importance() {
     };
     let mut details = String::new();
     // Per racer and ability, its contribution in each field played.
-    let mut rows: Vec<(&str, &str, Vec<Contribution>)> = Vec::new();
+    let mut rows: Vec<(&str, String, Vec<Contribution>)> = Vec::new();
     for field in &fields {
         let _ = writeln!(details, "## {} field: {}\n", field.name(), field.describe());
         for (driver, list) in RACERS {
             let contributions = measure(*field, driver, list, matches, minutes, &mut details);
-            for (ability, contribution) in list.iter().zip(contributions) {
-                match rows.iter_mut().find(|(r, a, _)| *r == driver_name(driver) && a == ability) {
+            let mut labels: Vec<String> = list.iter().map(|ability| (*ability).into()).collect();
+            if list.len() > 1 {
+                labels.push(format!("Both together: {}", list.join(" + ")));
+            }
+            for (ability, contribution) in labels.into_iter().zip(contributions) {
+                match rows.iter_mut().find(|(r, a, _)| *r == driver_name(driver) && *a == ability) {
                     Some((.., found)) => found.push(contribution),
                     None => rows.push((driver_name(driver), ability, vec![contribution])),
                 }
@@ -246,7 +289,9 @@ fn ability_importance() {
          in one of {MAX_PLAYERS} seats, on the same seeds for every subset. Fields: {}. \
          **Net** is kills minus deaths per match; **won** is the share of matches the racer finished with the most kills. \
          An ability's **contribution** is its Shapley value: its average effect when added to every subset of the racer's \
-         other abilities, with a 95% confidence interval over the seeds. Bots never press Nightmare Fuel themselves; \
+         other abilities, with a 95% confidence interval over the seeds. **Both together** rows measure the complete \
+         ability set against no abilities on the same seeds, including a paired 95% confidence interval; these are \
+         total loadout effects, not individual Shapley contributions or synergy scores. Bots never press Nightmare Fuel themselves; \
          the simulation presses it for every Houston whenever it is ready.\n",
         fields.iter().map(|f| format!("**{}**, {}", f.name(), f.describe())).collect::<Vec<_>>().join("; ")
     );

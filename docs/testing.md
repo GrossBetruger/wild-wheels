@@ -139,7 +139,10 @@ HTML dashboard to `.wild-wheels/reports/` by default and opens the dashboard in 
 default browser after a successful run. Use `--no-open` for unattended runs. `--out FILE`
 accepts a Markdown or HTML path; the companion report uses the same basename.
 The dashboard shows separate field rankings, contribution bars with confidence intervals,
-and expandable methodology and subset results. It ranks each ability by its Shapley contribution to kills minus deaths
+and expandable methodology and subset results. For racers with two abilities, the main
+rankings also show a Both together row: the complete ability set versus neither ability,
+with paired confidence intervals. This measures total loadout impact. It ranks each
+individual ability by its Shapley contribution to kills minus deaths
 per match, with a 95% confidence interval, and flags abilities bots never
 trigger. Bots never press Nightmare Fuel themselves, so both simulations press
 it for every Houston whenever it is ready. The switches are `ability_on` in `rust-core/src/arena/abilities.rs`;
