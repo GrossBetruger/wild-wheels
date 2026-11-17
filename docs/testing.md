@@ -92,6 +92,8 @@ The actual room host wins a tie for the highest points, including when they have
 
 ## Targeted checks
 
+The server keeps an all-time leaderboard of wins and games played by name; [leaderboard](leaderboard.md) lists its rules and checks. `npm run test:leaderboard` plays one whole match on a real server, about 3.5 minutes, and requires that a saved board is read at start, the finished match counts once for the person playing and as a win for the winner, the file holds only names, wins and games and is written as the match finishes, and a restart keeps it.
+
 The server keeps a problem log that clients report to; [logging](logging.md) lists its rules and checks. `npm run test:logging` runs a real server and requires that only a player in the room can write to the log, only the reading key can read it, a refused input is explained with what the server held, no session or key reaches a line, and the native client's reports arrive.
 
 Houston's “reine de la paresse” activates an eight-second tractor field with twenty-second recharge. Ready power-ups within 80 units move toward the closest active Houston at 55 units/second; ties use actor ID. Collected power-ups respawn at their original location, and uncollected ones return home on expiry or disable. `houston-gravity.test.js` covers JS/Rust parity, exact range, unavailable pickups, collection, expiry, and simultaneous fields. Chrome checks the moving pickup and its replicated inventory reward.

@@ -3,6 +3,7 @@
   "index.html",
   "assets/favicon.svg",
   "ui/ability-announcements.js",
+  "ui/all-time.js",
   "gameplay/locusts.js",
   "characters/tammy/locusts.js",
   "ui/reward-notice.js",

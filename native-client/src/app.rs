@@ -29,6 +29,10 @@ pub struct GameSession {
     /// For the problem log: frame times, and when the server was last heard from.
     health: crate::reports::FrameHealth,
     heard: f64,
+    /// The server's all-time leaderboard, best first: name, wins and games played.
+    pub board: Vec<(String, u64, u64)>,
+    /// The match phase last seen, to fetch the board again when a match finishes.
+    phase: String,
 }
 impl GameSession {
     pub(crate) fn new() -> Self {
@@ -48,6 +52,8 @@ impl GameSession {
             metrics: Default::default(),
             health: Default::default(),
             heard: 0.0,
+            board: vec![],
+            phase: String::new(),
         }
     }
     /// Whether the player has asked to be in a room, connected yet or not.
@@ -111,6 +117,7 @@ impl GameSession {
         while let Ok(event) = transport.events.try_recv() {
             match event {
                 Event::ColorPreference(color) => self.colors.preferred = color,
+                Event::Leaderboard(board) => self.board = board,
                 Event::ColorResult(result) => {
                     self.colors.pending = false;
                     match result {
@@ -162,12 +169,17 @@ impl GameSession {
                 }
             }
         }
+        let mut finished = false;
         if let Some(client) = self.client.as_ref() {
             let view = client.view();
             if view.phase != "racing" || view.player.destroyed > 0.0 || view.player.afk {
                 self.metrics.inactive();
             }
             self.metrics.acknowledged(view.movement_ack, now);
+            if view.phase != self.phase {
+                self.phase = view.phase.to_owned();
+                finished = view.phase == "finished";
+            }
             let state = (view.player.deaths, view.player.health.to_bits());
             if self.observed != Some(state) {
                 println!(
@@ -176,6 +188,10 @@ impl GameSession {
                 );
                 self.observed = Some(state);
             }
+        }
+        // The board changes when a match finishes; ask for it then.
+        if finished {
+            self.request(Command::Leaderboard);
         }
     }
     fn send(&mut self, input: ClientInput, now: f64) {

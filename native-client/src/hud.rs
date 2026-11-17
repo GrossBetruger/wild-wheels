@@ -409,6 +409,7 @@ fn readings(
     graphics: &Graphics,
     notices: &Notices,
     now: f64,
+    board: &[(String, u64, u64)],
 ) -> HashMap<Id, Reading> {
     let p = view.player;
     let racing = view.phase == "racing";
@@ -442,9 +443,23 @@ fn readings(
             format!("{name}  {:.0} / {}", a.kills, a.deaths)
         })
         .collect();
+    // Under the match's own standings, the server's all-time board: wins and games played.
+    let all_time: String = board
+        .iter()
+        .take(5)
+        .enumerate()
+        .map(|(place, (name, wins, games))| format!("\n{}. {name}  {wins} / {games}", place + 1))
+        .collect();
+    let all_time = match all_time.is_empty() {
+        true => all_time,
+        false => format!("\n\nALL-TIME · WINS / GAMES{all_time}"),
+    };
     text(
         Id::Board,
-        format!("LEADERBOARD · KILLS / DEATHS\n{}", rows.join("\n")),
+        format!(
+            "LEADERBOARD · KILLS / DEATHS\n{}{all_time}",
+            rows.join("\n")
+        ),
     );
     // The line under the top bar: respawn, spawn shield or rapid fire.
     let weapon = match p.driver {
@@ -1481,7 +1496,7 @@ pub fn update(
     };
     let now = time.elapsed_secs_f64();
     notices.sample(&view, &graphics, now);
-    let readings = readings(&view, &graphics, &notices, now);
+    let readings = readings(&view, &graphics, &notices, now, &session.board);
     let dark = crate::scene::dark_humor(&view).0 > 0.0;
     // Rivals far enough away to need a name, where the camera can see them.
     let mut plates = Vec::new();

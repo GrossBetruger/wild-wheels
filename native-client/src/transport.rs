@@ -21,6 +21,8 @@ pub enum Command {
     Driver(usize),
     Color(String),
     Afk(bool),
+    /// Fetch the all-time leaderboard again: a match has just finished.
+    Leaderboard,
     /// Give up the seat in the room, then stop.
     Leave,
     Stop,
@@ -35,6 +37,8 @@ pub enum Event {
     Connected(u64),
     ColorPreference(Option<String>),
     ColorResult(Result<String, String>),
+    /// The all-time leaderboard, best first: each name with its wins and games played.
+    Leaderboard(Vec<(String, u64, u64)>),
     Packet(Vec<u8>),
     Error(String),
 }
@@ -184,6 +188,35 @@ struct Link<'a> {
     number: u64,
     established: &'a mut bool,
 }
+/// Fetches the all-time leaderboard and hands its top to the game. A server that
+/// keeps none, or an answer that is not a board, changes nothing.
+async fn leaderboard(client: Client, origin: url::Url, events: Sender<Event>) {
+    let Ok(url) = origin.join("api/leaderboard") else {
+        return;
+    };
+    let Ok(reply) = client.get(url).send().await else {
+        return;
+    };
+    let Ok(board) = body(reply).await else {
+        return;
+    };
+    let players: Option<Vec<(String, u64, u64)>> = board["players"].as_array().map(|players| {
+        players
+            .iter()
+            .take(50)
+            .filter_map(|player| {
+                let name = player["name"]
+                    .as_str()
+                    .filter(|name| !name.is_empty() && name.encode_utf16().count() <= 24)?;
+                let (wins, games) = (player["wins"].as_u64()?, player["games"].as_u64()?);
+                (wins <= games).then(|| (name.to_owned(), wins, games))
+            })
+            .collect()
+    });
+    if let Some(players) = players {
+        let _ = events.try_send(Event::Leaderboard(players));
+    }
+}
 async fn connect(
     config: &mut Config,
     client: &Client,
@@ -314,6 +347,11 @@ async fn connect(
     *link.established = true;
     events.try_send(Event::Connected(link.number))?;
     crate::reports::note("info", "connected", json!({"connection":link.number}));
+    tokio::spawn(leaderboard(
+        client.clone(),
+        config.origin.clone(),
+        events.clone(),
+    ));
     let mut report_at = tokio::time::Instant::now() + Duration::from_secs(5);
     events.try_send(Event::Session {
         origin: config.origin.clone(),
@@ -345,6 +383,7 @@ async fn connect(
                         if let Ok(color)=&result { config.color=Some(color.clone()); }
                         events.try_send(Event::ColorResult(result))?;
                     },
+                    Ok(Command::Leaderboard)=>{tokio::spawn(leaderboard(client.clone(),config.origin.clone(),events.clone()));},
                     Ok(Command::Leave)=>{let _=client.post(config.origin.join("api/leave")?).bearer_auth(&token).json(&json!({})).send().await;let _=socket.close(None).await;return Ok(());},
                     Ok(Command::Afk(afk))=>{
                         if !afk{continue;}
