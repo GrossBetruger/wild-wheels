@@ -123,7 +123,7 @@ pub async fn upload(State(app): State<App>, h: HeaderMap, body: Bytes) -> Respon
     response(200, json!({"ok":true,"id":index}))
 }
 pub async fn list(State(app): State<App>, h: HeaderMap) -> Response {
-    if !same_origin(&app, &h) {
+    if !same_origin_get(&app, &h) {
         return error((403, "Use the game from the same server."));
     }
     let room = app.room.lock().unwrap();
@@ -148,7 +148,7 @@ pub async fn image(
     Path((epoch, id)): Path<(u64, usize)>,
     h: HeaderMap,
 ) -> Response {
-    if !same_origin(&app, &h) {
+    if !same_origin_get(&app, &h) {
         return error((403, "Use the game from the same server."));
     }
     let room = app.room.lock().unwrap();

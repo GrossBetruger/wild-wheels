@@ -32,7 +32,7 @@ export class RequestSecurity {
     const expected=this.origin(req),origin=req.headers.origin,site=req.headers['sec-fetch-site'];
     if(site==='cross-site'||site==='same-site')throw denied('Use the game from the same origin.');
     if(origin!==undefined){if(origin!==expected)throw denied('Use the game from the same origin.');}
-    else if(websocket||req.headers.cookie&&site!=='same-origin')throw denied('An origin or same-origin browser metadata is required.');
+    else if(websocket||req.method&&req.method!=='GET'&&req.method!=='HEAD'&&req.headers.cookie&&site!=='same-origin'||!req.method&&req.headers.cookie&&site!=='same-origin')throw denied('An origin or same-origin browser metadata is required.');
     // Headerless, cookieless API clients cannot impersonate a browser session.
     return expected;
   }

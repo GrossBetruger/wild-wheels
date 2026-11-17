@@ -8,7 +8,7 @@ mod sessions;
 mod stats;
 mod updates;
 mod security;
-use security::same_origin;
+use security::{same_origin, same_origin_get};
 use axum::{
     body::{Body, Bytes},
     extract::{
@@ -115,7 +115,8 @@ async fn http(
 ) -> Response {
     let path = uri.path();
     if path.starts_with("/api/") {
-        if !same_origin(&app, &h) {
+        let read_only = method == Method::GET && matches!(path, "/api/leaderboard" | "/api/info");
+        if !(if read_only { same_origin_get(&app, &h) } else { same_origin(&app, &h) }) {
             return error((403, "Use the game from the same server."));
         }
         if !limit(

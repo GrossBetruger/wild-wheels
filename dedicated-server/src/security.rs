@@ -26,6 +26,11 @@ pub fn same_origin(app: &App, h: &HeaderMap) -> bool {
     };
     origin.to_str().is_ok_and(|v| v == expected)
 }
+pub fn same_origin_get(app: &App, h: &HeaderMap) -> bool {
+    !h.get("sec-fetch-site")
+        .is_some_and(|v| v == "cross-site" || v == "same-site")
+        && (!h.contains_key(header::ORIGIN) || same_origin(app, h))
+}
 pub fn transport(app: &App, h: &HeaderMap, peer: IpAddr) -> bool {
     let Some(host) = h.get(header::HOST).and_then(|v| v.to_str().ok()) else {
         return false;
@@ -120,7 +125,10 @@ mod tests {
         let app=app(None);let peer="203.0.113.7".parse().unwrap();let mut headers=HeaderMap::new();
         headers.insert(header::HOST,"wild-wheels.duckdns.org:5173".parse().unwrap());headers.insert(header::ORIGIN,"http://wild-wheels.duckdns.org:5173".parse().unwrap());
         assert!(transport(&app,&headers,peer));assert!(same_origin(&app,&headers));
-        headers.insert(header::ORIGIN,"http://attacker.invalid".parse().unwrap());assert!(!same_origin(&app,&headers));
+        headers.remove(header::ORIGIN);headers.insert(header::COOKIE,"wild-wheels-session=secret".parse().unwrap());
+        assert!(same_origin_get(&app,&headers));assert!(!same_origin(&app,&headers));
+        headers.insert("sec-fetch-site","cross-site".parse().unwrap());assert!(!same_origin_get(&app,&headers));headers.remove("sec-fetch-site");
+        headers.insert(header::ORIGIN,"http://attacker.invalid".parse().unwrap());assert!(!same_origin(&app,&headers));assert!(!same_origin_get(&app,&headers));
         headers.insert(header::HOST,"wild-wheels.duckdns.org:5173/path".parse().unwrap());assert!(!transport(&app,&headers,peer));
     }
     #[test]
