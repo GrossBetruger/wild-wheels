@@ -126,6 +126,14 @@ impl NativeArena {
         told.kills = g.kill_feed.iter().map(|kill| kill.id).max().unwrap_or(told.kills).max(told.kills);
         found
     }
+    /// The seats in finishing order, the winner first, as the match itself ranks them.
+    pub fn placings(&self) -> Vec<usize> {
+        self.game.order()
+    }
+    /// Each seat in the match with its kills and deaths, in no particular order.
+    pub fn scores(&self) -> Vec<(usize, f64, u64)> {
+        self.game.actors.iter().filter(|a| !a.inactive).map(|a| (a.id, a.kills, a.deaths as u64)).collect()
+    }
     /// How much is in flight: projectiles, effects and drift particles.
     pub fn load(&self) -> [usize; 3] {
         let g = &self.game.global;

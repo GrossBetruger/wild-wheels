@@ -17,6 +17,7 @@ import { usesMobileControls, bombTarget, panBomber } from '../ui/mobile.js';
 import { CharacterPreview } from './character-preview.js';
 import { canChoosePlayerColor, playerColors, savedPlayerColor, applyPlayerColors } from '../gameplay/player-colors.js';
 import { ClientLog, FrameHealth, startReporting } from './log.js';
+import { allTimeRows, loadAllTime } from '../ui/all-time.js';
 const $ = id => document.getElementById(id);
 const canvas = $('game'), map = $('map').getContext('2d');
 canvas.tabIndex = 0;
@@ -201,6 +202,13 @@ characterPanel.append(choices, presentation);
 const setupRow = document.createElement('div'); setupRow.className = 'setup-row'; network.panel.before(setupRow); const lobbyColumn = document.createElement('div'); lobbyColumn.className = 'lobby-column'; lobbyColumn.append(network.panel, modeSwitch, mapSwitch); setupRow.append(lobbyColumn, characterPanel); document.querySelector('aside').prepend(chat.panel);
 const matchLayout = new MatchLayout({ layout: document.querySelector('.game-layout'), sidebar: document.querySelector('aside'), chat: chat.panel, map: $('map'), playground: document.querySelector('.track-panel'), viewport: document.querySelector('.viewport'), onChange: () => requestAnimationFrame(() => chat.scrollToLatest()) });
 const leaderboard = document.createElement('section'); leaderboard.className = 'leaderboard hidden'; document.querySelector('aside').append(leaderboard);
+// The server's all-time board, under the match's own: rating, wins and games played by name.
+const allTime = document.createElement('section'); allTime.className = 'leaderboard all-time hidden'; allTime.setAttribute('aria-label', 'All-time leaderboard'); leaderboard.after(allTime); let allTimePhase = null;
+async function refreshAllTime() {
+  const players = await loadAllTime(); allTime.classList.toggle('hidden', !players?.length); if (!players?.length) return;
+  const title = document.createElement('strong'); title.textContent = 'ALL-TIME · RATING · WINS / GAMES';
+  allTime.replaceChildren(title, ...allTimeRows(players, network.name?.value.trim() ?? '').map(row => { const line = document.createElement('div'); line.textContent = `${row.rank}. ${row.name}  ${row.rating} · ${row.wins} / ${row.games}`; line.classList.toggle('you', row.you); return line; }));
+}
 const finalResults = document.createElement('section'); finalResults.id = 'match-results'; finalResults.className = 'match-results hidden'; finalResults.setAttribute('aria-label', 'Final leaderboard'); startRow.before(finalResults); let resultsKey = '';
 const bicycleScores = document.createElement('section'); bicycleScores.id = 'bicycle-results'; bicycleScores.className = 'bicycle-results hidden'; finalResults.after(bicycleScores);
 function showResults() {
@@ -358,6 +366,8 @@ function hud() {
   const speedNode=$('speed').querySelector('b'),speedText=String(Math.round(race.speed*.24));if(speedNode.textContent!==speedText)speedNode.textContent=speedText;put('toast',uiNotice&&performance.now()<uiNotice.until?uiNotice.text:race.finishRank===null&&race.noticeTime>0?race.notice:'');
   document.querySelector('.position small').textContent=mode==='combat'?'KILLS':'POSITION';document.querySelector('.lap small').textContent=mode==='combat'?'HEALTH':'LAP';document.querySelector('.timer small').textContent=mode==='combat'?'TIME LEFT':'RACE TIME';
   leaderboard.classList.toggle('hidden',mode!=='combat');
+  // The all-time board changes only when a match finishes; it is fetched then and on arriving.
+  if(dedicated&&race.phase!==allTimePhase){const arriving=allTimePhase===null;allTimePhase=race.phase;if(arriving||race.phase==='finished')refreshAllTime();}
   document.querySelector('.viewport').classList.toggle('time-stopped',mode==='combat'&&race.timeStop>0);
   specialButton.classList.toggle('hidden',mode!=='combat'||![5,7,8,9,11,12,13,14].includes(race.driver)||race.bomber||race.specialAbilities===false);specialButton.textContent=(race.specialCooldown??0)>0?`F · RECHARGE ${race.specialCooldown.toFixed(1)}s`:`F · ${race.driver===13&&!auditTarget(race,race)?'XYLOPHONE-ATTACK':abilityNames[race.driver]??'SPECIAL'}`;specialButton.disabled=!battleActive(race)||race.destroyed>0||race.specialCooldown>0||race.driver===12&&race.health>=6||frozen(race,race.id);
   nightmareButton.classList.toggle('hidden',mode!=='combat'||race.driver!==7||race.bomber||race.specialAbilities===false);

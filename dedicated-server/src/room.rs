@@ -126,6 +126,9 @@ pub struct Room {
     /// The game events already noted, and the most in flight since the last report.
     told: Told,
     busiest: [usize; 3],
+    /// The all-time leaderboard, and whether it has changed since it was saved.
+    pub board: crate::leaderboard::Leaderboard,
+    pub board_changed: bool,
 }
 impl Room {
     pub fn new(arena: usize, bots: usize) -> Self {
@@ -148,6 +151,8 @@ impl Room {
             phase: "ready".into(),
             told: Told::default(),
             busiest: [0; 3],
+            board: Default::default(),
+            board_changed: false,
         }
     }
     /// Who a log line is about. Names are the players' own; tokens are never logged.
@@ -662,6 +667,25 @@ impl Room {
         if self.core.phase() != self.phase {
             let players: Vec<_> = (0..CAPACITY).filter(|id| self.members[*id].is_some()).map(|id| self.who(id)).collect();
             self.log.note("info", "match-phase", json!({"match":self.epoch,"from":self.phase,"to":self.core.phase(),"arena":self.arena,"bots":self.bots,"abilities":self.abilities,"players":players}));
+            if self.core.phase() == "finished" {
+                // A finished match counts for the people still playing it: one game
+                // each, and a win for whoever the match ranks first, unless that is a bot.
+                let playing = |id: usize| self.members[id].as_ref().filter(|p| !p.afk).map(|p| p.name.clone());
+                let placings = self.core.placings();
+                let played: Vec<String> = placings.iter().filter_map(|id| playing(*id)).collect();
+                let winner = placings.first().and_then(|id| playing(*id));
+                if !played.is_empty() {
+                    self.board.record(&played, winner.as_deref());
+                    self.board_changed = true;
+                }
+                // Ratings compare the people driving in it, by kills and then deaths;
+                // bots and bombers are not rated.
+                let results: Vec<crate::leaderboard::Result> = self.core.scores().into_iter()
+                    .filter_map(|(id, kills, deaths)| self.members[id].as_ref().filter(|p| !p.afk && p.role == "driver").map(|p| (p.name.clone(), kills, deaths)))
+                    .collect();
+                let ratings = self.board.rate(&results);
+                self.log.note("info", "match-result", json!({"match":self.epoch,"winner":winner,"played":played,"ratings":ratings}));
+            }
             self.phase = self.core.phase().to_owned();
         }
         if self.ticks % 2 == 0 {
@@ -908,6 +932,52 @@ mod tests {
         let phases: Vec<_> = read("day=today&event=match-phase")["entries"].as_array().unwrap().iter().map(|e| e["to"].as_str().unwrap().to_owned()).collect();
         assert_eq!(phases, ["countdown", "racing"]);
         std::fs::remove_dir_all(directory).unwrap();
+    }
+    #[test]
+    fn a_finished_match_counts_one_game_for_each_person_playing_and_a_win_for_the_winner() {
+        // Once with only people, once with a bot, which attacks and so usually wins.
+        for bots in [0, 1] {
+            let mut room = Room::new(0, bots);
+            for name in ["Oren", "Sarah", "Dana"] {
+                room.join(&json!({"name":name,"driver":null})).unwrap();
+            }
+            room.control(0,"/api/control",&json!({"action":"start"})).unwrap();
+            // Dana sits the match out.
+            room.control(2,"/api/afk",&json!({"afk":true})).unwrap();
+            let mut ticks = 0;
+            while room.core.phase() != "finished" {
+                room.tick();
+                ticks += 1;
+                assert!(ticks < 60 * 60 * 6, "the match must finish");
+                assert!(room.board_changed == (room.core.phase() == "finished"), "a match is counted as it finishes, not before");
+            }
+            let first = room.core.placings()[0];
+            let winner = ["Oren", "Sarah"].get(first).copied();
+            if bots == 0 {
+                assert_eq!(winner, Some("Oren"), "nobody scored, so the match ranks the first seat first");
+            }
+            let mut standings = room.board.standings();
+            standings.sort_by(|a, b| a.name.cmp(&b.name));
+            assert_eq!(standings.len(), 2, "only the people playing are counted: {standings:?}");
+            for (player, name) in standings.iter().zip(["Oren", "Sarah"]) {
+                assert_eq!((player.name.as_str(), player.games, player.wins), (name, 1, u64::from(winner == Some(name))), "bots {bots}, first seat {first}");
+            }
+            // The two people are rated against each other by their scores, whatever a bot did.
+            let scores = room.core.scores();
+            let score = |seat: usize| scores.iter().find(|(id, ..)| *id == seat).map(|(_, kills, deaths)| (*kills, std::cmp::Reverse(*deaths))).unwrap();
+            let (oren, sarah) = (standings[0].rating, standings[1].rating);
+            match score(0).partial_cmp(&score(1)).unwrap() {
+                std::cmp::Ordering::Greater => assert_eq!((oren, sarah), (1016.0, 984.0)),
+                std::cmp::Ordering::Less => assert_eq!((oren, sarah), (984.0, 1016.0)),
+                std::cmp::Ordering::Equal => assert_eq!((oren, sarah), (1000.0, 1000.0), "level scores are a draw, though the match names a winner"),
+            }
+            // The result is counted once, however long the finished match stays on screen.
+            room.board_changed = false;
+            for _ in 0..600 { room.tick(); }
+            assert!(!room.board_changed);
+            assert!(room.board.standings().iter().all(|player| player.games == 1));
+            assert_eq!(room.board.standings().iter().map(|player| player.rating).sum::<f64>(), 2000.0, "and rated once");
+        }
     }
     #[test]
     fn movement_gaps_and_actions_beyond_received_movement_are_rejected() {

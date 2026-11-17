@@ -1,5 +1,6 @@
 mod benchmark;
 mod chat;
+mod leaderboard;
 mod logs;
 mod photos;
 mod room;
@@ -132,6 +133,9 @@ async fn http(
             },
         ) {
             return error((429, "Too many requests. Try again shortly."));
+        }
+        if path == "/api/leaderboard" && method == Method::GET {
+            return response(200, app.room.lock().unwrap().board.report());
         }
         if path == "/api/info" && method == Method::GET {
             return response(
@@ -593,7 +597,10 @@ async fn main() {
         Ok("on") | Err(_) => true,
         Ok(_) => panic!("SPECIAL_ABILITIES must be on or off"),
     };
+    let board_path = std::env::var_os("WILD_WHEELS_LEADERBOARD_FILE").map(std::path::PathBuf::from)
+        .unwrap_or_else(|| ".wild-wheels/leaderboard.json".into());
     let mut room = Room::new(arena, bots);
+    room.board = leaderboard::Leaderboard::open(&board_path).expect("Unable to load the saved leaderboard");
     room.abilities = abilities;
     room.chat = chat::Chat::open(&chat_path).expect("Unable to load saved chat");
     let invite_secret = std::env::var("INVITE_SECRET").ok();
@@ -635,6 +642,7 @@ async fn main() {
         invite_secret,
     };
     let clock = app.room.clone();
+    let clock_board = board_path.clone();
     let tick_stats = app.stats.clone();
     let commit = match REVISION.is_empty() {true=>format!("build:{BUILD}"),false=>REVISION.to_owned()};
     let mut stop_clock = app.shutdown.subscribe();
@@ -652,6 +660,16 @@ async fn main() {
                 room.overruns += 1;
             }
             room.tick();
+            if std::mem::take(&mut room.board_changed) {
+                // A match just finished. The file is written away from the game's thread.
+                let (board, path, log) = (room.board.clone(), clock_board.clone(), room.log.clone());
+                tokio::task::spawn_blocking(move || {
+                    if let Err(error) = board.save(&path) {
+                        eprintln!("Unable to save the leaderboard: {error}");
+                        log.note("error", "leaderboard-not-saved", json!({"error":error.to_string()}));
+                    }
+                });
+            }
             let cost = *room.tick_us.last().unwrap_or(&0);
             tick_stats.lock().unwrap().record(&commit, sessions::now(), cost, overrun, room.count());
             late += u32::from(overrun);
@@ -740,7 +758,8 @@ async fn main() {
     tokio::task::spawn_blocking(move || {
         let chat = app.room.lock().unwrap().chat.save(&chat_path);
         let stats = final_stats.save(&stats_path);
-        chat.and(stats)
+        let board = app.room.lock().unwrap().board.save(&board_path);
+        chat.and(stats).and(board)
     })
         .await.expect("Server state save task failed").expect("Unable to save server state during shutdown");
     app.logs.note("info", "server-stop", json!({}));
