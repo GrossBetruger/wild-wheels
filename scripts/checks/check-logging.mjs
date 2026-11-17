@@ -85,9 +85,9 @@ try{
     const connected=(await events('&source=native')).find(entry=>entry.event==='connected');
     assert.equal(connected.who.name,'Native Reporter');assert.match(connected.build,/^native /);nativeChecked=true;
   }
-  // Everything at once: one file of lines in the order they happened, for the key only.
-  const collect=(query='',bearer=key)=>fetch(`${origin}/logz/all${query}`,{headers:bearer?{Authorization:`Bearer ${bearer}`}:{}});
-  assert.equal((await collect('',null)).status,401);assert.equal((await collect('?day=today')).status,400);assert.equal((await read('?days=2')).status,400);
+  // Everything at once: one public file of lines in the order they happened.
+  const collect=(query='')=>fetch(`${origin}/logz/all${query}`);
+  assert.equal((await collect('?day=today')).status,400);assert.equal((await read('?days=2')).status,400);
   const collected=await collect();assert.equal(collected.status,200);
   assert.equal(collected.headers.get('content-type'),'application/x-ndjson');assert.match(collected.headers.get('content-disposition'),/^attachment; filename="wild-wheels-log-\d{4}-\d{2}-\d{2}\.jsonl"$/);
   const lines=(await collected.text()).trim().split('\n').map(line=>JSON.parse(line));

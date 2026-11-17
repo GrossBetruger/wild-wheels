@@ -54,7 +54,7 @@ Three more limits keep one noisy problem from using the day's space:
 
 ## Reading it
 
-`GET /logz` and `GET /logz/all` need the reading key as a bearer token. The key is made the first
+`GET /logz` needs the reading key as a bearer token (`GET /logz/all` is public). The key is made the first
 time the server starts and saved in `read-key` with the log, readable only by
 the server's own user; `LOG_READ_KEY` (32 characters or more) sets it instead.
 
@@ -80,13 +80,13 @@ A misspelled query name is an error, not an empty answer. The endpoint allows
 
 ### Collecting everything
 
-`GET /logz/all` returns every kept day in one download: one JSON object per
+`GET /logz/all` is public and returns every kept day in one download: one JSON object per
 line, both files of each day merged in the order things happened, oldest day
 first.
 
 ```sh
-curl -H "Authorization: Bearer $KEY" -o wild-wheels-log.jsonl 'http://localhost:5173/logz/all'
-curl -H "Authorization: Bearer $KEY" 'http://localhost:5173/logz/all?days=2&level=error' | jq .
+curl -o wild-wheels-log.jsonl 'http://localhost:5173/logz/all'
+curl 'http://localhost:5173/logz/all?days=2&level=error' | jq .
 ```
 
 `days` keeps only the latest that many days (1–31); `source`, `level`, `event`
