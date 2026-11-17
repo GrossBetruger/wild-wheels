@@ -29,8 +29,8 @@ pub struct GameSession {
     /// For the problem log: frame times, and when the server was last heard from.
     health: crate::reports::FrameHealth,
     heard: f64,
-    /// The server's all-time leaderboard, best first: name, wins and games played.
-    pub board: Vec<(String, u64, u64)>,
+    /// The server's all-time leaderboard, best first: name, rating, wins and games played.
+    pub board: Vec<(String, f64, u64, u64)>,
     /// The match phase last seen, to fetch the board again when a match finishes.
     phase: String,
 }

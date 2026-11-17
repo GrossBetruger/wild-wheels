@@ -1,6 +1,7 @@
 // The all-time leaderboard, end to end on a real server: a saved board is read
 // at start, a finished match adds a game and a win, the file is written as the
 // match finishes, and a restart keeps it. Plays one whole match: about 3.5 minutes.
+// The saved board here predates ratings, so it also shows such a file is still read.
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
 import {createServer} from 'node:http';
@@ -26,7 +27,7 @@ const post=(path,body,token)=>fetch(origin+path,{method:'POST',headers:{'Content
 try{
   await writeFile(file,JSON.stringify({players:[{name:'Veteran',wins:5,games:9}]}));
   await start();
-  assert.deepEqual(await board(),[{name:'Veteran',wins:5,games:9}],'a saved board is read when the server starts');
+  assert.deepEqual(await board(),[{name:'Veteran',wins:5,games:9,rating:1000}],'a saved board is read when the server starts, and one without ratings starts at 1000');
 
   // One person plays a whole match alone and so wins it.
   const joined=await(await post('/api/join',{code:'00',name:'Solo',driver:0,role:'driver'})).json();
@@ -40,20 +41,21 @@ try{
   // Staying in touch keeps the player from being marked away.
   let sequence=0;const present=setInterval(()=>{if(socket.readyState===WebSocket.OPEN&&epoch!==null)socket.send(JSON.stringify({type:'input',sequence:sequence++,epoch,keys:[],actions:[],moves:[]}));},1000);
   await wait(()=>phase==='racing','The match did not start');
-  assert.deepEqual(await board(),[{name:'Veteran',wins:5,games:9}],'nothing is counted while the match is being played');
+  assert.deepEqual(await board(),[{name:'Veteran',wins:5,games:9,rating:1000}],'nothing is counted while the match is being played');
   await wait(()=>phase==='finished','The match did not finish',215000);
   clearInterval(present);
-  const expected=[{name:'Veteran',wins:5,games:9},{name:'Solo',wins:1,games:1}];
+  // Alone in the match there is nobody to be rated against, so the rating stays.
+  const expected=[{name:'Veteran',wins:5,games:9,rating:1000},{name:'Solo',wins:1,games:1,rating:1000}];
   await wait(async()=>(await board()).length===2,'The finished match was not counted');
   assert.deepEqual(await board(),expected);
   await wait(async()=>JSON.parse(await readFile(file,'utf8')).players.length===2,'The file was not written when the match finished',5000);
   const saved=JSON.parse(await readFile(file,'utf8')).players;
   assert.deepEqual([...saved].sort((a,b)=>b.wins-a.wins),expected);
-  assert.deepEqual(saved.map(player=>Object.keys(player).sort()),[['games','name','wins'],['games','name','wins']],'only names, wins and games are kept');
+  assert.deepEqual(saved.map(player=>Object.keys(player).sort()),[['games','name','rating','wins'],['games','name','rating','wins']],'only names, wins, games and ratings are kept');
   await sleep(1500);assert.deepEqual(await board(),expected,'a finished match is counted once');
   socket.close();
 
   await stop();await start();
   assert.deepEqual(await board(),expected,'the board survives a restart');
-  console.log(JSON.stringify({pass:true,criteria:'A saved leaderboard is read at start; a finished match adds one game for the person playing and a win for the winner, once; the file holds only names, wins and games, is written as the match finishes, and survives a restart.',board:expected}));
+  console.log(JSON.stringify({pass:true,criteria:'A saved leaderboard is read at start; a finished match adds one game for the person playing and a win for the winner, once; the file holds only names, wins, games and ratings, is written as the match finishes, and survives a restart.',board:expected}));
 }finally{server?.kill('SIGTERM');}

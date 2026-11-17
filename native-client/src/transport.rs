@@ -37,8 +37,8 @@ pub enum Event {
     Connected(u64),
     ColorPreference(Option<String>),
     ColorResult(Result<String, String>),
-    /// The all-time leaderboard, best first: each name with its wins and games played.
-    Leaderboard(Vec<(String, u64, u64)>),
+    /// The all-time leaderboard, best first: each name with its rating, wins and games played.
+    Leaderboard(Vec<(String, f64, u64, u64)>),
     Packet(Vec<u8>),
     Error(String),
 }
@@ -200,19 +200,23 @@ async fn leaderboard(client: Client, origin: url::Url, events: Sender<Event>) {
     let Ok(board) = body(reply).await else {
         return;
     };
-    let players: Option<Vec<(String, u64, u64)>> = board["players"].as_array().map(|players| {
-        players
-            .iter()
-            .take(50)
-            .filter_map(|player| {
-                let name = player["name"]
-                    .as_str()
-                    .filter(|name| !name.is_empty() && name.encode_utf16().count() <= 24)?;
-                let (wins, games) = (player["wins"].as_u64()?, player["games"].as_u64()?);
-                (wins <= games).then(|| (name.to_owned(), wins, games))
-            })
-            .collect()
-    });
+    let players: Option<Vec<(String, f64, u64, u64)>> =
+        board["players"].as_array().map(|players| {
+            players
+                .iter()
+                .take(50)
+                .filter_map(|player| {
+                    let name = player["name"]
+                        .as_str()
+                        .filter(|name| !name.is_empty() && name.encode_utf16().count() <= 24)?;
+                    let (wins, games) = (player["wins"].as_u64()?, player["games"].as_u64()?);
+                    let rating = player["rating"]
+                        .as_f64()
+                        .filter(|rating| (0.0..=10_000.0).contains(rating))?;
+                    (wins <= games).then(|| (name.to_owned(), rating, wins, games))
+                })
+                .collect()
+        });
     if let Some(players) = players {
         let _ = events.try_send(Event::Leaderboard(players));
     }

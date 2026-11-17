@@ -674,11 +674,17 @@ impl Room {
                 let placings = self.core.placings();
                 let played: Vec<String> = placings.iter().filter_map(|id| playing(*id)).collect();
                 let winner = placings.first().and_then(|id| playing(*id));
-                self.log.note("info", "match-result", json!({"match":self.epoch,"winner":winner,"played":played}));
                 if !played.is_empty() {
                     self.board.record(&played, winner.as_deref());
                     self.board_changed = true;
                 }
+                // Ratings compare the people driving in it, by kills and then deaths;
+                // bots and bombers are not rated.
+                let results: Vec<crate::leaderboard::Result> = self.core.scores().into_iter()
+                    .filter_map(|(id, kills, deaths)| self.members[id].as_ref().filter(|p| !p.afk && p.role == "driver").map(|p| (p.name.clone(), kills, deaths)))
+                    .collect();
+                let ratings = self.board.rate(&results);
+                self.log.note("info", "match-result", json!({"match":self.epoch,"winner":winner,"played":played,"ratings":ratings}));
             }
             self.phase = self.core.phase().to_owned();
         }
@@ -956,11 +962,21 @@ mod tests {
             for (player, name) in standings.iter().zip(["Oren", "Sarah"]) {
                 assert_eq!((player.name.as_str(), player.games, player.wins), (name, 1, u64::from(winner == Some(name))), "bots {bots}, first seat {first}");
             }
+            // The two people are rated against each other by their scores, whatever a bot did.
+            let scores = room.core.scores();
+            let score = |seat: usize| scores.iter().find(|(id, ..)| *id == seat).map(|(_, kills, deaths)| (*kills, std::cmp::Reverse(*deaths))).unwrap();
+            let (oren, sarah) = (standings[0].rating, standings[1].rating);
+            match score(0).partial_cmp(&score(1)).unwrap() {
+                std::cmp::Ordering::Greater => assert_eq!((oren, sarah), (1016.0, 984.0)),
+                std::cmp::Ordering::Less => assert_eq!((oren, sarah), (984.0, 1016.0)),
+                std::cmp::Ordering::Equal => assert_eq!((oren, sarah), (1000.0, 1000.0), "level scores are a draw, though the match names a winner"),
+            }
             // The result is counted once, however long the finished match stays on screen.
             room.board_changed = false;
             for _ in 0..600 { room.tick(); }
             assert!(!room.board_changed);
             assert!(room.board.standings().iter().all(|player| player.games == 1));
+            assert_eq!(room.board.standings().iter().map(|player| player.rating).sum::<f64>(), 2000.0, "and rated once");
         }
     }
     #[test]

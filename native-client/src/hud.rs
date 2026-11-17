@@ -409,7 +409,7 @@ fn readings(
     graphics: &Graphics,
     notices: &Notices,
     now: f64,
-    board: &[(String, u64, u64)],
+    board: &[(String, f64, u64, u64)],
 ) -> HashMap<Id, Reading> {
     let p = view.player;
     let racing = view.phase == "racing";
@@ -443,16 +443,18 @@ fn readings(
             format!("{name}  {:.0} / {}", a.kills, a.deaths)
         })
         .collect();
-    // Under the match's own standings, the server's all-time board: wins and games played.
+    // Under the match's own standings, the server's all-time board: rating, wins and games played.
     let all_time: String = board
         .iter()
         .take(5)
         .enumerate()
-        .map(|(place, (name, wins, games))| format!("\n{}. {name}  {wins} / {games}", place + 1))
+        .map(|(place, (name, rating, wins, games))| {
+            format!("\n{}. {name}  {rating:.0} · {wins} / {games}", place + 1)
+        })
         .collect();
     let all_time = match all_time.is_empty() {
         true => all_time,
-        false => format!("\n\nALL-TIME · WINS / GAMES{all_time}"),
+        false => format!("\n\nALL-TIME · RATING · WINS / GAMES{all_time}"),
     };
     text(
         Id::Board,

@@ -92,7 +92,7 @@ The actual room host wins a tie for the highest points, including when they have
 
 ## Targeted checks
 
-The server keeps an all-time leaderboard of wins and games played by name; [leaderboard](leaderboard.md) lists its rules and checks. `npm run test:leaderboard` plays one whole match on a real server, about 3.5 minutes, and requires that a saved board is read at start, the finished match counts once for the person playing and as a win for the winner, the file holds only names, wins and games and is written as the match finishes, and a restart keeps it.
+The server keeps an all-time leaderboard of Elo rating, wins and games played by name; [leaderboard](leaderboard.md) lists its rules and checks. `npm run test:leaderboard` plays one whole match on a real server, about 3.5 minutes, and requires that a saved board is read at start, the finished match counts once for the person playing and as a win for the winner, the file holds only names, wins, games and ratings and is written as the match finishes, a board saved before ratings is still read, and a restart keeps it.
 
 The server keeps a problem log that clients report to; [logging](logging.md) lists its rules and checks. `npm run test:logging` runs a real server and requires that only a player in the room can write to the log, only the reading key can read it, a refused input is explained with what the server held, no session or key reaches a line, and the native client's reports arrive.
 
