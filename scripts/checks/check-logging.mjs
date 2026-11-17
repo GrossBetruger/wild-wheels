@@ -85,9 +85,21 @@ try{
     const connected=(await events('&source=native')).find(entry=>entry.event==='connected');
     assert.equal(connected.who.name,'Native Reporter');assert.match(connected.build,/^native /);nativeChecked=true;
   }
+  // Everything at once: one file of lines in the order they happened, for the key only.
+  const collect=(query='',bearer=key)=>fetch(`${origin}/logz/all${query}`,{headers:bearer?{Authorization:`Bearer ${bearer}`}:{}});
+  assert.equal((await collect('',null)).status,401);assert.equal((await collect('?day=today')).status,400);assert.equal((await read('?days=2')).status,400);
+  const collected=await collect();assert.equal(collected.status,200);
+  assert.equal(collected.headers.get('content-type'),'application/x-ndjson');assert.match(collected.headers.get('content-disposition'),/^attachment; filename="wild-wheels-log-\d{4}-\d{2}-\d{2}\.jsonl"$/);
+  const lines=(await collected.text()).trim().split('\n').map(line=>JSON.parse(line));
+  assert.equal(lines.length,(await events()).length,'everything is every line of every day');
+  assert.deepEqual(lines.map(line=>line.t),lines.map(line=>line.t).sort(),'in the order it happened');
+  assert.ok(lines.some(line=>line.source==='server')&&lines.some(line=>line.source==='browser')&&lines.some(line=>line.source==='native'));
+  const errors=(await(await collect('?days=1&level=error')).text()).trim().split('\n').map(line=>JSON.parse(line));
+  assert.ok(errors.length>=2&&errors.every(line=>line.level==='error'));
+
   // A flood of reports is slowed at the door and cannot fill the day's file.
   const statuses=[];for(let i=0;i<12;i++)statuses.push((await post('/api/log',{client:'browser',entries:[{level:'warn',event:'flood',data:{i}}]},joined.token)).status);
   assert.ok(statuses.includes(429),`Reports must be rate limited: ${statuses}`);
 
-  console.log(JSON.stringify({pass:true,criteria:'The server notes its own problems with reasons, accepts checked reports only from players in the room, limits their rate and size, keeps sessions and keys out of the log, and shows the log only to the reading key.',nativeChecked,events:[...new Set((await events()).map(entry=>`${entry.source}:${entry.event}`))].sort()}));
+  console.log(JSON.stringify({pass:true,criteria:'The server notes its own problems with reasons, accepts checked reports only from players in the room, limits their rate and size, keeps sessions and keys out of the log, and shows the log, a day at a time or all at once, only to the reading key.',nativeChecked,events:[...new Set((await events()).map(entry=>`${entry.source}:${entry.event}`))].sort()}));
 }catch(error){console.error(serverLog);throw error;}finally{native?.kill('SIGKILL');server.kill('SIGTERM');}

@@ -203,8 +203,10 @@ async fn http(
             response(200, report)
         }
         "/build.json" => response(200, json!({"build":BUILD,"revision":REVISION})),
-        "/logz" => {
-            if !limit(&app, addr.ip(), "logs", 30, Duration::from_secs(60)) {
+        "/logz" | "/logz/all" => {
+            // Collecting everything is the heavier request, so it is allowed less often.
+            let everything = path == "/logz/all";
+            if !limit(&app, addr.ip(), if everything { "logs-all" } else { "logs" }, if everything { 4 } else { 30 }, Duration::from_secs(60)) {
                 return error((429, "Too many log requests."));
             }
             let presented = h.get(header::AUTHORIZATION).and_then(|v| v.to_str().ok()).and_then(|v| v.strip_prefix("Bearer ")).unwrap_or("");
@@ -218,6 +220,30 @@ async fn http(
                 Ok(query) => query,
                 Err(message) => return error((400, message)),
             };
+            if everything {
+                if query.day.is_some() || query.limit.is_some() {
+                    return error((400, "Everything has no day or limit. Use days, source, level, event and contains."));
+                }
+                let at = logs::now();
+                let (query, listing) = (Arc::new(query), directory.clone());
+                let listed = query.clone();
+                let Ok(days) = tokio::task::spawn_blocking(move || logs::kept(&listing, &listed, at)).await else {
+                    return error((500, "The log could not be read."));
+                };
+                // One day is read and sent at a time, away from the game's thread, so
+                // the whole log is never held in memory.
+                let pieces = futures_util::stream::iter(days).then(move |day| {
+                    let (directory, query) = (directory.clone(), query.clone());
+                    async move { tokio::task::spawn_blocking(move || Bytes::from(logs::collected(&directory, &day, &query))).await.map_err(std::io::Error::other) }
+                });
+                let mut r = Response::new(Body::from_stream(pieces));
+                r.headers_mut().insert(header::CONTENT_TYPE, "application/x-ndjson".parse().unwrap());
+                r.headers_mut().insert(header::CONTENT_DISPOSITION, format!("attachment; filename=\"wild-wheels-log-{}.jsonl\"", logs::day(at)).parse().unwrap());
+                return r;
+            }
+            if query.days.is_some() {
+                return error((400, "Use days with /logz/all."));
+            }
             let limits = app.logs.limits();
             // Files are read away from the game's thread.
             match tokio::task::spawn_blocking(move || logs::read(&directory, limits, &query, logs::now())).await {

@@ -54,7 +54,7 @@ Three more limits keep one noisy problem from using the day's space:
 
 ## Reading it
 
-`GET /logz` needs the reading key as a bearer token. The key is made the first
+`GET /logz` and `GET /logz/all` need the reading key as a bearer token. The key is made the first
 time the server starts and saved in `read-key` with the log, readable only by
 the server's own user; `LOG_READ_KEY` (32 characters or more) sets it instead.
 
@@ -77,6 +77,23 @@ Without `day` the reply lists the days on disk and their sizes. With `day`
 
 A misspelled query name is an error, not an empty answer. The endpoint allows
 30 requests a minute from one address.
+
+### Collecting everything
+
+`GET /logz/all` returns every kept day in one download: one JSON object per
+line, both files of each day merged in the order things happened, oldest day
+first.
+
+```sh
+curl -H "Authorization: Bearer $KEY" -o wild-wheels-log.jsonl 'http://localhost:5173/logz/all'
+curl -H "Authorization: Bearer $KEY" 'http://localhost:5173/logz/all?days=2&level=error' | jq .
+```
+
+`days` keeps only the latest that many days (1–31); `source`, `level`, `event`
+and `contains` filter as above. There is no `day` or `limit`. The server reads
+and sends one day at a time, so the whole log, about 124 MiB at most, is never
+held in memory and the game's thread never reads a file. It is sent
+uncompressed. The endpoint allows 4 requests a minute from one address.
 
 ## What is in a line
 
@@ -143,8 +160,8 @@ much was in flight.
 ## Checks
 
 - `cargo test --manifest-path dedicated-server/Cargo.toml logs` covers the
-  30-day rule, the daily limits, repeats, line length, the reading key and
-  queries. `abilities_and_match_phases_are_noted_with_the_match_clock` covers
+  30-day rule, the daily limits, repeats, line length, the reading key,
+  queries and collecting everything in order. `abilities_and_match_phases_are_noted_with_the_match_clock` covers
   game lines.
 - `tests/client/log.test.js` and `cargo test --lib reports` (native client)
   cover counting repeats, the limits on what a client sends, and which minutes

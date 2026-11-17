@@ -343,6 +343,8 @@ impl Logs {
 #[derive(Default)]
 pub struct Query {
     pub day: Option<String>,
+    /// For collecting everything: only the latest this many days.
+    pub days: Option<u64>,
     pub source: Option<String>,
     pub level: Option<String>,
     pub event: Option<String>,
@@ -364,7 +366,8 @@ impl Query {
                 "event" => parsed.event = Some(value),
                 "contains" => parsed.contains = Some(value),
                 "limit" => parsed.limit = Some(value.parse().ok().filter(|n| (1..=2000).contains(n)).ok_or("Limit must be 1–2000.")?),
-                _ => return Err("Unknown query. Use day, source, level, event, contains and limit."),
+                "days" => parsed.days = Some(value.parse().ok().filter(|n| (1..=DAYS + 1).contains(n)).ok_or("Days must be 1–31.")?),
+                _ => return Err("Unknown query. Use day, source, level, event, contains and limit, or days when collecting everything."),
             }
         }
         Ok(parsed)
@@ -424,6 +427,46 @@ pub fn read(directory: &Path, limits: Limits, query: &Query, at: u64) -> Result<
 
 /// One checked report: its level, its event and its details.
 pub type Report = (&'static str, String, Value);
+/// The days to collect, oldest first: every day on disk, or the latest `days` of them by date.
+pub fn kept(directory: &Path, query: &Query, at: u64) -> Vec<String> {
+    let mut found: Vec<String> = fs::read_dir(directory).into_iter().flatten().flatten().filter_map(|file| {
+        let name = file.file_name().to_string_lossy().into_owned();
+        name.strip_suffix(".server.jsonl").or_else(|| name.strip_suffix(".clients.jsonl")).filter(|day| days(day).is_some()).map(str::to_owned)
+    }).collect();
+    found.sort();
+    found.dedup();
+    if let Some(latest) = query.days {
+        found.retain(|day| days(day).is_some_and(|recorded| recorded + latest > at / DAY_MS));
+    }
+    found
+}
+/// One day's matching lines from both files, in the order they happened, each
+/// ending in a newline: a piece of a collection of everything. Reads files.
+pub fn collected(directory: &Path, day: &str, query: &Query) -> Vec<u8> {
+    let mut texts = Vec::new();
+    for clients in [false, true] {
+        if let Ok(text) = fs::read_to_string(directory.join(name(day, clients))) {
+            texts.push(text);
+        }
+    }
+    let filtered = query.source.is_some() || query.level.is_some() || query.event.is_some();
+    let is = |entry: &Value, field: &str, wanted: &Option<String>| wanted.as_deref().is_none_or(|wanted| entry[field].as_str() == Some(wanted));
+    // Every line holds its time as "t":"…", and such times sort as text.
+    let time = |line: &str| line.find("\"t\":\"").map(|at| line[at + 5..].chars().take(24).collect::<String>()).unwrap_or_default();
+    let mut lines: Vec<(String, &str)> = texts.iter().flat_map(|text| text.lines())
+        .filter(|line| query.contains.as_deref().is_none_or(|part| line.contains(part)))
+        .filter(|line| !filtered || serde_json::from_str::<Value>(line).is_ok_and(|entry| is(&entry, "source", &query.source) && is(&entry, "level", &query.level) && is(&entry, "event", &query.event)))
+        .map(|line| (time(line), line))
+        .collect();
+    lines.sort_by(|a, b| a.0.cmp(&b.0));
+    let mut bytes = Vec::with_capacity(lines.iter().map(|(_, line)| line.len() + 1).sum());
+    for (_, line) in lines {
+        bytes.extend_from_slice(line.as_bytes());
+        bytes.push(b'\n');
+    }
+    bytes
+}
+
 /// What a client may report in one request, checked and cut to size.
 pub fn reports(body: &Value) -> Result<(&'static str, Vec<Report>), &'static str> {
     let source = match body["client"].as_str() {
@@ -604,6 +647,33 @@ mod tests {
             use std::os::unix::fs::PermissionsExt;
             assert_eq!(fs::metadata(directory.join("read-key")).unwrap().permissions().mode() & 0o777, 0o600);
         }
+        fs::remove_dir_all(directory).unwrap();
+    }
+    #[test]
+    fn everything_is_collected_a_day_at_a_time_in_the_order_it_happened() {
+        let directory = folder("collect");
+        let mut log = writer(&directory, Limits::default(), START);
+        // Written out of order across the two files; collected in order.
+        log.accept(START + 3000, false, "third".into(), line(START + 3000, "server", "info", "third", json!({})));
+        log.accept(START + 1000, true, "first".into(), line(START + 1000, "browser", "error", "first", json!({"data":{"message":"boom"}})));
+        log.accept(START + 2000, false, "second".into(), line(START + 2000, "server", "warn", "second", json!({})));
+        log.accept(START + 2 * DAY_MS, true, "later".into(), line(START + 2 * DAY_MS, "native", "info", "later", json!({})));
+        log.save();
+        fs::write(directory.join("read-key"), "k").unwrap();
+        let at = START + 2 * DAY_MS;
+        let all = Query::default();
+        assert_eq!(kept(&directory, &all, at), ["2024-10-04", "2024-10-06"]);
+        assert_eq!(kept(&directory, &Query::parse("days=1").unwrap(), at), ["2024-10-06"]);
+        assert_eq!(kept(&directory, &Query::parse("days=3").unwrap(), at), ["2024-10-04", "2024-10-06"]);
+        let events = |query: &Query, day: &str| -> Vec<String> {
+            String::from_utf8(collected(&directory, day, query)).unwrap().lines().map(|line| serde_json::from_str::<Value>(line).unwrap()["event"].as_str().unwrap().to_owned()).collect()
+        };
+        assert_eq!(events(&all, "2024-10-04"), ["first", "second", "third"]);
+        assert_eq!(events(&Query::parse("source=server").unwrap(), "2024-10-04"), ["second", "third"]);
+        assert_eq!(events(&Query::parse("contains=boom").unwrap(), "2024-10-04"), ["first"]);
+        assert!(collected(&directory, "2024-10-05", &all).is_empty());
+        assert!(collected(&directory, "2024-10-06", &all).ends_with(b"\n"));
+        assert!(Query::parse("days=0").is_err() && Query::parse("days=32").is_err());
         fs::remove_dir_all(directory).unwrap();
     }
     #[test]
