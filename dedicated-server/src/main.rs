@@ -213,9 +213,11 @@ async fn http(
             if !limit(&app, addr.ip(), if everything { "logs-all" } else { "logs" }, if everything { 4 } else { 30 }, Duration::from_secs(60)) {
                 return error((429, "Too many log requests."));
             }
-            let presented = h.get(header::AUTHORIZATION).and_then(|v| v.to_str().ok()).and_then(|v| v.strip_prefix("Bearer ")).unwrap_or("");
-            if !app.logs.key_matches(presented) {
-                return error((401, "Send the log reading key as a bearer token."));
+            if !everything {
+                let presented = h.get(header::AUTHORIZATION).and_then(|v| v.to_str().ok()).and_then(|v| v.strip_prefix("Bearer ")).unwrap_or("");
+                if !app.logs.key_matches(presented) {
+                    return error((401, "Send the log reading key as a bearer token."));
+                }
             }
             let Some(directory) = app.logs.directory().map(std::path::Path::to_owned) else {
                 return error((503, "This server is not keeping a log."));
