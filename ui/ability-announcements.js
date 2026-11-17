@@ -2,7 +2,7 @@ import {RewardNotice} from './reward-notice.js';
 export const abilityCards={
   5:{title:'REVERSE PSYCHOLOGY',icon:'⇄',color:'#b7f35b',theme:'locust',detail:'LEFT IS RIGHT · FORWARD IS BACK'},
   7:{title:'REINE DE LA PARESSE',icon:'✺',color:'#ccb5ff',theme:'gravity',detail:'EVERYTHING GRAVITATES TO HER'},
-  8:{title:'SPECIAL RELATIVITY',icon:'⏱',color:'#9ffaff',theme:'relativity',detail:'TIME IS A MATTER OF PERSPECTIVE'},
+  8:{title:'SPECIAL RELATIVITY',icon:'⏱',color:'#9ffaff',theme:'relativity',detail:'Time is what happens when nothing else happens.'},
   9:{title:'FASHION-STATEMENT',icon:'🫰',color:'#ffd59d',theme:'fashion',detail:'FLORALS? FOR SPRING? GROUNDBREAKING.'},
   10:{title:'REEFER MADNESS',icon:'☁',color:'#c0f1ac',theme:'reefer',detail:'LA VIE C’EST LA VIE'},
   11:{title:'PROVIDENCE',icon:'✧',color:'#ffebac',theme:'providence',detail:'MICHAEL & GABRIEL HAVE ARRIVED'},
