@@ -8,3 +8,7 @@
    visually and on slower hardware before choosing quality thresholds.
    Use the [visual effect cost report](effect-costs.md) as the initial prioritization
    baseline; its browser timings need separate validation on native and slower GPUs.
+
+2. **Commentator.** A sports commentator powered by a small language model (SLM),
+   prompted to comment on arena events in real time and potentially fine-tuned
+   later. Deliver the commentary in a natural-sounding human voice.
