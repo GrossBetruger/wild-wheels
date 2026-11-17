@@ -62,7 +62,9 @@ three numbers.
 
 The browser shows it under the match's own kills and deaths, as
 `ALL-TIME · RATING · WINS / GAMES`: the top eight, and your own line if you are
-further down. The native client shows the top five under its leaderboard. Both fetch it
+further down. A server whose board is
+empty shows the panel with "No matches finished yet"; a server that is not
+running this version has no board, and no panel is shown. The native client shows the top five under its leaderboard. Both fetch it
 on arriving and when a match finishes, never during play.
 
 ## Checks

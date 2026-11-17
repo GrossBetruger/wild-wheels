@@ -409,7 +409,7 @@ fn readings(
     graphics: &Graphics,
     notices: &Notices,
     now: f64,
-    board: &[(String, f64, u64, u64)],
+    board: Option<&[(String, f64, u64, u64)]>,
 ) -> HashMap<Id, Reading> {
     let p = view.player;
     let racing = view.phase == "racing";
@@ -444,17 +444,24 @@ fn readings(
         })
         .collect();
     // Under the match's own standings, the server's all-time board: rating, wins and games played.
-    let all_time: String = board
-        .iter()
-        .take(5)
-        .enumerate()
-        .map(|(place, (name, rating, wins, games))| {
-            format!("\n{}. {name}  {rating:.0} · {wins} / {games}", place + 1)
-        })
-        .collect();
-    let all_time = match all_time.is_empty() {
-        true => all_time,
-        false => format!("\n\nALL-TIME · RATING · WINS / GAMES{all_time}"),
+    // A server that sent no board shows none; one with an empty board says so.
+    let all_time = match board {
+        None => String::new(),
+        Some(board) => {
+            let rows: String = board
+                .iter()
+                .take(5)
+                .enumerate()
+                .map(|(place, (name, rating, wins, games))| {
+                    format!("\n{}. {name}  {rating:.0} · {wins} / {games}", place + 1)
+                })
+                .collect();
+            let rows = match rows.is_empty() {
+                true => "\nNo matches finished yet".to_owned(),
+                false => rows,
+            };
+            format!("\n\nALL-TIME · RATING · WINS / GAMES{rows}")
+        }
     };
     text(
         Id::Board,
@@ -1498,7 +1505,7 @@ pub fn update(
     };
     let now = time.elapsed_secs_f64();
     notices.sample(&view, &graphics, now);
-    let readings = readings(&view, &graphics, &notices, now, &session.board);
+    let readings = readings(&view, &graphics, &notices, now, session.board.as_deref());
     let dark = crate::scene::dark_humor(&view).0 > 0.0;
     // Rivals far enough away to need a name, where the camera can see them.
     let mut plates = Vec::new();

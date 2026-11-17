@@ -205,9 +205,12 @@ const leaderboard = document.createElement('section'); leaderboard.className = '
 // The server's all-time board, under the match's own: rating, wins and games played by name.
 const allTime = document.createElement('section'); allTime.className = 'leaderboard all-time hidden'; allTime.setAttribute('aria-label', 'All-time leaderboard'); leaderboard.after(allTime); let allTimePhase = null;
 async function refreshAllTime() {
-  const players = await loadAllTime(); allTime.classList.toggle('hidden', !players?.length); if (!players?.length) return;
+  // A server without a board sends nothing and the panel stays away; one with an empty board shows it empty.
+  const players = await loadAllTime(); allTime.classList.toggle('hidden', players === null); if (players === null) return;
   const title = document.createElement('strong'); title.textContent = 'ALL-TIME · RATING · WINS / GAMES';
-  allTime.replaceChildren(title, ...allTimeRows(players, network.name?.value.trim() ?? '').map(row => { const line = document.createElement('div'); line.textContent = `${row.rank}. ${row.name}  ${row.rating} · ${row.wins} / ${row.games}`; line.classList.toggle('you', row.you); return line; }));
+  const lines = allTimeRows(players, network.name?.value.trim() ?? '').map(row => { const line = document.createElement('div'); line.textContent = `${row.rank}. ${row.name}  ${row.rating} · ${row.wins} / ${row.games}`; line.classList.toggle('you', row.you); return line; });
+  if (!lines.length) { const empty = document.createElement('div'); empty.textContent = 'No matches finished yet'; lines.push(empty); }
+  allTime.replaceChildren(title, ...lines);
 }
 const finalResults = document.createElement('section'); finalResults.id = 'match-results'; finalResults.className = 'match-results hidden'; finalResults.setAttribute('aria-label', 'Final leaderboard'); startRow.before(finalResults); let resultsKey = '';
 const bicycleScores = document.createElement('section'); bicycleScores.id = 'bicycle-results'; bicycleScores.className = 'bicycle-results hidden'; finalResults.after(bicycleScores);

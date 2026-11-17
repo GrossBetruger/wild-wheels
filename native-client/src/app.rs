@@ -29,8 +29,9 @@ pub struct GameSession {
     /// For the problem log: frame times, and when the server was last heard from.
     health: crate::reports::FrameHealth,
     heard: f64,
-    /// The server's all-time leaderboard, best first: name, rating, wins and games played.
-    pub board: Vec<(String, f64, u64, u64)>,
+    /// The server's all-time leaderboard, best first: name, rating, wins and games
+    /// played. `None` until a server has sent one, so one without a board shows none.
+    pub board: Option<Vec<(String, f64, u64, u64)>>,
     /// The match phase last seen, to fetch the board again when a match finishes.
     phase: String,
 }
@@ -52,7 +53,7 @@ impl GameSession {
             metrics: Default::default(),
             health: Default::default(),
             heard: 0.0,
-            board: vec![],
+            board: None,
             phase: String::new(),
         }
     }
@@ -67,6 +68,7 @@ impl GameSession {
             ..Default::default()
         };
         self.status = "Connecting...".into();
+        self.board = None;
         self.transport = Some(Transport::spawn(config));
     }
     /// Gives up the seat in the room and returns to the menu.
@@ -117,7 +119,7 @@ impl GameSession {
         while let Ok(event) = transport.events.try_recv() {
             match event {
                 Event::ColorPreference(color) => self.colors.preferred = color,
-                Event::Leaderboard(board) => self.board = board,
+                Event::Leaderboard(board) => self.board = Some(board),
                 Event::ColorResult(result) => {
                     self.colors.pending = false;
                     match result {
