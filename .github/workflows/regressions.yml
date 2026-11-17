@@ -11,9 +11,10 @@ concurrency:
   cancel-in-progress: true
 jobs:
   native-client:
-    name: Native client debug build
+    name: Native client debug build and reconnection
     runs-on: macos-15
-    timeout-minutes: 30
+    # A cold build takes about 19 minutes, and nearly twice that on a slow runner.
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: native-client
@@ -31,6 +32,11 @@ jobs:
         run: rustup show
       - name: Build native client (debug)
         run: cargo build --locked --bin wild-wheels-native
+      - name: Build dedicated server
+        run: cargo build --release --locked --manifest-path ../dedicated-server/Cargo.toml
+      - name: Native client recovers from dropped connections
+        run: npm run test:native-reconnect -- --client-binary native-client/target/debug/wild-wheels-native
+        working-directory: .
   regressions:
     runs-on: macos-15
     timeout-minutes: 15

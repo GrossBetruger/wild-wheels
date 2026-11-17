@@ -110,8 +110,9 @@ whole file takes about 6 minutes; run part of it by name, such as
 `cargo test --test animations knowitowl`. Each test holds steady loops still and
 checks from screenshots that the state change is visible and its transition has
 begun; eased transitions must also look unlike the state they lead to. A blank
-capture means nothing was drawn. It runs only on macOS; no CI job builds the
-native client. Run only the other tests with `cargo test --lib`.
+capture means nothing was drawn. It runs only on macOS, and not in CI, which
+builds the native client and runs only its reconnection check. Run only the
+other tests with `cargo test --lib`.
 
 For a real Chrome/native transport check, build both binaries first, then run:
 
@@ -131,8 +132,8 @@ over a delayed link, on its own isolated server. Each time the client must retry
 after one second, rejoin on its first reconnection, never be rejected by the
 server, and keep driving and firing.
 It uses the release builds of both binaries; `--server-binary` and
-`--client-binary` override them. The client prints a `connection-lost` line with
-the reason whenever its connection drops.
+`--client-binary` override them; CI runs it against the debug client. The client
+prints a `connection-lost` line with the reason whenever its connection drops.
 
 ## Boundaries
 
