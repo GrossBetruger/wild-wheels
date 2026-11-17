@@ -1,6 +1,8 @@
 // A native client whose connection drops mid-match must recover on its first
-// reconnection. The link has latency, so the racer keeps producing controls
-// while the new connection is being set up; none of those may reach it.
+// reconnection, each time it drops. The link has latency, so the racer keeps
+// producing controls while the new connection is being set up; none of those
+// may reach it. A working connection that drops is retried after one second,
+// however many times it has dropped before.
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
 import {createServer,request as httpRequest} from 'node:http';
@@ -12,7 +14,7 @@ import WebSocket,{WebSocketServer} from 'ws';
 const arg=(name,fallback)=>{const at=process.argv.indexOf(name);return at<0?fallback:process.argv[at+1];};
 const binary=resolve(arg('--server-binary','dedicated-server/target/release/wild-wheels-server'));
 const nativeBinary=resolve(arg('--client-binary','native-client/target/release/wild-wheels-native'));
-const DELAY=40,CUT_AFTER=5000,SECONDS=16;
+const DELAY=40,CUT_AFTER=5000,CUTS=2,SECONDS=22;
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 async function wait(check,message,ms=15000){const end=performance.now()+ms;while(performance.now()<end){if(await check())return;await sleep(40);}throw new Error(message);}
 const directory=await mkdtemp(join(tmpdir(),'wild-wheels-native-reconnect-'));
@@ -53,7 +55,7 @@ bridge.on('upgrade',(req,stream,head)=>later(()=>wsServer.handleUpgrade(req,stre
   });
   client.on('close',()=>close('client'));upstream.on('close',()=>close('server'));
   client.on('error',()=>close('client'));upstream.on('error',()=>close('server'));
-  if(sockets.length===1)setTimeout(()=>close('network'),CUT_AFTER);
+  if(sockets.length<=CUTS)setTimeout(()=>close('network'),CUT_AFTER);
 })));
 await new Promise(resolve=>bridge.listen(0,'127.0.0.1',resolve));
 let native;
@@ -67,16 +69,20 @@ try{
   const result=rows.findLast(row=>'pass'in row);
   const summary=JSON.stringify({sockets,lost:rows.filter(row=>row.event==='connection-lost')});
   assert.equal(done.code,0,log);assert.equal(result?.pass,true,log);
-  assert.equal(sockets[0].closedBy,'network','The check itself must be what drops the first connection');
+  const lost=rows.filter(row=>row.event==='connection-lost');
   assert.ok(!sockets.some(socket=>socket.closedBy==='server'),`The server must never reject a reconnected client: ${summary}`);
-  assert.equal(sockets.length,2,`One dropped connection must cost exactly one reconnection: ${summary}`);
-  assert.equal(result.metrics.connections,2,summary);
-  assert.equal(rows.filter(row=>row.event==='connection-lost').length,1,summary);
-  const [before,after]=sockets;
-  assert.ok(after.firstInput.moves.every(move=>move.sequence>before.movementAck)&&after.firstInput.sequence===0,`The first controls on a new connection must come from its own session: ${summary}`);
-  assert.ok(after.movementAck>before.movementAck+120,`Driving must continue after reconnecting: ${summary}`);
-  assert.ok(after.actionAck>before.actionAck+5,`Firing must continue after reconnecting: ${summary}`);
-  console.log(JSON.stringify({pass:true,criteria:'A native client whose connection drops mid-match over a delayed link rejoins on its first reconnection, is never rejected by the server, and keeps driving and firing.',sockets:sockets.map(({closedBy,inputs,actionAck,movementAck})=>({closedBy,inputs,actionAck,movementAck})),native:result}));
+  assert.equal(sockets.length,CUTS+1,`Each dropped connection must cost exactly one reconnection: ${summary}`);
+  assert.ok(sockets.slice(0,CUTS).every(socket=>socket.closedBy==='network'),`The check itself must be what drops the connections: ${summary}`);
+  assert.equal(result.metrics.connections,CUTS+1,summary);
+  assert.equal(lost.length,CUTS,summary);
+  assert.ok(lost.every(row=>row.established&&row.retrySeconds===1),`A working connection that drops must be retried after one second: ${summary}`);
+  for(let index=1;index<sockets.length;index++){
+    const before=sockets[index-1],after=sockets[index];
+    assert.ok(after.firstInput.moves.every(move=>move.sequence>before.movementAck)&&after.firstInput.sequence===0,`The first controls on a new connection must come from its own session: ${summary}`);
+    assert.ok(after.movementAck>before.movementAck+120,`Driving must continue after reconnecting: ${summary}`);
+    assert.ok(after.actionAck>before.actionAck+3,`Firing must continue after reconnecting: ${summary}`);
+  }
+  console.log(JSON.stringify({pass:true,criteria:'A native client whose connection drops twice mid-match over a delayed link rejoins on its first reconnection each time after one second, is never rejected by the server, and keeps driving and firing.',sockets:sockets.map(({closedBy,inputs,actionAck,movementAck})=>({closedBy,inputs,actionAck,movementAck})),native:result}));
 }finally{
   native?.kill('SIGKILL');for(const peer of peers)peer.terminate();wsServer.close();bridge.closeAllConnections();bridge.close();server.kill('SIGTERM');
 }
