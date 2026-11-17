@@ -31,6 +31,44 @@ async fn checking_updates_does_not_consume_the_install_rate_limit() {
     std::fs::remove_dir_all(directory).unwrap();
 }
 
+#[tokio::test(flavor = "current_thread")]
+async fn returning_gives_a_session_two_more_months_however_little_it_had_left() {
+    let directory = std::env::temp_dir().join(format!("wild-wheels-session-life-{}", room::token()));
+    let app = server(directory.join("sessions.json"));
+    assert_eq!(sessions::LIFETIME, 60 * 24 * 60 * 60);
+    let (status, cookie, joined) = post(&app, "/api/join", "", json!({"code":"00","name":"Regular","driver":0})).await;
+    assert_eq!(status, StatusCode::OK);
+    let first = joined["token"].as_str().unwrap().to_owned();
+    let at = sessions::now();
+    let left = |token: String| { let app = app.clone(); async move { app.sessions.lock().await.find(&token, sessions::now()).map(|session| session.expires) } };
+    assert!(left(first.clone()).await.unwrap() >= at + sessions::LIFETIME, "a new session lasts two months");
+    // A minute before it would have expired, the player comes back.
+    app.sessions.lock().await.expire(&first, at + 60);
+    let mut h = HeaderMap::new();
+    h.insert(header::HOST, "localhost".parse().unwrap());
+    h.insert(header::ORIGIN, "http://localhost".parse().unwrap());
+    h.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+    h.insert(header::COOKIE, cookie.parse().unwrap());
+    let response = http(State(app.clone()), ConnectInfo("127.0.0.1:1234".parse().unwrap()), Method::POST, "/api/session".parse().unwrap(), h, json!({}).to_string().into()).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let issued = response.headers().get(header::SET_COOKIE).unwrap().to_str().unwrap().to_owned();
+    assert!(issued.contains("Max-Age=5184000"), "the browser keeps the new cookie two months: {issued}");
+    let returned: Value = serde_json::from_slice(&axum::body::to_bytes(response.into_body(), 1024 * 1024).await.unwrap()).unwrap();
+    let second = returned["token"].as_str().unwrap().to_owned();
+    assert_ne!(second, first);
+    assert_eq!(returned["you"], joined["you"], "the same player, in the same seat");
+    assert!(left(second.clone()).await.unwrap() >= at + sessions::LIFETIME, "returning starts the two months again");
+    assert!(left(first).await.is_none(), "the earlier token no longer opens the session");
+    // The renewed life is what is saved, so it also outlasts a server restart.
+    let restored = sessions::Sessions::open(directory.join("sessions.json"), at + sessions::LIFETIME - 60).unwrap();
+    assert!(restored.find(&second, at + sessions::LIFETIME - 60).is_some());
+    // Changing a name is not returning: it keeps the life the session has.
+    app.sessions.lock().await.expire(&second, at + 60);
+    assert_eq!(post(&app, "/api/name", &format!("wild-wheels-session={second}"), json!({"name":"Renamed"})).await.0, StatusCode::OK);
+    assert_eq!(left(second).await, Some(at + 60));
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
 async fn post(app: &App, path: &str, cookie: &str, body: Value) -> (StatusCode, String, Value) {
     let mut h = HeaderMap::new();
     h.insert(header::HOST, "localhost".parse().unwrap());

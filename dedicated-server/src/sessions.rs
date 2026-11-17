@@ -6,7 +6,10 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-pub const LIFETIME: u64 = 30 * 24 * 60 * 60;
+/// How long a session lasts after the player last joined or returned: two months
+/// of 30 days. Each join or return issues a new token and cookie with this long
+/// to live, so a player who keeps coming back never has to start again.
+pub const LIFETIME: u64 = 60 * 24 * 60 * 60;
 const MAX_SESSIONS: usize = 10_000;
 const MAX_BYTES: u64 = 4 * 1024 * 1024;
 
@@ -77,6 +80,13 @@ impl Sessions {
         })
     }
 
+    /// For tests: makes the session with this token expire at `expires`.
+    #[cfg(test)]
+    pub fn expire(&mut self, token: &str, expires: u64) {
+        for session in self.records.iter_mut().filter(|p| p.token == token) {
+            session.expires = expires;
+        }
+    }
     pub fn find(&self, token: &str, at: u64) -> Option<&Session> {
         self.records
             .iter()
