@@ -1125,11 +1125,18 @@ pub fn setup(mut commands: Commands, mut fonts: ResMut<Assets<Font>>) {
             id,
             percent(23),
             (
-                boxed(pad(16.0, 8.0), 1.0, 9.0),
+                boxed(
+                    Node {
+                        max_width: percent(90),
+                        ..pad(16.0, 8.0)
+                    },
+                    1.0,
+                    9.0,
+                ),
                 hex(0x232955e6),
                 hex(0xffffff40),
             ),
-            Style::new(13.0, white),
+            Style::new(18.0, white),
         );
     }
     ui.banner(

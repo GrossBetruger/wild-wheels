@@ -2817,7 +2817,7 @@ body.mobile-playing {
 .reward-card {
   position: relative;
   display: grid;
-  grid-template-columns: 38px 1fr;
+  grid-template-columns: 38px minmax(0, 1fr);
   align-items: center;
   gap: 4px 10px;
   padding: 12px 24px;
@@ -2826,7 +2826,7 @@ body.mobile-playing {
   background: linear-gradient(135deg, #291a49e8, #48306ace);
   color: #fff8da;
   box-shadow: 0 0 30px #b18aff77, inset 0 0 22px #c6adff22;
-  font: bold 13px monospace;
+  font: bold 18px/1.35 monospace;
   animation: reward-arrive 3s both
 }
 
@@ -2843,9 +2843,10 @@ body.mobile-playing {
 
 .reward-card>small {
   grid-column: 1/-1;
-  font-size: 9px;
+  font-size: 16px;
+  line-height: 1.5;
   letter-spacing: .6px;
-  color: #f4eaffcc
+  color: #f4eaff
 }
 
 .reward-counter {
@@ -2983,11 +2984,11 @@ body.mobile-playing {
 
   .reward-card {
     padding: 9px 16px;
-    font-size: 11px
+    font-size: 16px
   }
 
   .reward-card>small {
-    font-size: 8px
+    font-size: 14px
   }
 }
 
@@ -4233,8 +4234,8 @@ body.mobile-playing {
 }
 
 .ability-announcement .reward-card {
-  min-width: 260px;
-  max-width: 390px;
+  min-width: min(260px, 100%);
+  max-width: min(440px, 100%);
   animation-duration: 2.4s;
   border-color: var(--reward-color);
   padding: 13px 21px
@@ -4245,11 +4246,10 @@ body.mobile-playing {
 }
 
 .ability-announcement .reward-card>strong {
-  font-size: 14px
+  font-size: clamp(16px, 2vw, 18px)
 }
 
 .ability-announcement .reward-card>small {
-  max-width: 310px;
   line-height: 1.5
 }
 
