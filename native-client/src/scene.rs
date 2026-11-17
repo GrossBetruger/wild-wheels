@@ -509,6 +509,20 @@ fn racers(stage: &mut Stage, view: &ClientView, bats: &Bats, dt: f32, now: f32, 
             }
             (false, false, false) => stage.clip(&racer("idle")),
         };
+        // For the problem log: a racer who is in the match yet cannot be drawn.
+        let placed = a.wx.is_finite() && a.wz.is_finite() && a.heading.is_finite();
+        if play.clip.is_none() || !placed {
+            crate::reports::limited(
+                &format!("racer:{}", a.id),
+                30.0,
+                "error",
+                "racer-not-drawn",
+                || {
+                    serde_json::json!({"reason":match placed {true => "no ported animation for this racer", false => "a position or angle is not a number"},
+                    "viewer":view.you,"racer":a.id,"driver":a.driver,"color":a.color,"wx":a.wx.to_string(),"wz":a.wz.to_string(),"heading":a.heading.to_string(),"boost":a.boost,"wrecked":wrecked})
+                },
+            );
+        }
         play.tint = tint(&a.color).unwrap_or([255; 3]);
         play.wind = stage
             .cache

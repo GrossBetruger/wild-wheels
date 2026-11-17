@@ -54,6 +54,7 @@ mod tests {
             photos: Default::default(),
             room: Arc::new(Mutex::new(Room::new(0, 0))),
             limits: Default::default(),
+            logs: crate::logs::Logs::disabled(),
             sockets: Arc::new(Semaphore::new(32)),
             origin: origin.map(str::to_owned),
             trust_proxy: true,

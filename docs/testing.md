@@ -92,6 +92,8 @@ The actual room host wins a tie for the highest points, including when they have
 
 ## Targeted checks
 
+The server keeps a problem log that clients report to; [logging](logging.md) lists its rules and checks. `npm run test:logging` runs a real server and requires that only a player in the room can write to the log, only the reading key can read it, a refused input is explained with what the server held, no session or key reaches a line, and the native client's reports arrive.
+
 Houston's “reine de la paresse” activates an eight-second tractor field with twenty-second recharge. Ready power-ups within 80 units move toward the closest active Houston at 55 units/second; ties use actor ID. Collected power-ups respawn at their original location, and uncollected ones return home on expiry or disable. `houston-gravity.test.js` covers JS/Rust parity, exact range, unavailable pickups, collection, expiry, and simultaneous fields. Chrome checks the moving pickup and its replicated inventory reward.
 
 Fashion-Statement uses F and a twenty-second recharge. It damages every other active racer for two hearts, or one heart at cuteness five, preserves the caster's health, credits kills, and places a pink/gold finger-snap burst above every other active racer, including distant racers. `fashion-statement.test.js` checks both engines, disabled abilities, range, and repeat activation. Browser special-ability checks also verify the overhead effects and time-warp music starts and resolves. A regression in `tests/combat/special-abilities.test.js` ensures time dilation never changes bots into human-controlled actors and they resume driving after it expires.

@@ -16,10 +16,17 @@ import { KillCelebration, ChaffNotice, RingOfFireNotice } from '../ui/combat-not
 import { usesMobileControls, bombTarget, panBomber } from '../ui/mobile.js';
 import { CharacterPreview } from './character-preview.js';
 import { canChoosePlayerColor, playerColors, savedPlayerColor, applyPlayerColors } from '../gameplay/player-colors.js';
+import { ClientLog, FrameHealth, startReporting } from './log.js';
 const $ = id => document.getElementById(id);
 const canvas = $('game'), map = $('map').getContext('2d');
 canvas.tabIndex = 0;
 const keys = new Set(), audio = new RaceAudio(), renderer = new Renderer(canvas);
+// This browser's problems, reported to the server's log; see docs/logging.md.
+const clientLog = new ClientLog({ build: document.body.dataset.build ?? '' }), frameHealth = new FrameHealth((level, event, data) => clientLog.note(level, event, data));
+addEventListener('error', event => clientLog.limited(`error:${event.message}`, 30000, 'error', 'js-error', { message: event.message, at: `${(event.filename ?? '').split('/').slice(-2).join('/')}:${event.lineno}:${event.colno}`, stack: event.error?.stack }));
+addEventListener('unhandledrejection', event => clientLog.limited(`rejection:${event.reason?.message ?? event.reason}`, 30000, 'error', 'js-rejection', { message: String(event.reason?.message ?? event.reason), stack: event.reason?.stack }));
+canvas.addEventListener('webglcontextlost', () => clientLog.note('error', 'graphics-lost', {}));
+renderer.report = (key, level, event, data) => clientLog.limited(key, 30000, level, event, data);
 const characterPreview = new CharacterPreview(document.querySelector('.racer-panel'));
 let uiNotice = null;
 const mobile = usesMobileControls(navigator.maxTouchPoints, matchMedia('(pointer:coarse)').matches); document.body.classList.toggle('mobile-bomber', mobile);
@@ -116,6 +123,7 @@ const network = new NetworkGame({
     if (changed || driverChanged) showDriver(world.driver);
   }, onLeave: () => { race = newGame(); lastPhase = ''; keys.clear(); updateMapLabels(); }
 });
+network.log = (level, event, data) => clientLog.note(level, event, data); startReporting(clientLog, { token: () => network.token });
 const startRow = document.createElement('div'); startRow.className = 'start-row'; $('start').before(startRow); startRow.append(network.createNameField(), $('start'));
 const photography = new BomberPhotography({ canvas, viewport: document.querySelector('.viewport'), network, sound: type => audio.event(type), unlock: () => audio.unlock() });
 const gameColumn = document.createElement('div'); gameColumn.className = 'game-column'; racePanel.before(gameColumn); gameColumn.append(racePanel);
@@ -449,4 +457,4 @@ for (const event of ['pointerdown', 'keydown']) window.addEventListener(event, (
 document.querySelectorAll('[data-key]').forEach(b => { b.addEventListener('pointerdown', e => { e.preventDefault(); b.setPointerCapture(e.pointerId); keys.add(b.dataset.key); if (b.dataset.key === ' ') useWeapon(); if (network.active) network.input(); }); for (const name of ['pointerup', 'pointercancel', 'lostpointercapture']) b.addEventListener(name, () => { keys.delete(b.dataset.key); if (network.active) network.input(); }); });
 selectDriver(0); updateMapLabels();
 let nextVisualFrame = 0;
-function frame(t) { if (t + 1 < nextVisualFrame) { requestAnimationFrame(frame); return; } nextVisualFrame = Math.max(nextVisualFrame + 1000 / 60, t + 1); const dt = lastTime ? Math.min((t - lastTime) / 1000, .05) : 0; lastTime = t; renderer.recordFrame(t); const performanceText = `${renderer.fps || '…'} FPS · ${renderer.pixelRatio().toFixed(2)}×${network.active ? ` · ${network.rtt ? Math.round(network.rtt * 1000) : '…'} ms ping` : ''}`; if (fpsMeter.textContent !== performanceText) fpsMeter.textContent = performanceText; if (network.active) { race = network.render(dt) ?? race; } if (!network.active && mode === 'combat') tickBattle(race, keys, dt); if (!network.active && mode === 'race') tick(race, keys, dt); for (const event of race.events) { audio.event(event); if (event === 'victory' || event === 'finish') announceFinish(); } race.events.length = 0; const priority = { win: 5, lap: 4, cheer: 3, hurt: 2, pass: 1 }; race.voices.sort((a, b) => priority[b.cue] - priority[a.cue]); for (const call of race.voices) audio.voice(call); race.voices.length = 0; audio.update(race); draw(); if (photography.requested) photography.afterDraw(); hud(); if (dedicated && network.active && !document.body.classList.contains('arena-connected')) document.body.classList.add('arena-connected'); requestAnimationFrame(frame); } requestAnimationFrame(frame);
+function frame(t) { if (t + 1 < nextVisualFrame) { requestAnimationFrame(frame); return; } nextVisualFrame = Math.max(nextVisualFrame + 1000 / 60, t + 1); const dt = lastTime ? Math.min((t - lastTime) / 1000, .05) : 0; lastTime = t; renderer.recordFrame(t); frameHealth.frame(t, network.active && race.phase === 'racing' && !document.hidden, network.lastPacket, network.rtt, { match: race.soundEpoch, seconds: race.elapsed }); const performanceText = `${renderer.fps || '…'} FPS · ${renderer.pixelRatio().toFixed(2)}×${network.active ? ` · ${network.rtt ? Math.round(network.rtt * 1000) : '…'} ms ping` : ''}`; if (fpsMeter.textContent !== performanceText) fpsMeter.textContent = performanceText; if (network.active) { race = network.render(dt) ?? race; } if (!network.active && mode === 'combat') tickBattle(race, keys, dt); if (!network.active && mode === 'race') tick(race, keys, dt); for (const event of race.events) { audio.event(event); if (event === 'victory' || event === 'finish') announceFinish(); } race.events.length = 0; const priority = { win: 5, lap: 4, cheer: 3, hurt: 2, pass: 1 }; race.voices.sort((a, b) => priority[b.cue] - priority[a.cue]); for (const call of race.voices) audio.voice(call); race.voices.length = 0; audio.update(race); draw(); if (photography.requested) photography.afterDraw(); hud(); if (dedicated && network.active && !document.body.classList.contains('arena-connected')) document.body.classList.add('arena-connected'); requestAnimationFrame(frame); } requestAnimationFrame(frame);

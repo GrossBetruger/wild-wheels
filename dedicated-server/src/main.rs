@@ -1,5 +1,6 @@
 mod benchmark;
 mod chat;
+mod logs;
 mod photos;
 mod room;
 mod sessions;
@@ -15,7 +16,7 @@ use axum::{
     },
     http::{header, HeaderMap, Method, StatusCode, Uri},
     response::{IntoResponse, Response},
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
 use futures_util::{SinkExt, StreamExt};
@@ -35,6 +36,7 @@ include!(concat!(env!("OUT_DIR"), "/assets.rs"));
 #[derive(Clone)]
 struct App {
     stats: Arc<Mutex<stats::Stats>>,
+    logs: logs::Logs,
     shutdown: tokio::sync::watch::Sender<bool>,
     updates: Arc<tokio::sync::Mutex<updates::Updates>>,
     sessions: Arc<tokio::sync::Mutex<sessions::Sessions>>,
@@ -166,7 +168,9 @@ async fn http(
             let result = match path {"/api/updates/check" => updates.check().await, _ => updates.start().await};
             return match result {Ok(value) => response(200, value), Err(e) => error(e)};
         }
-        return match control(&app, path, session(&h), &b).await {
+        let outcome = control(&app, path, session(&h), &b).await;
+        note_request(&app, path, &b, &outcome);
+        return match outcome {
             Ok(value) => {
                 let token = value["token"].as_str().map(str::to_owned);
                 let mut r = response(200, value);
@@ -199,6 +203,29 @@ async fn http(
             response(200, report)
         }
         "/build.json" => response(200, json!({"build":BUILD,"revision":REVISION})),
+        "/logz" => {
+            if !limit(&app, addr.ip(), "logs", 30, Duration::from_secs(60)) {
+                return error((429, "Too many log requests."));
+            }
+            let presented = h.get(header::AUTHORIZATION).and_then(|v| v.to_str().ok()).and_then(|v| v.strip_prefix("Bearer ")).unwrap_or("");
+            if !app.logs.key_matches(presented) {
+                return error((401, "Send the log reading key as a bearer token."));
+            }
+            let Some(directory) = app.logs.directory().map(std::path::Path::to_owned) else {
+                return error((503, "This server is not keeping a log."));
+            };
+            let query = match logs::Query::parse(uri.query().unwrap_or("")) {
+                Ok(query) => query,
+                Err(message) => return error((400, message)),
+            };
+            let limits = app.logs.limits();
+            // Files are read away from the game's thread.
+            match tokio::task::spawn_blocking(move || logs::read(&directory, limits, &query, logs::now())).await {
+                Ok(Ok(found)) => response(200, found),
+                Ok(Err(message)) => error((400, message)),
+                Err(_) => error((500, "The log could not be read.")),
+            }
+        }
         "/healthz" => {
             let room = app.room.lock().unwrap();
             let mut timings = room.tick_us.clone();
@@ -224,6 +251,58 @@ async fn http(
             }
             None => error((404, "Not found.")),
         },
+    }
+}
+/// Notes a room request in the problem log: refusals, and the ones that change
+/// who is playing or how. Chat and controls are not noted, nor is anything secret.
+fn note_request(app: &App, path: &str, body: &Value, outcome: &room::Result<Value>) {
+    let asked: serde_json::Map<String, Value> = ["action", "arena", "bots", "driver", "afk", "role", "color", "abilities"]
+        .iter()
+        .filter_map(|key| body.get(*key).filter(|v| !v.is_null()).map(|v| (key.to_string(), v.clone())))
+        .collect();
+    match outcome {
+        Err((status, message)) => app.logs.note("warn", "request-refused", json!({"path":path,"status":status,"message":message,"asked":asked})),
+        Ok(value) if matches!(path, "/api/join" | "/api/session" | "/api/leave" | "/api/afk" | "/api/driver" | "/api/name" | "/api/color" | "/api/control") => {
+            let who = value["you"].as_u64().map(|id| app.room.lock().unwrap().who(id as usize));
+            app.logs.note("info", "request", json!({"path":path,"who":who,"asked":asked,"phase":value["world"]["phase"]}));
+        }
+        Ok(_) => {}
+    }
+}
+/// A client's own problems, sent a few at a time over HTTP, never over the game socket.
+async fn report(State(app): State<App>, ConnectInfo(addr): ConnectInfo<SocketAddr>, h: HeaderMap, body: Bytes) -> Response {
+    if !same_origin(&app, &h) {
+        return error((403, "Use the game from the same server."));
+    }
+    if !limit(&app, addr.ip(), "log", 6, Duration::from_secs(10)) {
+        return error((429, "Too many reports. Try again shortly."));
+    }
+    if h.get(header::CONTENT_TYPE).and_then(|v| v.to_str().ok()).is_none_or(|v| v.split(';').next() != Some("application/json")) {
+        return error((415, "Use JSON."));
+    }
+    let Ok(b) = serde_json::from_slice::<Value>(&body) else {
+        return error((400, "Invalid JSON."));
+    };
+    // Only a player in the room may write to the log.
+    let who = {
+        let room = app.room.lock().unwrap();
+        room.find(session(&h)).map(|id| room.who(id))
+    };
+    let Some(who) = who else {
+        return error((401, "Join the room before reporting."));
+    };
+    match logs::reports(&b) {
+        Ok((source, entries)) => {
+            let received = logs::now();
+            for (level, event, mut fields) in entries {
+                fields["who"] = who.clone();
+                // When it happened, not when it was sent, to set beside the server's own lines.
+                fields["happened"] = json!(logs::stamp(received - fields["agoMs"].as_u64().unwrap_or(0)));
+                app.logs.client(source, level, &event, fields);
+            }
+            response(200, json!({}))
+        }
+        Err(message) => error((400, message)),
     }
 }
 async fn control(app: &App, path: &str, token: &str, body: &Value) -> room::Result<Value> {
@@ -313,54 +392,72 @@ async fn upgrade(
             connection(app, socket).await
         })
 }
+/// The parts of a refused input that explain the refusal, without its key presses.
+fn input_summary(text: &str) -> Value {
+    let Ok(b) = serde_json::from_str::<Value>(text) else {
+        return Value::Null;
+    };
+    let moves = b["moves"].as_array().map(|moves| json!({"count":moves.len(),"first":moves.first().map(|m| m["sequence"].clone()),"last":moves.last().map(|m| m["sequence"].clone())}));
+    let actions: Vec<_> = b["actions"].as_array().into_iter().flatten().take(8).map(|a| json!({"type":a["type"],"id":a["id"],"afterMove":a["afterMove"]})).collect();
+    json!({"sequence":b["sequence"],"epoch":b["epoch"],"moves":moves,"actions":actions})
+}
 async fn connection(app: App, mut socket: WebSocket) {
     let mut shutdown = app.shutdown.subscribe();
     if *shutdown.borrow() { return; }
+    let refuse = |reason: &str| app.logs.note("warn", "socket-refused", json!({"reason":reason}));
     let Ok(Some(Ok(Message::Text(text)))) = timeout(Duration::from_secs(3), socket.next()).await
     else {
-        return;
+        return refuse("no sign-in message within 3 seconds");
     };
     let Ok(auth) = serde_json::from_str::<Value>(&text) else {
-        return;
+        return refuse("the sign-in message was not JSON");
     };
     if auth["type"] != "authenticate" {
-        return;
+        return refuse("the first message was not a sign-in");
     }
     let Some(token) = auth["token"].as_str() else {
-        return;
+        return refuse("the sign-in had no session");
     };
     let (id, generation, notify) = {
         let mut room = app.room.lock().unwrap();
         let Some(id) = room.find(token) else {
-            return;
+            drop(room);
+            return refuse("the session is not in the room");
         };
         let p = room.members[id].as_mut().unwrap();
         p.generation += 1;
         p.connected = true;
         p.seen = Instant::now();
         p.notify.notify_one();
-        (id, p.generation, p.notify.clone())
+        let opened = (id, p.generation, p.notify.clone());
+        app.logs.note("info", "socket-open", json!({"who":room.who(id),"connection":opened.1}));
+        opened
     };
+    let opened = Instant::now();
     let (mut sink, mut stream) = socket.split();
     let (pong_tx, mut pong_rx) = mpsc::channel::<Message>(1);
     let writer_app = app.clone();
     let writer = async move {
         loop {
-            let message = tokio::select! {_=notify.notified()=>{let packet=writer_app.room.lock().unwrap().packet(id,generation);let Some(packet)=packet else{break;};Message::Binary(packet.into())},Some(pong)=pong_rx.recv()=>pong};
+            let message = tokio::select! {_=notify.notified()=>{let packet=writer_app.room.lock().unwrap().packet(id,generation);let Some(packet)=packet else{break "replaced by a newer connection, or the player left";};Message::Binary(packet.into())},Some(pong)=pong_rx.recv()=>pong};
             if !matches!(
                 timeout(Duration::from_secs(2), sink.send(message)).await,
                 Ok(Ok(()))
             ) {
-                break;
+                break "the client did not take a message within 2 seconds";
             }
         }
     };
+    // Why the server ended the connection, and what it held if it refused an input.
     let reader = async {
         let mut since = Instant::now();
         let mut count = 0;
         loop {
-            let Ok(Some(Ok(message))) = timeout(Duration::from_secs(30), stream.next()).await else {
-                break;
+            let message = match timeout(Duration::from_secs(30), stream.next()).await {
+                Ok(Some(Ok(message))) => message,
+                Ok(Some(Err(_))) => break ("the connection failed".to_owned(), Value::Null),
+                Ok(None) => break ("the client went away".to_owned(), Value::Null),
+                Err(_) => break ("nothing from the client for 30 seconds".to_owned(), Value::Null),
             };
             if since.elapsed() >= Duration::from_secs(1) {
                 since = Instant::now();
@@ -368,30 +465,30 @@ async fn connection(app: App, mut socket: WebSocket) {
             }
             count += 1;
             if count > 100 {
-                break;
+                break ("more than 100 messages in a second".to_owned(), Value::Null);
             }
             let text = match message {
                 Message::Text(t) => t,
-                Message::Close(_) => break,
+                Message::Close(_) => break ("the client closed it".to_owned(), Value::Null),
                 Message::Ping(_) | Message::Pong(_) => continue,
-                _ => break,
+                _ => break ("a message that was not text".to_owned(), Value::Null),
             };
             let Ok(b) = serde_json::from_str::<Value>(&text) else {
-                break;
+                break ("a message that was not JSON".to_owned(), Value::Null);
             };
             let mut room = app.room.lock().unwrap();
             let Some(p) = &mut room.members[id] else {
-                break;
+                break ("the player left".to_owned(), Value::Null);
             };
             if p.generation != generation || p.token != token {
-                break;
+                break ("replaced by a newer connection".to_owned(), Value::Null);
             }
             p.seen = Instant::now();
             match b["type"].as_str() {
                 Some("ping") => {
                     let Some(sent) = b["sent"].as_f64().filter(|v| v.is_finite() && *v >= 0.0)
                     else {
-                        break;
+                        break ("an invalid ping".to_owned(), Value::Null);
                     };
                     if pong_tx
                         .try_send(Message::Text(
@@ -399,20 +496,28 @@ async fn connection(app: App, mut socket: WebSocket) {
                         ))
                         .is_err()
                     {
-                        break;
+                        break ("pings faster than they could be answered".to_owned(), Value::Null);
                     }
                 }
                 Some("input") => {
-                    if room.controls(id, b).is_err() {
-                        break;
+                    let held = room.input_state(id);
+                    if let Err((_, message)) = room.controls(id, b) {
+                        break (format!("refused input: {message}"), json!({"held":held,"input":input_summary(&text)}));
                     }
                 }
-                _ => break,
+                _ => break ("an unknown kind of message".to_owned(), Value::Null),
             }
         }
     };
-    tokio::select! {_=writer=>{},_=reader=>{},_=shutdown.changed()=>{}}
-    app.room.lock().unwrap().disconnect(id, generation);
+    let (reason, detail) = tokio::select! {reason=writer=>(reason.to_owned(),Value::Null),ended=reader=>ended,_=shutdown.changed()=>("the server is stopping".to_owned(),Value::Null)};
+    let mut room = app.room.lock().unwrap();
+    // A refusal is the server's doing and worth a look; a client leaving is routine.
+    let level = match reason.starts_with("refused") || reason.starts_with("more than") || reason.contains("did not take") {
+        true => "error",
+        false => "info",
+    };
+    app.logs.note(level, "socket-closed", json!({"who":room.who(id),"connection":generation,"seconds":opened.elapsed().as_secs(),"reason":reason,"detail":detail}));
+    room.disconnect(id, generation);
 }
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
@@ -467,7 +572,25 @@ async fn main() {
     if origin.as_ref().is_some_and(|o| o.starts_with("https://")) {
         assert!(invite_secret.as_ref().is_some_and(|v| v.len() >= 32), "Set INVITE_SECRET to at least 32 random characters for public hosting");
     }
+    let log_directory = std::env::var_os("WILD_WHEELS_LOG_DIR").map(std::path::PathBuf::from).unwrap_or_else(|| ".wild-wheels/logs".into());
+    let log_key = std::env::var("LOG_READ_KEY").ok();
+    assert!(log_key.as_ref().is_none_or(|key| key.len() >= 32), "LOG_READ_KEY must have at least 32 characters");
+    let logs = logs::Logs::open(&log_directory, logs::Limits::from_env(), log_key).unwrap_or_else(|error| {
+        eprintln!("Unable to keep a problem log in {}: {error}", log_directory.display());
+        logs::Logs::disabled()
+    });
+    // A panic is the one problem the server cannot note afterwards.
+    let panic_log = logs.clone();
+    let earlier = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |panic| {
+        panic_log.note("error", "panic", json!({"message":panic.to_string()}));
+        panic_log.flush();
+        earlier(panic);
+    }));
+    logs.note("info", "server-start", json!({"build":BUILD,"revision":REVISION,"port":port,"arena":arena,"bots":bots,"players":room::CAPACITY,"abilities":abilities}));
+    room.log = logs.clone();
     let app = App {
+        logs,
         stats: Arc::new(Mutex::new(stats::Stats::open(&stats_path).expect("Unable to load saved server stats"))),
         shutdown: tokio::sync::watch::channel(false).0,
         updates: Arc::new(tokio::sync::Mutex::new(updates::Updates::discover())),
@@ -490,6 +613,9 @@ async fn main() {
     let clock_task = tokio::spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_nanos(1_000_000_000 / 60));
         interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+        // For the problem log: a minute of tick costs, late ticks and the longest
+        // wait between ticks, reported once a minute while anyone is in the room.
+        let (mut costs, mut late, mut longest_gap, mut last) = (Vec::with_capacity(3600), 0u32, Duration::ZERO, Instant::now());
         loop {
             let deadline = tokio::select! {tick=interval.tick()=>tick,_=stop_clock.changed()=>break};
             let mut room = clock.lock().unwrap();
@@ -498,7 +624,26 @@ async fn main() {
                 room.overruns += 1;
             }
             room.tick();
-            tick_stats.lock().unwrap().record(&commit, sessions::now(), *room.tick_us.last().unwrap_or(&0), overrun, room.count());
+            let cost = *room.tick_us.last().unwrap_or(&0);
+            tick_stats.lock().unwrap().record(&commit, sessions::now(), cost, overrun, room.count());
+            late += u32::from(overrun);
+            longest_gap = longest_gap.max(last.elapsed());
+            last = Instant::now();
+            costs.push(cost);
+            if cost > 16_000 {
+                room.log.note("warn", "tick-slow", json!({"microseconds":cost,"players":room.count()}));
+            }
+            if costs.len() >= 3600 {
+                costs.sort_unstable();
+                if room.count() > 0 || late > 0 {
+                    let level = match late > 30 || longest_gap > Duration::from_millis(250) {true => "warn", false => "info"};
+                    let (players, busiest, clock) = (room.activity(), room.busiest(), room.clock());
+                    room.log.note(level, "server-minute", json!({"ticks":costs.len(),"tickMicroseconds":{"median":costs[costs.len()/2],"p99":costs[costs.len()*99/100],"longest":costs[costs.len()-1]},"lateTicks":late,"longestGapMs":longest_gap.as_millis() as u64,"phase":room.core.phase(),"clock":clock,"busiest":busiest,"players":players}));
+                }
+                costs.clear();
+                late = 0;
+                longest_gap = Duration::ZERO;
+            }
         }
     });
     let checkpoint_stats = app.stats.clone();
@@ -526,6 +671,7 @@ async fn main() {
                 .layer(DefaultBodyLimit::max(65536)),
         )
         .route("/api/photos/{epoch}/{id}", get(photos::image))
+        .route("/api/log", post(report).layer(DefaultBodyLimit::max(8192)))
         .fallback(http)
         .layer(DefaultBodyLimit::max(2048))
         .layer(axum::middleware::from_fn_with_state(app.clone(), headers))
@@ -569,6 +715,8 @@ async fn main() {
         chat.and(stats)
     })
         .await.expect("Server state save task failed").expect("Unable to save server state during shutdown");
+    app.logs.note("info", "server-stop", json!({}));
+    app.logs.flush();
     println!("Chat saved for the next server start.");
     println!("Cumulative server stats saved for the next server start.");
 }

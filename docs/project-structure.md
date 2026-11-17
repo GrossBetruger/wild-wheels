@@ -186,6 +186,7 @@ Use `npm run test:netcode` for the network checks, `npm run build:core` to rebui
 | `docs/dedicated-server.md` | Native server setup and operation. |
 | `docs/dedicated-server-results.json` | Recorded native server results. |
 | `docs/encoding-comparison.md` | Snapshot encoding experiment results. |
+| `docs/logging.md` | The server's problem log: what is kept, for how long, how to read it. |
 | `docs/owned-state-experiment.md` | State ownership experiment design and results. |
 | `docs/performance.md` | Performance measurements and methodology. |
 | `docs/photography.md` | Photography behavior and protocol. |

@@ -141,6 +141,7 @@ export class Renderer {
   model(key,x,y,z,angle,build,pitch=0,plumage=null,roll=0){
     let model=this.models.get(key);
     if(!model){const mesh=new Mesh();this.buildingModel=true;try{build(mesh);}finally{this.buildingModel=false;}const buffer=this.gl.createBuffer();this.gl.bindBuffer(this.gl.ARRAY_BUFFER,buffer);this.gl.bufferData(this.gl.ARRAY_BUFFER,new Float32Array(mesh.data),this.gl.STATIC_DRAW);model={buffer,count:mesh.data.length/9,rubble:this.rubbleSamples(mesh.data)};this.models.set(key,model);}
+    if(this.report&&!Number.isFinite(x+y+z+angle+pitch+roll))this.report(`model:${key}`,'error','model-not-finite',{key,x,y,z,angle,pitch,roll});
     this.instances.push({...model,x,y,z,angle,pitch,plumage,roll});
   }
   scenery(track){
@@ -661,6 +662,8 @@ export class Renderer {
       if(!arrival)this.kart(m,pose,actor.color??drivers[actor.driver].color,actor.driver,0,0,actor.boost>0,time,actor.celebrate,jump,actor.driver!==7||actor.vulcan<=0);
       if(actor.driver===14)this.batBuddy(pose,actor,r,time,jump);
       const parts=this.instances.slice(bodyStart);this.rememberBody(actor,parts,parts.length?[]:m.data.slice(dataStart));
+      // For the problem log: a racer who is in the match yet left nothing on screen.
+      if(this.report){const lost=[pose.x,pose.z,actor.heading,pose.bikeRoll,jump?.height??0,jump?.pitch??0].some(value=>!Number.isFinite(value));if(lost||(!arrival&&!parts.length&&m.data.length===dataStart))this.report(`racer:${actor.id}`,'error','racer-not-drawn',{reason:lost?'a position or angle is not a number':'its model drew nothing',viewer:r.id,racer:actor.id,driver:actor.driver,color:actor.color,wx:actor.wx,wz:actor.wz,heading:actor.heading,roll:pose.bikeRoll,boost:actor.boost,somersault:actor.somersault,shield:actor.shield,hedgeShield:actor.hedgeShield,vulcan:actor.vulcan,distance:Math.hypot(actor.wx-r.wx,actor.wz-r.wz)});}
       if(r.specialAbilities!==false&&actor.reverseControls>0)drawCricketPuppet(m,this.glow,pose,time,actor.reverseControls,actor.heading,actor.driver===11?11:8);
       if(r.specialAbilities!==false&&[r,...r.bots].some(a=>a.id!==actor.id&&a.driver===13&&a.specialActive>0)){
         const facing=actor.cameraHeading??actor.heading,phase=Math.floor(time*8)%8;

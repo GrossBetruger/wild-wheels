@@ -17,6 +17,7 @@
   "characters/fourmidable/fourmidable.js",
   "characters/catheterpillar/catheterpillar.js",
   "client/character-preview.js",
+  "client/log.js",
   "client/preview-pose.js",
   "characters/pearococo/pearococo.js",
   "characters/master-yuda/master-yuda.js",

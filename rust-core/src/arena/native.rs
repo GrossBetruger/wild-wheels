@@ -7,6 +7,29 @@ pub(super) static KERNEL: Mutex<()> = Mutex::new(());
 pub struct NativeArena {
     game: Game,
 }
+/// What `NativeArena::happenings` has already told, so each thing is told once.
+#[derive(Default)]
+pub struct Told {
+    epoch: u64,
+    kills: u32,
+    cooldown: [f64; MAX_PLAYERS],
+    /// Per racer: special ability, Nightmare Fuel, Ring of Fire and rapid fire, whether on.
+    on: [[bool; 4]; MAX_PLAYERS],
+}
+/// The special ability a racer's F key uses, by racer.
+fn special_name(driver: usize) -> &'static str {
+    match driver {
+        5 => "Reverse Psychology",
+        7 => "Reine de la paresse",
+        8 => "Special Relativity",
+        9 => "Fashion-Statement",
+        11 => "Providence",
+        12 => "Six-Heart Recovery",
+        13 => "Tax-Audit",
+        14 => "Dark Humor",
+        _ => "special",
+    }
+}
 impl NativeArena {
     pub fn new(config: Value) -> Result<Self, &'static str> {
         let room: control::Room = serde_json::from_value(config).map_err(|_| "Invalid room")?;
@@ -65,6 +88,48 @@ impl NativeArena {
             .encode_packet(id, &mut out)
             .expect("valid bounded arena packet");
         out
+    }
+    /// What happened in the match since the last call, for a server's log: each
+    /// ability, Nightmare Fuel, Ring of Fire and rapid fire starting and ending,
+    /// and each kill, with the match clock so a client's slow frames can be set
+    /// beside them. Cheap enough to call every tick.
+    pub fn happenings(&self, told: &mut Told) -> Vec<Value> {
+        let g = &self.game.global;
+        let fresh = told.epoch != g.sound_epoch;
+        if fresh {
+            *told = Told { epoch: g.sound_epoch, kills: g.kill_feed.iter().map(|kill| kill.id).max().unwrap_or(0), ..Told::default() };
+        }
+        let mut found = Vec::new();
+        let who = |a: &Actor| json!({"racer":a.id,"character":DRIVER_NAMES[a.driver % DRIVER_NAMES.len()],"human":a.human});
+        for a in self.game.actors.iter().filter(|a| !a.inactive) {
+            let now = [a.special_active > 0.0 || (a.driver == 8 && g.time_stop > 0.0 && g.time_owner == Some(a.id)), a.nightmare_active > 0.0, a.ring_remaining > 0.0, a.vulcan > 0.0];
+            let used = a.special_cooldown > told.cooldown[a.id] + 1.0;
+            for (kind, name) in [special_name(a.driver), "Nightmare Fuel", "Ring of Fire", "rapid fire"].into_iter().enumerate() {
+                let started = now[kind] && !told.on[a.id][kind];
+                // An ability with no duration is over as it starts; it is told once, as used.
+                let state = match (started || (kind == 0 && used), now[kind], told.on[a.id][kind]) {
+                    (true, true, _) => "start",
+                    (true, false, _) => "used",
+                    (false, false, true) => "end",
+                    _ => continue,
+                };
+                if !fresh {
+                    found.push(json!({"what":"ability","ability":name,"state":state,"who":who(a),"matchSeconds":(g.elapsed * 10.0).round() / 10.0}));
+                }
+            }
+            told.on[a.id] = now;
+            told.cooldown[a.id] = a.special_cooldown;
+        }
+        for kill in g.kill_feed.iter().filter(|kill| kill.id > told.kills) {
+            found.push(json!({"what":"kill","by":kill.attacker,"byName":kill.attacker_name,"of":kill.victim,"ofName":kill.victim_name,"with":kill.kind,"matchSeconds":(g.elapsed * 10.0).round() / 10.0}));
+        }
+        told.kills = g.kill_feed.iter().map(|kill| kill.id).max().unwrap_or(told.kills).max(told.kills);
+        found
+    }
+    /// How much is in flight: projectiles, effects and drift particles.
+    pub fn load(&self) -> [usize; 3] {
+        let g = &self.game.global;
+        [g.projectiles.len(), g.effects.len(), g.drift_particles.len()]
     }
     pub fn cues(&self, id: usize) -> (Vec<Value>, Vec<Value>) {
         (self.game.viewer_events(id), self.game.global.voices.clone())

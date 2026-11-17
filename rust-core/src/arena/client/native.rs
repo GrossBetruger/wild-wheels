@@ -50,6 +50,8 @@ pub struct ClientView<'a> {
     pub you: usize,
     pub arena: usize,
     pub phase: &'a str,
+    /// The match this is; it changes with every new match.
+    pub epoch: u64,
     pub elapsed: f64,
     pub countdown: f64,
     pub duration: f64,
@@ -196,6 +198,7 @@ impl NativeClient {
             you,
             arena: g.arena,
             phase: &g.phase,
+            epoch: g.sound_epoch,
             elapsed: g.elapsed,
             countdown: g.countdown,
             duration: g.duration,

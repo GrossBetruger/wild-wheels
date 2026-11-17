@@ -6,7 +6,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::sync::Notify;
-use wild_wheels_core::{Action, Frame, Input, Move, NativeArena, PLAYER_COLORS};
+use wild_wheels_core::{Action, Frame, Input, Move, NativeArena, Told, PLAYER_COLORS};
 /// Set once, in rust-core: `wild_wheels_core::MAX_PLAYERS`.
 pub const CAPACITY: usize = wild_wheels_core::MAX_PLAYERS;
 static FULL: std::sync::LazyLock<&'static str> =
@@ -88,6 +88,10 @@ pub struct Member {
     events: Vec<Value>,
     voices: Vec<Value>,
     cue_epoch: u64,
+    /// For the problem log: inputs received and the longest queue of moves waiting
+    /// to be played, since the last report.
+    inputs: u32,
+    longest_queue: usize,
 }
 impl Member {
     fn clear(&mut self, movement: i64, action: i64) {
@@ -116,6 +120,12 @@ pub struct Room {
     pub ticks: u64,
     pub overruns: u64,
     pub tick_us: Vec<u64>,
+    pub log: crate::logs::Logs,
+    /// The match phase last noted in the log.
+    phase: String,
+    /// The game events already noted, and the most in flight since the last report.
+    told: Told,
+    busiest: [usize; 3],
 }
 impl Room {
     pub fn new(arena: usize, bots: usize) -> Self {
@@ -134,7 +144,43 @@ impl Room {
             ticks: 0,
             overruns: 0,
             tick_us: Vec::new(),
+            log: crate::logs::Logs::disabled(),
+            phase: "ready".into(),
+            told: Told::default(),
+            busiest: [0; 3],
         }
+    }
+    /// Who a log line is about. Names are the players' own; tokens are never logged.
+    pub fn who(&self, id: usize) -> Value {
+        match &self.members[id] {
+            Some(p) => json!({"player":id,"name":p.name,"driver":p.driver}),
+            None => json!({"player":id}),
+        }
+    }
+    /// What the server holds of a player's controls, for a line about refusing them.
+    pub fn input_state(&self, id: usize) -> Value {
+        match &self.members[id] {
+            Some(p) => json!({"acceptedMove":p.accepted_move,"queuedMoves":p.moves.len(),"sequence":p.sequence,"acceptedAction":p.accepted_action,"afk":p.afk}),
+            None => Value::Null,
+        }
+    }
+    /// The match being played and its clock, to set beside what clients report.
+    pub fn clock(&self) -> Value {
+        json!({"match":self.epoch,"matchSeconds":(self.core.elapsed() * 10.0).round() / 10.0})
+    }
+    /// The most projectiles, effects and drift particles in flight since the last call.
+    pub fn busiest(&mut self) -> Value {
+        let [projectiles, effects, particles] = std::mem::take(&mut self.busiest);
+        json!({"projectiles":projectiles,"effects":effects,"particles":particles})
+    }
+    /// Each player's inputs and longest queue of waiting moves since the last call.
+    pub fn activity(&mut self) -> Vec<Value> {
+        self.members.iter_mut().enumerate().filter_map(|(id, p)| p.as_mut().map(|p| {
+            let report = json!({"player":id,"name":p.name,"driver":p.driver,"connected":p.connected,"afk":p.afk,"inputs":p.inputs,"longestMoveQueue":p.longest_queue});
+            p.inputs = 0;
+            p.longest_queue = 0;
+            report
+        })).collect()
     }
     pub fn count(&self) -> usize {
         self.members.iter().flatten().count()
@@ -253,6 +299,8 @@ impl Room {
             events: Vec::new(),
             voices: Vec::new(),
             cue_epoch: self.core.epoch(),
+            inputs: 0,
+            longest_queue: 0,
         };
         p.clear(-1, -1);
         self.members[id] = Some(p);
@@ -514,6 +562,8 @@ impl Room {
         }
         p.accepted_move = accepted;
         p.moves.extend(moves);
+        p.inputs += 1;
+        p.longest_queue = p.longest_queue.max(p.moves.len());
         if c.sequence > p.sequence {
             if p.actions.len() + c.actions.len() > 64 {
                 return Err((429, "Too many pending actions."));
@@ -537,11 +587,14 @@ impl Room {
     pub fn tick(&mut self) {
         let start = Instant::now();
         let mut changed = false;
-        for p in &mut self.members {
+        for (id, p) in self.members.iter_mut().enumerate() {
             if p.as_ref()
                 .is_some_and(|p| p.seen.elapsed() > Duration::from_secs(900))
             {
-                if let Some(member) = p.as_ref() { member.notify.notify_one(); }
+                if let Some(member) = p.as_ref() {
+                    member.notify.notify_one();
+                    self.log.note("info", "player-expired", json!({"player":id,"name":member.name,"reason":"not heard from for 15 minutes"}));
+                }
                 *p = None;
                 changed = true;
                 continue;
@@ -551,6 +604,7 @@ impl Room {
                     p.afk = true;
                     p.keys = 0;
                     changed = true;
+                    self.log.note("warn", "player-away", json!({"player":id,"name":p.name,"connected":p.connected,"reason":"not heard from for 15 seconds"}));
                 }
             }
         }
@@ -595,6 +649,21 @@ impl Room {
             })
             .expect("validated frame");
         self.ticks += 1;
+        // What happens in the match, so a client's slow frames can be set beside it.
+        for mut event in self.core.happenings(&mut self.told) {
+            event["match"] = json!(self.epoch);
+            let kind = match event["what"] == "kill" {true => "game-kill", false => "game-ability"};
+            self.log.note("info", kind, event);
+        }
+        let load = self.core.load();
+        for (most, now) in self.busiest.iter_mut().zip(load) {
+            *most = (*most).max(now);
+        }
+        if self.core.phase() != self.phase {
+            let players: Vec<_> = (0..CAPACITY).filter(|id| self.members[*id].is_some()).map(|id| self.who(id)).collect();
+            self.log.note("info", "match-phase", json!({"match":self.epoch,"from":self.phase,"to":self.core.phase(),"arena":self.arena,"bots":self.bots,"abilities":self.abilities,"players":players}));
+            self.phase = self.core.phase().to_owned();
+        }
         if self.ticks % 2 == 0 {
             self.broadcast();
         }
@@ -812,6 +881,33 @@ mod tests {
         room.tick();
         assert_eq!(room.reply(0)["actionSequence"],1);
         assert!(room.reply(0)["world"]["nightmareCooldown"].as_f64().unwrap()<active["world"]["nightmareCooldown"].as_f64().unwrap());
+    }
+    #[test]
+    fn abilities_and_match_phases_are_noted_with_the_match_clock() {
+        let directory = std::env::temp_dir().join(format!("wild-wheels-game-log-{}", token()));
+        let mut room = Room::new(0, 0);
+        room.log = crate::logs::Logs::open(&directory, Default::default(), None).unwrap();
+        room.join(&json!({"name":"Houston","driver":7})).unwrap();
+        room.control(0,"/api/control",&json!({"action":"start"})).unwrap();
+        for _ in 0..181 { room.tick(); }
+        let epoch=room.core.epoch();
+        room.controls(0,json!({"sequence":0,"epoch":epoch,"keys":[],"moves":[],"actions":[{"type":"nightmare","id":0,"afterMove":-1},{"type":"special","id":1,"afterMove":-1}]})).unwrap();
+        // Nightmare Fuel lasts 13 seconds; it starts once and ends once.
+        for _ in 0..(14 * 60) { room.tick(); }
+        room.log.flush();
+        std::thread::sleep(Duration::from_millis(1200));
+        let read = |query: &str| crate::logs::read(&directory, Default::default(), &crate::logs::Query::parse(query).unwrap(), crate::logs::now()).unwrap();
+        let abilities = read("day=today&event=game-ability");
+        let told: Vec<_> = abilities["entries"].as_array().unwrap().iter().map(|e| (e["ability"].as_str().unwrap().to_owned(), e["state"].as_str().unwrap().to_owned())).collect();
+        assert_eq!(told.iter().filter(|(ability, state)| ability == "Nightmare Fuel" && state == "start").count(), 1, "{told:?}");
+        assert_eq!(told.iter().filter(|(ability, state)| ability == "Nightmare Fuel" && state == "end").count(), 1, "{told:?}");
+        assert_eq!(told.iter().filter(|(ability, state)| ability == "Reine de la paresse" && state == "start").count(), 1, "{told:?}");
+        let start = abilities["entries"].as_array().unwrap().iter().find(|e| e["ability"] == "Nightmare Fuel" && e["state"] == "start").unwrap();
+        assert_eq!((start["match"].as_u64(), start["who"]["character"].as_str(), start["who"]["human"].as_bool()), (Some(u64::from(room.epoch)), Some("Houston the RTPL"), Some(true)));
+        assert!(start["matchSeconds"].as_f64().unwrap() < 0.2, "{start}");
+        let phases: Vec<_> = read("day=today&event=match-phase")["entries"].as_array().unwrap().iter().map(|e| e["to"].as_str().unwrap().to_owned()).collect();
+        assert_eq!(phases, ["countdown", "racing"]);
+        std::fs::remove_dir_all(directory).unwrap();
     }
     #[test]
     fn movement_gaps_and_actions_beyond_received_movement_are_rejected() {

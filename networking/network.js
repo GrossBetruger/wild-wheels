@@ -26,6 +26,8 @@ export class PlayRequestPrompt {
 export class NetworkGame {
   playRequestPrompt=new PlayRequestPrompt();
   token=null;state=null;paused=false;sequence=0;actions=[];client=null;rtt=0;lastPing=-Infinity;
+  // For the problem log: where to report, and when the server was last heard from.
+  log=()=>{};lastPacket=0;
   constructor({anchor,keys,driver,arena,onState,onLeave,unlock,sound=()=>{},role='driver'}){
     this.preferredColor=savedPlayerColor(document.cookie);this.colorDirty=false;this.colorPending=false;this.colorError='';
     Object.assign(this,{keys,driver,arena,onState,onLeave,unlock,sound,role});this.dedicated=document.body.classList.contains('dedicated-server');
@@ -209,7 +211,7 @@ export class NetworkGame {
     if(this.restoring)return;this.restoring=true;
     this.connectionStatus();
     try{this.adopt(await this.request('/api/session',this.colorDirty&&isPlayerColor(this.preferredColor)?{color:this.preferredColor}:{}));}
-    catch(error){if(error.status!==401){this.status.textContent=error.message;this.connectionStatus(error.message);if(this.active){const token=this.token;setTimeout(()=>{if(this.token===token)this.restore();},1000);}return;}if(this.active){this.leave('This room is no longer available.',false);return;}await this.infoReady;if(this.invitation)await this.connect('/api/join');}
+    catch(error){this.log('warn','reconnect-failed',{status:error.status,message:error.message});if(error.status!==401){this.status.textContent=error.message;this.connectionStatus(error.message);if(this.active){const token=this.token;setTimeout(()=>{if(this.token===token)this.restore();},1000);}return;}if(this.active){this.leave('This room is no longer available.',false);return;}await this.infoReady;if(this.invitation)await this.connect('/api/join');}
     finally{this.restoring=false;this.hostButton.disabled=this.active&&!this.isHost;}
   }
   async setAway(afk){
@@ -284,7 +286,7 @@ export class NetworkGame {
   }
   accept(packet){
     if(!this.active)return;
-    const now=performance.now()/1000;this.client.accept(packet,now);this.client.frame(0,this.paused?0:this.keys,now);this.client.peek();
+    const now=performance.now()/1000;this.lastPacket=now*1000;this.client.accept(packet,now);this.client.frame(0,this.paused?0:this.keys,now);this.client.peek();
     const state=this.client.state();
     const rosterKey=JSON.stringify([state.host,state.you,state.players]);
     this.state=state;this.leaveButton.classList.remove('hidden');this.share.classList.remove('hidden');this.copyButton.classList.remove('hidden');this.animalChoice.classList.toggle('hidden',this.dedicated||!this.isHost);
@@ -331,11 +333,11 @@ export class NetworkGame {
   }
   stream(){
     const token=this.token,url=new URL('/api/socket',location.href);url.protocol=location.protocol==='https:'?'wss:':'ws:';const socket=this.socket=new WebSocket(url);
-    socket.binaryType='arraybuffer';
+    socket.binaryType='arraybuffer';const opened=performance.now();
     socket.onopen=()=>{if(this.token===token){this.client.resend();socket.send(JSON.stringify({type:'authenticate',token}));}};
-    socket.onmessage=event=>{try{if(this.token!==token)return;if(event.data instanceof ArrayBuffer){this.accept(event.data);return;}if(typeof event.data!=='string'||event.data.length>2048)throw new Error();const state=JSON.parse(event.data);if(state.type!=='pong')throw new Error();if(state.sent===this.lastPing)this.rtt=Math.max(0,Math.min(.3,performance.now()/1000-state.sent));}catch{socket.close();}};
+    socket.onmessage=event=>{try{if(this.token!==token)return;if(event.data instanceof ArrayBuffer){this.accept(event.data);return;}if(typeof event.data!=='string'||event.data.length>2048)throw new Error();const state=JSON.parse(event.data);if(state.type!=='pong')throw new Error();if(state.sent===this.lastPing)this.rtt=Math.max(0,Math.min(.3,performance.now()/1000-state.sent));}catch(error){this.log('error','socket-message-invalid',{message:error?.message,binary:event.data instanceof ArrayBuffer,size:event.data?.byteLength??event.data?.length});socket.close();}};
     socket.onerror=()=>{};
-    socket.onclose=event=>{if(this.token!==token||this.socket!==socket)return;this.keys.clear();if([4001,4003,4004].includes(event.code)){if(this.awayPending||this.connecting)return;this.leave(event.code===4003?'You were removed by the host.':event.code===4004?'The host replaced this room. Open the new invitation.':'This player resumed in another tab.',false);return;}this.status.textContent='Reconnecting to the room…';setTimeout(()=>{if(this.token===token)this.restore();},500);};
+    socket.onclose=event=>{if(this.token!==token||this.socket!==socket)return;this.log(event.code===1000?'info':'warn','socket-closed',{code:event.code,reason:event.reason,clean:event.wasClean,openSeconds:Math.round((performance.now()-opened)/1000),waitingBytes:socket.bufferedAmount,sinceServerMs:Math.round(performance.now()-this.lastPacket)});this.keys.clear();if([4001,4003,4004].includes(event.code)){if(this.awayPending||this.connecting)return;this.leave(event.code===4003?'You were removed by the host.':event.code===4004?'The host replaced this room. Open the new invitation.':'This player resumed in another tab.',false);return;}this.status.textContent='Reconnecting to the room…';setTimeout(()=>{if(this.token===token)this.restore();},500);};
   }
   async control(action,arena,bots){try{if(action==='start'&&!await this.saveName())return;await this.request('/api/control',{action,arena,bots});this.paused=false;}catch(error){this.status.textContent=error.message;}}
   async chooseDriver(driver){

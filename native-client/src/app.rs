@@ -26,6 +26,9 @@ pub struct GameSession {
     pub away: bool,
     observed: Option<(u32, u64)>,
     metrics: crate::metrics::Metrics,
+    /// For the problem log: frame times, and when the server was last heard from.
+    health: crate::reports::FrameHealth,
+    heard: f64,
 }
 impl GameSession {
     pub(crate) fn new() -> Self {
@@ -43,6 +46,8 @@ impl GameSession {
             away: false,
             observed: None,
             metrics: Default::default(),
+            health: Default::default(),
+            heard: 0.0,
         }
     }
     /// Whether the player has asked to be in a room, connected yet or not.
@@ -128,16 +133,29 @@ impl GameSession {
                     self.status = "Connected".into();
                 }
                 Event::Error(error) => {
+                    crate::reports::note(
+                        "error",
+                        "connection-ended",
+                        serde_json::json!({"reason":error}),
+                    );
                     self.status = error;
                     self.client = None;
                 }
                 Event::Packet(bytes) => {
+                    self.heard = now;
                     let result = match self.client.as_mut() {
                         Some(client) => client.accept(&bytes, now),
                         None => NativeClient::from_packet(&bytes, now)
                             .map(|client| self.client = Some(client)),
                     };
                     if let Err(error) = result {
+                        crate::reports::limited(
+                            "packet",
+                            10.0,
+                            "error",
+                            "packet-invalid",
+                            || serde_json::json!({"error":error.to_string(),"bytes":bytes.len()}),
+                        );
                         self.status = format!("Protocol error: {error}");
                         self.client = None;
                     }
@@ -322,6 +340,17 @@ pub(crate) fn drive(
 ) {
     let now = session.epoch.elapsed().as_secs_f64();
     session.receive(now);
+    // A window in the background draws slowly by design; that is not a problem to report.
+    let (racing, clock) = session.client.as_ref().map_or((false, (0, 0.0)), |client| {
+        let view = client.view();
+        (
+            view.phase == "racing" && !view.player.afk,
+            (view.epoch, view.elapsed),
+        )
+    });
+    let racing = racing && !session.away && windows.iter().any(|w| w.focused);
+    let heard = session.heard;
+    session.health.frame(now, racing, heard, clock);
     // Keys pressed while the menu is open belong to the menu.
     let focused = windows.iter().any(|w| w.focused) && !menu.open && !chat.capture_frame;
     let held = |codes: &[KeyCode]| focused && codes.iter().any(|key| keys.pressed(*key));
@@ -345,6 +374,13 @@ pub(crate) fn drive(
         false => input,
     };
     if let Err(error) = client.advance(time.delta_secs_f64().min(0.05), input, now) {
+        crate::reports::limited(
+            "advance",
+            10.0,
+            "error",
+            "prediction-failed",
+            || serde_json::json!({"error":error.to_string()}),
+        );
         session.status = error.to_string();
         return;
     }

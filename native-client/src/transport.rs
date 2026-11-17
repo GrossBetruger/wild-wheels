@@ -132,10 +132,10 @@ async fn worker(mut config: Config, commands: Receiver<Command>, events: Sender<
                 if established {
                     delay = 1;
                 }
-                println!(
-                    "{}",
-                    json!({"event":"connection-lost","connection":connection,"established":established,"reason":error.to_string(),"retrySeconds":delay})
-                );
+                let lost = json!({"event":"connection-lost","connection":connection,"established":established,"reason":error.to_string(),"retrySeconds":delay});
+                println!("{lost}");
+                // Sent once a connection is back; a server that cannot be reached cannot be told.
+                crate::reports::note("warn", "connection-lost", lost);
                 if events
                     .try_send(Event::Status(format!("Reconnecting in {delay}s: {error}")))
                     .is_err()
@@ -313,6 +313,8 @@ async fn connect(
     events.try_send(Event::Status("Connected".into()))?;
     *link.established = true;
     events.try_send(Event::Connected(link.number))?;
+    crate::reports::note("info", "connected", json!({"connection":link.number}));
+    let mut report_at = tokio::time::Instant::now() + Duration::from_secs(5);
     events.try_send(Event::Session {
         origin: config.origin.clone(),
         token: token.clone(),
@@ -325,6 +327,15 @@ async fn connect(
                 Some(Ok(_))=>{},Some(Err(e))=>return Err(e.into()),None=>return Err("Connection ended".into()),
             },
             _=tokio::time::sleep(Duration::from_millis(2))=>{
+                // Waiting reports go over HTTP in a task of their own, so a slow
+                // request never holds up controls or snapshots.
+                if tokio::time::Instant::now()>=report_at {
+                    report_at=tokio::time::Instant::now()+crate::reports::EVERY;
+                    if let Some(body)=crate::reports::batch() {
+                        let request=client.post(config.origin.join("api/log")?).bearer_auth(&token).header("Content-Type","application/json").body(body);
+                        tokio::spawn(async move { crate::reports::sent(request.send().await.ok().map(|reply| reply.status().as_u16())); });
+                    }
+                }
                 for _ in 0..8 {match commands.try_recv(){
                     Ok(Command::Input(made_for,bytes))=>{if made_for!=link.number{continue;}let text=String::from_utf8(bytes)?;tokio::time::timeout(Duration::from_secs(2),socket.send(Message::Text(text.into()))).await??;},
                     Ok(Command::Control(action))=>{let result=body(client.post(config.origin.join("api/control")?).bearer_auth(&token).json(&action).send().await?).await;if let Err(e)=result{let _=events.try_send(Event::Status(e.to_string()));}},

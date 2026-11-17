@@ -207,6 +207,7 @@ mod tests {
             room: Arc::new(Mutex::new(room)),
             photos: Default::default(),
             limits: Default::default(),
+            logs: crate::logs::Logs::disabled(),
             sockets: Arc::new(Semaphore::new(32)),
             origin: None,
             trust_proxy: false,
