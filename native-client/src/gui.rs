@@ -32,7 +32,7 @@ const WARNING: Color = Color::srgb(1.0, 0.62, 0.52);
 const PREVIEW: Vec3 = Vec3::new(0.0, 500.0, 0.0);
 /// Set once, in rust-core.
 const ROOM_CAPACITY: usize = wild_wheels_core::MAX_PLAYERS;
-const CONTROLS: &str = "Arrows / WASD   drive\nShift   drift\nSpace   fire\nTab   switch weapon\nX   boost      C   chaff\nZ   flip      F   special ability";
+const CONTROLS: &str = "Arrows / WASD   drive\nShift   drift\nSpace   fire\nTab   switch weapon\nX   boost      C   chaff\nZ   flip      F   special ability\nP   sit out (AFK)      Esc   menu";
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Field {
@@ -113,11 +113,15 @@ impl Menu {
             root: None,
         }
     }
+    pub fn is_benchmark(&self) -> bool {
+        self.base.benchmark.is_some()
+    }
     pub fn screen(&self, session: &GameSession) -> Screen {
         match session.client.as_ref() {
             _ if !session.joined() => Screen::Join,
+            _ if session.away => Screen::Menu,
             None => Screen::Connecting,
-            Some(_) if self.open || session.away => Screen::Menu,
+            Some(_) if self.open => Screen::Menu,
             Some(client) if matches!(client.view().phase, "ready" | "finished") => Screen::Lobby,
             Some(_) => Screen::Playing,
         }
@@ -250,7 +254,13 @@ pub fn control(
             (Screen::Lobby, Key::Enter) => acts.push(Act::Start),
             (Screen::Connecting, Key::Escape) => acts.push(Act::Leave),
             (Screen::Lobby | Screen::Playing, Key::Escape) => menu.open = true,
-            (Screen::Menu, Key::Escape) if !session.away => acts.push(Act::Resume),
+            (Screen::Menu, Key::Enter | Key::Escape) if session.away => acts.push(Act::SitOut),
+            (Screen::Menu, Key::Escape) => acts.push(Act::Resume),
+            (Screen::Lobby | Screen::Playing | Screen::Menu, Key::Character(text))
+                if !command && text.eq_ignore_ascii_case("p") =>
+            {
+                acts.push(Act::SitOut);
+            }
             _ => {}
         }
     }
@@ -291,8 +301,7 @@ pub fn control(
             Act::Resume => menu.open = false,
             Act::SitOut => {
                 let away = !session.away;
-                if session.request(Command::Afk(away)) {
-                    session.away = away;
+                if session.set_away(away) {
                     menu.open = false;
                 }
             }
@@ -496,10 +505,11 @@ pub fn draw(
                 .iter()
                 .filter(|a| !a.inactive)
                 .map(|a| format!(
-                    "{}{}{}",
+                    "{}{}{}{}",
                     a.name.as_deref().unwrap_or("bot"),
                     a.human,
-                    a.color
+                    a.color,
+                    a.afk
                 ))
                 .collect::<Vec<_>>()
                 .join(","),
@@ -630,7 +640,13 @@ pub fn draw(
             );
             let names: Vec<_> = racers()
                 .filter(|a| a.human)
-                .map(|a| a.name.as_deref().unwrap_or("Racer"))
+                .map(|a| {
+                    let name = a.name.as_deref().unwrap_or("Racer");
+                    match a.afk {
+                        true => format!("{name} (AFK)"),
+                        false => name.to_owned(),
+                    }
+                })
                 .collect();
             ui.text(
                 panel,
@@ -645,6 +661,13 @@ pub fn draw(
                 PRIMARY,
                 percent(100),
             );
+            ui.button(
+                panel,
+                "Sit out (AFK)  (P)",
+                Act::SitOut,
+                BUTTON,
+                percent(100),
+            );
             ui.button(panel, "Leave room", Act::Leave, BUTTON, percent(100));
             ui.text(panel, &session.status, 13.0, WARNING);
         }
@@ -656,15 +679,22 @@ pub fn draw(
         }
         (Screen::Menu, _) => {
             let panel = ui.column(root, centered);
-            let (title, sit) = match session.away {
-                true => ("SITTING OUT", "Return to the arena"),
-                false => ("MENU", "Sit out (AFK)"),
+            let (title, sit, tone) = match session.away {
+                true => ("SITTING OUT", "Return to the arena  (Enter)", PRIMARY),
+                false => ("MENU", "Sit out (AFK)  (P)", BUTTON),
             };
             ui.text(panel, title, 30.0, GOLD);
-            if !session.away {
+            if session.away {
+                ui.text(
+                    panel,
+                    "Your place and score are saved. The match continues while you are away.",
+                    15.0,
+                    Color::WHITE,
+                );
+            } else {
                 ui.button(panel, "Resume  (Esc)", Act::Resume, PRIMARY, percent(100));
             }
-            ui.button(panel, sit, Act::SitOut, BUTTON, percent(100));
+            ui.button(panel, sit, Act::SitOut, tone, percent(100));
             ui.button(panel, "Leave room", Act::Leave, BUTTON, percent(100));
             ui.button(panel, "Quit game", Act::Quit, BUTTON, percent(100));
             ui.text(panel, CONTROLS, 15.0, MUTED);

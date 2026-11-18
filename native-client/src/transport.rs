@@ -120,6 +120,7 @@ async fn worker(mut config: Config, commands: Receiver<Command>, events: Sender<
     };
     let mut delay = 1;
     let mut connection = 0;
+    let mut away = false;
     loop {
         let _ = events.try_send(Event::Status("Connecting to dedicated arena...".into()));
         connection += 1;
@@ -127,9 +128,11 @@ async fn worker(mut config: Config, commands: Receiver<Command>, events: Sender<
         let link = Link {
             number: connection,
             established: &mut established,
+            away: &mut away,
         };
         match connect(&mut config, &client, &mut store, &commands, &events, link).await {
-            Ok(()) => return,
+            Ok(false) => return,
+            Ok(true) => delay = 1,
             Err(error) => {
                 // Only repeated failures to connect wait longer; a link that was
                 // working and dropped is retried promptly.
@@ -146,19 +149,61 @@ async fn worker(mut config: Config, commands: Receiver<Command>, events: Sender<
                 {
                     return;
                 }
+                tokio::time::sleep(Duration::from_secs(delay)).await;
+                delay = (delay * 2).min(10);
             }
         }
-        tokio::time::sleep(Duration::from_secs(delay)).await;
-        delay = (delay * 2).min(10);
         // Inputs from a dead session must not leak into the new session.
         loop {
             match commands.try_recv() {
                 Ok(Command::Stop | Command::Leave)
-                | Err(crossbeam_channel::TryRecvError::Disconnected) => return,
+                | Err(crossbeam_channel::TryRecvError::Disconnected) => {
+                    leave_stored(&client, &config.origin, &store).await;
+                    return;
+                }
+                Ok(Command::Afk(next)) => away = next,
+                Ok(Command::Driver(driver)) => config.driver = driver,
+                Ok(Command::Color(color)) if crate::colors::valid(&color) => {
+                    config.color = Some(color);
+                }
                 Ok(_) => {}
                 Err(crossbeam_channel::TryRecvError::Empty) => break,
             }
         }
+        if away {
+            let _ = events.try_send(Event::Status("Sitting out".into()));
+            while away {
+                match commands.try_recv() {
+                    Ok(Command::Afk(next)) => away = next,
+                    Ok(Command::Driver(driver)) => config.driver = driver,
+                    Ok(Command::Color(color)) if crate::colors::valid(&color) => {
+                        config.color = Some(color);
+                    }
+                    Ok(Command::Stop | Command::Leave)
+                    | Err(crossbeam_channel::TryRecvError::Disconnected) => {
+                        leave_stored(&client, &config.origin, &store).await;
+                        return;
+                    }
+                    Ok(_) => {}
+                    Err(crossbeam_channel::TryRecvError::Empty) => {
+                        tokio::time::sleep(Duration::from_millis(20)).await;
+                    }
+                }
+            }
+            delay = 1;
+        }
+    }
+}
+async fn leave_stored(client: &Client, origin: &url::Url, store: &Store) {
+    if let Some(identity) = store.get(origin.as_str())
+        && let Ok(url) = origin.join("api/leave")
+    {
+        let _ = client
+            .post(url)
+            .bearer_auth(&identity.token)
+            .json(&json!({}))
+            .send()
+            .await;
     }
 }
 pub(crate) async fn set_color(
@@ -183,10 +228,12 @@ pub(crate) async fn set_color(
     body(response).await?;
     Ok(color.into())
 }
-/// One attempt to connect: its number, and whether it got as far as a live socket.
+/// One attempt to connect: its number, whether it got as far as a live socket,
+/// and whether the player has asked to sit out.
 struct Link<'a> {
     number: u64,
     established: &'a mut bool,
+    away: &'a mut bool,
 }
 /// Fetches the all-time leaderboard and hands its top to the game. A server that
 /// keeps none, or an answer that is not a board, changes nothing.
@@ -228,7 +275,7 @@ async fn connect(
     commands: &Receiver<Command>,
     events: &Sender<Event>,
     link: Link<'_>,
-) -> NetResult<()> {
+) -> NetResult<bool> {
     let origin = config.origin.as_str();
     let info = body(client.get(config.origin.join("api/info")?).send().await?).await?;
     if info["dedicated"] != true {
@@ -365,7 +412,7 @@ async fn connect(
         tokio::select! {
             message=socket.next()=>match message {
                 Some(Ok(Message::Binary(bytes)))=>events.try_send(Event::Packet(bytes.to_vec())).map_err(|_|"Snapshot queue is full; reconnecting")?,
-                Some(Ok(Message::Close(frame)))=>{if frame.is_some_and(|f|matches!(u16::from(f.code),4001|4004)){events.try_send(Event::Error("Session resumed elsewhere; restart to reconnect".into()))?;return Ok(());}return Err("Connection closed".into());},
+                Some(Ok(Message::Close(frame)))=>{if frame.is_some_and(|f|matches!(u16::from(f.code),4001|4004)){events.try_send(Event::Error("Session resumed elsewhere; restart to reconnect".into()))?;return Ok(false);}return Err("Connection closed".into());},
                 Some(Ok(_))=>{},Some(Err(e))=>return Err(e.into()),None=>return Err("Connection ended".into()),
             },
             _=tokio::time::sleep(Duration::from_millis(2))=>{
@@ -381,32 +428,31 @@ async fn connect(
                 for _ in 0..8 {match commands.try_recv(){
                     Ok(Command::Input(made_for,bytes))=>{if made_for!=link.number{continue;}let text=String::from_utf8(bytes)?;tokio::time::timeout(Duration::from_secs(2),socket.send(Message::Text(text.into()))).await??;},
                     Ok(Command::Control(action))=>{let result=body(client.post(config.origin.join("api/control")?).bearer_auth(&token).json(&action).send().await?).await;if let Err(e)=result{let _=events.try_send(Event::Status(e.to_string()));}},
-                    Ok(Command::Driver(driver))=>{let result=body(client.post(config.origin.join("api/driver")?).bearer_auth(&token).json(&json!({"driver":driver})).send().await?).await;if let Err(e)=result{let _=events.try_send(Event::Status(e.to_string()));}},
+                    Ok(Command::Driver(driver))=>{config.driver=driver;let result=body(client.post(config.origin.join("api/driver")?).bearer_auth(&token).json(&json!({"driver":driver})).send().await?).await;if let Err(e)=result{let _=events.try_send(Event::Status(e.to_string()));}},
                     Ok(Command::Color(color))=>{
                         let result=set_color(client,&config.origin,&token,&color).await.map_err(|e|e.to_string());
                         if let Ok(color)=&result { config.color=Some(color.clone()); }
                         events.try_send(Event::ColorResult(result))?;
                     },
                     Ok(Command::Leaderboard)=>{tokio::spawn(leaderboard(client.clone(),config.origin.clone(),events.clone()));},
-                    Ok(Command::Leave)=>{let _=client.post(config.origin.join("api/leave")?).bearer_auth(&token).json(&json!({})).send().await;let _=socket.close(None).await;return Ok(());},
+                    Ok(Command::Leave)=>{let _=client.post(config.origin.join("api/leave")?).bearer_auth(&token).json(&json!({})).send().await;let _=socket.close(None).await;return Ok(false);},
                     Ok(Command::Afk(afk))=>{
                         if !afk{continue;}
+                        *link.away=true;
+                        if let Some(body)=crate::reports::batch() {
+                            let request=client.post(config.origin.join("api/log")?).bearer_auth(&token).header("Content-Type","application/json").body(body);
+                            tokio::spawn(async move { crate::reports::sent(request.send().await.ok().map(|reply| reply.status().as_u16())); });
+                        }
                         let response=client.post(config.origin.join("api/afk")?).bearer_auth(&token).json(&json!({"afk":true})).send().await?;
                         let age=response.cookies().find(|c|c.name()=="wild-wheels-session").and_then(|c|c.max_age()).map(|d|d.as_secs()).unwrap_or(0);
                         let reply=body(response).await?;
                         let resumed=reply["token"].as_str().ok_or("AFK response missing session")?;
                         store.remember(origin,Identity{token:resumed.into(),expires:now()+age})?;
                         events.try_send(Event::Session { origin:config.origin.clone(), token:resumed.into() })?;
-                        let _=socket.close(None).await;events.try_send(Event::Status("Sitting out".into()))?;
-                        loop {match commands.try_recv(){
-                            Ok(Command::Afk(false))=>break,
-                            Ok(Command::Leave)=>{let _=client.post(config.origin.join("api/leave")?).bearer_auth(resumed).json(&json!({})).send().await;return Ok(());},
-                            Ok(Command::Stop)|Err(crossbeam_channel::TryRecvError::Disconnected)=>return Ok(()),
-                            _=>{},
-                        }tokio::time::sleep(Duration::from_millis(20)).await;}
-                        return Err("Returning from AFK".into());
+                        let _=socket.close(None).await;
+                        return Ok(true);
                     },
-                    Ok(Command::Stop)|Err(crossbeam_channel::TryRecvError::Disconnected)=>{let _=socket.close(None).await;return Ok(());},
+                    Ok(Command::Stop)|Err(crossbeam_channel::TryRecvError::Disconnected)=>{let _=socket.close(None).await;return Ok(false);},
                     Err(crossbeam_channel::TryRecvError::Empty)=>break,
                 }}
             }

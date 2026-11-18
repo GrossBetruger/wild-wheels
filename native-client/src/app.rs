@@ -9,6 +9,53 @@ use std::{
 };
 use wild_wheels_core::{ClientAction, ClientInput, NativeClient};
 
+/// Matches `dedicated-server/src/room.rs` (`player-away` after 15 seconds).
+const UNFOCUSED_AWAY_SECONDS: f64 = 15.0;
+
+/// Puts the player into AFK when the game window is left in the background,
+/// matching the browser client's `blur`/`visibilitychange` and background-tab rules.
+#[derive(Default, Debug)]
+pub(crate) struct FocusAfk {
+    ever_focused: bool,
+    unfocused_since: Option<f64>,
+}
+impl FocusAfk {
+    pub fn reset(&mut self) {
+        *self = Self::default();
+    }
+    pub fn should_sit_out(
+        &mut self,
+        now: f64,
+        window_focused: bool,
+        phase: Option<&str>,
+        away: bool,
+        automated: bool,
+    ) -> bool {
+        if window_focused {
+            self.ever_focused = true;
+            self.unfocused_since = None;
+            return false;
+        }
+        if automated || away || phase.is_none() {
+            self.unfocused_since = None;
+            return false;
+        }
+        let since = *self.unfocused_since.get_or_insert(now);
+        let unfocused_for = (now - since).max(0.0);
+        if matches!(phase, Some("countdown" | "racing"))
+            && (self.ever_focused || unfocused_for >= UNFOCUSED_AWAY_SECONDS)
+        {
+            self.unfocused_since = None;
+            return true;
+        }
+        if unfocused_for >= UNFOCUSED_AWAY_SECONDS {
+            self.unfocused_since = None;
+            return true;
+        }
+        false
+    }
+}
+
 #[derive(Resource)]
 pub struct GameSession {
     pub colors: crate::colors::Selection,
@@ -24,6 +71,7 @@ pub struct GameSession {
     /// The connection the current client was built from; see `Command::Input`.
     connection: u64,
     pub away: bool,
+    focus: FocusAfk,
     observed: Option<(u32, u64)>,
     metrics: crate::metrics::Metrics,
     /// For the problem log: frame times, and when the server was last heard from.
@@ -49,6 +97,7 @@ impl GameSession {
             last_send: 0.0,
             connection: 0,
             away: false,
+            focus: Default::default(),
             observed: None,
             metrics: Default::default(),
             health: Default::default(),
@@ -80,7 +129,19 @@ impl GameSession {
         }
         self.client = None;
         self.away = false;
+        self.focus.reset();
         self.status.clear();
+    }
+    /// Transitions into or out of AFK (`Sitting out`).
+    pub fn set_away(&mut self, away: bool) -> bool {
+        if self.away == away || !self.joined() {
+            return false;
+        }
+        if self.request(Command::Afk(away)) {
+            self.away = away;
+            return true;
+        }
+        false
     }
     /// Performs one of the racer's actions, as a key press or a HUD button would.
     pub fn act(&mut self, action: ClientAction) {
@@ -172,11 +233,13 @@ impl GameSession {
             }
         }
         let mut finished = false;
+        let mut server_afk = false;
         if let Some(client) = self.client.as_ref() {
             let view = client.view();
             if view.phase != "racing" || view.player.destroyed > 0.0 || view.player.afk {
                 self.metrics.inactive();
             }
+            server_afk = view.player.afk;
             self.metrics.acknowledged(view.movement_ack, now);
             if view.phase != self.phase {
                 self.phase = view.phase.to_owned();
@@ -191,6 +254,9 @@ impl GameSession {
                 self.observed = Some(state);
             }
         }
+        if server_afk && !self.away {
+            self.set_away(true);
+        }
         // The board changes when a match finishes; ask for it then.
         if finished {
             self.request(Command::Leaderboard);
@@ -200,7 +266,7 @@ impl GameSession {
         let Some(transport) = self.transport.as_ref() else {
             return;
         };
-        if now - self.last_send < 1.0 / 30.0 || transport.commands.is_full() {
+        if now - self.last_send < 1.0 / 30.0 || transport.commands.len() >= 4 {
             return;
         }
         let Some(client) = self.client.as_mut() else {
@@ -350,7 +416,7 @@ pub fn run(mut config: Config) -> Result<(), Box<dyn Error>> {
 }
 pub(crate) fn drive(
     mut session: ResMut<GameSession>,
-    menu: Res<crate::gui::Menu>,
+    mut menu: ResMut<crate::gui::Menu>,
     chat: Res<crate::chat::ChatPanel>,
     keys: Res<ButtonInput<KeyCode>>,
     windows: Query<&Window>,
@@ -358,6 +424,18 @@ pub(crate) fn drive(
 ) {
     let now = session.epoch.elapsed().as_secs_f64();
     session.receive(now);
+    let window_focused = windows.iter().any(|w| w.focused);
+    let pilot = std::env::var_os("WILD_WHEELS_PILOT_SPECIAL").is_some();
+    let automated = windows.is_empty() || menu.is_benchmark() || pilot;
+    let away = session.away;
+    let phase = session.client.as_ref().map(|c| c.view().phase.to_owned());
+    if session
+        .focus
+        .should_sit_out(now, window_focused, phase.as_deref(), away, automated)
+        && session.set_away(true)
+    {
+        menu.open = false;
+    }
     // A window in the background draws slowly by design; that is not a problem to report.
     let (racing, clock) = session.client.as_ref().map_or((false, (0, 0.0)), |client| {
         let view = client.view();
@@ -366,11 +444,11 @@ pub(crate) fn drive(
             (view.epoch, view.elapsed),
         )
     });
-    let racing = racing && !session.away && windows.iter().any(|w| w.focused);
+    let racing = racing && !session.away && window_focused;
     let heard = session.heard;
     session.health.frame(now, racing, heard, clock);
     // Keys pressed while the menu is open belong to the menu.
-    let focused = windows.iter().any(|w| w.focused) && !menu.open && !chat.capture_frame;
+    let focused = window_focused && !menu.open && !chat.capture_frame;
     let held = |codes: &[KeyCode]| focused && codes.iter().any(|key| keys.pressed(*key));
     let input = ClientInput {
         keys: u32::from(held(&[KeyCode::ArrowUp, KeyCode::KeyW]))
@@ -387,7 +465,7 @@ pub(crate) fn drive(
         return;
     };
     // A developer run can hand the controls to the sparring pilot.
-    let input = match std::env::var_os("WILD_WHEELS_PILOT_SPECIAL").is_some() {
+    let input = match pilot {
         true => crate::pilot::drive(client, now),
         false => input,
     };
@@ -441,7 +519,9 @@ pub(crate) fn drive(
     let sounds = client.drain_audio();
     session.sounds.extend(sounds);
     session.voices.extend(voices);
-    session.send(input, now);
+    if window_focused || automated {
+        session.send(input, now);
+    }
 }
 fn headless(config: Config) -> Result<(), Box<dyn Error>> {
     let seconds = config.seconds;
@@ -512,4 +592,66 @@ fn headless(config: Config) -> Result<(), Box<dyn Error>> {
         );
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn losing_window_focus_during_countdown_or_racing_immediately_triggers_afk() {
+        let mut focus = FocusAfk::default();
+        assert!(!focus.should_sit_out(1.0, true, Some("racing"), false, false));
+        assert!(focus.should_sit_out(1.1, false, Some("racing"), false, false));
+
+        focus.reset();
+        assert!(!focus.should_sit_out(2.0, true, Some("countdown"), false, false));
+        assert!(focus.should_sit_out(2.1, false, Some("countdown"), false, false));
+    }
+
+    #[test]
+    fn match_starting_while_window_is_unfocused_in_background_immediately_triggers_afk() {
+        let mut focus = FocusAfk::default();
+        // Player finishes a match and switches away from the window.
+        assert!(!focus.should_sit_out(10.0, true, Some("finished"), false, false));
+        assert!(!focus.should_sit_out(11.0, false, Some("finished"), false, false));
+        assert!(!focus.should_sit_out(14.0, false, Some("finished"), false, false));
+        // Another player starts a match while this window is still unfocused.
+        assert!(focus.should_sit_out(15.0, false, Some("countdown"), false, false));
+    }
+
+    #[test]
+    fn unfocused_lobby_window_waits_fifteen_seconds_before_sitting_out() {
+        let mut focus = FocusAfk::default();
+        assert!(!focus.should_sit_out(5.0, true, Some("ready"), false, false));
+        assert!(!focus.should_sit_out(10.0, false, Some("ready"), false, false));
+        assert!(!focus.should_sit_out(24.9, false, Some("ready"), false, false));
+        assert!(focus.should_sit_out(25.0, false, Some("ready"), false, false));
+
+        // Returning focus before 15 seconds resets the background timer.
+        let mut focus = FocusAfk::default();
+        assert!(!focus.should_sit_out(0.0, true, Some("finished"), false, false));
+        assert!(!focus.should_sit_out(1.0, false, Some("finished"), false, false));
+        assert!(!focus.should_sit_out(12.0, false, Some("finished"), false, false));
+        assert!(!focus.should_sit_out(12.5, true, Some("finished"), false, false));
+        assert!(!focus.should_sit_out(20.0, false, Some("finished"), false, false));
+        assert!(!focus.should_sit_out(34.9, false, Some("finished"), false, false));
+        assert!(focus.should_sit_out(35.0, false, Some("finished"), false, false));
+    }
+
+    #[test]
+    fn startup_grace_and_automated_runs_do_not_falsely_sit_out() {
+        // Before the OS has focused a newly spawned window for the first time,
+        // wait the full 15s threshold even if `--auto-start` enters countdown immediately.
+        let mut focus = FocusAfk::default();
+        assert!(!focus.should_sit_out(0.1, false, Some("countdown"), false, false));
+        assert!(!focus.should_sit_out(15.0, false, Some("racing"), false, false));
+        assert!(focus.should_sit_out(15.1, false, Some("racing"), false, false));
+
+        // Automated benchmark/pilot runs never sit out due to window focus.
+        let mut automated = FocusAfk::default();
+        assert!(!automated.should_sit_out(1.0, true, Some("racing"), false, true));
+        assert!(!automated.should_sit_out(2.0, false, Some("racing"), false, true));
+        assert!(!automated.should_sit_out(100.0, false, Some("ready"), false, true));
+    }
 }
