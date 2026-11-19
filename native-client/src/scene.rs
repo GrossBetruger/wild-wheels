@@ -707,7 +707,8 @@ fn effects(stage: &mut Stage, view: &ClientView, xray: bool) {
                 let radius = fx.radius.unwrap_or(10.0) as f32 / FIRE_RING_RADIUS;
                 transform.scale = Vec3::new(radius, 1.0, radius);
                 match (fx.kind.as_str(), fx.color.as_deref()) {
-                    ("fireRingOut", _) => stage.aged("effect:fireRingOut", fx.age),
+                    ("fireRingOut", Some("#4abaff")) => stage.aged("effect:fireRingOut:blue", fx.age),
+                    ("fireRingOut", _) => stage.aged("effect:fireRingOut:orange", fx.age),
                     (_, Some("#4abaff")) => stage.clip("effect:fireRing:blue"),
                     _ => stage.clip("effect:fireRing:orange"),
                 }
