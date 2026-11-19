@@ -109,8 +109,8 @@ clip name in `scene.rs`.
   Houston's flying helmet, muzzle flashes, Tammy's arrival scale-up, the dizzy
   camera wobble and the bomber views.
 - Master-Yuda's drift lean is the one piece ported by hand, in `scene.rs`.
-- Fire rings and their burnouts have separate orange and blue clips at 24 fps. They are recorded at one radius and scaled, which also scales flame width.
-- Ashes and celebrations are recorded at 12 frames per second to
+- Fire rings are recorded at one radius and scaled, which also scales flame width.
+- Ashes, celebrations and fire rings are recorded at 12 frames per second to
   bound the pack size: about 120 MiB of geometry, compressed to about 45 MiB.
 - Loops whose browser period does not divide their length restart with a small jump.
 - Native lighting approximates the browser's `0.62 + 0.38 * n·l` shading; the

@@ -87,7 +87,6 @@ impl Scene {
         let racer = |text: &str| text.parse::<usize>().ok().filter(|driver| *driver < 15);
         let (kind, driver, state) = match parts.as_slice() {
             ["boost"] => ("boost", 9, None),
-            ["fire-ring"] => ("fire-ring", 10, None),
             ["nightmare"] => ("nightmare", 7, None),
             ["nightmare-end"] => ("nightmare-end", 7, None),
             ["reverse-psychology"] => ("reverse-psychology", 0, None),
@@ -99,36 +98,6 @@ impl Scene {
         };
         let step = Step::new;
         let steps = match (kind, state) {
-            ("fire-ring", None) if driver == 10 => vec![
-                step(
-                    "left drift",
-                    2.0,
-                    "idle",
-                    Some("effect:fireRing:orange"),
-                    false,
-                ),
-                step(
-                    "burnout",
-                    2.4,
-                    "idle",
-                    Some("effect:fireRingOut:orange"),
-                    true,
-                ),
-                step(
-                    "right drift",
-                    2.0,
-                    "idle",
-                    Some("effect:fireRing:blue"),
-                    false,
-                ),
-                step(
-                    "burnout",
-                    2.4,
-                    "idle",
-                    Some("effect:fireRingOut:blue"),
-                    true,
-                ),
-            ],
             ("reverse-psychology", None) => vec![
                 step("normal controls", 2.0, "idle", None, false),
                 step(
@@ -254,9 +223,7 @@ impl Scene {
     fn required(&self) -> String {
         let step = &self.steps[1];
         match &step.overlay {
-            Some(overlay) if overlay.starts_with("overlay:") || overlay.starts_with("effect:") => {
-                overlay.clone()
-            }
+            Some(overlay) if overlay.starts_with("overlay:") => overlay.clone(),
             Some(overlay) => format!("overlay:{}:{overlay}", self.driver),
             None => format!("driver:{}:{}", self.driver, step.racer),
         }
@@ -432,9 +399,6 @@ fn setup(
 /// Where the camera stands and looks. Scenes seen from behind are circled slowly,
 /// `turned` radians so far, so their sheen can be watched shifting with the view.
 fn viewpoint(scene: &Scene, turned: f32) -> (Vec3, Vec3) {
-    if scene.steps[0].overlay.as_deref() == Some("effect:fireRing:orange") {
-        return (Vec3::new(28.0, 31.0, 36.0), Vec3::Y * 2.5);
-    }
     if scene
         .steps
         .iter()
