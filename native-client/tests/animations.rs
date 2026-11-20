@@ -183,6 +183,7 @@ macro_rules! animations {
 // Racers that draw a transition through the same browser code, differing only in
 // color, share one test. The most interesting run first.
 animations! {
+    t00_master_yuda_ring_of_fire: 0, "fire-ring", true;
     t00_houston_nightmare_fuel: 0, "nightmare", false;
     t00_houston_nightmare_fuel_wind_down: 0, "nightmare-end", true;
     t00_reverse_psychology_cricket_puppet: 0, "reverse-psychology", true;

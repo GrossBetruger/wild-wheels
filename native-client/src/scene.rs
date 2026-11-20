@@ -77,6 +77,8 @@ enum Role {
     Skid,
     Supply,
     Effect,
+    /// A skull circling one of Master-Yuda's fire rings.
+    Rider,
     Bomb,
     Chaff,
     Stink,
@@ -95,7 +97,22 @@ const ENDINGS: [Option<f64>; 6] = [Some(1.0), Some(1.5), Some(1.5), None, None, 
 /// Racers whose special ability ramps in from its starting duration.
 const SPECIAL_STARTS: [(usize, f64); 1] = [(11, 12.0)];
 /// Matches `FIRE_RING_RADIUS` in scripts/build/graphics-port.mjs.
-const FIRE_RING_RADIUS: f32 = 20.0;
+pub const FIRE_RING_RADIUS: f32 = 20.0;
+/// Matches `FIRE_RING_RIDERS` in characters/master-yuda/fire-ring-visual.js.
+pub const FIRE_RING_RIDERS: usize = 6;
+/// Where skull rider `index` of a fire ring stands relative to the ring's centre,
+/// and how far ahead its clip plays. The ring's clip is stretched to its radius,
+/// which a skull must not follow, so each rider is one recorded clip placed here by
+/// the browser's `fireRingRiderAngle` and `fireRingRiderSize`. `spin` is 1 for an
+/// orange ring and -1 for a blue one. Riders on the off beat bob and laugh half a
+/// cycle apart, which two thirds of a second into the clip also does.
+pub fn fire_ring_rider(index: usize, radius: f32, spin: f32, elapsed: f32) -> (Transform, f32) {
+    let angle = (index as f32 + spin * elapsed / 2.0) * TAU / FIRE_RING_RIDERS as f32;
+    let place = Transform::from_xyz(radius * angle.sin(), 0.0, radius * angle.cos())
+        .with_rotation(Quat::from_rotation_y(angle))
+        .with_scale(Vec3::splat((0.5 + radius / 40.0).min(1.0)));
+    (place, (index % 2) as f32 * 2.0 / 3.0)
+}
 
 #[derive(Resource, Default)]
 pub struct SceneCache {
@@ -682,7 +699,7 @@ fn racers(stage: &mut Stage, view: &ClientView, bats: &Bats, dt: f32, now: f32, 
     }
 }
 
-fn effects(stage: &mut Stage, view: &ClientView, xray: bool) {
+fn effects(stage: &mut Stage, view: &ClientView, xray: bool, elapsed: f32) {
     // In X-ray, the viewer's own bombs and everyone else's are told apart by color.
     let side = |owner: usize| match owner == view.you {
         true => crate::xray::OWN,
@@ -704,12 +721,29 @@ fn effects(stage: &mut Stage, view: &ClientView, xray: bool) {
                 )
             }
             "fireRing" | "fireRingOut" => {
-                let radius = fx.radius.unwrap_or(10.0) as f32 / FIRE_RING_RADIUS;
-                transform.scale = Vec3::new(radius, 1.0, radius);
-                match (fx.kind.as_str(), fx.color.as_deref()) {
-                    ("fireRingOut", _) => stage.aged("effect:fireRingOut", fx.age),
-                    (_, Some("#4abaff")) => stage.clip("effect:fireRing:blue"),
-                    _ => stage.clip("effect:fireRing:orange"),
+                let radius = fx.radius.unwrap_or(10.0) as f32;
+                let stretch = radius / FIRE_RING_RADIUS;
+                transform.scale = Vec3::new(stretch, 1.0, stretch);
+                let (color, spin) = match fx.color.as_deref() {
+                    Some("#4abaff") => ("blue", -1.0),
+                    _ => ("orange", 1.0),
+                };
+                let out = fx.kind == "fireRingOut";
+                for rider in 0..FIRE_RING_RIDERS {
+                    let (mut place, ahead) = fire_ring_rider(rider, radius, spin, elapsed);
+                    place.translation += Vec3::new(fx.wx as f32, 0.0, fx.wz as f32);
+                    let play = match out {
+                        true => stage.aged(&format!("effect:fireRingOut:rider:{color}"), fx.age),
+                        false => Play {
+                            time: Some(elapsed + ahead),
+                            ..stage.clip(&format!("effect:fireRing:rider:{color}"))
+                        },
+                    };
+                    stage.show(Role::Rider, index * FIRE_RING_RIDERS + rider, play, place);
+                }
+                match out {
+                    true => stage.aged(&format!("effect:fireRingOut:{color}"), fx.age),
+                    false => stage.clip(&format!("effect:fireRing:{color}")),
                 }
             }
             kind => {
@@ -1001,7 +1035,7 @@ pub fn sync(
             at(supply.wx, 0.0, supply.wz, 0.0),
         );
     }
-    effects(&mut stage, &view, seeing);
+    effects(&mut stage, &view, seeing, time.elapsed_secs());
     stage.retire();
     // The browser's chase camera, including its wider view while boosting or drifting.
     let p = view.player;

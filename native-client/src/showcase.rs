@@ -7,7 +7,7 @@ use crate::{
     config::Config,
     plumage::Wind,
     ported::{BLENDING, Graphics, Ported, PortedGraphicsPlugin, STILL},
-    scene::FollowCamera,
+    scene::{FIRE_RING_RADIUS, FIRE_RING_RIDERS, FollowCamera, fire_ring_rider},
 };
 use bevy::{
     app::{AppExit, ScheduleRunnerPlugin},
@@ -87,6 +87,7 @@ impl Scene {
         let racer = |text: &str| text.parse::<usize>().ok().filter(|driver| *driver < 15);
         let (kind, driver, state) = match parts.as_slice() {
             ["boost"] => ("boost", 9, None),
+            ["fire-ring"] => ("fire-ring", 10, None),
             ["nightmare"] => ("nightmare", 7, None),
             ["nightmare-end"] => ("nightmare-end", 7, None),
             ["reverse-psychology"] => ("reverse-psychology", 0, None),
@@ -98,6 +99,36 @@ impl Scene {
         };
         let step = Step::new;
         let steps = match (kind, state) {
+            ("fire-ring", None) if driver == 10 => vec![
+                step(
+                    "ring of fire, left drift",
+                    2.0,
+                    "idle",
+                    Some("effect:fireRing:orange"),
+                    false,
+                ),
+                step(
+                    "burning out",
+                    2.4,
+                    "idle",
+                    Some("effect:fireRingOut:orange"),
+                    true,
+                ),
+                step(
+                    "ring of fire, right drift",
+                    2.0,
+                    "idle",
+                    Some("effect:fireRing:blue"),
+                    false,
+                ),
+                step(
+                    "burning out",
+                    2.4,
+                    "idle",
+                    Some("effect:fireRingOut:blue"),
+                    true,
+                ),
+            ],
             ("reverse-psychology", None) => vec![
                 step("normal controls", 2.0, "idle", None, false),
                 step(
@@ -223,7 +254,9 @@ impl Scene {
     fn required(&self) -> String {
         let step = &self.steps[1];
         match &step.overlay {
-            Some(overlay) if overlay.starts_with("overlay:") => overlay.clone(),
+            Some(overlay) if overlay.starts_with("overlay:") || overlay.starts_with("effect:") => {
+                overlay.clone()
+            }
             Some(overlay) => format!("overlay:{}:{overlay}", self.driver),
             None => format!("driver:{}:{}", self.driver, step.racer),
         }
@@ -251,6 +284,9 @@ const SIZE: (u32, u32) = (1000, 700);
 struct Racer;
 #[derive(Component)]
 struct Layer;
+/// One of the skulls circling a fire ring.
+#[derive(Component)]
+struct Rider(usize);
 #[derive(Component)]
 struct Caption;
 
@@ -307,7 +343,7 @@ pub fn run(config: Config, name: &str) -> Result<(), Box<dyn Error>> {
         .add_systems(Startup, setup)
         .add_systems(
             Update,
-            (play, crate::ported::animate, capture, controls).chain(),
+            (play, ride, crate::ported::animate, capture, controls).chain(),
         )
         .run();
     Ok(())
@@ -379,6 +415,14 @@ fn setup(
         Ported::new(None, tint, None),
         Layer,
     ));
+    for rider in 0..FIRE_RING_RIDERS {
+        commands.spawn((
+            Transform::default(),
+            Visibility::default(),
+            Ported::new(None, [255; 3], None),
+            Rider(rider),
+        ));
+    }
     commands.spawn((
         Text::default(),
         TextFont {
@@ -399,6 +443,9 @@ fn setup(
 /// Where the camera stands and looks. Scenes seen from behind are circled slowly,
 /// `turned` radians so far, so their sheen can be watched shifting with the view.
 fn viewpoint(scene: &Scene, turned: f32) -> (Vec3, Vec3) {
+    if scene.steps[0].overlay.as_deref() == Some("effect:fireRing:orange") {
+        return (Vec3::new(28.0, 31.0, 36.0), Vec3::Y * 2.5);
+    }
     if scene
         .steps
         .iter()
@@ -519,6 +566,39 @@ fn play(
             "{name}: {}  {into:.1}s\nBlending between recorded frames: {blending}\nB toggles blending   Esc quits",
             step.label
         );
+    }
+}
+
+/// A fire ring's skull riders are clips of their own, placed as the game places them.
+fn ride(
+    show: Res<Show>,
+    time: Res<Time>,
+    graphics: Res<Graphics>,
+    mut riders: Query<(&mut Ported, &mut Transform, &Rider)>,
+) {
+    let (step, into) = step_at(&show.scene, time.elapsed_secs());
+    let ring = step.overlay.as_deref().and_then(|overlay| {
+        let (kind, color) = overlay.strip_prefix("effect:")?.split_once(':')?;
+        matches!(kind, "fireRing" | "fireRingOut").then_some((kind, color))
+    });
+    // Like every steady loop, the riders hold still while screenshots are taken.
+    let clock = match show.capture {
+        Some(_) => 0.0,
+        None => time.elapsed_secs(),
+    };
+    for (mut player, mut transform, rider) in &mut riders {
+        let Some((kind, color)) = ring else {
+            player.clip = None;
+            continue;
+        };
+        let spin = if color == "blue" { -1.0 } else { 1.0 };
+        let (place, ahead) = fire_ring_rider(rider.0, FIRE_RING_RADIUS, spin, clock);
+        *transform = place;
+        player.clip = graphics.clip(&format!("effect:{kind}:rider:{color}"));
+        player.time = match step.once {
+            true => Some(into),
+            false => Some(clock + ahead),
+        };
     }
 }
 
