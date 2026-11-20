@@ -12,6 +12,10 @@ import { createBinaryEncoder, decodeBinarySnapshot } from '../networking/binary-
 const encodeBinarySnapshot = createBinaryEncoder();
 
 const KEYS = new Set(['arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'w', 'a', 's', 'd', 'shift', ' ']);
+function matchLimit(value, max) {
+  if (!Number.isInteger(value) || value < 1 || value > max) throw problem(400, `Choose a whole number from 1 to ${max}.`);
+  return value;
+}
 const problem = (status, message) => Object.assign(new Error(message), { status });
 const SESSION_COOKIE = 'wild-wheels-session';
 function sessionToken(req) { return req.headers.authorization?.match(/^Bearer ([a-f0-9]{64})$/)?.[1] ?? req.headers.cookie?.split(';').map(part => part.trim()).find(part => part.startsWith(`${SESSION_COOKIE}=`))?.slice(SESSION_COOKIE.length + 1); }
@@ -82,7 +86,7 @@ export class Multiplayer {
       }
     }
   }
-  roomConfig(room) { return { code: room.code, arena: room.arena, bots: room.botCount, specialAbilities: room.specialAbilities !== false, host: room.host, epoch: room.soundEpoch, seed: room.seed ?? 0, players: [...room.members.values()].map(p => ({ id: p.id, name: p.name, color: p.color, driver: p.driver, role: p.role, afk: Boolean(p.afk), wantsToPlay: Boolean(p.wantsToPlay), playRequestRefused: Boolean(p.playRequestRefused) })), startRequest: room.startRequest ? { id: room.startRequest.id, remainingMs: Math.max(0, room.startRequest.deadline - this.startNow()) } : null }; }
+  roomConfig(room) { return { code: room.code, arena: room.arena, bots: room.botCount, targetScore: room.targetScore, matchMinutes: room.matchMinutes, specialAbilities: room.specialAbilities !== false, host: room.host, epoch: room.soundEpoch, seed: room.seed ?? 0, players: [...room.members.values()].map(p => ({ id: p.id, name: p.name, color: p.color, driver: p.driver, role: p.role, afk: Boolean(p.afk), wantsToPlay: Boolean(p.wantsToPlay), playRequestRefused: Boolean(p.playRequestRefused) })), startRequest: room.startRequest ? { id: room.startRequest.id, remainingMs: Math.max(0, room.startRequest.deadline - this.startNow()) } : null }; }
   syncRoom(room) { const config = this.roomConfig(room), text = JSON.stringify(config); if (text === room.configText) return; room.core.configure(config); room.configText = text; }
   makeWorld(room) {
     room.photoAlbum = new PhotoAlbum(); room.startRequest = null; room.soundEpoch = (room.soundEpoch ?? 0) + 1; room.seed = randomInt(0x100000000); room.botCount = Math.min(room.botCount, 6 - room.members.size);
@@ -247,7 +251,7 @@ export class Multiplayer {
           if (!Number.isInteger(body.arena) || body.arena < 0 || body.arena > 1) throw problem(400, 'Choose an arena.');
           if (body.bots !== undefined && (!Number.isInteger(body.bots) || body.bots < 0 || body.bots > 5)) throw problem(400, 'Choose 0–5 bots.');
           const code = allocateRoomCode(this.rooms);
-          room = { code, invite: randomBytes(32).toString('hex'), arena: body.arena, botCount: body.bots ?? 1, host: 0, members: new Map() }; this.makeWorld(room);
+          room = { code, invite: randomBytes(32).toString('hex'), arena: body.arena, botCount: body.bots ?? 1, targetScore: matchLimit(body.targetScore === undefined ? 10 : body.targetScore, 100), matchMinutes: matchLimit(body.matchMinutes === undefined ? 3 : body.matchMinutes, 30), host: 0, members: new Map() }; this.makeWorld(room);
           const member = this.join(room, body); for (const old of this.rooms.values()) this.destroyRoom(old); this.rooms.set(code, room);
           sessionCookie(req, res, member.token, this.security); json(200, { token: member.token, ...this.snapshot(room, member) }); return true;
         }
@@ -335,7 +339,14 @@ export class Multiplayer {
         }
         case '/api/control': {
           if (room.host !== member.id) throw problem(403, 'Only the room host can start or change the match.');
-          switch (body.action) { case 'special-abilities': if (typeof body.enabled !== 'boolean') throw problem(400, 'Choose abilities on or off.'); room.specialAbilities = body.enabled; this.syncRoom(room); break; case 'start': if (!['ready', 'finished'].includes(room.core.status.phase)) throw problem(409, 'Match already running.'); this.makeWorld(room); room.core.start(); break; case 'refuse-start': this.refusePlayRequest(member, body.requestId); break; case 'reset': this.makeWorld(room); break; case 'arena': if (!Number.isInteger(body.arena) || body.arena < 0 || body.arena > 1) throw problem(400, 'Choose an arena.'); room.arena = body.arena; this.makeWorld(room); break; case 'bots': if (!['ready', 'finished'].includes(room.core.status.phase)) throw problem(409, 'Change bots before the next match.'); if (!Number.isInteger(body.bots) || body.bots < 0 || body.bots > 6 - room.members.size) throw problem(400, 'Too many bots for this room.'); room.botCount = body.bots; this.makeWorld(room); break; default: throw problem(400, 'Unknown match control.'); }
+          switch (body.action) {
+            case 'targetScore':
+            case 'matchMinutes':
+              if (!['ready', 'finished'].includes(room.core.status.phase)) throw problem(409, 'Change match limits between matches.');
+              room[body.action] = matchLimit(body.value, body.action === 'targetScore' ? 100 : 30);
+              this.syncRoom(room);
+              break;
+            case 'special-abilities': if (typeof body.enabled !== 'boolean') throw problem(400, 'Choose abilities on or off.'); room.specialAbilities = body.enabled; this.syncRoom(room); break; case 'start': if (!['ready', 'finished'].includes(room.core.status.phase)) throw problem(409, 'Match already running.'); this.makeWorld(room); room.core.start(); break; case 'refuse-start': this.refusePlayRequest(member, body.requestId); break; case 'reset': this.makeWorld(room); break; case 'arena': if (!Number.isInteger(body.arena) || body.arena < 0 || body.arena > 1) throw problem(400, 'Choose an arena.'); room.arena = body.arena; this.makeWorld(room); break; case 'bots': if (!['ready', 'finished'].includes(room.core.status.phase)) throw problem(409, 'Change bots before the next match.'); if (!Number.isInteger(body.bots) || body.bots < 0 || body.bots > 6 - room.members.size) throw problem(400, 'Too many bots for this room.'); room.botCount = body.bots; this.makeWorld(room); break; default: throw problem(400, 'Unknown match control.'); }
           this.broadcast(room); json(200, { ok: true }); break;
         }
         case '/api/kick': {

@@ -28,9 +28,9 @@ export class NetworkGame {
   token=null;state=null;paused=false;sequence=0;actions=[];client=null;rtt=0;lastPing=-Infinity;
   // For the problem log: where to report, and when the server was last heard from.
   log=()=>{};lastPacket=0;
-  constructor({anchor,keys,driver,arena,onState,onLeave,unlock,sound=()=>{},role='driver'}){
+  constructor({anchor,limits=()=>({}),keys,driver,arena,onState,onLeave,unlock,sound=()=>{},role='driver'}){
     this.preferredColor=savedPlayerColor(document.cookie);this.colorDirty=false;this.colorPending=false;this.colorError='';
-    Object.assign(this,{keys,driver,arena,onState,onLeave,unlock,sound,role});this.dedicated=document.body.classList.contains('dedicated-server');
+    Object.assign(this,{limits,keys,driver,arena,onState,onLeave,unlock,sound,role});this.dedicated=document.body.classList.contains('dedicated-server');
     this.panel=document.createElement('section');this.panel.className='network-panel';this.panel.setAttribute('aria-label','Multiplayer arena lobby');
     const title=this.title=document.createElement('strong');title.textContent='PLAY TOGETHER · UP TO 6 PLAYERS';
     this.name=document.createElement('input');this.name.placeholder='Your name';this.name.value=savedPlayerName(document.cookie);if(this.name.value==='Player')this.name.value='';this.name.maxLength=24;this.name.setAttribute('aria-label','Player name');
@@ -266,7 +266,7 @@ export class NetworkGame {
     this.connectionStatus();
     this.hostButton.disabled=true;this.status.textContent='Connecting…';
     try{
-      this.unlock().catch(()=>{});if(path==='/api/rooms')await this.refreshInfo();const reply=await this.request(path,{name:this.name.value.trim(),driver:path==='/api/join'?null:this.driver(),role:this.role,arena:this.arena(),bots:Number(this.botCount.value),code:this.invitation.toUpperCase(),invite:this.invite,...(isPlayerColor(this.preferredColor)?{color:this.preferredColor}:{})});
+      this.unlock().catch(()=>{});if(path==='/api/rooms')await this.refreshInfo();const reply=await this.request(path,{name:this.name.value.trim(),driver:path==='/api/join'?null:this.driver(),role:this.role,arena:this.arena(),...(path==='/api/rooms'?this.limits():{}),bots:Number(this.botCount.value),code:this.invitation.toUpperCase(),invite:this.invite,...(isPlayerColor(this.preferredColor)?{color:this.preferredColor}:{})});
       this.adopt(reply);
     }catch(error){this.status.textContent=error.message;this.connectionStatus(error.message);}
     this.connecting=false;this.hostButton.disabled=this.active&&!this.isHost;this.name.disabled=false;

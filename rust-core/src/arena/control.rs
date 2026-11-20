@@ -18,13 +18,18 @@ struct Request {id:u32,remaining_ms:f64}
 pub(super) struct Room {
     #[serde(default="default_capacity")]max_players:usize,
     #[serde(default="abilities_default")]special_abilities:bool,
+    #[serde(default="default_target")]target_score:u32,
+    #[serde(default="default_minutes")]match_minutes:u32,
     #[serde(default)]dedicated:bool,
     code:String,host:Option<usize>,arena:usize,bots:usize,epoch:u32,players:Vec<Player>,
     #[serde(default)]start_request:Option<Request>,#[serde(default)]seed:u32,
 }
+fn default_target()->u32{10}
+fn default_minutes()->u32{3}
 fn default_capacity()->usize{6}
 impl Room {
     pub(super) fn valid(&self)->bool {
+        if !(1..=100).contains(&self.target_score) || !(1..=30).contains(&self.match_minutes) {return false;}
         if self.code.len()!=2||!self.code.bytes().all(|b|b.is_ascii_digit())||!super::valid_capacity(self.max_players)||self.arena>1||self.players.len()>self.max_players||self.bots>self.max_players-self.players.len() {return false;}
         match (self.dedicated,self.host){
             (true,None)=>{if self.start_request.is_some(){return false;}},
@@ -54,12 +59,16 @@ impl Game {
         let mut state=room.seed.max(1);let mut random=||{state^=state<<13;state^=state>>17;state^=state<<5;state as f64/(u32::MAX as f64+1.0)};
         let mut skills=[0.6;MAX_PLAYERS-1];for (i,(low,high)) in [(0.94,1.0),(0.86,0.93),(0.70,0.83),(0.53,0.68),(0.35,0.51)].into_iter().enumerate(){skills[i]=low+random()*(high-low);}
         for i in (1..5).rev(){let j=(random()*(i+1)as f64).floor()as usize;skills.swap(i,j);}
-        let global=Globals{special_abilities:room.special_abilities,mode:"combat".into(),phase:"ready".into(),arena:room.arena,countdown:3.0,duration:180.0,target_score:10.0,rank:6,multiplayer:true,sound_epoch:room.epoch as u64,
+        let global=Globals{special_abilities:room.special_abilities,mode:"combat".into(),phase:"ready".into(),arena:room.arena,countdown:3.0,duration:f64::from(room.match_minutes * 60),target_score:f64::from(room.target_score),rank:6,multiplayer:true,sound_epoch:room.epoch as u64,
             supplies:[(-70.0,-65.0,"missile"),(70.0,65.0,"missile"),(-65.0,70.0,"hedgehog"),(65.0,-70.0,"hedgehog"),(-12.0,48.0,"boost"),(12.0,-48.0,"boost"),(-70.0,0.0,"health"),(70.0,0.0,"health"),(-50.0,-50.0,"hedgeproof"),(50.0,50.0,"tehilim")].into_iter().enumerate().map(|(id,(wx,wz,kind))|Supply{random_spawn:true,id:id as u32,wx,wz,kind:kind.into(),cooldown:match kind{"hedgeproof"|"tehilim"=>30.0,_=>0.0},..Supply::default()}).collect(),..Globals::default()};
         let mut game=Self::from_seed(Seed{global,player:initial_actor(0,0.85,room.max_players),bots:(1..room.max_players).map(|id|initial_actor(id,skills[id-1],room.max_players)).collect()})?;
         game.configure_room(room);game.global.supply_seed=state;for index in 0..game.global.supplies.len(){if !supplies::place(&mut game.global,&game.actors,index){game.global.supplies[index].cooldown=0.25;}}Ok(game)
     }
     pub(super) fn configure_room(&mut self,room:&Room){
+        if matches!(self.global.phase.as_str(), "ready" | "finished") {
+            self.global.target_score = f64::from(room.target_score);
+            self.global.duration = f64::from(room.match_minutes * 60);
+        }
         self.global.host=room.host;self.global.special_abilities=room.special_abilities;if !room.special_abilities{self.global.time_stop=0.0;self.global.time_owner=None;self.global.effects.retain(|f|f.kind!="yudaSmoke");for supply in &mut self.global.supplies{supply.restore_home();}for a in &mut self.actors{a.special_active=0.0;}}
         // Reserve human colors first, so bots yield a swatch when a player
         // chooses it. Retain existing colors whenever they remain available.

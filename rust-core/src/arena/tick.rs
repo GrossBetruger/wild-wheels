@@ -21,7 +21,7 @@ impl Game{
         if self.global.phase=="countdown"{
             self.acknowledge_idle_commands(&frame);
             self.global.countdown-=dt;
-            if self.global.countdown<=0.0{self.global.phase="racing".into();self.actors[0].notice="BATTLE ON! · FIRST TO 10 KILLS".into();self.actors[0].notice_time=3.0;}return;
+            if self.global.countdown<=0.0{self.global.phase="racing".into();self.actors[0].notice=format!("BATTLE ON! · FIRST TO {} KILLS", self.global.target_score);self.actors[0].notice_time=3.0;}return;
         }
         self.special_tick(frame.dt);
         self.nightmare_tick(frame.dt);

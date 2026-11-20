@@ -5,6 +5,20 @@ import {decodeBinarySnapshot} from '../../networking/binary-wire.js';
 import {ArenaClient} from '../../gameplay/arena-core.js';
 import {playerColors} from '../../gameplay/player-colors.js';
 
+test('the room broadcasts the chosen kill target and clock to all fighters', () => {
+  const room = {code:'07', host:0, arena:0, bots:0, epoch:1, players:[
+    {id:0, name:'Host', driver:0, role:'driver'}, {id:1, name:'Guest', driver:1, role:'driver'},
+  ]};
+  const core = ArenaCore.room(room);
+  core.configure({...room, targetScore:4, matchMinutes:30});
+  for (const player of [0, 1]) {
+    const {world} = decodeBinarySnapshot(core.packet(player));
+    assert.equal(world.targetScore, 4);
+    assert.equal(world.duration, 1800);
+  }
+  for (const matchMinutes of [0, 31, 1.5]) assert.throws(() => core.configure({...room, matchMinutes}));
+});
+
 test('a Rust-created multiplayer room spawns distinct drivers and two of each bomb for its bomber',()=>{
   const core=ArenaCore.room({code:'07',host:0,arena:1,bots:2,epoch:3,seed:41,players:[{id:0,name:'Oren',driver:0,role:'driver'},{id:1,name:'Bomber',driver:2,role:'bomber'}]});
   const host=decodeBinarySnapshot(core.packet(0)),guest=decodeBinarySnapshot(core.packet(1));

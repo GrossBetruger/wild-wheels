@@ -58,6 +58,7 @@ pub enum Act {
     Start,
     Arena(usize),
     Bots(usize),
+    MatchLimit(&'static str, usize),
     Abilities(bool),
     /// Opens the in-game menu, as Escape does.
     Menu,
@@ -292,6 +293,7 @@ pub fn control(
             Act::Join => menu.join(&mut session),
             Act::Start => control(&mut session, json!({"action":"start"})),
             Act::Arena(arena) => control(&mut session, json!({"action":"arena","arena":arena})),
+            Act::MatchLimit(field, value) => control(&mut session, json!({"action":field,"value":value})),
             Act::Bots(bots) => control(&mut session, json!({"action":"bots","bots":bots})),
             Act::Abilities(enabled) => control(
                 &mut session,
@@ -499,7 +501,7 @@ pub fn draw(
             menu.server, menu.name, menu.field, menu.driver, menu.notice, menu.color
         ),
         (Screen::Lobby, Some(view)) => format!(
-            "lobby|{}|{}|{}|{}|{}|{}|{:?}|{}|{}",
+            "lobby|{}|{}|{}|{}|{}|{}|{:?}|{}|{}|{}|{}",
             view.arena,
             view.actors
                 .iter()
@@ -519,7 +521,9 @@ pub fn draw(
             session.status,
             menu.color,
             session.colors.pending,
-            session.colors.message
+            session.colors.message,
+            view.target_score,
+            view.duration
         ),
         _ => format!("{screen:?}|{}|{}", session.away, session.status),
     };
@@ -623,6 +627,16 @@ pub fn draw(
             ui.text(row, &format!("  {bots}  "), 18.0, Color::WHITE);
             let more = (bots + 1).min(ROOM_CAPACITY.saturating_sub(people));
             ui.button(row, "+", Act::Bots(more), BUTTON, px(44));
+            for (label, field, value, maximum) in [
+                ("KILLS TO WIN", "targetScore", view.target_score as usize, 100),
+                ("MINUTES", "matchMinutes", (view.duration / 60.0) as usize, 30),
+            ] {
+                let row = ui.row(panel);
+                ui.text(row, label, 13.0, MUTED);
+                ui.button(row, "-", Act::MatchLimit(field, value.saturating_sub(1).max(1)), BUTTON, px(44));
+                ui.text(row, &format!("  {value}  "), 18.0, Color::WHITE);
+                ui.button(row, "+", Act::MatchLimit(field, (value + 1).min(maximum)), BUTTON, px(44));
+            }
             ui.text(panel, "SPECIAL ABILITIES", 13.0, MUTED);
             let row = ui.row(panel);
             for (label, enabled) in [("On", true), ("Off", false)] {

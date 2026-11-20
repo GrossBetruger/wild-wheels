@@ -45,7 +45,8 @@ const qualitySelect = document.createElement('select'); qualitySelect.setAttribu
 const fpsMeter = document.createElement('span'); fpsMeter.id = 'render-fps'; fpsMeter.textContent = 'Measuring FPS…'; fpsMeter.title = renderer.gpuName; renderControls.append(graphicsLabel, fpsMeter); if (renderer.softwareGPU) { const warning = document.createElement('span'); warning.textContent = 'SOFTWARE GPU'; warning.title = 'Chrome is rendering graphics without hardware acceleration.'; renderControls.append(warning); } document.querySelector('.race-panel').append(renderControls);
 const buildLabel = document.createElement('span'); buildLabel.id = 'build-version'; buildLabel.textContent = document.body.dataset.build ? `BUILD ${document.body.dataset.build}` : 'BUILD …'; buildLabel.title = 'Compare this build ID on both computers after refreshing.'; renderControls.append(buildLabel);
 globalThis.__syncBuildLabel?.();
-const newGame = () => { if (mobile) bomberWeapon = 'abomb'; return applyPlayerColors(mode === 'combat' ? (mobile ? equipBomber(createBattle(selected, track)) : createBattle(selected, track)) : createRace(selected, track), network.preferredColor); };
+const soloLimits = {targetScore: 10, matchMinutes: 3};
+const newGame = () => { if (mobile) bomberWeapon = 'abomb'; return applyPlayerColors(mode === 'combat' ? (mobile ? equipBomber(createBattle(selected, track, Math.random, soloLimits)) : createBattle(selected, track, Math.random, soloLimits)) : createRace(selected, track), network.preferredColor); };
 const useWeapon = () => network.active ? network.action('fire') : mode === 'combat' ? fireBattle(race) : useItem(race);
 const switchWeapon = () => network.active ? network.action('cycle') : cycleItem(race);
 const chaff = () => network.active ? network.action('chaff') : mode === 'combat' ? releaseChaff(race) : false;
@@ -112,15 +113,37 @@ const mapSwitch = document.createElement('nav'); mapSwitch.className = 'map-swit
 const mapCaption = document.createElement('strong'); mapCaption.textContent = 'CHOOSE MAP'; mapSwitch.append(mapCaption);
 const mapButtons = Array.from({ length: 2 }, (_, index) => { const button = document.createElement('button'); button.id = `map-choice-${index}`; button.type = 'button'; button.onclick = () => chooseMap(index); mapSwitch.append(button); return button; });
 const mapHelp = document.createElement('small'); mapHelp.textContent = 'Choosing another map starts a fresh game.'; mapSwitch.append(mapHelp); modeSwitch.after(mapSwitch);
+const limitInputs = [];
+for (const [field, caption, maximum] of [['targetScore', 'Kills to win', 100], ['matchMinutes', 'Minutes', 30]]) {
+  const label = document.createElement('label');
+  label.textContent = caption + ' ';
+  const select = document.createElement('select');
+  for (let value = 1; value <= maximum; value++) select.add(new Option(String(value), String(value)));
+  select.value = String(soloLimits[field]);
+  select.onchange = async () => {
+    const value = Number(select.value);
+    if (network.active) {
+      try { await network.request('/api/control', {action: field, value}); }
+      catch (error) { network.status.textContent = error.message; }
+      return;
+    }
+    soloLimits[field] = value;
+    resetMap();
+  };
+  label.append(select);
+  mapSwitch.append(label);
+  limitInputs.push({field, select, label});
+}
 function resetMap() { race = newGame(); lastPhase = ''; lastCount = -1; keys.clear(); updateMapLabels(); }
 function chooseMap(index) { if (dedicated && !network.active) return; if (index === track) return; if (network.active) { if (network.canConfigure) network.control('arena', index); return; } track = index; selectedMaps[mode] = index; resetMap(); }
 const network = new NetworkGame({
-  anchor: modeSwitch, keys, role: mobile ? 'bomber' : 'driver', driver: () => selected, arena: () => track, unlock: () => audio.unlock(), sound: type => audio.event(type), onState: world => {
+  anchor: modeSwitch, limits: () => soloLimits, keys, role: mobile ? 'bomber' : 'driver', driver: () => selected, arena: () => track, unlock: () => audio.unlock(), sound: type => audio.event(type), onState: world => {
     const changed = mode !== 'combat' || track !== world.arena;
     if (race.soundEpoch !== world.soundEpoch) bomberWeapon = 'abomb';
+    if (world.phase === "ready" && (world.targetScore !== race.targetScore || world.duration !== race.duration)) lastPhase = "";
     const driverChanged = selected !== world.driver;
     race = world; mode = 'combat'; track = world.arena; if (changed) { lastPhase = ''; updateMapLabels(); }
-    document.querySelector('.race-meta').textContent = `10 KILLS · 3 MIN · ${network.state.players.length + network.state.bots} FIGHTERS`;
+    document.querySelector('.race-meta').textContent = `${world.targetScore} KILLS · ${world.duration / 60} MIN · ${network.state.players.length + network.state.bots} FIGHTERS`;
     if (changed || driverChanged) showDriver(world.driver);
   }, onLeave: () => { race = newGame(); lastPhase = ''; keys.clear(); updateMapLabels(); }
 });
@@ -249,7 +272,7 @@ const nightmareTitle=document.createElement('strong'),nightmareState=document.cr
 const abilityAnnouncements=new AbilityAnnouncements(document.querySelector('.viewport'));
 const ringNotice=new RingOfFireNotice(),ringBanner=document.createElement('div');ringBanner.id='ring-of-fire-announcement';ringBanner.className='ring-of-fire-announcement hidden';ringBanner.setAttribute('role','status');ringBanner.setAttribute('aria-atomic','true');const ringTitle=document.createElement('strong'),ringHelp=document.createElement('span');ringTitle.textContent='RING OF FIRE';ringHelp.textContent='KEEP TURNING · LET IT BURN';ringBanner.append(ringTitle,ringHelp);document.querySelector('.viewport').append(ringBanner);
 const chaffNotice=new ChaffNotice(),avertedBanner=document.createElement('div');avertedBanner.id='averted-notice';avertedBanner.className='incoming-warning averted-notice hidden';avertedBanner.setAttribute('role','status');avertedBanner.setAttribute('aria-atomic','true');const avertedTitle=document.createElement('strong'),avertedHelp=document.createElement('span');avertedTitle.textContent='✓ MISSILE AVERTED';avertedHelp.textContent='CHAFF BROKE THE LOCK';avertedBanner.append(avertedTitle,avertedHelp);document.querySelector('.viewport').append(avertedBanner);
-function updateMapLabels(){const maps=mode==='combat'?arenas:tracks,info=maps[track];$('track-name').textContent=info.name;$('track-label').textContent=info.name.toUpperCase();$('track-desc').textContent=info.desc;$('difficulty').textContent=mode==='combat'?'MELEE':info.difficulty;document.querySelector('.race-meta').textContent=mode==='combat'?'10 KILLS · 3 MIN · 6 FIGHTERS':'3 LAPS · 6 RACERS';document.querySelector('.race-bar .divider').nextElementSibling.textContent=mode==='combat'?'DEATHMATCH':'GRAND PRIX';for(const button of modeSwitch.children)button.setAttribute('aria-pressed',String(button.id===`mode-${mode}`));for(const [index,button] of mapButtons.entries()){button.textContent=maps[index].name;button.setAttribute('aria-pressed',String(index===track));}const next=maps[(track+1)%maps.length];$('change-track').textContent='NEXT MAP →';$('change-track').setAttribute('aria-label',`Switch to ${next.name}`);}
+function updateMapLabels(){const maps=mode==='combat'?arenas:tracks,info=maps[track];$('track-name').textContent=info.name;$('track-label').textContent=info.name.toUpperCase();$('track-desc').textContent=info.desc;$('difficulty').textContent=mode==='combat'?'MELEE':info.difficulty;document.querySelector('.race-meta').textContent=mode==='combat'?`${race.targetScore} KILLS · ${race.duration / 60} MIN · 6 FIGHTERS`:'3 LAPS · 6 RACERS';document.querySelector('.race-bar .divider').nextElementSibling.textContent=mode==='combat'?'DEATHMATCH':'GRAND PRIX';for(const button of modeSwitch.children)button.setAttribute('aria-pressed',String(button.id===`mode-${mode}`));for(const [index,button] of mapButtons.entries()){button.textContent=maps[index].name;button.setAttribute('aria-pressed',String(index===track));}const next=maps[(track+1)%maps.length];$('change-track').textContent='NEXT MAP →';$('change-track').setAttribute('aria-label',`Switch to ${next.name}`);}
 const ammoRack=document.createElement('div');ammoRack.className='ammo-rack';const ammoCards=new Map();
 for(const [type,icon,label] of [['hedgehog','🦔','HEDGEHOGS'],['missile','🚀','MISSILES'],['boost','ϟ','TURBOS']]){
   const button=document.createElement('button');button.className='ammo-card';button.id=`ammo-${type}`;button.type='button';
@@ -345,6 +368,13 @@ function hud() {
     if (incomingHelp.textContent !== help) incomingHelp.textContent = help;
   }
   for (const button of modeSwitch.children) button.disabled = network.active;
+  for (const {field, select, label} of limitInputs) {
+    label.hidden = mode !== 'combat';
+    if (label.hidden) continue;
+    select.disabled = !['ready', 'finished'].includes(race.phase) || (network.active && !network.canConfigure);
+    const value = String(field === 'targetScore' ? race.targetScore : race.duration / 60);
+    if (select.value !== value) select.value = value;
+  }
   for (const button of mapButtons) button.disabled = network.active && !network.canConfigure;
   $('change-track').disabled = network.active && !network.canConfigure; $('restart').disabled = network.active && !network.canConfigure;
   const guest = network.active && !network.isHost && !dedicated;
@@ -428,7 +458,7 @@ function hud() {
   const button=$('start'),message=$('message');button.classList.toggle('hidden',race.phase==='countdown');startRow.classList.toggle('hidden',race.phase==='countdown');
   $('pause').textContent=dedicated?(network.afk?'BACK':'AFK'):race.phase==='paused'?'▶':'Ⅱ';$('pause').setAttribute('aria-label',dedicated?(network.afk?'Return to the arena':'Go AFK'):'Pause race');
   switch(race.phase){
-    case 'ready':message.querySelector('.pill').textContent=race.bomber?'YOU HAVE AIR SUPPORT':mode==='combat'?'EVERY KART FOR ITSELF':'THE GRID IS WAITING';message.querySelector('h2').textContent=race.bomber?'Trouble from above.':mode==='combat'?'Small karts. Big trouble.':'Born to be wild.';message.querySelector('p').textContent=race.bomber?'Start with 2 of each bomb · Stink every 5s · A-bomb every 10s':mode==='combat'?'First to 10 kills · 3 minutes · Hold Space to fire':'Six racers. Three laps. Two alternate routes.';message.querySelector('small').textContent=`${mode==='combat'?arenas[track].name:tracks[track].name} · ${race.bomber?'Tap to bomb · Drag to explore':'Press Enter to start'}`;button.textContent=race.bomber?'LET’S BOMB ↗':mode==='combat'?'LET’S BATTLE ↗':'LET’S RACE ↗';$('status').textContent='READY WHEN YOU ARE';break;
+    case 'ready':message.querySelector('.pill').textContent=race.bomber?'YOU HAVE AIR SUPPORT':mode==='combat'?'EVERY KART FOR ITSELF':'THE GRID IS WAITING';message.querySelector('h2').textContent=race.bomber?'Trouble from above.':mode==='combat'?'Small karts. Big trouble.':'Born to be wild.';message.querySelector('p').textContent=race.bomber?'Start with 2 of each bomb · Stink every 5s · A-bomb every 10s':mode==='combat'?`First to ${race.targetScore} kills · ${race.duration / 60} min · Hold Space to fire`:'Six racers. Three laps. Two alternate routes.';message.querySelector('small').textContent=`${mode==='combat'?arenas[track].name:tracks[track].name} · ${race.bomber?'Tap to bomb · Drag to explore':'Press Enter to start'}`;button.textContent=race.bomber?'LET’S BOMB ↗':mode==='combat'?'LET’S BATTLE ↗':'LET’S RACE ↗';$('status').textContent='READY WHEN YOU ARE';break;
     case 'countdown':message.querySelector('.pill').textContent='ON YOUR MARKS';message.querySelector('p').textContent=race.bomber?'Pick your target. Tap when the battle starts.':'Hold ↑ or W to accelerate';message.querySelector('small').textContent='';$('status').textContent='LIGHTS OUT IN 3…';break;
     case 'racing':tone(850,.3);$('status').textContent='MAKE SOME PIXEL DUST';break;
     case 'paused':message.querySelector('.pill').textContent='PIT STOP';message.querySelector('h2').textContent='Catch your breath.';message.querySelector('p').textContent=network.active?'The match continues while you are away.':'Your rivals can wait.';button.textContent='BACK TO THE RACE ↗';$('status').textContent=dedicated?'AFK · MATCH CONTINUES':'RACE PAUSED';if(dedicated){message.querySelector('.pill').textContent='AFK';message.querySelector('small').textContent='Your place and score are saved.';button.textContent='BACK TO ARENA ↗';}break;

@@ -46,8 +46,8 @@ function spawn(r, actor, initial = false) {
   actor.somersault = 0; actor.somersaultCooldown = 0; actor.somersaultCameraStart = actor.cameraHeading;
   actor.dizzy = 0; actor.stinkContributors = new Map();
 }
-export function createBattle(driver = 0, arena = 0, random = Math.random) {
-  const r = createRace(driver, 0, random); r.specialAbilities = true; r.timeStop = 0; r.timeOwner = null; r.mode = 'combat'; r.arena = arena; r.duration = 180; r.targetScore = 10; r.id = 0; r.color = drivers[driver].color; r.killFeed = []; r.driftParticles = []; r.chaffClouds = []; r.chaffSequence = 0; r.bombs = []; r.bombSequence = 0; r.stinkClouds = [];
+export function createBattle(driver = 0, arena = 0, random = Math.random, {targetScore = 10, matchMinutes = 3} = {}) {
+  const r = createRace(driver, 0, random); r.specialAbilities = true; r.timeStop = 0; r.timeOwner = null; r.mode = 'combat'; r.arena = arena; r.duration = matchMinutes * 60; r.targetScore = targetScore; r.id = 0; r.color = drivers[driver].color; r.killFeed = []; r.driftParticles = []; r.chaffClouds = []; r.chaffSequence = 0; r.bombs = []; r.bombSequence = 0; r.stinkClouds = [];
   const actors = [r, ...r.bots]; for (const [id, actor] of actors.entries()) Object.assign(actor, { id, wx: 0, wz: 0, heading: 0, kills: 0, deaths: 0, bicyclesStolen: 0, health: 3, destroyed: 0, shield: 0, celebrate: 0, fireCooldown: 0, reload: 0, brain: 0, path: [], bomber: false, bombAmmo: 0, bombReload: 0, stinkAmmo: 0 });
   for (const actor of actors) spawn(r, actor, true);
   r.supplies = [[-70, -65, 'missile'], [70, 65, 'missile'], [-65, 70, 'hedgehog'], [65, -70, 'hedgehog'], [-12, 48, 'boost'], [12, -48, 'boost'], [-70, 0, 'health'], [70, 0, 'health'], [-50, -50, 'hedgeproof'], [50, 50, 'tehilim']].map(([wx, wz, kind], id) => ({ id, randomSpawn:true, version: 0, wx, wz, kind, cooldown: ['hedgeproof', 'tehilim'].includes(kind) ? 30 : 0 }));
@@ -317,7 +317,7 @@ function advanceKartMovement(world, actor, keys, dt) {
 }
 export function tickBattle(r, keys, dt, inputs = null) {
   dt = clamp(dt, 0, .05); if (!['racing', 'countdown'].includes(r.phase)) return;
-  if (r.phase === 'countdown') { r.countdown -= dt; if (r.countdown <= 0) { r.phase = 'racing'; r.notice = 'BATTLE ON! · FIRST TO 10 KILLS'; r.noticeTime = 3; } return; }
+  if (r.phase === 'countdown') { r.countdown -= dt; if (r.countdown <= 0) { r.phase = 'racing'; r.notice = `BATTLE ON! · FIRST TO ${r.targetScore} KILLS`; r.noticeTime = 3; } return; }
   tickSpecials(r, dt);tickNightmare(r, dt);tickLocusts(r,dt); const worldDt = r.timeStop > 0 ? 0 : dt;
   const ending = r.finishCountdown !== null; if (ending) dt = Math.min(dt, r.finishCountdown);
   r.elapsed += dt; r.noticeTime = Math.max(0, r.noticeTime - dt); r.shake = Math.max(0, r.shake - dt * 2);

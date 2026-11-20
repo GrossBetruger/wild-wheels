@@ -67,6 +67,29 @@ test('the tenth kill ends combat after the result announcement',()=>{
   for(let i=0;i<60;i++)tickBattle(r,new Set(),.05);
   assert.equal(r.phase,'finished');assert.equal(r.speed,0);
 });
+test('a two-kill match ends at two kills', () => {
+  const r = createBattle(0, 0, () => .5, {targetScore: 2, matchMinutes: 30});
+  r.phase = 'racing';
+  r.bots = [];
+  r.kills = 1;
+  tickBattle(r, new Set(), .05);
+  assert.equal(r.finishCountdown, null);
+  r.kills = 2;
+  tickBattle(r, new Set(), .05);
+  assert.equal(r.finishCountdown, 3);
+});
+for (const minutes of [1, 30]) {
+  test(`a ${minutes}-minute match ends when its clock expires`, () => {
+    const r = createBattle(0, 0, () => .5, {matchMinutes: minutes});
+    r.phase = 'racing';
+    r.bots = [];
+    r.elapsed = minutes * 60 - .08;
+    tickBattle(r, new Set(), .05);
+    assert.equal(r.finishCountdown, null);
+    tickBattle(r, new Set(), .05);
+    assert.equal(r.finishTime, minutes * 60);
+  });
+}
 test('arena play continues at five and nine kills',()=>{
   const r=createBattle(0,0,()=>.5);r.phase='racing';r.bots=[];r.kills=5;
   tickBattle(r,new Set(),.05);assert.equal(r.phase,'racing');assert.equal(r.finishCountdown,null);

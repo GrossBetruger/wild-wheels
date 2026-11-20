@@ -115,6 +115,8 @@ pub struct Room {
     pub bots: usize,
     pub arena: usize,
     pub abilities: bool,
+    target_score: u64,
+    match_minutes: u64,
     epoch: u32,
     seed: u32,
     pub ticks: u64,
@@ -142,6 +144,8 @@ impl Room {
             bots,
             arena,
             abilities: true,
+            target_score: 10,
+            match_minutes: 3,
             epoch,
             seed,
             ticks: 0,
@@ -191,7 +195,7 @@ impl Room {
         self.members.iter().flatten().count()
     }
     pub fn config(&self) -> Value {
-        json!({"maxPlayers":CAPACITY,"code":"00","arena":self.arena,"bots":self.bots,"host":null,"dedicated":true,"epoch":self.epoch,"seed":self.seed,"specialAbilities":self.abilities,"players":self.members.iter().enumerate().filter_map(|(id,p)|p.as_ref().map(|p|json!({"id":id,"name":p.name,"driver":p.driver,"color":p.color,"role":p.role,"afk":p.afk}))).collect::<Vec<_>>()})
+        json!({"maxPlayers":CAPACITY,"code":"00","arena":self.arena,"bots":self.bots,"host":null,"dedicated":true,"epoch":self.epoch,"seed":self.seed,"specialAbilities":self.abilities,"targetScore":self.target_score,"matchMinutes":self.match_minutes,"players":self.members.iter().enumerate().filter_map(|(id,p)|p.as_ref().map(|p|json!({"id":id,"name":p.name,"driver":p.driver,"color":p.color,"role":p.role,"afk":p.afk}))).collect::<Vec<_>>()})
     }
     pub fn sync(&mut self) {
         self.bots = self.bots.min(CAPACITY - self.count());
@@ -441,6 +445,14 @@ impl Room {
                     ));
                 }
                 match b["action"].as_str().unwrap_or("") {
+                    "targetScore" => {
+                        self.target_score = b["value"].as_u64().filter(|n| (1..=100).contains(n))
+                            .ok_or((400, "Choose 1 to 100 kills."))?;
+                    }
+                    "matchMinutes" => {
+                        self.match_minutes = b["value"].as_u64().filter(|n| (1..=30).contains(n))
+                            .ok_or((400, "Choose 1 to 30 minutes."))?;
+                    }
                     "special-abilities" => {
                         self.abilities = b["enabled"]
                             .as_bool()
