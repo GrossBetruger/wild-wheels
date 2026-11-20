@@ -114,6 +114,9 @@ const mapCaption = document.createElement('strong'); mapCaption.textContent = 'C
 const mapButtons = Array.from({ length: 2 }, (_, index) => { const button = document.createElement('button'); button.id = `map-choice-${index}`; button.type = 'button'; button.onclick = () => chooseMap(index); mapSwitch.append(button); return button; });
 const mapHelp = document.createElement('small'); mapHelp.textContent = 'Choosing another map starts a fresh game.'; mapSwitch.append(mapHelp); modeSwitch.after(mapSwitch);
 const limitInputs = [];
+const limitsRow = document.createElement('div');
+limitsRow.className = 'match-limits';
+mapSwitch.append(limitsRow);
 for (const [field, caption, maximum] of [['targetScore', 'Kills to win', 100], ['matchMinutes', 'Minutes', 30]]) {
   const label = document.createElement('label');
   label.textContent = caption + ' ';
@@ -131,8 +134,8 @@ for (const [field, caption, maximum] of [['targetScore', 'Kills to win', 100], [
     resetMap();
   };
   label.append(select);
-  mapSwitch.append(label);
-  limitInputs.push({field, select, label});
+  limitsRow.append(label);
+  limitInputs.push({field, select});
 }
 function resetMap() { race = newGame(); lastPhase = ''; lastCount = -1; keys.clear(); updateMapLabels(); }
 function chooseMap(index) { if (dedicated && !network.active) return; if (index === track) return; if (network.active) { if (network.canConfigure) network.control('arena', index); return; } track = index; selectedMaps[mode] = index; resetMap(); }
@@ -368,9 +371,9 @@ function hud() {
     if (incomingHelp.textContent !== help) incomingHelp.textContent = help;
   }
   for (const button of modeSwitch.children) button.disabled = network.active;
-  for (const {field, select, label} of limitInputs) {
-    label.hidden = mode !== 'combat';
-    if (label.hidden) continue;
+  limitsRow.hidden = mode !== 'combat';
+  for (const {field, select} of limitInputs) {
+    if (limitsRow.hidden) continue;
     select.disabled = !['ready', 'finished'].includes(race.phase) || (network.active && !network.canConfigure);
     const value = String(field === 'targetScore' ? race.targetScore : race.duration / 60);
     if (select.value !== value) select.value = value;

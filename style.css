@@ -582,6 +582,53 @@ aside {
   display: block
 }
 
+.match-limits {
+  display: flex;
+  flex: 1 0 100%;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.match-limits[hidden] {
+  display: none;
+}
+
+.match-limits label {
+  display: grid;
+  gap: 5px;
+  font: 9px monospace;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.match-limits select {
+  min-height: 44px;
+  min-width: 90px;
+  padding: 8px 12px;
+  border: 1px solid #d7cedf;
+  border-radius: 7px;
+  background-color: #faf8f0;
+  color: var(--ink);
+  font: bold 12px monospace;
+  cursor: pointer;
+}
+
+.match-limits select:hover:enabled,
+.match-limits select:focus-visible {
+  border-color: var(--purple);
+  background-color: #e8defa;
+}
+
+.match-limits select:focus-visible {
+  outline: 3px solid #a584ed;
+  outline-offset: 2px;
+}
+
+.match-limits select:disabled {
+  cursor: default;
+  opacity: .65;
+}
+
 .track-bottom {
   display: flex;
   align-items: center;
