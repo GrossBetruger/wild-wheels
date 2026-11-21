@@ -79,7 +79,8 @@ export class OwlFlight {
       }
     }
     const pose = p.specialActive > 0 ? 6 : celebrate > 0 ? 1 + Math.floor(time * 1.3) % 6 : gesture?.id === 'monocle' ? 5 : gesture?.id === 'xray' ? 6 : gesture?.id === 'hello' ? 1 : gesture?.id === 'cheer' ? 2 : gesture?.id === 'look' ? 3 : 0;
-    renderer.model('owl:body:' + phase + ':' + Math.round(a * 20) + ':' + pose, p.x, height + (gesture?.bounce ?? 0), p.z, angle + (gesture?.yaw ?? 0) + (pose === 4 ? Math.sin(time * 4) * .45 : 0), mesh => drawOwl(mesh, phase, a, pose), (jump?.pitch ?? 0) + (pose === 2 ? .15 : 0));
+    const flightStep = Math.round(a * 4), flight = flightStep / 4;
+    renderer.model('owl:body:' + phase + ':' + flightStep + ':' + pose, p.x, height + (gesture?.bounce ?? 0), p.z, angle + (gesture?.yaw ?? 0) + (pose === 4 ? Math.sin(time * 4) * .45 : 0), mesh => drawOwl(mesh, phase, flight, pose), (jump?.pitch ?? 0) + (pose === 2 ? .15 : 0));
     if (pose >= 5) {
       s.monocle = (s.monocle ?? 0) + (Number(pose >= 5) - (s.monocle ?? 0)) * (1 - Math.exp(-dt * 12));
       const amount = gesture ? gesture.monocle ?? 1 : s.monocle, step = Math.round(amount * 12) / 12, facing = angle + (gesture?.yaw ?? 0);

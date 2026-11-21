@@ -38,7 +38,7 @@ export class RoomJoinTracker {
 export class NetworkGame {
   playRequestPrompt=new PlayRequestPrompt();
   joinTracker=new RoomJoinTracker();
-  token=null;state=null;paused=false;sequence=0;actions=[];client=null;rtt=0;lastPing=-Infinity;
+  token=null;state=null;paused=false;sequence=0;actions=[];client=null;rtt=0;lastPing=-Infinity;restoreOnVisible=false;
   // For the problem log: where to report, and when the server was last heard from.
   log=()=>{};lastPacket=0;
   constructor({anchor,limits=()=>({}),keys,driver,arena,onState,onLeave,unlock,sound=()=>{},role='driver'}){
@@ -98,6 +98,7 @@ export class NetworkGame {
     this.infoReady=this.refreshInfo();
     if(!this.dedicated)this.infoTimer=setInterval(()=>{if(this.active&&this.isHost)this.refreshInfo();},5000);
     this.timer=setInterval(()=>this.input(),1000/30);
+    if(typeof document!=='undefined')document.addEventListener('visibilitychange',()=>{if(!document.hidden&&this.restoreOnVisible&&this.active){this.restoreOnVisible=false;this.restore();}});
     this.hostButton.disabled=true;queueMicrotask(()=>this.restore());
   }
   get hasName(){return validPlayerName(this.name.value);}
@@ -216,19 +217,21 @@ export class NetworkGame {
     const draft=this.nameDirty?this.name.value:null;
     if(reply.invite)this.invite=reply.invite;
     const url=new URL(location.href);url.searchParams.set('room',reply.code);if(this.invite)url.hash=new URLSearchParams({invite:this.invite}).toString();history.replaceState(null,'',url);this.invitation=reply.code;
+    this.restoreOnVisible=false;
     this.token=reply.token;this.socket?.close();this.nameDirty=false;this.namePending=false;this.namePromise=null;this.sequence=0;this.pending=null;this.failures=0;this.shareEdited=false;this.actions=[];this.keys.clear();this.paused=Boolean(reply.players.find(player=>player.id===reply.you)?.afk);this.client=new ArenaClient();this.accept(bootstrapPacket(reply));
     if(draft!==null){this.name.value=draft;this.nameDirty=draft.trim()!==reply.world.name;}
     this.rememberName();this.stream();
   }
   async restore(){
-    if(this.restoring)return;this.restoring=true;
+    if(this.restoring)return;this.restoring=true;this.restoreOnVisible=false;
     this.connectionStatus();
-    try{this.adopt(await this.request('/api/session',this.colorDirty&&isPlayerColor(this.preferredColor)?{color:this.preferredColor}:{}));}
+    const body={...(this.colorDirty&&isPlayerColor(this.preferredColor)?{color:this.preferredColor}:{}),...(this.afk||(this.active&&typeof document!=='undefined'&&document.hidden)?{afk:true}:{})};
+    try{this.adopt(await this.request('/api/session',body));}
     catch(error){this.log('warn','reconnect-failed',{status:error.status,message:error.message});if(error.status!==401){this.status.textContent=error.message;this.connectionStatus(error.message);if(this.active){const token=this.token;setTimeout(()=>{if(this.token===token)this.restore();},1000);}return;}if(this.active){this.leave('This room is no longer available.',false);return;}await this.infoReady;if(this.invitation)await this.connect('/api/join');}
     finally{this.restoring=false;this.hostButton.disabled=this.active&&!this.isHost;}
   }
   async setAway(afk){
-    if(!this.active||this.awayPending)return;this.awayPending=true;this.leaveButton.disabled=true;
+    if(!this.active||this.awayPending)return;this.awayPending=true;this.restoreOnVisible=false;this.leaveButton.disabled=true;
     try{this.adopt(await this.request('/api/afk',{afk}));}catch(error){this.status.textContent=error.message;}
     finally{this.awayPending=false;this.leaveButton.disabled=false;}
   }
@@ -303,7 +306,7 @@ export class NetworkGame {
     const state=this.client.state();
     if(this.joinTracker.sample(state)){this.unlock?.().catch(()=>{});this.sound('playerJoin');}
     const rosterKey=JSON.stringify([state.host,state.you,state.players]);
-    this.state=state;this.leaveButton.classList.remove('hidden');this.share.classList.remove('hidden');this.copyButton.classList.remove('hidden');this.animalChoice.classList.toggle('hidden',this.dedicated||!this.isHost);
+    this.state=state;if(this.dedicated)this.paused=this.afk;else if(this.afk)this.paused=true;this.leaveButton.classList.remove('hidden');this.share.classList.remove('hidden');this.copyButton.classList.remove('hidden');this.animalChoice.classList.toggle('hidden',this.dedicated||!this.isHost);
     for(const node of [this.hostButton,this.botCount,this.share.parentElement,this.help])node.classList.toggle('hidden',!this.isHost&&!this.dedicated);
     if(this.dedicated)this.hostButton.classList.add('hidden');
     this.leaveButton.textContent=this.afk?'BACK TO ARENA':'AFK';this.hostButton.disabled=this.connecting||!this.isHost;
@@ -351,7 +354,7 @@ export class NetworkGame {
     socket.onopen=()=>{if(this.token===token){this.client.resend();socket.send(JSON.stringify({type:'authenticate',token}));}};
     socket.onmessage=event=>{try{if(this.token!==token)return;if(event.data instanceof ArrayBuffer){this.accept(event.data);return;}if(typeof event.data!=='string'||event.data.length>2048)throw new Error();const state=JSON.parse(event.data);if(state.type!=='pong')throw new Error();if(state.sent===this.lastPing)this.rtt=Math.max(0,Math.min(.3,performance.now()/1000-state.sent));}catch(error){this.log('error','socket-message-invalid',{message:error?.message,binary:event.data instanceof ArrayBuffer,size:event.data?.byteLength??event.data?.length});socket.close();}};
     socket.onerror=()=>{};
-    socket.onclose=event=>{if(this.token!==token||this.socket!==socket)return;this.log(event.code===1000?'info':'warn','socket-closed',{code:event.code,reason:event.reason,clean:event.wasClean,openSeconds:Math.round((performance.now()-opened)/1000),waitingBytes:socket.bufferedAmount,sinceServerMs:Math.round(performance.now()-this.lastPacket)});this.keys.clear();if([4001,4003,4004].includes(event.code)){if(this.awayPending||this.connecting)return;this.leave(event.code===4003?'You were removed by the host.':event.code===4004?'The host replaced this room. Open the new invitation.':'This player resumed in another tab.',false);return;}this.status.textContent='Reconnecting to the room…';setTimeout(()=>{if(this.token===token)this.restore();},500);};
+    socket.onclose=event=>{if(this.token!==token||this.socket!==socket)return;this.log(event.code===1000?'info':'warn','socket-closed',{code:event.code,reason:event.reason,clean:event.wasClean,openSeconds:Math.round((performance.now()-opened)/1000),waitingBytes:socket.bufferedAmount,sinceServerMs:Math.round(performance.now()-this.lastPacket)});this.keys.clear();if([4001,4003,4004].includes(event.code)){if(this.awayPending||this.connecting)return;this.leave(event.code===4003?'You were removed by the host.':event.code===4004?'The host replaced this room. Open the new invitation.':'This player resumed in another tab.',false);return;}if(this.afk&&typeof document!=='undefined'&&document.hidden){this.restoreOnVisible=true;this.status.textContent='AFK · Reconnects when you return to this tab.';return;}this.status.textContent='Reconnecting to the room…';setTimeout(()=>{if(this.token===token)this.restore();},500);};
   }
   async control(action,arena,bots){try{if(action==='start'&&!await this.saveName())return;await this.request('/api/control',{action,arena,bots});this.paused=false;}catch(error){this.status.textContent=error.message;}}
   async chooseDriver(driver){
@@ -365,6 +368,7 @@ export class NetworkGame {
     this.hostButton.classList.remove('hidden');this.botCount.classList.remove('hidden');this.share.parentElement.classList.remove('hidden');
     this.colorPending=false;this.colorError='';
     this.nameFeedback.textContent='';this.nameDirty=false;this.namePending=false;this.namePromise=null;
+    this.restoreOnVisible=false;
     if(notify)this.request('/api/leave',{}).catch(()=>{});this.token=null;this.chatColor=null;this.socket?.close();this.state=null;this.pending=null;this.actions=[];this.keys.clear();this.client=null;this.rtt=0;this.lastPing=-Infinity;
     this.internetError=false;this.hostButton.disabled=false;this.name.disabled=false;this.botCount.disabled=false;for(const option of this.botCount.options)option.disabled=false;this.leaveButton.classList.add('hidden');this.copyButton.classList.add('hidden');this.internetButton.classList.add('hidden');this.animalChoice.classList.add('hidden');this.share.classList.add('hidden');this.help.classList.add('hidden');this.players.replaceChildren();this.status.textContent=message;this.onLeave();
     if(this.dedicated){document.body.classList.remove('arena-connected');this.connectionStatus(message);}

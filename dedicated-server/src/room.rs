@@ -395,7 +395,12 @@ impl Room {
         match path {
             "/api/session" => {
                 if let Some(color) = color_preference(b)? { self.prefer_color(id, &color)?; }
-                return Ok(self.resume(id, false));
+                let afk = match b.get("afk") {
+                    None | Some(Value::Null) => false,
+                    Some(Value::Bool(afk)) => *afk,
+                    _ => return bad("Choose AFK or back in the arena."),
+                };
+                return Ok(self.resume(id, afk));
             }
             "/api/color" => {
                 if !matches!(self.core.phase(), "ready" | "finished") {
@@ -1000,6 +1005,26 @@ mod tests {
         room.controls(0,json!({"sequence":0,"epoch":1,"keys":[],"moves":[{"sequence":0,"keys":["w"]}],"actions":[]})).unwrap();
         room.tick();
         assert_eq!(room.reply(0)["movementSequence"], 0);
+    }
+    #[test]
+    fn session_resume_can_preserve_afk_or_return_to_arena() {
+        let mut room = Room::new(0, 0);
+        room.join(&json!({"name":"Oren","driver":0})).unwrap();
+        room.control(0, "/api/afk", &json!({"afk":true})).unwrap();
+        assert!(room.members[0].as_ref().unwrap().afk);
+
+        // Background/AFK reconnects pass afk: true and must not pop the player back into the match.
+        let stayed = room.control(0, "/api/session", &json!({"afk":true})).unwrap();
+        assert!(room.members[0].as_ref().unwrap().afk);
+        assert_eq!(stayed["players"][0]["afk"], true);
+
+        // Invalid non-boolean afk is rejected.
+        assert_eq!(room.control(0, "/api/session", &json!({"afk":"yes"})).unwrap_err().0, 400);
+
+        // Default /api/session without afk returns the player to active play.
+        let returned = room.control(0, "/api/session", &json!({})).unwrap();
+        assert!(!room.members[0].as_ref().unwrap().afk);
+        assert_eq!(returned["players"][0]["afk"], false);
     }
 }
 

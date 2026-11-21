@@ -508,7 +508,9 @@ window.addEventListener('keydown', e => {
   if (network.active) network.input();
   switch (key) { case 'enter': start(); break; case 'escape': case 'p': pause(); break; case ' ': useWeapon(); break; case 'q': switchWeapon(); break; case 'x': if (!e.ctrlKey && !e.metaKey && !e.altKey) turbo(); break; case 'f': if (!e.ctrlKey && !e.metaKey && !e.altKey) special(); break; case 'z': if (!e.ctrlKey && !e.metaKey && !e.altKey) somersault(); break; case 'c': if (!e.ctrlKey && !e.metaKey && !e.altKey) chaff(); break; }
 });
-window.addEventListener('keyup', e => { keys.delete(gameKey(e)); if (network.active) network.input(); }); window.addEventListener('blur', () => { keys.clear(); if (['racing', 'countdown'].includes(race.phase)) pause(); }); document.addEventListener('visibilitychange', () => { if (document.hidden && ['racing', 'countdown'].includes(race.phase)) pause(); });
+window.addEventListener('keyup', e => { keys.delete(gameKey(e)); if (network.active) network.input(); });
+const stepAway = () => { if (!['racing', 'countdown'].includes(race.phase)) return; if (network.active && network.dedicated) { if (!network.afk) network.setAway(true); return; } pause(); };
+window.addEventListener('blur', () => { keys.clear(); stepAway(); }); document.addEventListener('visibilitychange', () => { if (document.hidden) stepAway(); });
 for (const event of ['pointerdown', 'keydown']) window.addEventListener(event, () => { if (network.active) audio.unlock().catch(() => { }); }, { once: true });
 document.querySelectorAll('[data-key]').forEach(b => { b.addEventListener('pointerdown', e => { e.preventDefault(); b.setPointerCapture(e.pointerId); keys.add(b.dataset.key); if (b.dataset.key === ' ') useWeapon(); if (network.active) network.input(); }); for (const name of ['pointerup', 'pointercancel', 'lostpointercapture']) b.addEventListener(name, () => { keys.delete(b.dataset.key); if (network.active) network.input(); }); });
 selectDriver(0); updateMapLabels();
