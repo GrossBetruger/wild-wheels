@@ -102,7 +102,14 @@ impl Client{
     }
     pub(super) fn feedback_commands(&mut self)->Vec<serde_json::Value>{
         let mut last=self.last_sent_action;
-        let result=self.ops.iter().filter_map(|op|match op{Op::Action{action,..}if action.id.is_some_and(|id|id as i64>self.last_sent_action)=>Some(action),_=>None}).take(8).map(|action|{
+        // A reconnect can rewind last_sent even when movement was already acknowledged.
+        let available_move = self.last_sent.max(self.pred.movement_ack[self.viewer]);
+        let unsent = self.ops.iter().filter_map(|op| match op {
+            Op::Action { action, .. } if action.id.is_some_and(|id| i64::from(id) > self.last_sent_action) => Some(action),
+            _ => None,
+        });
+        // Preserve action IDs in order; a later action cannot overtake a waiting shot.
+        let result=unsent.take_while(|action| action.after_move <= available_move).take(8).map(|action|{
             let id=action.id.unwrap();last=id as i64;let mut value=json!({"id":id,"type":action.kind,"afterMove":action.after_move});
             if !action.item.is_empty(){value["item"]=json!(action.item);}if action.kind=="bomb"{value["wx"]=json!(action.wx);value["wz"]=json!(action.wz);value["kind"]=json!(action.bomb_kind.as_deref().unwrap_or("abomb"));}value
         }).collect();self.last_sent_action=last;result

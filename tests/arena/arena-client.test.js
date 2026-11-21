@@ -3,6 +3,22 @@ import assert from 'node:assert/strict';
 import {ArenaCore,ArenaClient} from '../../gameplay/arena-core.js';
 import {createBattle} from '../../scripts/helpers/reference-combat.mjs';
 
+test('a shot waits for its movement packet and is sent once', () => {
+  const seed = createBattle();
+  Object.assign(seed, {phase:'racing', multiplayer:true, human:true, supplies:[], fireCooldown:0});
+  const server = new ArenaCore(seed), client = new ArenaClient();
+  client.accept(server.packet(), 0);
+  for (let frame = 1; frame <= 12; frame++) client.frame(1/60, [], frame/60);
+  assert.equal(client.action('fire', undefined, .2), true);
+  const first = client.outbound([]);
+  assert.equal(first.moves.at(-1).sequence, 7);
+  assert.deepEqual(first.actions, []);
+  const next = client.outbound([]);
+  assert.equal(next.moves.at(-1).sequence, 11);
+  assert.deepEqual(next.actions, [{type:'fire', id:0, afterMove:11}]);
+  assert.deepEqual(client.outbound([]).actions, []);
+});
+
 test('Rust-owned prediction and authoritative movement stay identical through command acknowledgements',()=>{
   const seed=createBattle();Object.assign(seed,{phase:'racing',multiplayer:true,human:true,supplies:[],wx:-65,wz:70,heading:Math.PI/2,motionHeading:Math.PI/2,cameraHeading:Math.PI/2});
   for(const bot of seed.bots)Object.assign(bot,{inactive:true,destroyed:1e9});
@@ -51,6 +67,21 @@ test('Rust shooting appears immediately and server confirmation produces neither
   let view=client.present();assert.equal(view.ammo,4);assert.equal(view.projectiles.length,1);assert.deepEqual(view.events,['fire']);
   const input=client.outbound([]);server.step(1/60,[{actor:0,...input}]);client.accept(server.packet(),1/60);client.frame(0,[],1/60);
   view=client.present();assert.equal(view.ammo,4);assert.equal(view.projectiles.length,1);assert.deepEqual(view.events,[]);
+});
+
+test('a shot using a predicted missile pickup waits for the pickup movement', () => {
+  const seed = createBattle();
+  Object.assign(seed, {phase:'racing', multiplayer:true, human:true, fireCooldown:0,
+    missiles:0, wx:-65, wz:0, supplies:[{id:0, wx:-65, wz:0, kind:'missile', cooldown:0, version:0}]});
+  const server = new ArenaCore(seed), client = new ArenaClient();
+  client.accept(server.packet(), 0);
+  client.frame(0, [], .01);
+  assert.equal(client.action('fire', undefined, .01), true);
+  assert.deepEqual(client.outbound([]).actions, []);
+  client.frame(1/60, [], .03);
+  const packet = client.outbound([]);
+  assert.equal(packet.moves[0].sequence, 0);
+  assert.deepEqual(packet.actions, [{type:'fire', id:0, afterMove:0}]);
 });
 
 test('Rust bomber feedback spends stink ammo and shows the bomb before any server reply',()=>{

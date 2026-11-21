@@ -552,6 +552,26 @@ async fn connection(app: App, mut socket: WebSocket) {
     app.logs.note(level, "socket-closed", json!({"who":room.who(id),"connection":generation,"seconds":opened.elapsed().as_secs(),"reason":reason,"detail":detail}));
     room.disconnect(id, generation);
 }
+// Keep the 60 Hz simulation timer independent of HTTP and WebSocket scheduling.
+fn spawn_game_clock(task: impl std::future::Future<Output = ()> + Send + 'static) -> std::thread::JoinHandle<()> {
+    std::thread::Builder::new().name("game-clock".into()).spawn(move || {
+        tokio::runtime::Builder::new_current_thread().enable_time().build()
+            .expect("game clock runtime").block_on(task);
+    }).expect("game clock thread")
+}
+
+#[cfg(test)]
+#[tokio::test(flavor = "current_thread")]
+async fn game_clock_advances_while_the_request_thread_is_busy() {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let clock = spawn_game_clock(async move {
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        tx.send(()).unwrap();
+    });
+    rx.recv_timeout(Duration::from_secs(2)).expect("tick while the request thread is blocked");
+    clock.join().unwrap();
+}
+
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
     if std::env::args().any(|v| v == "--benchmark") {
@@ -647,7 +667,7 @@ async fn main() {
     let tick_stats = app.stats.clone();
     let commit = match REVISION.is_empty() {true=>format!("build:{BUILD}"),false=>REVISION.to_owned()};
     let mut stop_clock = app.shutdown.subscribe();
-    let clock_task = tokio::spawn(async move {
+    let clock_task = spawn_game_clock(async move {
         let mut interval = tokio::time::interval(Duration::from_nanos(1_000_000_000 / 60));
         interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
         // For the problem log: a minute of tick costs, late ticks and the longest
@@ -655,7 +675,17 @@ async fn main() {
         let (mut costs, mut late, mut longest_gap, mut last) = (Vec::with_capacity(3600), 0u32, Duration::ZERO, Instant::now());
         loop {
             let deadline = tokio::select! {tick=interval.tick()=>tick,_=stop_clock.changed()=>break};
+            let woke = Instant::now();
             let mut room = clock.lock().unwrap();
+            let acquired = Instant::now();
+            let gap = acquired.duration_since(last);
+            if gap >= Duration::from_millis(250) {
+                room.log.note("warn", "tick-gap", json!({"gapMs":gap.as_millis() as u64,
+                    "timerLateMs":woke.saturating_duration_since(deadline.into_std()).as_millis() as u64,
+                    "roomLockWaitMs":acquired.duration_since(woke).as_millis() as u64,
+                    "clock":room.clock()}));
+            }
+            last = acquired;
             let overrun = deadline.elapsed() > Duration::from_millis(16);
             if overrun {
                 room.overruns += 1;
@@ -674,8 +704,7 @@ async fn main() {
             let cost = *room.tick_us.last().unwrap_or(&0);
             tick_stats.lock().unwrap().record(&commit, sessions::now(), cost, overrun, room.count());
             late += u32::from(overrun);
-            longest_gap = longest_gap.max(last.elapsed());
-            last = Instant::now();
+            longest_gap = longest_gap.max(gap);
             costs.push(cost);
             if cost > 16_000 {
                 room.log.note("warn", "tick-slow", json!({"microseconds":cost,"players":room.count()}));
@@ -752,7 +781,7 @@ async fn main() {
     })
     .await
     .unwrap();
-    clock_task.await.expect("Server clock task failed");
+    clock_task.join().expect("Server clock task failed");
     checkpoint_task.await.expect("Stats checkpoint task failed");
     // All HTTP chat writes have drained before the final snapshot is taken.
     let final_stats = app.stats.lock().unwrap().clone();
