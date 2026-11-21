@@ -241,7 +241,12 @@ async fn leaderboard(client: Client, origin: url::Url, events: Sender<Event>) {
     let Ok(url) = origin.join("api/leaderboard") else {
         return;
     };
-    let Ok(reply) = client.get(url).send().await else {
+    let Ok(reply) = client
+        .get(url)
+        .header("Origin", origin.origin().ascii_serialization())
+        .send()
+        .await
+    else {
         return;
     };
     let Ok(board) = body(reply).await else {
@@ -251,7 +256,7 @@ async fn leaderboard(client: Client, origin: url::Url, events: Sender<Event>) {
         board["players"].as_array().map(|players| {
             players
                 .iter()
-                .take(50)
+                .take(1000)
                 .filter_map(|player| {
                     let name = player["name"]
                         .as_str()

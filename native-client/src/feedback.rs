@@ -92,6 +92,7 @@ pub fn sync_match(
     session: Res<GameSession>,
     menu: Res<crate::gui::Menu>,
     graphics: Res<crate::ported::Graphics>,
+    faces: Option<Res<crate::hud::MenloFaces>>,
     time: Res<Time>,
     mut state: ResMut<FeedbackState>,
     mut panels: Query<&mut Node, With<MatchPanel>>,
@@ -193,10 +194,11 @@ pub fn sync_match(
         message = None;
     }
     for mut panel in &mut panels {
-        // The final standings make room for the lobby on the right.
-        (panel.left, panel.right) = match finished {
-            true => (percent(4), px(426)),
-            false => (percent(22), percent(22)),
+        // The final standings sit between the all-time leaderboard on the left and the room lobby on the right.
+        (panel.left, panel.right, panel.top) = match (finished, session.board.is_some()) {
+            (true, true) => (px(424), px(420), px(14)),
+            (true, false) => (percent(4), px(426), percent(12)),
+            (false, _) => (percent(22), percent(22), percent(12)),
         };
         panel.display = match message {
             Some(_) => Display::Flex,
@@ -204,10 +206,14 @@ pub fn sync_match(
         };
     }
     for (mut text, mut font) in &mut texts {
+        if let Some(faces) = &faces {
+            font.font = faces.source.clone();
+        }
         text.0 = message.clone().unwrap_or_default();
-        font.font_size = FontSize::Px(match countdown {
-            true => 48.0 + (now * 7.0).sin() * 5.0,
-            false => 30.0,
+        font.font_size = FontSize::Px(match (countdown, finished) {
+            (true, _) => 48.0 + (now * 7.0).sin() * 5.0,
+            (false, true) => 18.0,
+            (false, false) => 30.0,
         });
     }
     state.flash = (state.flash - dt).max(0.0);

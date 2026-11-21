@@ -46,6 +46,17 @@ pub struct Heard {
     vulcan: f64,
     warning: i64,
     voice_until: f32,
+    players: Option<HashSet<usize>>,
+}
+
+/// Returns whether a new active human peer joined (or returned from AFK) since the last snapshot,
+/// updating `known` with the current set of active human peers.
+pub(crate) fn joined_room(known: &mut Option<HashSet<usize>>, current: HashSet<usize>) -> bool {
+    let joined = known
+        .as_ref()
+        .is_some_and(|previous| current.difference(previous).next().is_some());
+    *known = Some(current);
+    joined
 }
 
 fn u32_at(bytes: &[u8], at: usize) -> Option<usize> {
@@ -143,12 +154,25 @@ pub fn play(
     let mut pitch = 1.0;
     let mut stopped = Vec::new();
     match session.client.as_ref() {
-        None => *heard = Heard::default(),
+        None => {
+            let players = session.joined().then(|| heard.players.take()).flatten();
+            *heard = Heard {
+                players,
+                ..Heard::default()
+            };
+        }
         Some(client) => {
             let view = client.view();
             let p = view.player;
             let active = view.phase == "racing";
             let racers = || view.actors.iter().filter(|a| !a.inactive);
+            let players: HashSet<usize> = racers()
+                .filter(|a| a.human && !a.afk && a.id != view.you)
+                .map(|a| a.id)
+                .collect();
+            if joined_room(&mut heard.players, players) {
+                cues.push(("event:playerJoin".into(), 1.0));
+            }
             if view.phase == "countdown" {
                 let count = view.countdown.ceil() as i64;
                 if count != heard.countdown {
@@ -297,7 +321,13 @@ mod tests {
     fn embedded_pack_ports_every_cue_voice_and_layer() {
         let (rate, sounds) = parse(PACK).expect("valid pack");
         let sounds: HashMap<_, _> = sounds.into_iter().collect();
-        for name in ["event:fire", "event:explosion", "event:victory", "cue:go"] {
+        for name in [
+            "event:fire",
+            "event:explosion",
+            "event:victory",
+            "event:playerJoin",
+            "cue:go",
+        ] {
             assert!(sounds.contains_key(name), "{name}");
         }
         for driver in 0..15 {
@@ -325,5 +355,20 @@ mod tests {
         assert_eq!(u32_at(&bytes, 40), Some(4));
         assert_eq!(bytes.len(), 48);
         assert!(parse(b"WWSP").is_none());
+    }
+
+    #[test]
+    fn room_join_sound_plays_only_when_new_human_peer_arrives_or_returns_from_afk() {
+        let mut known = None;
+        // Initial room snapshot with player 1 already present: no sound.
+        assert!(!joined_room(&mut known, HashSet::from([1])));
+        // Same roster on next frame: no sound.
+        assert!(!joined_room(&mut known, HashSet::from([1])));
+        // Player 2 joins: sound plays!
+        assert!(joined_room(&mut known, HashSet::from([1, 2])));
+        // Player 2 goes AFK / leaves: no sound.
+        assert!(!joined_room(&mut known, HashSet::from([1])));
+        // Player 2 returns from AFK: sound plays!
+        assert!(joined_room(&mut known, HashSet::from([1, 2])));
     }
 }

@@ -23,8 +23,21 @@ export class PlayRequestPrompt {
   }
 }
 
+export class RoomJoinTracker {
+  room=null;players=null;
+  sample(state){
+    if(!state||!Array.isArray(state.players)){this.reset();return false;}
+    const present=new Set(state.players.filter(player=>player.id!==state.you&&!player.afk).map(player=>player.id));
+    const joined=this.room===state.code&&this.players!==null&&[...present].some(id=>!this.players.has(id));
+    this.room=state.code??null;this.players=present;
+    return joined;
+  }
+  reset(){this.room=null;this.players=null;}
+}
+
 export class NetworkGame {
   playRequestPrompt=new PlayRequestPrompt();
+  joinTracker=new RoomJoinTracker();
   token=null;state=null;paused=false;sequence=0;actions=[];client=null;rtt=0;lastPing=-Infinity;
   // For the problem log: where to report, and when the server was last heard from.
   log=()=>{};lastPacket=0;
@@ -288,6 +301,7 @@ export class NetworkGame {
     if(!this.active)return;
     const now=performance.now()/1000;this.lastPacket=now*1000;this.client.accept(packet,now);this.client.frame(0,this.paused?0:this.keys,now);this.client.peek();
     const state=this.client.state();
+    if(this.joinTracker.sample(state)){this.unlock?.().catch(()=>{});this.sound('playerJoin');}
     const rosterKey=JSON.stringify([state.host,state.you,state.players]);
     this.state=state;this.leaveButton.classList.remove('hidden');this.share.classList.remove('hidden');this.copyButton.classList.remove('hidden');this.animalChoice.classList.toggle('hidden',this.dedicated||!this.isHost);
     for(const node of [this.hostButton,this.botCount,this.share.parentElement,this.help])node.classList.toggle('hidden',!this.isHost&&!this.dedicated);
@@ -347,7 +361,7 @@ export class NetworkGame {
   pause(){if(this.dedicated)return this.setAway(!this.afk);this.paused=!this.paused;this.keys.clear();this.actions=[];this.input();this.onState(this.view());}
   leave(message='You left the room.',notify=true){
     if(!this.active)return;
-    this.readyDialog?.close();this.playRequestPrompt=new PlayRequestPrompt();
+    this.readyDialog?.close();this.playRequestPrompt=new PlayRequestPrompt();this.joinTracker.reset();
     this.hostButton.classList.remove('hidden');this.botCount.classList.remove('hidden');this.share.parentElement.classList.remove('hidden');
     this.colorPending=false;this.colorError='';
     this.nameFeedback.textContent='';this.nameDirty=false;this.namePending=false;this.namePromise=null;

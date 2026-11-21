@@ -119,6 +119,7 @@ export class RaceAudio {
     case 'dizzy':this.note(620,.35,{type:'triangle',end:180,volume:.12});this.note(400,.45,{type:'sine',end:650,volume:.1,delay:.15});break;
     case 'explosion':this.note(85,.8,{type:'sine',end:22,volume:1});this.burst(1.3,3500,.9,0,90);this.burst(.5,5500,.45,.09,300);this.note(160,.2,{end:38,volume:.4});break;
     case 'respawn':this.note(330,.3,{type:'sine',end:660,volume:.1});break;
+    case 'playerJoin':this.note(587.33,.14,{type:'sine',end:659.25,volume:.22});this.note(880,.22,{type:'sine',end:1174.66,delay:.09,volume:.24});break;
     case 'victory':this.fanfare();break;
     case 'finish':for(const [i,f] of [392,493.88,587.33].entries())this.note(f,.4,{delay:i*.12,volume:.2});break;
   }}

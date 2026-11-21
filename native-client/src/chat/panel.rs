@@ -181,6 +181,12 @@ pub fn control(
             continue;
         }
         panel.capture_frame = true;
+        if command && event.key_code == KeyCode::KeyV {
+            if let Some(value) = crate::gui::clipboard() {
+                panel.type_text(&value);
+            }
+            continue;
+        }
         match &event.logical_key {
             Key::Escape if !event.repeat => panel.open = false,
             Key::Enter if !event.repeat => panel.send(&mut session.chat),
@@ -197,6 +203,11 @@ pub fn control(
             Key::Space => panel.type_text(" "),
             Key::PageUp => panel.scroll += 200.0,
             Key::PageDown => panel.scroll = (panel.scroll - 200.0).max(0.0),
+            _ if !command => {
+                if let Some(s) = &event.text {
+                    panel.type_text(s);
+                }
+            }
             _ => {}
         }
     }
@@ -207,9 +218,35 @@ pub fn control(
     }
     panel.capture_frame |= panel.open;
 }
+/// Returns true if the text contains Hebrew or other RTL codepoints.
+pub(crate) fn has_rtl(value: &str) -> bool {
+    value.chars().any(|c| {
+        matches!(
+            u32::from(c),
+            0x0590..=0x08FF | 0xFB1D..=0xFDFF | 0xFE70..=0xFEFF
+        )
+    })
+}
+/// Formats the chat input line so the `> ` prompt stays on the left and the cursor `|`
+/// stays at the end of the typed text even when typing Hebrew (RTL).
+pub(crate) fn format_prompt(draft: &str) -> String {
+    match has_rtl(draft) {
+        true => format!("\u{200E}> {draft}|\u{200F}"),
+        false => format!("> {draft}|"),
+    }
+}
+/// Formats a chat message line (`Name: text`) so the sender prefix stays anchored on the
+/// left while RTL Hebrew message text flows naturally without scrambling the colon or sender.
+pub(crate) fn format_line(prefix: &str, body: &str) -> String {
+    match has_rtl(prefix) || has_rtl(body) {
+        true => format!("\u{200E}{prefix}\u{200E}: {body}\u{200F}"),
+        false => format!("{prefix}: {body}"),
+    }
+}
 fn text(
     commands: &mut Commands,
     parent: Entity,
+    font: &bevy::text::FontSource,
     value: impl Into<String>,
     size: f32,
     color: Color,
@@ -217,6 +254,7 @@ fn text(
     commands.spawn((
         Text::new(value),
         TextFont {
+            font: font.clone(),
             font_size: FontSize::Px(size),
             ..default()
         },
@@ -224,7 +262,13 @@ fn text(
         ChildOf(parent),
     ));
 }
-fn button(commands: &mut Commands, parent: Entity, label: &str, action: Action) {
+fn button(
+    commands: &mut Commands,
+    parent: Entity,
+    font: &bevy::text::FontSource,
+    label: &str,
+    action: Action,
+) {
     let entity = commands
         .spawn((
             Node {
@@ -237,7 +281,7 @@ fn button(commands: &mut Commands, parent: Entity, label: &str, action: Action) 
             ChildOf(parent),
         ))
         .id();
-    text(commands, entity, label, 14.0, Color::WHITE);
+    text(commands, entity, font, label, 14.0, Color::WHITE);
 }
 fn visible(message: &Message, chat: &Chat, selected: Option<usize>) -> bool {
     match selected {
@@ -250,7 +294,13 @@ fn visible(message: &Message, chat: &Chat, selected: Option<usize>) -> bool {
         }
     }
 }
-pub fn draw(mut commands: Commands, mut panel: ResMut<ChatPanel>, session: Res<GameSession>) {
+pub fn draw(
+    mut commands: Commands,
+    mut panel: ResMut<ChatPanel>,
+    session: Res<GameSession>,
+    faces: Option<Res<crate::hud::MenloFaces>>,
+) {
+    let font = faces.map(|f| f.source.clone()).unwrap_or_default();
     let chat = &session.chat;
     let draft = panel
         .drafts
@@ -300,6 +350,7 @@ pub fn draw(mut commands: Commands, mut panel: ResMut<ChatPanel>, session: Res<G
     button(
         &mut commands,
         root,
+        &font,
         &match panel.open {
             true => "PIT STOP CHAT  -  CLOSE (ESC)".into(),
             false => format!("CHAT (T)  -  {} NEW", chat.unread),
@@ -323,6 +374,7 @@ pub fn draw(mut commands: Commands, mut panel: ResMut<ChatPanel>, session: Res<G
     button(
         &mut commands,
         tabs,
+        &font,
         &format!("Everyone ({})", chat.unread_in(None)),
         Action::Conversation(None),
     );
@@ -330,6 +382,7 @@ pub fn draw(mut commands: Commands, mut panel: ResMut<ChatPanel>, session: Res<G
         button(
             &mut commands,
             tabs,
+            &font,
             &format!("{} ({})", player.name, chat.unread_in(Some(player.id))),
             Action::Conversation(Some(player.id)),
         );
@@ -341,6 +394,7 @@ pub fn draw(mut commands: Commands, mut panel: ResMut<ChatPanel>, session: Res<G
     text(
         &mut commands,
         root,
+        &font,
         conversation,
         15.0,
         Color::srgb(0.94, 0.79, 0.45),
@@ -381,8 +435,8 @@ pub fn draw(mut commands: Commands, mut panel: ResMut<ChatPanel>, session: Res<G
         text(
             &mut commands,
             row,
-            format!(
-                "{}: {}",
+            &font,
+            format_line(
                 match own {
                     true => "You",
                     false => &message.name,
@@ -390,7 +444,7 @@ pub fn draw(mut commands: Commands, mut panel: ResMut<ChatPanel>, session: Res<G
                 match message.deleted {
                     true => "Message deleted",
                     false => &message.text,
-                }
+                },
             ),
             15.0,
             Color::WHITE,
@@ -399,13 +453,13 @@ pub fn draw(mut commands: Commands, mut panel: ResMut<ChatPanel>, session: Res<G
             text(
                 &mut commands,
                 row,
-                format!(
-                    "Reply to {}: {}",
-                    quote.name,
+                &font,
+                format_line(
+                    &format!("Reply to {}", quote.name),
                     match quote.deleted {
                         true => "Message deleted",
                         false => &quote.text,
-                    }
+                    },
                 ),
                 12.0,
                 Color::srgb(0.73, 0.70, 0.83),
@@ -421,9 +475,21 @@ pub fn draw(mut commands: Commands, mut panel: ResMut<ChatPanel>, session: Res<G
                     ChildOf(row),
                 ))
                 .id();
-            button(&mut commands, actions, "Reply", Action::Reply(message.id));
+            button(
+                &mut commands,
+                actions,
+                &font,
+                "Reply",
+                Action::Reply(message.id),
+            );
             if own {
-                button(&mut commands, actions, "Delete", Action::Delete(message.id));
+                button(
+                    &mut commands,
+                    actions,
+                    &font,
+                    "Delete",
+                    Action::Delete(message.id),
+                );
             }
         }
     }
@@ -435,22 +501,31 @@ pub fn draw(mut commands: Commands, mut panel: ResMut<ChatPanel>, session: Res<G
         text(
             &mut commands,
             root,
-            format!("Replying to {}: {}", reply.name, reply.text),
+            &font,
+            format_line(&format!("Replying to {}", reply.name), &reply.text),
             12.0,
             Color::srgb(0.94, 0.79, 0.45),
         );
-        button(&mut commands, root, "Cancel reply", Action::CancelReply);
+        button(
+            &mut commands,
+            root,
+            &font,
+            "Cancel reply",
+            Action::CancelReply,
+        );
     }
     text(
         &mut commands,
         root,
-        format!("> {}|", draft.text),
+        &font,
+        format_prompt(&draft.text),
         17.0,
         Color::WHITE,
     );
     button(
         &mut commands,
         root,
+        &font,
         match chat.pending {
             true => "Sending...",
             false => "Send (Enter)",
@@ -460,6 +535,7 @@ pub fn draw(mut commands: Commands, mut panel: ResMut<ChatPanel>, session: Res<G
     text(
         &mut commands,
         root,
+        &font,
         format!(
             "{} - {}/500\nScroll / PgUp / PgDn for history",
             chat.status,
@@ -591,5 +667,17 @@ mod tests {
         let mut panel = ChatPanel::default();
         panel.type_text("<script> שלום\n");
         assert_eq!(panel.drafts[&None].text, "<script> שלום");
+    }
+    #[test]
+    fn hebrew_messages_and_prompts_format_with_bidirectional_markers() {
+        assert!(!has_rtl("Hello world"));
+        assert!(has_rtl("שלום עולם"));
+        assert_eq!(format_prompt("hello"), "> hello|");
+        assert_eq!(format_prompt("שלום"), "\u{200E}> שלום|\u{200F}");
+        assert_eq!(format_line("Oren", "gg"), "Oren: gg");
+        assert_eq!(
+            format_line("Oren", "משחק טוב!"),
+            "\u{200E}Oren\u{200E}: משחק טוב!\u{200F}"
+        );
     }
 }
