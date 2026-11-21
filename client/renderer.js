@@ -138,9 +138,49 @@ export class Renderer {
   }
   setQuality(quality){this.quality=quality;this.resolution=({high:2,balanced:1,low:.65,auto:this.softwareGPU?.75:1.25})[quality];this.slowWindows=0;this.fastWindows=0;}
   pixelRatio(){return Math.min(devicePixelRatio,this.resolution);}
+  owlVisibilityReport(world) {
+    const gl = this.gl;
+    const report = {
+      match: world.soundEpoch, matchSeconds: world.elapsed, viewer: world.id,
+      fog: darkHumorState(world).strength, contextLost: gl.isContextLost(),
+      owlCacheBytesRequested: 0, owls: [],
+    };
+    for (const [key, model] of this.models) {
+      if (!key.startsWith('owl:body:')) continue;
+      report.owlCacheBytesRequested += model.count * 36;
+    }
+    const previous = gl.getParameter(gl.ARRAY_BUFFER_BINDING);
+    try {
+      for (const actor of world.bots.filter(a => a.driver === 14 && a.human)) {
+        // lastBodies survives skipped frames for death effects. Only count a
+        // body if that very instance was submitted in the latest battle frame.
+        const body = this.lastBodies.get(actor.id)?.parts.find(part =>
+          this.instances.includes(part) && part.key?.startsWith('owl:body:'));
+        const owl = {
+          id: actor.id, x: actor.wx, z: actor.wz, afk: actor.afk, inactive: actor.inactive,
+          destroyed: actor.destroyed, bomber: actor.bomber, boost: actor.boost,
+          projectiles: world.projectiles.filter(p => p.owner === actor.id).length,
+          bodySubmitted: Boolean(body),
+        };
+        if (body) {
+          owl.variant = body.key;
+          owl.expectedBytes = body.count * 36;
+          owl.allocatedBytes = null;
+          if (body.buffer && !report.contextLost) {
+            gl.bindBuffer(gl.ARRAY_BUFFER, body.buffer);
+            owl.allocatedBytes = gl.getBufferParameter(gl.ARRAY_BUFFER, gl.BUFFER_SIZE);
+          }
+        }
+        report.owls.push(owl);
+      }
+    } finally {
+      gl.bindBuffer(gl.ARRAY_BUFFER, previous);
+    }
+    return report;
+  }
   model(key,x,y,z,angle,build,pitch=0,plumage=null,roll=0){
     let model=this.models.get(key);
-    if(!model){const mesh=new Mesh();this.buildingModel=true;try{build(mesh);}finally{this.buildingModel=false;}const buffer=this.gl.createBuffer();this.gl.bindBuffer(this.gl.ARRAY_BUFFER,buffer);this.gl.bufferData(this.gl.ARRAY_BUFFER,new Float32Array(mesh.data),this.gl.STATIC_DRAW);model={buffer,count:mesh.data.length/9,rubble:this.rubbleSamples(mesh.data)};this.models.set(key,model);}
+    if(!model){const mesh=new Mesh();this.buildingModel=true;try{build(mesh);}finally{this.buildingModel=false;}const buffer=this.gl.createBuffer();this.gl.bindBuffer(this.gl.ARRAY_BUFFER,buffer);this.gl.bufferData(this.gl.ARRAY_BUFFER,new Float32Array(mesh.data),this.gl.STATIC_DRAW);model={key,buffer,count:mesh.data.length/9,rubble:this.rubbleSamples(mesh.data)};this.models.set(key,model);}
     if(this.report&&!Number.isFinite(x+y+z+angle+pitch+roll))this.report(`model:${key}`,'error','model-not-finite',{key,x,y,z,angle,pitch,roll});
     this.instances.push({...model,x,y,z,angle,pitch,plumage,roll});
   }

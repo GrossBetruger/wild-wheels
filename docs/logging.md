@@ -133,6 +133,7 @@ never logged. Player names and whatever text a client's error carries are.
 | `crashed-last-run` | The native client crashed last time; reported on the next start. |
 | `racer-not-drawn` | A racer who is in the match left nothing on screen: a position or angle that is not a number, or a model that drew nothing. Includes the racer's state. |
 | `model-not-finite` | The browser was asked to draw a model at a position that is not a number. |
+| `owl-visibility` | Press F8 (Fn+F8 on some Macs) in the affected multiplayer browser when a human opponent's owl disappears. Records the match clock, fog, owl state, owned projectile count and whether its body was submitted in the latest frame. For a submitted body, compare expected and allocated WebGL buffer bytes. A matching size establishes allocation only. Captures are limited to one per browser per 30 seconds and sent with the normal client-log batch. |
 | `slow-minute` | A minute with a 95th-percentile frame over 40 ms, ten frames over 50 ms, or a second without news from the server. |
 | `match-frames` | One line per finished match: frames, long frames, the longest frame and wait. |
 | `reports-dropped` | The client had more to report than it is allowed to send. |

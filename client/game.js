@@ -30,6 +30,7 @@ canvas.addEventListener('webglcontextlost', () => clientLog.note('error', 'graph
 renderer.report = (key, level, event, data) => clientLog.limited(key, 30000, level, event, data);
 const characterPreview = new CharacterPreview(document.querySelector('.racer-panel'));
 let uiNotice = null;
+let nextVisibilityReport = 0;
 const mobile = usesMobileControls(navigator.maxTouchPoints, matchMedia('(pointer:coarse)').matches); document.body.classList.toggle('mobile-bomber', mobile);
 const racePanel = document.querySelector('.race-panel'); let mobileImmersive = false, mobileNativeFullscreen = false;
 function exitMobileFullscreen() { mobileImmersive = false; mobileNativeFullscreen = false; racePanel.classList.remove('mobile-fullscreen'); document.body.classList.remove('mobile-playing'); mobileScreenButton.textContent = 'FULL SCREEN'; if (document.fullscreenElement === racePanel) document.exitFullscreen().catch(() => { }); }
@@ -488,6 +489,15 @@ window.addEventListener('keydown', e => {
 window.addEventListener('keydown', e => {
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement || e.target.isContentEditable) return;
   const playing = ['racing', 'countdown'].includes(race.phase), key = gameKey(e);
+  if (e.code === 'F8' && network.active && mode === 'combat') {
+    e.preventDefault();
+    const now = performance.now();
+    if (e.repeat || now < nextVisibilityReport) return;
+    nextVisibilityReport = now + 30000;
+    clientLog.note('info', 'owl-visibility', renderer.owlVisibilityReport(race));
+    uiNotice = {text: 'Owl visibility snapshot captured', until: now + 3000};
+    return;
+  }
   if (key === 'tab' || key === 'meta') {
     if (!playing || e.shiftKey || e.ctrlKey || e.altKey || key === 'tab' && e.metaKey) return;
     e.preventDefault(); if (!e.repeat) switchWeapon(); return;
