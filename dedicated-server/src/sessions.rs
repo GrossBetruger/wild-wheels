@@ -63,7 +63,7 @@ impl Sessions {
                     || p.name.encode_utf16().count() > 24
                     || p.color.as_ref().is_some_and(|color| color.len() != 7 || !color.starts_with('#') || !color.as_bytes()[1..].iter().all(u8::is_ascii_hexdigit))
                     || p.chat_color.as_ref().is_some_and(|color| color.len() != 7 || !color.starts_with('#') || !color.as_bytes()[1..].iter().all(u8::is_ascii_hexdigit))
-                    || p.driver >= 15
+                    || p.driver >= 16
                     || !matches!(p.role.as_str(), "driver" | "bomber")
             })
         {

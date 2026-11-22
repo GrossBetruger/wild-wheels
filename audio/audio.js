@@ -69,7 +69,7 @@ export class RaceAudio {
   voice({driver,cue,pan=0,volume=1}){
     if(!this.context||!this.enabled)return false;
     // Synthesized cartoon calls, including a trumpet, chirps and a human hum.
-    const profiles=[{pitch:460,formant:1150,wobble:9,depth:14},{pitch:610,formant:1550,wobble:28,depth:35},{pitch:780,formant:1900,wobble:13,depth:22},{pitch:205,formant:660,wobble:7,depth:9},{pitch:125,formant:720,wobble:6,depth:24},{pitch:1450,formant:3400,wobble:52,depth:90},{pitch:165,formant:1050,wobble:4,depth:3},{pitch:240,formant:820,wobble:3,depth:7},{pitch:920,formant:2100,wobble:17,depth:30},{pitch:720,formant:1700,wobble:6,depth:18},{pitch:135,formant:760,wobble:3,depth:5},{pitch:115,formant:580,wobble:8,depth:16},{pitch:840,formant:1950,wobble:5,depth:12},{pitch:1050,formant:2400,wobble:17,depth:24},{pitch:185,formant:900,wobble:5,depth:9}];
+    const profiles=[{pitch:460,formant:1150,wobble:9,depth:14},{pitch:610,formant:1550,wobble:28,depth:35},{pitch:780,formant:1900,wobble:13,depth:22},{pitch:205,formant:660,wobble:7,depth:9},{pitch:125,formant:720,wobble:6,depth:24},{pitch:1450,formant:3400,wobble:52,depth:90},{pitch:165,formant:1050,wobble:4,depth:3},{pitch:240,formant:820,wobble:3,depth:7},{pitch:920,formant:2100,wobble:17,depth:30},{pitch:720,formant:1700,wobble:6,depth:18},{pitch:135,formant:760,wobble:3,depth:5},{pitch:115,formant:580,wobble:8,depth:16},{pitch:840,formant:1950,wobble:5,depth:12},{pitch:1050,formant:2400,wobble:17,depth:24},{pitch:185,formant:900,wobble:5,depth:9},{pitch:540,formant:1320,wobble:11,depth:18}];
     const profile=profiles[driver];if(!profile)return false;
     const patterns={pass:[[0,.14,1,1.25],[.17,.16,1.15,.95]],hurt:[[0,.24,1.5,.65]],cheer:[[0,.13,.9,1.3],[.16,.2,1.1,1.45]],lap:[[0,.16,.9,1.1],[.2,.2,1.15,1.4]],win:[[0,.16,1,1.3],[.2,.17,1.2,1.5],[.43,.32,1.35,1.05]]};
     const pattern=patterns[cue];if(!pattern)return false;
@@ -93,6 +93,7 @@ export class RaceAudio {
     return true;
   }
   event(type){switch(type){
+    case 'karmaRaccoon':for(const [i,f]of [432,540,648,864].entries())this.note(f,.95,{type:'sine',delay:i*.08,volume:.16});this.burst(.35,1600,.14,.05,3600);break;
     case 'teleportOut':this.burst(.25,900,.2,0,4200);this.note(220,.28,{type:'sine',end:880,volume:.14});break;
     case 'locustSwarm':this.burst(.4,2800,.12);this.note(880,.18,{volume:.08});break;case 'locustPop':this.burst(.12,1800,.15);this.note(440,.1,{end:100,volume:.1});break;case 'teleportIn':this.burst(.22,3600,.13,0,800);for(const [i,f]of [880,1174.66,1567.98].entries())this.note(f,.18,{type:'sine',delay:i*.045,volume:.06});break;
     case 'cameraShutter':this.mechanicalClick(.018,3200,.42,0,'highpass');this.mechanicalClick(.027,1150,.4,.065,'bandpass');this.mechanicalClick(.018,420,.2,.07,'lowpass');break;

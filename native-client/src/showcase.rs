@@ -84,13 +84,14 @@ impl Scene {
     /// `plumage` and `rapid-fire` alone show Pearococo and KnowItOwl.
     pub fn parse(name: &str) -> Option<Self> {
         let parts: Vec<&str> = name.split(':').collect();
-        let racer = |text: &str| text.parse::<usize>().ok().filter(|driver| *driver < 15);
+        let racer = |text: &str| text.parse::<usize>().ok().filter(|driver| *driver < 16);
         let (kind, driver, state) = match parts.as_slice() {
             ["boost"] => ("boost", 9, None),
             ["fire-ring"] => ("fire-ring", 10, None),
             ["nightmare"] => ("nightmare", 7, None),
             ["nightmare-end"] => ("nightmare-end", 7, None),
             ["reverse-psychology"] => ("reverse-psychology", 0, None),
+            ["karmic-raccooning"] => ("karmic-raccooning", 15, None),
             ["plumage"] => ("plumage", 9, None),
             ["rapid-fire"] => ("rapid-fire", 14, None),
             [kind, driver] => (*kind, racer(driver)?, None),
@@ -128,6 +129,17 @@ impl Scene {
                     Some("effect:fireRingOut:blue"),
                     true,
                 ),
+            ],
+            ("karmic-raccooning", None) if driver == 15 => vec![
+                step("peaceful cruise", 2.0, "idle", None, false),
+                step(
+                    "Karmic Raccooning mandala",
+                    2.8,
+                    "idle",
+                    Some("effect:karmaRaccoon"),
+                    true,
+                ),
+                step("lotus aura", 2.0, "idle", Some("special"), false),
             ],
             ("reverse-psychology", None) => vec![
                 step("normal controls", 2.0, "idle", None, false),
@@ -684,6 +696,6 @@ mod tests {
             "overlay:3:hedge:end"
         );
         assert!(Scene::parse("fade:dizzy:3").is_none());
-        assert!(Scene::parse("boost:15").is_none());
+        assert!(Scene::parse("boost:16").is_none());
     }
 }

@@ -12,7 +12,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use wild_wheels_core::{ClientAction, ClientView};
 
 /// Racers whose special ability the browser offers a button for.
-const SPECIALISTS: [usize; 8] = [5, 7, 8, 9, 11, 12, 13, 14];
+const SPECIALISTS: [usize; 9] = [5, 7, 8, 9, 11, 12, 13, 14, 15];
 /// The browser viewport is 922 CSS pixels wide in its usual layout; the native
 /// window is 1280, so every CSS length is scaled by this.
 const K: f32 = 1.4;
@@ -149,6 +149,7 @@ pub struct Notices {
     burning: bool,
     ring: Option<(bool, f64)>,
     abilities: HashMap<usize, (usize, f64, f64, f64, f64)>,
+    last_karma_id: u32,
     ability: Option<Notice>,
     intelligence: Option<u32>,
     reward: Option<Notice>,
@@ -174,6 +175,7 @@ impl Notices {
                     .map(|c| (c.id, c.diversions))
                     .collect(),
                 intelligence: Some(p.intelligence_bonus),
+                last_karma_id: view.last_karma.map_or(0, |k| k.id),
                 ..default()
             };
         }
@@ -259,6 +261,56 @@ impl Notices {
         }
         // AbilityUsage: a jump in a racer's cooldown means they just used their special.
         let mut used = None;
+        let mut karma_caster = None;
+        if let Some(karma) = view.last_karma
+            && karma.id > self.last_karma_id
+        {
+            self.last_karma_id = karma.id;
+            if racing && view.special_abilities && view.elapsed - karma.time < 3.0 {
+                karma_caster = Some(karma.caster);
+                let fmt = |v: f64| match (v - v.round()).abs() < 1e-6 {
+                    true => format!("{}", v.round() as i64),
+                    false => format!("{v:.1}"),
+                };
+                let caster = match karma.caster == view.you {
+                    true => "YOU".to_owned(),
+                    false => karma.caster_name.to_uppercase(),
+                };
+                let victim = match karma.victim == view.you {
+                    true => "YOU".to_owned(),
+                    false => karma.victim_name.to_uppercase(),
+                };
+                let (title, detail, duration) = match karma.swapped {
+                    true => (
+                        format!(
+                            "KARMIC RACCOONING · SCORES SWAPPED! ({} -> {})",
+                            fmt(karma.caster_before),
+                            fmt(karma.caster_after)
+                        ),
+                        format!(
+                            "{caster} KO'D {victim} & SWAPPED KILLS · {caster} {} <-> {victim} {}",
+                            fmt(karma.caster_after),
+                            fmt(karma.victim_after)
+                        ),
+                        3.8,
+                    ),
+                    false => (
+                        "KARMIC RACCOONING".to_owned(),
+                        format!("{caster} KO'D {victim} · KARMA BALANCED (NO SWAP)"),
+                        3.2,
+                    ),
+                };
+                used = Some((
+                    karma.caster == view.you,
+                    Notice {
+                        title,
+                        detail,
+                        color: Some([0x8e, 0xf0, 0xc8]),
+                        until: now + duration,
+                    },
+                ));
+            }
+        }
         for a in view.actors {
             let state = (
                 a.driver,
@@ -288,6 +340,9 @@ impl Notices {
                 );
             }
             if state.1 > before.1 + 1.0 || (a.driver == 10 && state.2 > before.2 + 0.3) {
+                if a.driver == 15 && karma_caster == Some(a.id) {
+                    continue;
+                }
                 card = racer
                     .filter(|racer| !racer.card.0.is_empty())
                     .map(|racer| racer.card.clone());
@@ -819,7 +874,17 @@ fn readings(
             (true, _) => format!("F · RECHARGE {:.1}s", p.special_cooldown),
             _ => format!("F · {ability}"),
         };
-        let ready = live && p.special_cooldown <= 0.0 && !(p.driver == 12 && p.health >= 6.0);
+        let karma_ready = p.last_killer.is_some_and(|v| {
+            v != p.id
+                && view
+                    .actors
+                    .get(v)
+                    .is_some_and(|t| !t.inactive && !t.afk && !t.bomber && t.destroyed <= 0.0)
+        });
+        let ready = live
+            && p.special_cooldown <= 0.0
+            && !(p.driver == 12 && p.health >= 6.0)
+            && !(p.driver == 15 && !karma_ready);
         card(Id::Special, String::new(), label, ready, None);
     }
     if !voice_text.is_empty() {

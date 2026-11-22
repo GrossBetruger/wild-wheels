@@ -10,7 +10,7 @@ export function effectScenes(){
     for(const [state,value] of [['boost',2],['vulcan',3],['shield',2],['hedgeShield',2],['tehilim',2],['dizzy',2],['celebrate',1],['somersault',.5]]){
       add(`${name} / ${state}`,driver,r=>{r[state]=value;if(state==='vulcan')r.fireCooldown=.1;});
     }
-    if([5,7,8,9,11,12,13,14].includes(driver))add(`${name} / special`,driver,r=>{
+    if([5,7,8,9,11,12,13,14,15].includes(driver))add(`${name} / special`,driver,r=>{
       r.specialActive=3;
       if(driver===8){r.timeStop=2.5;r.timeOwner=r.id;}
     });
@@ -24,7 +24,7 @@ export function effectScenes(){
   add('Dark Humor / victim fog',0,r=>{Object.assign(r.bots[0],{driver:14,specialActive:3,inactive:false,destroyed:0,wx:20,wz:60});});
   scenes.at(-1).baseline=r=>{Object.assign(r.bots[0],{driver:14,specialActive:0,inactive:false,destroyed:0,wx:20,wz:60});};
   add('Dark Humor / caster X-ray',14,r=>{r.specialActive=3;});
-  for(const [type,life] of [['reverseShockwave',2.2],['explosion',2.5],['abomb',3],['radiation',RADIATION_DURATION],['fashionSnap',1.2],['heartbeat',.7],['taxAudit',2.5],['teleportOut',1.35],['teleportIn',1.35],['locustSpawn',1.2],['locustBurst',.7],['pickup',.65],['fireRingOut',2.4],['yudaSmoke',3]]){
+  for(const [type,life] of [['reverseShockwave',2.2],['explosion',2.5],['abomb',3],['radiation',RADIATION_DURATION],['fashionSnap',1.2],['heartbeat',.7],['taxAudit',2.5],['karmaRaccoon',2.8],['teleportOut',1.35],['teleportIn',1.35],['locustSpawn',1.2],['locustBurst',.7],['pickup',.65],['fireRingOut',2.4],['yudaSmoke',3]]){
     add(type,0,(r,t)=>{r.effects=[{type,owner:r.id,wx:r.wx,wz:r.wz+6,heading:0,age:life*(.1+.7*t),life,radius:20,color:'#ff631c'}];},'World effects');
   }
   for(const radius of [10,20,40])for(const color of ['#ff631c','#4abaff'])add(`Fire ring / radius ${radius} / ${color}`,10,r=>{r.effects=[{type:'fireRing',owner:r.id,wx:r.wx,wz:r.wz,age:1,life:20,radius,color}];},'World effects');

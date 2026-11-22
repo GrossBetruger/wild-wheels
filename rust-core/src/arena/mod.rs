@@ -71,11 +71,11 @@ pub fn voice(g:&mut Globals,a:&mut Actor,cue:&str,root_x:f64){
     a.voice_cooldown=1.5;
     g.voices.push(json!({"driver":a.driver,"cue":cue,"pan":match a.id==0 {true=>0.0,false=>((a.wx-root_x)/70.0).clamp(-0.8,0.8)},"volume":match a.id==0 {true=>1.0,false=>0.6}}));
 }
-pub const DRIVER_CUTENESS:[u8;15]=[5,3,4,4,5,5,1,5,5,5,3,5,5,5,4];
-pub const DRIVER_INTELLIGENCE:[u32;15]=[3,5,4,2,4,3,4,5,5,4,5,4,5,5,5];
+pub const DRIVER_CUTENESS:[u8;16]=[5,3,4,4,5,5,1,5,5,5,3,5,5,5,4,5];
+pub const DRIVER_INTELLIGENCE:[u32;16]=[3,5,4,2,4,3,4,5,5,4,5,4,5,5,5,5];
 pub const START_HEDGEHOGS:u32=10;
 pub const DIZZY_DURATION:f64=8.0;
-pub const DRIVER_FUEL:[u8;15]=[3,2,2,3,3,2,3,5,3,3,3,3,3,2,3];
+pub const DRIVER_FUEL:[u8;16]=[3,2,2,3,3,2,3,5,3,3,3,3,3,2,3,3];
 pub fn boost_duration(driver:usize)->f64{2.0+0.8*f64::from(DRIVER_FUEL[driver%DRIVER_FUEL.len()]-1)}
 impl Actor{
     pub fn intelligence(&self)->u32{DRIVER_INTELLIGENCE[self.driver%DRIVER_INTELLIGENCE.len()].saturating_add(self.intelligence_bonus)}
@@ -83,7 +83,7 @@ impl Actor{
 }
 pub fn recovery_interval(driver:usize)->f64{14.0-2.0*f64::from(DRIVER_CUTENESS[driver%DRIVER_CUTENESS.len()])}
 pub fn hedgehog_recovery_interval(driver:usize)->f64{2.25-0.25*f64::from(DRIVER_CUTENESS[driver%DRIVER_CUTENESS.len()])}
-pub const DRIVER_NAMES:[&str;15]=["Pip the Panda","Rocco the Raccoon","Felix the Fox","Benny the Bear","Ellie the Elephant","Tammy the Cricket","Elon Musk","Houston the RTPL","Avita-Jas","Pearococo","Master-Yuda","R-yeah","Catheterpillar","Fourmidable","KnowItOwl"];
+pub const DRIVER_NAMES:[&str;16]=["Pip the Panda","Rocco the Raccoon","Felix the Fox","Benny the Bear","Ellie the Elephant","Tammy the Cricket","Elon Musk","Houston the RTPL","Avita-Jas","Pearococo","Master-Yuda","R-yeah","Catheterpillar","Fourmidable","KnowItOwl","Tycoon"];
 pub fn driver_name(driver:usize)->&'static str { DRIVER_NAMES[driver%DRIVER_NAMES.len()] }
 impl Game {
     pub fn combat_active(&self)->bool{self.global.phase=="racing"}

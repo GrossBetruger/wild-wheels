@@ -47,8 +47,8 @@ function spawn(r, actor, initial = false) {
   actor.dizzy = 0; actor.stinkContributors = new Map();
 }
 export function createBattle(driver = 0, arena = 0, random = Math.random, {targetScore = 10, matchMinutes = 3} = {}) {
-  const r = createRace(driver, 0, random); r.specialAbilities = true; r.timeStop = 0; r.timeOwner = null; r.mode = 'combat'; r.arena = arena; r.duration = matchMinutes * 60; r.targetScore = targetScore; r.id = 0; r.color = drivers[driver].color; r.killFeed = []; r.driftParticles = []; r.chaffClouds = []; r.chaffSequence = 0; r.bombs = []; r.bombSequence = 0; r.stinkClouds = [];
-  const actors = [r, ...r.bots]; for (const [id, actor] of actors.entries()) Object.assign(actor, { id, wx: 0, wz: 0, heading: 0, kills: 0, deaths: 0, bicyclesStolen: 0, health: 3, destroyed: 0, shield: 0, celebrate: 0, fireCooldown: 0, reload: 0, brain: 0, path: [], bomber: false, bombAmmo: 0, bombReload: 0, stinkAmmo: 0 });
+  const r = createRace(driver, 0, random); r.specialAbilities = true; r.timeStop = 0; r.timeOwner = null; r.mode = 'combat'; r.arena = arena; r.duration = matchMinutes * 60; r.targetScore = targetScore; r.id = 0; r.color = drivers[driver].color; r.killFeed = []; r.karmaSequence = 0; r.lastKarma = null; r.driftParticles = []; r.chaffClouds = []; r.chaffSequence = 0; r.bombs = []; r.bombSequence = 0; r.stinkClouds = [];
+  const actors = [r, ...r.bots]; for (const [id, actor] of actors.entries()) Object.assign(actor, { id, wx: 0, wz: 0, heading: 0, kills: 0, deaths: 0, lastKiller: null, bicyclesStolen: 0, health: 3, destroyed: 0, shield: 0, celebrate: 0, fireCooldown: 0, reload: 0, brain: 0, path: [], bomber: false, bombAmmo: 0, bombReload: 0, stinkAmmo: 0 });
   for (const actor of actors) spawn(r, actor, true);
   r.supplies = [[-70, -65, 'missile'], [70, 65, 'missile'], [-65, 70, 'hedgehog'], [65, -70, 'hedgehog'], [-12, 48, 'boost'], [12, -48, 'boost'], [-70, 0, 'health'], [70, 0, 'health'], [-50, -50, 'hedgeproof'], [50, 50, 'tehilim']].map(([wx, wz, kind], id) => ({ id, randomSpawn:true, version: 0, wx, wz, kind, cooldown: ['hedgeproof', 'tehilim'].includes(kind) ? 30 : 0 }));
   r.supplySeed=Math.floor(random()*4294967296)>>>0||1;
@@ -213,7 +213,7 @@ export function advanceProjectile(r, shot, dt) {
   return { impact, victim, decoy };
 }
 export function damageBattle(r, victim, owner, amount, kind = 'hedgehog') {
-  if (victim.bomber || victim.inactive || !battleActive(r) || victim.destroyed > 0 || victim.shield > 0 && kind !== 'wall' && kind !== 'tax' && kind !== 'nightmare' || victim.hedgeShield > 0 && kind !== 'missile' && kind !== 'wall' && kind !== 'tax' && kind !== 'nightmare' || victim.id === owner) return false;
+  if (victim.bomber || victim.inactive || !battleActive(r) || victim.destroyed > 0 || victim.shield > 0 && kind !== 'wall' && kind !== 'tax' && kind !== 'nightmare' && kind !== 'karma' || victim.hedgeShield > 0 && kind !== 'missile' && kind !== 'wall' && kind !== 'tax' && kind !== 'nightmare' && kind !== 'karma' || victim.id === owner) return false;
   victim.health = Math.max(0, victim.health - amount); victim.healTimer = 0; voice(r, victim, 'hurt');
   if (victim === r) r.shake = .5;
   const attacker = [r, ...r.bots].find(k => k.id === owner);
@@ -225,7 +225,7 @@ export function damageBattle(r, victim, owner, amount, kind = 'hedgehog') {
     if (bomber && bomber !== victim) credited.add(bomber);
   }
   victim.stinkContributors = new Map();
-  victim.destroyed = 3; victim.reverseControls = 0; victim.nightmareActive = 0; victim.speed = 0; victim.boost = 0; if (r.finishCountdown === null) victim.deaths++; fx(r, ['abomb', 'radiation', 'nightmare'].includes(kind) ? 'ash' : 'explosion', victim);
+  victim.destroyed = 3; victim.reverseControls = 0; victim.nightmareActive = 0; victim.speed = 0; victim.boost = 0; if (r.finishCountdown === null) { victim.deaths++; if (attacker && attacker.id !== victim.id) victim.lastKiller = attacker.id; } fx(r, ['abomb', 'radiation', 'nightmare'].includes(kind) ? 'ash' : 'explosion', victim);
   victim.owlBoosting = false; victim.drift = 0; victim.wasDrifting = false; victim.driftTrail = null; victim.killStreak = 0; victim.batCooldown = 0; victim.vulcan = 0; victim.hedgeShield = 0; victim.tehilim = 0; victim.specialActive = 0; victim.somersault = 0; victim.dizzy = 0;
   if (r.finishCountdown !== null) return true;
   for (const scorer of credited) { const full = kind === 'wall' || scorer === attacker; scorer.kills += full ? 1 : .5; scorer.celebrate = 1.6; voice(r, scorer, 'cheer'); r.killFeed.unshift({ id: r.killSequence = (r.killSequence ?? 0) + 1, attacker: scorer.id, kind, assist: !full, radiation: kind === 'radiation' && scorer === attacker, victim: victim.id, victimName: victim.name ?? drivers[victim.driver].name, victimColor: victim.color ?? drivers[victim.driver].color, text: `${scorer === r ? 'YOU' : scorer.name ?? drivers[scorer.driver].name.split(' ')[0]} → ${victim === r ? 'YOU' : victim.name ?? drivers[victim.driver].name.split(' ')[0]}`, time: r.elapsed }); r.killFeed = r.killFeed.slice(0, 16); }

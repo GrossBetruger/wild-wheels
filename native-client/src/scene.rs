@@ -747,7 +747,7 @@ fn effects(stage: &mut Stage, view: &ClientView, xray: bool, elapsed: f32) {
                 }
             }
             kind => {
-                if matches!(kind, "heartbeat" | "taxAudit") {
+                if matches!(kind, "heartbeat" | "taxAudit" | "karmaRaccoon") {
                     // These face the viewer; a heartbeat also follows its racer.
                     let owner = fx.owner.and_then(|id| view.actors.get(id));
                     let (wx, wz) = match (kind, owner) {

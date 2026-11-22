@@ -17,6 +17,7 @@
   "characters/knowitowl/dark-humor.js",
   "characters/fourmidable/fourmidable.js",
   "characters/catheterpillar/catheterpillar.js",
+  "characters/tycoon/tycoon.js",
   "client/character-preview.js",
   "client/log.js",
   "client/preview-pose.js",

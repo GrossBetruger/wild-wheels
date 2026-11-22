@@ -1,4 +1,5 @@
 import {RewardNotice} from './reward-notice.js';
+const formatScore=n=>Number.isInteger(n)?String(n):Number(n).toFixed(1);
 export const abilityCards={
   5:{title:'REVERSE PSYCHOLOGY',icon:'⇄',color:'#b7f35b',theme:'locust',detail:'LEFT IS RIGHT · FORWARD IS BACK'},
   7:{title:'REINE DE LA PARESSE',icon:'✺',color:'#ccb5ff',theme:'gravity',detail:'EVERYTHING GRAVITATES TO HER'},
@@ -9,20 +10,49 @@ export const abilityCards={
   12:{title:'SIX-HEART RECOVERY',icon:'♥',color:'#ffb5c6',theme:'heartbeat',detail:'EVERY HEARTBEAT COUNTS'},
   13:{title:'TAX-AUDIT',icon:'Ⓕ',color:'#ffd1ba',theme:'audit',detail:'YOUR ITEMS HAVE BEEN ACCOUNTED FOR'},
   14:{title:'DARK HUMOR',icon:'◉',color:'#d6a8ff',theme:'darkness',detail:'SOME JOKES ARE BETTER IN THE DARK'},
+  15:{title:'KARMIC RACCOONING',icon:'☯',color:'#8ef0c8',theme:'karma',detail:'BALANCE RESTORED FROM TYROL'},
 };
 export class AbilityUsage {
-  previous=new Map();identity=null;elapsed=0;sequence=0;
+  previous=new Map();identity=null;elapsed=0;sequence=0;lastKarmaId=null;
   sample(world){
     const identity=[world.mode,world.soundEpoch,world.arena].join(':');
-    if(identity!==this.identity||world.elapsed+.5<this.elapsed){this.previous.clear();this.identity=identity;}
+    if(identity!==this.identity||world.elapsed+.5<this.elapsed){this.previous.clear();this.identity=identity;this.lastKarmaId=null;}
     this.elapsed=world.elapsed;
     const events=[];
+    const karma=world.lastKarma??null;
+    let karmaCaster=null;
+    if(this.lastKarmaId===null){
+      this.lastKarmaId=karma?.id??0;
+    }else if(karma&&karma.id>this.lastKarmaId){
+      this.lastKarmaId=karma.id;
+      if(world.phase==='racing'&&world.specialAbilities!==false&&world.elapsed-karma.time<3){
+        karmaCaster=karma.caster;
+        const caster=karma.caster===world.id?'YOU':(karma.casterName||'TYCOON').toUpperCase();
+        const victim=karma.victim===world.id?'YOU':(karma.victimName||'RIVAL').toUpperCase();
+        const title=karma.swapped?'KARMIC RACCOONING · SCORES SWAPPED!':'KARMIC RACCOONING';
+        const detail=karma.swapped
+          ?`${caster} KO’D ${victim} & SWAPPED KILLS · ${caster} ${formatScore(karma.casterAfter)} ⇄ ${victim} ${formatScore(karma.victimAfter)}`
+          :`${caster} KO’D ${victim} · KARMA BALANCED (NO SWAP)`;
+        events.push({
+          ...abilityCards[15],
+          id:`karma:${identity}:${karma.id}`,
+          owner:karma.caster,
+          title,
+          detail,
+          ...(karma.swapped?{from:karma.casterBefore,to:karma.casterAfter}:{}),
+          duration:karma.swapped?3.8:3.2,
+        });
+      }
+    }
     for(const a of [world,...world.bots]){
       const state={driver:a.driver,cooldown:a.specialCooldown??0,boost:a.boost??0,flip:a.somersaultCooldown??0,nightmare:a.nightmareCooldown??0};
       const before=this.previous.get(a.id);this.previous.set(a.id,state);
       if(!before||before.driver!==a.driver||world.phase!=='racing'||world.specialAbilities===false||a.inactive||a.afk||a.destroyed||a.bomber)continue;
       let card;
-      if(state.cooldown>before.cooldown+1)card=abilityCards[a.driver];
+      if(state.cooldown>before.cooldown+1){
+        if(a.driver===15&&karmaCaster===a.id)continue;
+        card=abilityCards[a.driver];
+      }
       if(a.driver===10&&state.boost>before.boost+.3)card=abilityCards[10];
       if(a.driver===5&&state.flip>before.flip+.3)card={title:'CRICKET’S JUMP',icon:'🦗',color:'#b7f35b',theme:'locust',detail:'NOW YOU SEE HER…'};
       if(a.driver===7&&state.nightmare>(before.nightmare??0)+1)card={title:'NIGHTMARE FUEL',icon:'✺',color:'#d068ff',theme:'gravity',detail:'HOUSTON, WE HAVE A PROBLEM'};

@@ -15,7 +15,7 @@ impl Serialize for GlobalMeta<'_>{fn serialize<S:Serializer>(&self,serializer:S)
     macro_rules! e{($key:literal,$value:expr)=>{map.serialize_entry($key,&$value)?;};}
     e!("locusts",g.locusts);e!("locustSequence",g.locust_sequence);e!("mode",g.mode);e!("phase",g.phase);e!("arena",g.arena);e!("elapsed",g.elapsed);e!("countdown",g.countdown);e!("duration",g.duration);e!("targetScore",g.target_score);e!("finishTime",g.finish_time);e!("finishCountdown",g.finish_countdown);e!("winner",g.winner);e!("multiplayer",g.multiplayer);e!("soundEpoch",g.sound_epoch);e!("soundSequence",g.sound_sequence);e!("shake",g.shake);e!("projectileSequence",g.projectile_sequence);e!("bombSequence",g.bomb_sequence);e!("chaffSequence",g.chaff_sequence);e!("killSequence",g.kill_sequence);
     e!("specialAbilities",g.special_abilities);e!("timeStop",g.time_stop);e!("timeOwner",g.time_owner);
-    e!("host",g.host);e!("bombs",g.bombs);e!("chaffClouds",g.chaff_clouds);e!("stinkClouds",g.stink_clouds);e!("supplies",g.supplies);e!("effects",g.effects);e!("voices",g.voices);e!("killFeed",self.game.viewer_feed(self.viewer));
+    e!("host",g.host);e!("bombs",g.bombs);e!("chaffClouds",g.chaff_clouds);e!("stinkClouds",g.stink_clouds);e!("supplies",g.supplies);e!("effects",g.effects);e!("voices",g.voices);e!("killFeed",self.game.viewer_feed(self.viewer));if let Some(karma)=&g.last_karma{e!("lastKarma",karma);}
     let events=self.game.viewer_events(self.viewer);
     e!("events",events);e!("skids",[0u8;0]);e!("driftParticles",[0u8;0]);e!("projectiles",g.projectiles.iter().map(ShotMeta).collect::<Vec<_>>());map.end()
 }}
@@ -43,7 +43,7 @@ impl Game{
     }
     pub(super) fn viewer_events(&self,viewer:usize)->Vec<serde_json::Value>{
         let actor=&self.actors[viewer];let g=&self.global;
-        let mut events:Vec<_>=g.events.iter().filter(|event|event.as_str()!=Some("victory")&&event.as_str()!=Some("finish")).filter(|event|actor.bomber||event.is_string()||event["type"]=="bombExplosion"||event["owner"].as_u64()==Some(viewer as u64)||event["wx"].as_f64().zip(event["wz"].as_f64()).is_some_and(|(x,z)|distance(x,z,actor.wx,actor.wz)<90.0)).cloned().collect();
+        let mut events:Vec<_>=g.events.iter().filter(|event|event.as_str()!=Some("victory")&&event.as_str()!=Some("finish")).filter(|event|actor.bomber||event.is_string()||event["type"]=="bombExplosion"||event["type"]=="karmaRaccoon"||event["owner"].as_u64()==Some(viewer as u64)||event["wx"].as_f64().zip(event["wz"].as_f64()).is_some_and(|(x,z)|distance(x,z,actor.wx,actor.wz)<90.0)).cloned().collect();
         if g.events.iter().any(|e|matches!(e.as_str(),Some("victory"|"finish"))){events.push(json!(match self.order().first()==Some(&viewer){true=>"victory",false=>"finish"}));}events
     }
     pub(super) fn encode_packet(&self,viewer:usize,output:&mut Vec<u8>)->Result<(),()>{

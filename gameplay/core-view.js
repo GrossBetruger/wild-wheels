@@ -23,6 +23,7 @@ class Actor extends Row{
   get nightmareCooldown(){return this.frame.text.actors[this.id]?.nightmareCooldown??0;}
   get intelligenceBonus(){return this.frame.text.actors[this.id]?.intelligenceBonus??0;}
   get bicyclesStolen(){return this.frame.text.actors[this.id]?.bicyclesStolen??0;}
+  get lastKiller(){return this.frame.text.actors[this.id]?.lastKiller??null;}
   get specialCooldown(){return this.n(46);}
   get specialActive(){return this.n(47);}
   get healTimer(){return this.n(43);}
@@ -52,7 +53,7 @@ fields(Bomb,['id','owner',null,'wx','wz','age','actionId'],{nullable:['actionId'
 class Chaff extends Row{get color(){return color(this.n(10));}}
 fields(Chaff,['id','owner','wx','wz','originX','originZ','age','life','diversions','divertedAt'],{nullable:['divertedAt']});
 class Stink extends Row{}fields(Stink,['id','owner','wx','wz','age','life']);
-class Effect extends Row{get heading(){return this.n(7);}get type(){return ['effect','explosion','abomb','boost','pickup','hit','crash','fire','vulcanReady','ash','radiation','yudaSmoke','fashionSnap','heartbeat','taxAudit','teleportOut','teleportIn','fireRing','fireRingOut','locustSpawn','locustBurst','reverseShockwave'][this.n(0)];}get color(){return color(this.n(5));}}
+class Effect extends Row{get heading(){return this.n(7);}get type(){return ['effect','explosion','abomb','boost','pickup','hit','crash','fire','vulcanReady','ash','radiation','yudaSmoke','fashionSnap','heartbeat','taxAudit','teleportOut','teleportIn','fireRing','fireRingOut','locustSpawn','locustBurst','reverseShockwave','karmaRaccoon'][this.n(0)];}get color(){return color(this.n(5));}}
 fields(Effect,[null,'wx','wz','age','life',null,'owner','radius'],{nullable:['owner']});
 class World extends Actor{
   get base(){return 32+this.frame.n(21)*48;}
@@ -61,7 +62,7 @@ class World extends Actor{
   get finishRank(){return this.frame.n(16)<0?null:this.frame.n(16);}get finishTime(){return this.frame.n(17)<0?null:this.frame.n(17);}get finishCountdown(){return this.frame.n(18)<0?null:this.frame.n(18);}
   get rank(){return this.frame.n(19);}get shake(){return this.frame.n(20);}get soundEpoch(){return this.frame.n(22);}get winner(){return this.frame.text.winner;}get host(){return this.frame.text.host;}get multiplayer(){return this.frame.text.multiplayer;}
   get specialAbilities(){return this.frame.text.specialAbilities!==false;}get timeStop(){return this.frame.text.timeStop??0;}get timeOwner(){return this.frame.text.timeOwner;}
-  get killFeed(){return this.frame.text.killFeed;}get events(){return this.frame.events;}get voices(){return this.frame.voices;}
+  get killFeed(){return this.frame.text.killFeed;}get lastKarma(){return this.frame.text.lastKarma??null;}get events(){return this.frame.events;}get voices(){return this.frame.voices;}
   get locusts(){return this.frame.text.locusts??[];}get bots(){return this.frame.bots;}get skids(){return this.frame.pools.skids;}get driftParticles(){return this.frame.pools.driftParticles;}get projectiles(){return this.frame.pools.projectiles;}get supplies(){return this.frame.pools.supplies;}get bombs(){return this.frame.pools.bombs;}get chaffClouds(){return this.frame.pools.chaffClouds;}get stinkClouds(){return this.frame.pools.stinkClouds;}get effects(){return this.frame.pools.effects;}
 }
 export class CoreView{

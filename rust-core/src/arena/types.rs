@@ -18,6 +18,7 @@ pub struct Actor {
     pub joined_after_kill:u32,
     pub wx:f64,pub wz:f64,pub heading:f64,pub motion_heading:f64,pub camera_heading:f64,
     pub speed:f64,pub health:f64,pub kills:f64,pub deaths:u32,pub kill_streak:u32,
+    #[serde(skip_serializing_if="Option::is_none")]pub last_killer:Option<usize>,
     pub destroyed:f64,pub shield:f64,pub hedge_shield:f64,pub tehilim:f64,pub celebrate:f64,pub fire_cooldown:f64,
     pub heal_timer:f64,pub reload:f64,pub brain:f64,pub skill:f64,pub path:Vec<Point>,
     pub human:bool,pub bomber:bool,pub inactive:bool,pub afk:bool,
@@ -73,10 +74,15 @@ pub struct Particle { pub owner:usize,pub wx:f64,pub wz:f64,pub height:f64,pub v
 pub struct Kill { pub id:u32,pub attacker:usize,pub victim:usize,pub attacker_name:String,pub victim_name:String,pub victim_color:String,pub kind:String,pub text:String,pub time:f64,pub assist:bool,pub radiation:bool }
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(default,rename_all="camelCase")]
+pub struct KarmaEvent { pub id:u32,pub caster:usize,pub caster_name:String,pub victim:usize,pub victim_name:String,pub swapped:bool,pub caster_before:f64,pub caster_after:f64,pub victim_before:f64,pub victim_after:f64,pub time:f64 }
+#[derive(Clone, Default, Deserialize, Serialize)]
+#[serde(default,rename_all="camelCase")]
 pub struct Globals {
     pub locusts:Vec<Locust>,pub locust_sequence:u32,
     pub supply_seed:u32,
     pub bicycle_sequence:u32,
+    pub karma_sequence:u32,
+    #[serde(skip_serializing_if="Option::is_none")]pub last_karma:Option<KarmaEvent>,
     #[serde(default="abilities_default")]pub special_abilities:bool,
     pub time_stop:f64,pub time_owner:Option<usize>,
     pub mode:String,pub phase:String,pub arena:usize,pub elapsed:f64,pub countdown:f64,pub duration:f64,pub target_score:f64,

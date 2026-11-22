@@ -39,7 +39,7 @@ pub(crate) fn color_preference(body: &Value) -> Result<Option<String>> {
 fn driver(value: &Value) -> Result<usize> {
     value
         .as_u64()
-        .filter(|&v| v < 15)
+        .filter(|&v| v < 16)
         .map(|v| v as usize)
         .ok_or((400, "Choose a character."))
 }
@@ -270,7 +270,7 @@ impl Room {
             return Err((409, *FULL));
         };
         let chosen = chosen.unwrap_or_else(|| {
-            (0..15)
+            (0..16)
                 .find(|&d| !self.members.iter().flatten().any(|p| p.driver == d))
                 .unwrap_or(id)
         });

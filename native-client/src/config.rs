@@ -70,8 +70,8 @@ impl Config {
                     config.driver = args
                         .next()
                         .and_then(|driver| driver.parse().ok())
-                        .filter(|driver| *driver < 15)
-                        .ok_or("--driver requires a racer from 0 to 14")?
+                        .filter(|driver| *driver < 16)
+                        .ok_or("--driver requires a racer from 0 to 15")?
                 }
                 "--benchmark" => {
                     config.benchmark = Some(

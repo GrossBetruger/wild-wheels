@@ -947,9 +947,11 @@ mod tests {
     fn embedded_pack_ports_every_racer_state_and_arena() {
         let graphics = Graphics::parse(PACK).expect("valid pack");
         assert_eq!(graphics.arenas.len(), 2);
-        assert_eq!(graphics.racers().len(), 15);
+        assert_eq!(graphics.racers().len(), 16);
         assert_eq!(graphics.racers()[0].name, "Pip the Panda");
         assert_eq!(graphics.racers()[14].ability, "DARK HUMOR");
+        assert_eq!(graphics.racers()[15].name, "Tycoon");
+        assert_eq!(graphics.racers()[15].ability, "KARMIC RACCOONING");
         // Pearococo's eleven tail feathers are drawn by the plumage shader; no
         // other racer has any.
         let feathers = |driver: usize| {
@@ -964,7 +966,7 @@ mod tests {
         assert!(graphics.racers()[0].ability.is_empty());
         assert_eq!(graphics.racers()[14].card.0, "DARK HUMOR");
         assert_eq!(graphics.racers()[0].intelligence, 3);
-        for driver in 0..15 {
+        for driver in 0..16 {
             for state in ["idle", "boost", "celebrate"] {
                 let clip = graphics
                     .clip(&format!("driver:{driver}:{state}"))
@@ -994,6 +996,7 @@ mod tests {
             "pickup:bicycle",
             "health:3",
             "effect:reverseShockwave",
+            "effect:karmaRaccoon",
             "overlay:reversePsychology",
             "overlay:reversePsychology:end",
             "effect:explosion",

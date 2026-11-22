@@ -330,7 +330,7 @@ mod tests {
         ] {
             assert!(sounds.contains_key(name), "{name}");
         }
-        for driver in 0..15 {
+        for driver in 0..16 {
             for cue in ["pass", "hurt", "cheer", "lap", "win"] {
                 assert!(sounds.contains_key(format!("voice:{driver}:{cue}").as_str()));
             }

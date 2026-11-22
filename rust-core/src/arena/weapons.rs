@@ -61,7 +61,7 @@ impl Game{
     }
     pub(super) fn damage(&mut self,victim:usize,owner:usize,amount:f64,kind:&str)->bool{
         let a=&self.actors[victim];
-        if a.bomber||a.inactive||a.afk||self.global.phase!="racing"||a.destroyed>0.0||a.shield>0.0&&kind!="wall"&&kind!="tax"&&kind!="nightmare"||a.hedge_shield>0.0&&kind!="missile"&&kind!="wall"&&kind!="tax"&&kind!="nightmare"||victim==owner{return false;}
+        if a.bomber||a.inactive||a.afk||self.global.phase!="racing"||a.destroyed>0.0||a.shield>0.0&&kind!="wall"&&kind!="tax"&&kind!="nightmare"&&kind!="karma"||a.hedge_shield>0.0&&kind!="missile"&&kind!="wall"&&kind!="tax"&&kind!="nightmare"&&kind!="karma"||victim==owner{return false;}
         let unscored=self.global.finish_countdown.is_some();
         let root_x=self.actors[0].wx;let g=&mut self.global;let a=&mut self.actors[victim];a.health=(a.health-amount).max(0.0);a.heal_timer=0.0;voice(g,a,"hurt",root_x);if victim==0{g.shake=0.5;}
         if a.health>0.0{
@@ -71,7 +71,7 @@ impl Game{
         let mut credit=Vec::new();if owner<self.actors.len(){credit.push(owner);}
         let a=&self.actors[victim];
         if a.dizzy>0.0{for(&id,&expires)in &a.credits{if expires>g.elapsed+1e-8&&self.actors.get(id).is_some_and(|b|b.bomber&&!b.inactive)&&id!=victim&&!credit.contains(&id){credit.push(id);}}}
-        let a=&mut self.actors[victim];a.credits.clear();a.owl_boosting=false;a.destroyed=3.0;a.reverse_controls=0.0;a.nightmare_active=0.0;a.speed=0.0;a.boost=0.0;if !unscored{a.deaths+=1;}effect(g,match kind{"abomb"|"radiation"|"nightmare"=>"ash",_=>"explosion"},victim,a.wx,a.wz,None);a.drift=0.0;a.was_drifting=false;a.drift_trail=None;a.kill_streak=0;a.bat_cooldown=0.0;a.vulcan=0.0;a.hedge_shield=0.0;a.tehilim=0.0;a.special_active=0.0;a.somersault=0.0;a.dizzy=0.0;
+        let actor_count=self.actors.len();let a=&mut self.actors[victim];a.credits.clear();a.owl_boosting=false;a.destroyed=3.0;a.reverse_controls=0.0;a.nightmare_active=0.0;a.speed=0.0;a.boost=0.0;if !unscored{a.deaths+=1;if owner<actor_count&&owner!=victim{a.last_killer=Some(owner);}}effect(g,match kind{"abomb"|"radiation"|"nightmare"=>"ash",_=>"explosion"},victim,a.wx,a.wz,None);a.drift=0.0;a.was_drifting=false;a.drift_trail=None;a.kill_streak=0;a.bat_cooldown=0.0;a.vulcan=0.0;a.hedge_shield=0.0;a.tehilim=0.0;a.special_active=0.0;a.somersault=0.0;a.dizzy=0.0;
         if unscored{return true;}
         let victim_name=a.name.clone().unwrap_or_else(||driver_name(a.driver).into());let victim_color=a.color.clone();
         for scorer in credit{

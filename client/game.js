@@ -8,7 +8,7 @@ import { LENGTH, drivers, tracks, createRace, tick, useItem, useTurbo, selectIte
 import { Renderer } from './renderer.js';
 import { RaceAudio } from '../audio/audio.js';
 import { sampleTrack, branches } from '../gameplay/track.js';
-import { useSpecial, abilityNames, frozen, auditTarget } from '../gameplay/special-abilities.js';
+import { useSpecial, abilityNames, frozen, auditTarget, karmaTarget } from '../gameplay/special-abilities.js';
 import { createBattle, battleActive, tickBattle, fireBattle, releaseChaff, useBattleTurbo, somersaultBattle, arenas, standings, incomingMissiles, VULCAN_DURATION, MAX_HEALTH, equipBomber, dropBomb, BOMB_RECHARGE, recoveryInterval, hedgehogRecoveryInterval } from '../gameplay/combat.js';
 import { NetworkGame } from '../networking/network.js';
 import { ordinal, matchResults, battleTieNotice, bicycleResults } from '../ui/results.js';
@@ -406,7 +406,7 @@ function hud() {
   // The all-time board changes only when a match finishes; it is fetched then and on arriving.
   if(dedicated&&race.phase!==allTimePhase){const arriving=allTimePhase===null;allTimePhase=race.phase;if(arriving||race.phase==='finished')refreshAllTime();}
   document.querySelector('.viewport').classList.toggle('time-stopped',mode==='combat'&&race.timeStop>0);
-  specialButton.classList.toggle('hidden',mode!=='combat'||![5,7,8,9,11,12,13,14].includes(race.driver)||race.bomber||race.specialAbilities===false);specialButton.textContent=(race.specialCooldown??0)>0?`F · RECHARGE ${race.specialCooldown.toFixed(1)}s`:`F · ${race.driver===13&&!auditTarget(race,race)?'XYLOPHONE-ATTACK':abilityNames[race.driver]??'SPECIAL'}`;specialButton.disabled=!battleActive(race)||race.destroyed>0||race.specialCooldown>0||race.driver===12&&race.health>=6||frozen(race,race.id);
+  specialButton.classList.toggle('hidden',mode!=='combat'||![5,7,8,9,11,12,13,14,15].includes(race.driver)||race.bomber||race.specialAbilities===false);specialButton.textContent=(race.specialCooldown??0)>0?`F · RECHARGE ${race.specialCooldown.toFixed(1)}s`:`F · ${race.driver===13&&!auditTarget(race,race)?'XYLOPHONE-ATTACK':abilityNames[race.driver]??'SPECIAL'}`;specialButton.disabled=!battleActive(race)||race.destroyed>0||race.specialCooldown>0||race.driver===12&&race.health>=6||race.driver===15&&!karmaTarget(race,race)||frozen(race,race.id);
   nightmareButton.classList.toggle('hidden',mode!=='combat'||race.driver!==7||race.bomber||race.specialAbilities===false);
   const nightmareActive=race.nightmareActive??0,nightmareCooldown=race.nightmareCooldown??0;
   nightmareState.textContent=nightmareActive>0?`BURNING · ${nightmareActive.toFixed(1)}s`:nightmareCooldown>0?`RECHARGE · ${nightmareCooldown.toFixed(1)}s`:'DOUBLE X · READY';

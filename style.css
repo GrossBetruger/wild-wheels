@@ -4425,6 +4425,36 @@ body.mobile-playing {
   box-shadow: 0 0 28px #b0d4b955
 }
 
+.ability-announcement[data-theme=karma] .reward-card {
+  max-width: min(520px, 100%);
+  animation-duration: 3.8s;
+  background: radial-gradient(ellipse at 20% 25%, #f8dc7d44, transparent 50%), radial-gradient(ellipse at 82% 75%, #88efc455, transparent 55%), linear-gradient(135deg, #1b4438f2, #2e5947ee 55%, #4f462af0);
+  border: 3px double #f8df8c;
+  border-radius: 26px 12px 26px 12px;
+  box-shadow: 0 0 36px #86edc488, inset 0 0 22px #f6db7b33
+}
+
+.ability-announcement[data-theme=karma] .reward-icon {
+  color: #fff2be;
+  font-size: 42px;
+  text-shadow: 0 0 16px #8ef0c8;
+  animation: ability-karma-spin 1.8s ease-in-out 2
+}
+
+@keyframes ability-karma-spin {
+  0% {
+    transform: rotate(0deg) scale(.85)
+  }
+
+  50% {
+    transform: rotate(180deg) scale(1.18)
+  }
+
+  100% {
+    transform: rotate(360deg) scale(1)
+  }
+}
+
 .setup-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);

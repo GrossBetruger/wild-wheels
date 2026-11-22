@@ -21,5 +21,5 @@ test('Tax-Audit and Xylophone-Attack receive distinct designs and no disabled ab
   world.specialAbilities=false;world.specialCooldown=0;tracker.sample(world);world.specialCooldown=20;assert.deepEqual(tracker.sample(world),[]);
 });
 test('each character’s activated ability has its own visual theme',()=>{
-  assert.equal(new Set(Object.values(abilityCards).map(card=>card.theme)).size,9);
+  assert.equal(new Set(Object.values(abilityCards).map(card=>card.theme)).size,10);
 });
