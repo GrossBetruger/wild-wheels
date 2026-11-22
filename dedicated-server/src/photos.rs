@@ -209,6 +209,8 @@ mod tests {
             limits: Default::default(),
             logs: crate::logs::Logs::disabled(),
             sockets: Arc::new(Semaphore::new(32)),
+            voice_sockets: Arc::new(Semaphore::new(32)),
+            voice: Default::default(),
             listener: ([127, 0, 0, 1], 5173).into(),
             origin: None,
             trust_proxy: false,

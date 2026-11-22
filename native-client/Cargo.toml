@@ -9,6 +9,7 @@ publish = false
 wild-wheels-core = { path = "../rust-core" }
 bevy = { version = "=0.20.1", default-features = false, features = ["std", "default_app", "3d_bevy_render", "bevy_winit", "bevy_ui", "bevy_ui_render", "default_font", "multi_threaded", "bevy_audio", "wav", "keyboard", "mouse"] }
 crossbeam-channel = "0.5"
+cpal = "0.17.3"
 # Inflates the compressed graphics pack; already used by Bevy's image loading.
 miniz_oxide = "=0.8.9"
 tokio = { version = "=1.54.1", features = ["rt", "net", "time", "sync", "macros"] }

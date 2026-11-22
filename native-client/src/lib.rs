@@ -19,6 +19,7 @@ mod showcase;
 mod sound;
 mod sprite;
 mod transport;
+mod voice;
 mod xray;
 
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {

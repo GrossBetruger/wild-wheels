@@ -6043,6 +6043,7 @@ name = "wild-wheels-native"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "cpal",
  "crossbeam-channel",
  "directories",
  "futures-util",

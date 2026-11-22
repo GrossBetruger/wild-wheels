@@ -35,13 +35,73 @@ export class Multiplayer {
   rooms = new Map(); members = new Map(); limits = new Map();
   constructor({ startNow = () => performance.now(), fixtureWorld, ...securityOptions } = {}) { this.security = new RequestSecurity(securityOptions); this.fixtureWorld = fixtureWorld; this.startNow = startNow; this.lastAdvance = performance.now(); this.accumulator = 0; this.timer = setInterval(() => this.advance(performance.now()), 1000 / 60); this.timer.unref(); }
   advance(now) { this.accumulator = Math.min(.25, this.accumulator + Math.max(0, (now - this.lastAdvance) / 1000)); this.lastAdvance = now; while (this.accumulator >= 1 / 60) { this.step(1 / 60); this.accumulator -= 1 / 60; } }
-  close() { clearInterval(this.timer); clearInterval(this.socketSweep); for (const socket of this.sockets?.clients ?? []) socket.terminate(); this.sockets?.close(); for (const member of this.members.values()) member.stream?.end(); this.members.clear(); this.rooms.clear(); }
+  close() { clearInterval(this.timer); clearInterval(this.socketSweep); for (const socket of this.sockets?.clients ?? []) socket.terminate(); this.sockets?.close(); for (const socket of this.voiceSockets?.clients ?? []) socket.terminate(); this.voiceSockets?.close(); for (const member of this.members.values()) member.stream?.end(); this.members.clear(); this.rooms.clear(); }
   attach(server) {
-    this.socketSweep = setInterval(() => { for (const socket of this.sockets.clients) if (Date.now() - (socket.lastActivity ?? 0) > 30000) socket.terminate(); }, 10000); this.socketSweep.unref();
+    this.socketSweep = setInterval(() => {
+      for (const socket of this.sockets.clients) if (Date.now() - (socket.lastActivity ?? 0) > 30000) socket.terminate();
+      for (const socket of this.voiceSockets.clients) if (Date.now() - (socket.lastActivity ?? 0) > 45000) socket.terminate();
+    }, 10000); this.socketSweep.unref();
     this.sockets = new WebSocketServer({ noServer: true, maxPayload: 2048, perMessageDeflate: { serverNoContextTakeover: true, clientNoContextTakeover: true, concurrencyLimit: 2, threshold: 1024, zlibDeflateOptions: { level: 1 } } });
+    this.voiceSockets = new WebSocketServer({ noServer: true, maxPayload: 1024, perMessageDeflate: false });
     server.on('upgrade', (req, socket, head) => {
-      try { this.security.check(req, { websocket: true }); if (req.url !== '/api/socket' || this.sockets.clients.size >= 32 || [...this.sockets.clients].filter(client => client.peer === req.socket.remoteAddress).length >= 12) throw problem(403, 'Denied'); this.limit(req, 'upgrade', 10); this.sockets.handleUpgrade(req, socket, head, ws => { ws.peer = req.socket.remoteAddress; this.openSocket(ws); }); } catch { socket.destroy(); }
+      try {
+        this.security.check(req, { websocket: true });
+        if (req.url === '/api/voice') {
+          if (this.voiceSockets.clients.size >= 32 || [...this.voiceSockets.clients].filter(client => client.peer === req.socket.remoteAddress).length >= 12) throw problem(403, 'Denied');
+          this.limit(req, 'voice-upgrade', 10);
+          this.voiceSockets.handleUpgrade(req, socket, head, ws => { ws.peer = req.socket.remoteAddress; this.openVoiceSocket(ws); });
+          return;
+        }
+        if (req.url !== '/api/socket' || this.sockets.clients.size >= 32 || [...this.sockets.clients].filter(client => client.peer === req.socket.remoteAddress).length >= 12) throw problem(403, 'Denied');
+        this.limit(req, 'upgrade', 10);
+        this.sockets.handleUpgrade(req, socket, head, ws => { ws.peer = req.socket.remoteAddress; this.openSocket(ws); });
+      } catch { socket.destroy(); }
     });
+  }
+  openVoiceSocket(socket) {
+    socket.lastActivity = Date.now();
+    let member, count = 0, since = Date.now();
+    const authTimer = setTimeout(() => socket.close(1008, 'Authentication required'), 3000); authTimer.unref();
+    socket.on('error', () => { });
+    socket.on('message', (data, binary) => {
+      try {
+        socket.lastActivity = Date.now();
+        if (!member) {
+          if (binary) throw problem(400, 'Authenticate with JSON first');
+          const message = JSON.parse(data.toString());
+          if (message.type !== 'authenticate' || typeof message.token !== 'string') throw problem(401, 'Authenticate first');
+          member = this.members.get(message.token);
+          if (!member) throw problem(401, 'Invalid room session');
+          clearTimeout(authTimer);
+          member.voiceSocket?.close(1000, 'Voice connection replaced');
+          member.voiceSocket = socket;
+          return;
+        }
+        if (member.voiceSocket !== socket || this.members.get(member.token) !== member) { socket.close(1000, 'Voice connection replaced'); return; }
+        if (!binary) {
+          const message = JSON.parse(data.toString());
+          if (message.type !== 'ping') throw problem(400, 'Unknown voice message');
+          socket.send(JSON.stringify({ type: 'pong' }));
+          return;
+        }
+        const now = Date.now();
+        if (now - since >= 1000) { since = now; count = 0; }
+        if (++count > 75) throw problem(429, 'Too many voice frames');
+        const payload = Buffer.isBuffer(data) ? data : Buffer.from(data);
+        if (payload.length < 164 || payload.length > 964) throw problem(400, 'Invalid voice frame size');
+        const samples = payload.readUInt16LE(2);
+        if (samples < 160 || samples > 960 || payload.length !== 4 + samples) throw problem(400, 'Invalid voice sample count');
+        const out = Buffer.allocUnsafe(2 + payload.length);
+        out[0] = member.id & 0xff;
+        out[1] = 0;
+        payload.copy(out, 2);
+        for (const peer of member.room.members.values()) {
+          if (peer === member || peer.voiceSocket?.readyState !== 1 || peer.voiceSocket.bufferedAmount > 8192) continue;
+          peer.voiceSocket.send(out);
+        }
+      } catch { socket.close(1008, 'Invalid voice frame or session'); }
+    });
+    socket.on('close', () => { clearTimeout(authTimer); if (member?.voiceSocket === socket) member.voiceSocket = null; });
   }
   openSocket(socket) {
     socket.lastActivity = Date.now();
@@ -139,7 +199,7 @@ export class Multiplayer {
   }
   destroyRoom(room) {
     this.rooms.delete(room.code);
-    for (const member of room.members.values()) { this.members.delete(member.token); const socket = member.socket; member.socket = null; member.stream?.end(); socket?.close(4004, 'Room replaced by host'); }
+    for (const member of room.members.values()) { this.members.delete(member.token); const socket = member.socket; member.socket = null; const voice = member.voiceSocket; member.voiceSocket = null; member.stream?.end(); socket?.close(4004, 'Room replaced by host'); voice?.close(4004, 'Room replaced by host'); }
     room.members.clear();
   }
   roster(room) { room.botCount = Math.min(room.botCount, 6 - room.members.size); this.syncRoom(room); }
@@ -155,7 +215,7 @@ export class Multiplayer {
     const member = { ...identity, driver: driver < 0 ? id % drivers.length : driver, color, chatColor, preferredColor: body.color ?? color, name: identity.name === 'Player' ? `Player ${id + 1}` : identity.name, id, token, room, keys: new Set(), actions: [], lastSeen: Date.now(), sequence: -1 }; room.members.set(id, member); this.members.set(token, member); this.assign(room, member); this.roster(room); this.broadcast(room); return member;
   }
   remove(member) {
-    const room = member.room; this.members.delete(member.token); room.members.delete(member.id); member.stream?.end(); member.socket?.close(1000, 'Left room');
+    const room = member.room; this.members.delete(member.token); room.members.delete(member.id); member.stream?.end(); member.socket?.close(1000, 'Left room'); member.voiceSocket?.close(1000, 'Left room'); member.voiceSocket = null;
     if (!room.members.size) { this.rooms.delete(room.code); return; }
     const hostLeft = room.host === member.id;
     if (hostLeft) room.host = room.members.keys().next().value;

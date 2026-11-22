@@ -141,7 +141,7 @@ for (const [field, caption, maximum] of [['targetScore', 'Kills to win', 100], [
 function resetMap() { race = newGame(); lastPhase = ''; lastCount = -1; keys.clear(); updateMapLabels(); }
 function chooseMap(index) { if (dedicated && !network.active) return; if (index === track) return; if (network.active) { if (network.canConfigure) network.control('arena', index); return; } track = index; selectedMaps[mode] = index; resetMap(); }
 const network = new NetworkGame({
-  anchor: modeSwitch, limits: () => soloLimits, keys, role: mobile ? 'bomber' : 'driver', driver: () => selected, arena: () => track, unlock: () => audio.unlock(), sound: type => audio.event(type), onState: world => {
+  anchor: modeSwitch, limits: () => soloLimits, keys, role: mobile ? 'bomber' : 'driver', driver: () => selected, arena: () => track, unlock: () => audio.unlock(), sound: type => audio.event(type), isAudioEnabled: () => audio.enabled, getAudioContext: () => audio.context, onState: world => {
     const changed = mode !== 'combat' || track !== world.arena;
     if (race.soundEpoch !== world.soundEpoch) bomberWeapon = 'abomb';
     if (world.phase === "ready" && (world.targetScore !== race.targetScore || world.duration !== race.duration)) lastPhase = "";
@@ -506,10 +506,10 @@ window.addEventListener('keydown', e => {
   if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'shift'].includes(key)) e.preventDefault();
   keys.add(key); if (e.repeat) return;
   if (network.active) network.input();
-  switch (key) { case 'enter': start(); break; case 'escape': case 'p': pause(); break; case ' ': useWeapon(); break; case 'q': switchWeapon(); break; case 'x': if (!e.ctrlKey && !e.metaKey && !e.altKey) turbo(); break; case 'f': if (!e.ctrlKey && !e.metaKey && !e.altKey) special(); break; case 'z': if (!e.ctrlKey && !e.metaKey && !e.altKey) somersault(); break; case 'c': if (!e.ctrlKey && !e.metaKey && !e.altKey) chaff(); break; }
+  switch (key) { case 'enter': start(); break; case 'escape': case 'p': pause(); break; case ' ': useWeapon(); break; case 'q': switchWeapon(); break; case 'x': if (!e.ctrlKey && !e.metaKey && !e.altKey) turbo(); break; case 'f': if (!e.ctrlKey && !e.metaKey && !e.altKey) special(); break; case 'z': if (!e.ctrlKey && !e.metaKey && !e.altKey) somersault(); break; case 'c': if (!e.ctrlKey && !e.metaKey && !e.altKey) chaff(); break; case 'v': if (!e.ctrlKey && !e.metaKey && !e.altKey && network.active) network.setTalking(true); break; }
 });
-window.addEventListener('keyup', e => { keys.delete(gameKey(e)); if (network.active) network.input(); });
-const stepAway = () => { if (!['racing', 'countdown'].includes(race.phase)) return; if (network.active && network.dedicated) { if (!network.afk) network.setAway(true); return; } pause(); };
+window.addEventListener('keyup', e => { const key = gameKey(e); keys.delete(key); if (key === 'v') network.setTalking(false); if (network.active) network.input(); });
+const stepAway = () => { network.setTalking(false); if (!['racing', 'countdown'].includes(race.phase)) return; if (network.active && network.dedicated) { if (!network.afk) network.setAway(true); return; } pause(); };
 window.addEventListener('blur', () => { keys.clear(); stepAway(); }); document.addEventListener('visibilitychange', () => { if (document.hidden) stepAway(); });
 for (const event of ['pointerdown', 'keydown']) window.addEventListener(event, () => { if (network.active) audio.unlock().catch(() => { }); }, { once: true });
 document.querySelectorAll('[data-key]').forEach(b => { b.addEventListener('pointerdown', e => { e.preventDefault(); b.setPointerCapture(e.pointerId); keys.add(b.dataset.key); if (b.dataset.key === ' ') useWeapon(); if (network.active) network.input(); }); for (const name of ['pointerup', 'pointercancel', 'lostpointercapture']) b.addEventListener(name, () => { keys.delete(b.dataset.key); if (network.active) network.input(); }); });

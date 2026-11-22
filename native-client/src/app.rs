@@ -60,6 +60,7 @@ impl FocusAfk {
 pub struct GameSession {
     pub colors: crate::colors::Selection,
     pub chat: crate::chat::Chat,
+    pub voice: crate::voice::Voice,
     pub client: Option<NativeClient>,
     pub status: String,
     pub sounds: Vec<String>,
@@ -91,6 +92,7 @@ impl GameSession {
         Self {
             colors: Default::default(),
             chat: Default::default(),
+            voice: Default::default(),
             client: None,
             status: String::new(),
             sounds: vec![],
@@ -128,6 +130,7 @@ impl GameSession {
     pub fn leave(&mut self) {
         self.colors.pending = false;
         self.chat.clear();
+        self.voice.disconnect();
         if let Some(transport) = self.transport.take() {
             let _ = transport.commands.try_send(Command::Leave);
         }
@@ -202,7 +205,10 @@ impl GameSession {
                         Err(error) => self.colors.message = error,
                     }
                 }
-                Event::Session { origin, token } => self.chat.connect(origin, token),
+                Event::Session { origin, token } => {
+                    self.chat.connect(origin.clone(), token.clone());
+                    self.voice.connect(origin, token);
+                }
                 Event::Status(status) => {
                     self.status = status;
                 }
@@ -465,6 +471,15 @@ pub(crate) fn drive(
     session.health.frame(now, racing, heard, clock);
     // Keys pressed while the menu is open belong to the menu.
     let focused = window_focused && !menu.open && !chat.capture_frame;
+    let ptt_allowed = window_focused && !chat.capture_frame && session.joined();
+    let modifier = keys.pressed(KeyCode::SuperLeft)
+        || keys.pressed(KeyCode::SuperRight)
+        || keys.pressed(KeyCode::ControlLeft)
+        || keys.pressed(KeyCode::ControlRight)
+        || keys.pressed(KeyCode::AltLeft)
+        || keys.pressed(KeyCode::AltRight);
+    let talking = ptt_allowed && !modifier && keys.pressed(KeyCode::KeyV);
+    session.voice.set_talking(talking);
     let held = |codes: &[KeyCode]| focused && codes.iter().any(|key| keys.pressed(*key));
     let input = ClientInput {
         keys: u32::from(held(&[KeyCode::ArrowUp, KeyCode::KeyW]))

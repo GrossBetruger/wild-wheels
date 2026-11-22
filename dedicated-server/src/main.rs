@@ -10,6 +10,7 @@ mod stats;
 mod updates;
 mod security;
 mod text;
+mod voice;
 use security::{same_origin, same_origin_get};
 use axum::{
     body::{Body, Bytes},
@@ -47,6 +48,8 @@ struct App {
     room: Arc<Mutex<Room>>,
     limits: Arc<Mutex<HashMap<(IpAddr, String), (Instant, u32)>>>,
     sockets: Arc<Semaphore>,
+    voice_sockets: Arc<Semaphore>,
+    voice: Arc<Mutex<voice::VoiceHub>>,
     listener: SocketAddr,
     origin: Option<String>,
     trust_proxy: bool,
@@ -363,6 +366,11 @@ async fn control(app: &App, path: &str, token: &str, body: &Value) -> room::Resu
         let previous_color = if path == "/api/color" {
             room.find(token).map(|id| { let p = room.members[id].as_ref().unwrap(); (p.color.clone(), p.preferred_color.clone()) })
         } else { None };
+        if path == "/api/leave" {
+            if let Some(id) = room.find(token) {
+                app.voice.lock().unwrap().disconnect(id);
+            }
+        }
         let value = dispatch(&mut room, saved.as_deref(), path, token, body, at)?;
         let record = saved.as_ref().map(|store| {
             let current_token = value["token"].as_str().unwrap_or(token);
@@ -679,6 +687,8 @@ async fn main() {
         room: Arc::new(Mutex::new(room)),
         limits: Default::default(),
         sockets: Arc::new(Semaphore::new(32)),
+        voice_sockets: Arc::new(Semaphore::new(32)),
+        voice: Default::default(),
         listener: listener.local_addr().expect("Unable to read game listening address"),
         origin,
         trust_proxy: std::env::var("TRUST_PROXY").is_ok_and(|v| v == "1"),
@@ -767,6 +777,7 @@ async fn main() {
     });
     let router = Router::new()
         .route("/api/socket", get(upgrade))
+        .route("/api/voice", get(voice::upgrade))
         .route(
             "/api/photos",
             get(photos::list)

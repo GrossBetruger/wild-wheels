@@ -2,6 +2,7 @@ import {canChoosePlayerColor, isPlayerColor, savedPlayerColor} from '../gameplay
 import { drivers } from '../gameplay/engine.js';
 import {ArenaClient} from '../gameplay/arena-core.js';
 import {createBinaryEncoder} from './binary-wire.js';
+import {VoiceChat} from '../audio/voice-chat.js';
 const bootstrapPacket=createBinaryEncoder();
 export const validPlayerName=value=>typeof value==='string'&&value.trim().length>0&&value.length<=24;
 const isLoopbackHost=hostname=>['localhost','localhost.','[::1]'].includes(hostname)||/^127(?:\.\d{1,3}){3}$/.test(hostname);
@@ -42,9 +43,10 @@ export class NetworkGame {
   token=null;state=null;paused=false;sequence=0;actions=[];client=null;rtt=0;lastPing=-Infinity;restoreOnVisible=false;
   // For the problem log: where to report, and when the server was last heard from.
   log=()=>{};lastPacket=0;
-  constructor({anchor,limits=()=>({}),keys,driver,arena,onState,onLeave,unlock,sound=()=>{},role='driver'}){
+  constructor({anchor,limits=()=>({}),keys,driver,arena,onState,onLeave,unlock,sound=()=>{},isAudioEnabled=()=>true,getAudioContext=()=>null,role='driver'}){
     this.preferredColor=savedPlayerColor(document.cookie);this.colorDirty=false;this.colorPending=false;this.colorError='';
-    Object.assign(this,{limits,keys,driver,arena,onState,onLeave,unlock,sound,role});this.dedicated=document.body.classList.contains('dedicated-server');
+    Object.assign(this,{limits,keys,driver,arena,onState,onLeave,unlock,sound,isAudioEnabled,getAudioContext,role});this.dedicated=document.body.classList.contains('dedicated-server');
+    this.voice=new VoiceChat({isAudioEnabled:()=>this.isAudioEnabled(),getAudioContext:()=>this.getAudioContext(),onChange:()=>this.updateVoiceUi()});
     this.panel=document.createElement('section');this.panel.className='network-panel';this.panel.setAttribute('aria-label','Multiplayer arena lobby');
     const title=this.title=document.createElement('strong');title.textContent='PLAY TOGETHER · UP TO 6 PLAYERS';
     this.name=document.createElement('input');this.name.placeholder='Your name';this.name.value=savedPlayerName(document.cookie);if(this.name.value==='Player')this.name.value='';this.name.maxLength=24;this.name.setAttribute('aria-label','Player name');
@@ -61,6 +63,11 @@ export class NetworkGame {
     this.animalChoice=document.createElement('select');this.animalChoice.className='hidden';this.animalChoice.setAttribute('aria-label','Your multiplayer character');for(const [index,animal] of drivers.entries()){const option=document.createElement('option');option.value=String(index);option.textContent=`${animal.emoji} ${animal.name}`;this.animalChoice.append(option);}this.animalChoice.onchange=()=>this.chooseDriver(Number(this.animalChoice.value));
     this.hostButton=this.button(this.dedicated?'JOIN SERVER':'HOST ARENA',()=>this.connect(this.dedicated?'/api/join':'/api/rooms'));
     this.leaveButton=this.button('AFK',()=>this.setAway(!this.afk));this.leaveButton.classList.add('hidden');
+    this.micButton=this.button('🎙 HOLD V TO TALK',()=>{});this.micButton.className='mic-button hidden';this.micButton.setAttribute('aria-label','Hold to talk on microphone');
+    this.micButton.addEventListener('pointerdown',event=>{event.preventDefault();this.micButton.setPointerCapture?.(event.pointerId);this.setTalking(true);});
+    for(const name of ['pointerup','pointercancel','lostpointercapture'])this.micButton.addEventListener(name,()=>this.setTalking(false));
+    this.voiceBanner=document.createElement('div');this.voiceBanner.className='voice-indicator hidden';this.voiceBanner.setAttribute('role','status');
+    document.querySelector('.viewport')?.append(this.voiceBanner);
     this.status=document.createElement('p');this.status.setAttribute('role','status');this.status.textContent=this.dedicated?'Joining the shared arena…':'Host an arena and share the link. Opening it joins the game automatically.';
     this.players=document.createElement('div');this.players.className='network-players';
     this.share=document.createElement('input');this.share.className='hidden';this.share.setAttribute('aria-label','Room invitation link');this.share.addEventListener('input',()=>{this.shareEdited=true;});
@@ -70,7 +77,7 @@ export class NetworkGame {
     this.updateServerButton=this.button('UPDATE SERVER',()=>this.updateServer());this.updateServerButton.classList.add('hidden');
     this.updateStatus=document.createElement('span');this.updateStatus.setAttribute('role','status');
     const updates=document.createElement('div');updates.className=this.dedicated?'network-controls':'network-controls hidden';updates.append(this.checkUpdatesButton,this.updateServerButton,this.updateStatus);
-    const row=document.createElement('div');row.className='network-controls';row.append(this.abilities,this.nameFeedback,this.animalChoice,this.botCount,this.hostButton,this.leaveButton);
+    const row=document.createElement('div');row.className='network-controls';row.append(this.abilities,this.nameFeedback,this.animalChoice,this.botCount,this.hostButton,this.leaveButton,this.micButton);
     const invite=document.createElement('div');invite.className='network-invite';invite.append(this.share,this.internetButton,this.copyButton);
     this.help=document.createElement('p');this.help.className='network-help hidden';
     this.panel.append(title,row,this.status,this.players,invite,this.help,updates);anchor.before(this.panel);
@@ -221,7 +228,43 @@ export class NetworkGame {
     this.restoreOnVisible=false;
     this.token=reply.token;this.socket?.close();this.nameDirty=false;this.namePending=false;this.namePromise=null;this.sequence=0;this.pending=null;this.failures=0;this.shareEdited=false;this.actions=[];this.keys.clear();this.paused=Boolean(reply.players.find(player=>player.id===reply.you)?.afk);this.client=new ArenaClient();this.accept(bootstrapPacket(reply));
     if(draft!==null){this.name.value=draft;this.nameDirty=draft.trim()!==reply.world.name;}
-    this.rememberName();this.stream();
+    this.rememberName();this.stream();this.voice.connect(reply.token);
+  }
+  setTalking(active){
+    if(active)this.unlock?.().catch(()=>{});
+    return this.voice.setTalking(Boolean(active)&&this.active);
+  }
+  updateVoiceUi(){
+    if(!this.micButton)return;
+    const talking=this.voice.talking;
+    this.micButton.classList.toggle('talking',talking);
+    this.micButton.textContent=talking?'🎙 TALKING…':'🎙 HOLD V TO TALK';
+    this.micButton.title=this.voice.error||'Hold V (or hold this button) to talk';
+    const names=new Map((this.state?.players??[]).map(player=>[player.id,player.name]));
+    const activeNames=this.voice.activeSpeakers().map(id=>names.get(id)).filter(Boolean);
+    const parts=[];
+    if(talking)parts.push('🎙 MIC LIVE');
+    if(activeNames.length)parts.push(`🔊 ${activeNames.join(', ')}`);
+    if(!parts.length&&this.voice.error&&this.active)parts.push(`🎙 ${this.voice.error}`);
+    const text=parts.join(' · ');
+    if(this.voiceBanner){
+      this.voiceBanner.textContent=text;
+      this.voiceBanner.classList.toggle('hidden',!this.active||!text);
+      this.voiceBanner.classList.toggle('talking',talking);
+    }
+    for(const chip of this.players.children){
+      const id=Number(chip.dataset.playerId);
+      if(!Number.isInteger(id))continue;
+      const speaking=id===this.state?.you?talking:this.voice.isSpeaking(id);
+      chip.classList.toggle('speaking',speaking);
+      const mute=chip.querySelector('.voice-mute');
+      if(mute){
+        const muted=this.voice.isMuted(id);
+        mute.textContent=muted?'🔇':'🔊';
+        mute.setAttribute('aria-pressed',String(muted));
+        mute.title=muted?'Unmute player':'Mute player';
+      }
+    }
   }
   async restore(){
     if(this.restoring)return;this.restoring=true;this.restoreOnVisible=false;
@@ -307,7 +350,7 @@ export class NetworkGame {
     const state=this.client.state();
     if(this.joinTracker.sample(state)){this.unlock?.().catch(()=>{});this.sound('playerJoin');}
     const rosterKey=JSON.stringify([state.host,state.you,state.players]);
-    this.state=state;if(this.dedicated)this.paused=this.afk;else if(this.afk)this.paused=true;this.leaveButton.classList.remove('hidden');this.share.classList.remove('hidden');this.copyButton.classList.remove('hidden');this.animalChoice.classList.toggle('hidden',this.dedicated||!this.isHost);
+    this.state=state;if(this.dedicated)this.paused=this.afk;else if(this.afk)this.paused=true;this.leaveButton.classList.remove('hidden');this.micButton.classList.remove('hidden');this.share.classList.remove('hidden');this.copyButton.classList.remove('hidden');this.animalChoice.classList.toggle('hidden',this.dedicated||!this.isHost);
     for(const node of [this.hostButton,this.botCount,this.share.parentElement,this.help])node.classList.toggle('hidden',!this.isHost&&!this.dedicated);
     if(this.dedicated)this.hostButton.classList.add('hidden');
     this.leaveButton.textContent=this.afk?'BACK TO ARENA':'AFK';this.hostButton.disabled=this.connecting||!this.isHost;
@@ -329,7 +372,8 @@ export class NetworkGame {
     }
     if(['countdown','racing'].includes(state.world.phase))this.status.textContent=`MATCH LIVE · ${state.players.length} players + ${state.bots} bots`;
     if(this.afk)this.status.textContent='AFK · Your place and scores are saved. Press BACK TO ARENA to return.';
-    if(rosterKey!==this.rosterKey){this.rosterKey=rosterKey;this.players.replaceChildren(...state.players.map(player=>{const label=document.createElement('span');label.textContent=`${player.role==='bomber'?'✈':drivers[player.driver].emoji} ${player.name}${player.role==='bomber'?' · BOMBER':''}${player.id===state.host?' · HOST':''}${player.id===state.you?' · YOU':''}${player.afk?' · AFK':''}${player.wantsToPlay?' · READY ✓':''}`;label.style.borderLeft=`4px solid ${player.color}`;if(this.isHost&&player.id!==state.you){const remove=this.button('REMOVE',()=>this.request('/api/kick',{id:player.id}).then(reply=>{this.invite=reply.invite;const url=new URL(location.href);url.hash=new URLSearchParams({invite:this.invite}).toString();history.replaceState(null,'',url);this.shareEdited=false;this.updateShare();}).catch(error=>{this.status.textContent=error.message;}));remove.setAttribute('aria-label',`Remove ${player.name} from room`);label.append(remove);}return label;}));}
+    if(rosterKey!==this.rosterKey){this.rosterKey=rosterKey;this.players.replaceChildren(...state.players.map(player=>{const label=document.createElement('span');label.dataset.playerId=String(player.id);label.textContent=`${player.role==='bomber'?'✈':drivers[player.driver].emoji} ${player.name}${player.role==='bomber'?' · BOMBER':''}${player.id===state.host?' · HOST':''}${player.id===state.you?' · YOU':''}${player.afk?' · AFK':''}${player.wantsToPlay?' · READY ✓':''}`;label.style.borderLeft=`4px solid ${player.color}`;if(player.id!==state.you){const muted=this.voice.isMuted(player.id);const mute=this.button(muted?'🔇':'🔊',()=>this.voice.toggleMute(player.id));mute.className='voice-mute';mute.setAttribute('aria-label',`${muted?'Unmute':'Mute'} ${player.name}`);mute.setAttribute('aria-pressed',String(muted));mute.title=muted?'Unmute player':'Mute player';label.append(mute);}if(this.isHost&&player.id!==state.you){const remove=this.button('REMOVE',()=>this.request('/api/kick',{id:player.id}).then(reply=>{this.invite=reply.invite;const url=new URL(location.href);url.hash=new URLSearchParams({invite:this.invite}).toString();history.replaceState(null,'',url);this.shareEdited=false;this.updateShare();}).catch(error=>{this.status.textContent=error.message;}));remove.setAttribute('aria-label',`Remove ${player.name} from room`);label.append(remove);}return label;}));}
+    this.updateVoiceUi();
     this.updatePlayRequest();
     this.onState(this.view());
   }
@@ -369,9 +413,9 @@ export class NetworkGame {
     this.hostButton.classList.remove('hidden');this.botCount.classList.remove('hidden');this.share.parentElement.classList.remove('hidden');
     this.colorPending=false;this.colorError='';
     this.nameFeedback.textContent='';this.nameDirty=false;this.namePending=false;this.namePromise=null;
-    this.restoreOnVisible=false;
+    this.restoreOnVisible=false;this.voice.disconnect();
     if(notify)this.request('/api/leave',{}).catch(()=>{});this.token=null;this.chatColor=null;this.socket?.close();this.state=null;this.pending=null;this.actions=[];this.keys.clear();this.client=null;this.rtt=0;this.lastPing=-Infinity;
-    this.internetError=false;this.hostButton.disabled=false;this.name.disabled=false;this.botCount.disabled=false;for(const option of this.botCount.options)option.disabled=false;this.leaveButton.classList.add('hidden');this.copyButton.classList.add('hidden');this.internetButton.classList.add('hidden');this.animalChoice.classList.add('hidden');this.share.classList.add('hidden');this.help.classList.add('hidden');this.players.replaceChildren();this.status.textContent=message;this.onLeave();
+    this.internetError=false;this.hostButton.disabled=false;this.name.disabled=false;this.botCount.disabled=false;for(const option of this.botCount.options)option.disabled=false;this.leaveButton.classList.add('hidden');this.micButton.classList.add('hidden');this.voiceBanner?.classList.add('hidden');this.copyButton.classList.add('hidden');this.internetButton.classList.add('hidden');this.animalChoice.classList.add('hidden');this.share.classList.add('hidden');this.help.classList.add('hidden');this.players.replaceChildren();this.status.textContent=message;this.onLeave();
     if(this.dedicated){document.body.classList.remove('arena-connected');this.connectionStatus(message);}
   }
 }

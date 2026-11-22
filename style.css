@@ -1364,10 +1364,61 @@ footer>span:last-child {
 }
 
 .network-players span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font: 10px monospace;
   padding: 6px 8px;
   border-radius: 5px;
   background: #dfd2f0
+}
+
+.network-players span.speaking {
+  background: #d2f3dc;
+  box-shadow: 0 0 0 2px #36a868
+}
+
+.network-panel button.mic-button {
+  background: #2f5e6e;
+  border-color: #6298aa
+}
+
+.network-panel button.mic-button.talking {
+  background: #229954;
+  border-color: #7ee8a9;
+  box-shadow: 0 0 0 2px rgba(126, 232, 169, .45)
+}
+
+.network-panel button.voice-mute {
+  min-height: 24px;
+  padding: 2px 6px;
+  font-size: 12px;
+  line-height: 1;
+  background: rgba(40, 39, 56, .12);
+  border-color: rgba(40, 39, 56, .2);
+  color: #282738
+}
+
+.voice-indicator {
+  position: absolute;
+  left: 50%;
+  top: 12px;
+  transform: translateX(-50%);
+  z-index: 6;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(20, 22, 34, .82);
+  border: 1px solid rgba(188, 229, 243, .45);
+  color: #f9f4e8;
+  font: bold 11px monospace;
+  letter-spacing: .6px;
+  pointer-events: none;
+  white-space: nowrap
+}
+
+.voice-indicator.talking {
+  background: rgba(26, 118, 66, .92);
+  border-color: #9bf5be
 }
 
 .network-invite input {

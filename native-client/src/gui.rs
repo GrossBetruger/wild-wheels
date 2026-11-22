@@ -32,7 +32,7 @@ const WARNING: Color = Color::srgb(1.0, 0.62, 0.52);
 const PREVIEW: Vec3 = Vec3::new(0.0, 500.0, 0.0);
 /// Set once, in rust-core.
 const ROOM_CAPACITY: usize = wild_wheels_core::MAX_PLAYERS;
-const CONTROLS: &str = "Arrows / WASD   drive\nShift   drift\nSpace   fire\nTab   switch weapon\nX   boost      C   chaff\nZ   flip      F   special ability\nP   sit out (AFK)      Esc   menu";
+const CONTROLS: &str = "Arrows / WASD   drive\nShift   drift\nSpace   fire\nTab   switch weapon\nX   boost      C   chaff\nZ   flip      F   special ability\nV   push to talk (mic)\nP   sit out (AFK)      Esc   menu";
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Field {
@@ -64,6 +64,7 @@ pub enum Act {
     Menu,
     Resume,
     SitOut,
+    MuteVoice(usize),
     Leave,
     Quit,
 }
@@ -331,6 +332,9 @@ pub fn control(
                 session.leave();
                 menu.open = false;
             }
+            Act::MuteVoice(id) => {
+                session.voice.toggle_mute(id);
+            }
             Act::Quit => {
                 session.leave();
                 exit.write(AppExit::Success);
@@ -526,7 +530,7 @@ pub fn draw(
             menu.server, menu.name, menu.field, menu.driver, menu.notice, menu.color
         ),
         (Screen::Lobby, Some(view)) => format!(
-            "lobby|{}|{}|{}|{}|{}|{}|{:?}|{}|{}|{}|{}|{:?}",
+            "lobby|{}|{}|{}|{}|{}|{}|{:?}|{}|{}|{}|{}|{:?}|{}|{:?}|{:?}",
             view.arena,
             view.actors
                 .iter()
@@ -549,7 +553,26 @@ pub fn draw(
             session.colors.message,
             view.target_score,
             view.duration,
-            session.board
+            session.board,
+            session.voice.is_talking(),
+            session.voice.error(),
+            view.actors
+                .iter()
+                .filter(|a| !a.inactive && a.human && a.id != view.you)
+                .map(|a| (a.id, session.voice.is_muted(a.id), session.voice.is_speaking(a.id)))
+                .collect::<Vec<_>>()
+        ),
+        (Screen::Menu, Some(view)) => format!(
+            "{screen:?}|{}|{}|{}|{:?}|{:?}",
+            session.away,
+            session.status,
+            session.voice.is_talking(),
+            session.voice.error(),
+            view.actors
+                .iter()
+                .filter(|a| !a.inactive && a.human && a.id != view.you)
+                .map(|a| (a.id, a.name.as_deref().unwrap_or(""), session.voice.is_muted(a.id), session.voice.is_speaking(a.id)))
+                .collect::<Vec<_>>()
         ),
         _ => format!("{screen:?}|{}|{}", session.away, session.status),
     };
@@ -743,8 +766,9 @@ pub fn draw(
                 session.colors.pending,
                 &session.colors.message,
             );
-            let names: Vec<_> = racers()
-                .filter(|a| a.human)
+            let humans: Vec<_> = racers().filter(|a| a.human).collect();
+            let names: Vec<_> = humans
+                .iter()
                 .map(|a| {
                     let name = a.name.as_deref().unwrap_or("Racer");
                     let elo = session
@@ -752,11 +776,21 @@ pub fn draw(
                         .as_deref()
                         .and_then(|b| crate::hud::player_elo(b, Some(name)))
                         .map(|(_, rating, _, _)| rating);
-                    match (elo, a.afk) {
-                        (Some(rating), true) => format!("{name} ({rating}, AFK)"),
-                        (Some(rating), false) => format!("{name} ({rating})"),
-                        (None, true) => format!("{name} (AFK)"),
-                        (None, false) => name.to_owned(),
+                    let talking = match a.id == view.you {
+                        true => session.voice.is_talking(),
+                        false => session.voice.is_speaking(a.id),
+                    };
+                    let tag = match (a.afk, talking) {
+                        (true, true) => "AFK, MIC",
+                        (true, false) => "AFK",
+                        (false, true) => "MIC",
+                        (false, false) => "",
+                    };
+                    match (elo, tag.is_empty()) {
+                        (Some(rating), false) => format!("{name} ({rating}, {tag})"),
+                        (Some(rating), true) => format!("{name} ({rating})"),
+                        (None, false) => format!("{name} ({tag})"),
+                        (None, true) => name.to_owned(),
                     }
                 })
                 .collect();
@@ -766,6 +800,33 @@ pub fn draw(
                 13.0,
                 MUTED,
             );
+            let peers: Vec<_> = humans.iter().filter(|a| a.id != view.you).collect();
+            if !peers.is_empty() {
+                ui.text(panel, "VOICE  (HOLD V TO TALK)", 12.0, MUTED);
+                for peer in peers {
+                    let name = peer.name.as_deref().unwrap_or("Racer");
+                    let muted = session.voice.is_muted(peer.id);
+                    let row = ui.row(panel);
+                    let label = match session.voice.is_speaking(peer.id) && !muted {
+                        true => format!("{name}  [TALKING]"),
+                        false => name.to_owned(),
+                    };
+                    ui.text(row, &label, 13.0, Color::WHITE);
+                    ui.choice(
+                        row,
+                        match muted {
+                            true => "Unmute",
+                            false => "Mute",
+                        },
+                        Act::MuteVoice(peer.id),
+                        muted,
+                        px(76),
+                    );
+                }
+            }
+            if let Some(err) = session.voice.error() {
+                ui.text(panel, &format!("MIC: {err}"), 12.0, WARNING);
+            }
             ui.button(
                 panel,
                 "START MATCH  (Enter)",
@@ -807,6 +868,32 @@ pub fn draw(
                 ui.button(panel, "Resume  (Esc)", Act::Resume, PRIMARY, percent(100));
             }
             ui.button(panel, sit, Act::SitOut, tone, percent(100));
+            if let Some(view) = view.as_ref() {
+                let peers: Vec<_> = view
+                    .actors
+                    .iter()
+                    .filter(|a| !a.inactive && a.human && a.id != view.you)
+                    .collect();
+                if !peers.is_empty() {
+                    ui.text(panel, "VOICE MUTE  (HOLD V TO TALK)", 12.0, MUTED);
+                    for peer in peers {
+                        let name = peer.name.as_deref().unwrap_or("Racer");
+                        let muted = session.voice.is_muted(peer.id);
+                        let row = ui.row(panel);
+                        ui.text(row, name, 13.0, Color::WHITE);
+                        ui.choice(
+                            row,
+                            match muted {
+                                true => "Unmute",
+                                false => "Mute",
+                            },
+                            Act::MuteVoice(peer.id),
+                            muted,
+                            px(76),
+                        );
+                    }
+                }
+            }
             ui.button(panel, "Leave room", Act::Leave, BUTTON, percent(100));
             ui.button(panel, "Quit game", Act::Quit, BUTTON, percent(100));
             ui.text(panel, CONTROLS, 15.0, MUTED);

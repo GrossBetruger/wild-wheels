@@ -86,6 +86,7 @@ pub enum Id {
     Special,
     Chaff,
     Flip,
+    Voice,
 }
 /// A node the HUD shows, hides, moves or recolors.
 #[derive(Component, Clone, Copy, PartialEq, Debug)]
@@ -475,6 +476,8 @@ fn readings(
     notices: &Notices,
     now: f64,
     board: Option<&[(String, f64, u64, u64)]>,
+    voice_text: String,
+    talking: bool,
 ) -> HashMap<Id, Reading> {
     let p = view.player;
     let racing = view.phase == "racing";
@@ -818,6 +821,24 @@ fn readings(
         };
         let ready = live && p.special_cooldown <= 0.0 && !(p.driver == 12 && p.health >= 6.0);
         card(Id::Special, String::new(), label, ready, None);
+    }
+    if !voice_text.is_empty() {
+        out.insert(
+            Id::Voice,
+            Reading {
+                text: voice_text,
+                tone: Some(match talking {
+                    true => hex(0x1a7642ea),
+                    false => hex(0x141622d4),
+                }),
+                border: Some(match talking {
+                    true => hex(0x9bf5beff),
+                    false => hex(0xbce5f377),
+                }),
+                color: Some(hex(0xf9f4e8ff)),
+                ..default()
+            },
+        );
     }
     out
 }
@@ -1221,6 +1242,17 @@ pub fn setup(mut commands: Commands, mut fonts: ResMut<Assets<Font>>) {
     );
     ui.banner(
         root,
+        Id::Voice,
+        px(12.0 * K),
+        (
+            boxed(pad(14.0, 6.0), 1.0, 999.0),
+            hex(0x141622d4),
+            hex(0xbce5f377),
+        ),
+        Style::new(11.0, hex(0xf9f4e8ff)),
+    );
+    ui.banner(
+        root,
         Id::Hint,
         percent(15),
         (pad(0.0, 0.0), none, none),
@@ -1612,7 +1644,39 @@ pub fn update(
     };
     let now = time.elapsed_secs_f64();
     notices.sample(&view, &graphics, now);
-    let readings = readings(&view, &graphics, &notices, now, session.board.as_deref());
+    let talking = session.voice.is_talking();
+    let mut voice_parts = Vec::new();
+    if talking {
+        voice_parts.push("MIC LIVE".to_owned());
+    }
+    let speaker_names: Vec<_> = session
+        .voice
+        .active_speakers()
+        .into_iter()
+        .filter_map(|id| {
+            view.actors
+                .iter()
+                .find(|a| a.id == id)
+                .and_then(|a| a.name.clone())
+        })
+        .collect();
+    if !speaker_names.is_empty() {
+        voice_parts.push(format!("VOICE: {}", speaker_names.join(", ")));
+    }
+    if voice_parts.is_empty()
+        && let Some(err) = session.voice.error()
+    {
+        voice_parts.push(format!("MIC: {err}"));
+    }
+    let readings = readings(
+        &view,
+        &graphics,
+        &notices,
+        now,
+        session.board.as_deref(),
+        voice_parts.join(" · "),
+        talking,
+    );
     let dark = crate::scene::dark_humor(&view).0 > 0.0;
     // Rivals far enough away to need a name, where the camera can see them.
     let mut plates = Vec::new();
