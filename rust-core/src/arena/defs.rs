@@ -132,6 +132,47 @@ pub fn default_arenas() -> Vec<ArenaDef> {
             sky: "#d8cfc4".into(),
             blocks: vec![],
         },
+        ArenaDef {
+            name: "Maze".into(),
+            desc: "Twisting hedge labyrinth. Loops, flanks, and ambushes.".into(),
+            size: 96.0,
+            shape: "square".into(),
+            max_players: None,
+            ground: "#958e7c".into(),
+            wall: "#4d7c58".into(),
+            sky: "#c2dbc8".into(),
+            blocks: vec![
+                // Inner pinwheel hub (38x38 center with four 18-unit staggered entries)
+                [-11.0, 22.0, 24.0, 6.0],
+                [22.0, 11.0, 6.0, 24.0],
+                [11.0, -22.0, 24.0, 6.0],
+                [-22.0, -11.0, 6.0, 24.0],
+                // Middle staggered ring walls (20-unit inner ring corridor)
+                [-21.0, 47.0, 44.0, 6.0],
+                [47.0, 21.0, 6.0, 44.0],
+                [21.0, -47.0, 44.0, 6.0],
+                [-47.0, -21.0, 6.0, 44.0],
+                // Connected L-arms extending from mid-ring
+                [-41.0, 32.0, 6.0, 36.0],
+                [32.0, 41.0, 36.0, 6.0],
+                [41.0, -32.0, 6.0, 36.0],
+                [-32.0, -41.0, 36.0, 6.0],
+                // Radial maze dividers with wide 17-unit passages on both sides
+                [21.0, 60.0, 6.0, 32.0],
+                [60.0, -21.0, 32.0, 6.0],
+                [-21.0, -60.0, 6.0, 32.0],
+                [-60.0, 21.0, 32.0, 6.0],
+                // Outer corner L-walls wrapping the perimeter highway
+                [-51.0, 73.0, 48.0, 6.0],
+                [73.0, 51.0, 6.0, 48.0],
+                [51.0, -73.0, 48.0, 6.0],
+                [-73.0, -51.0, 6.0, 48.0],
+                [-72.0, 58.0, 6.0, 36.0],
+                [58.0, 72.0, 36.0, 6.0],
+                [72.0, -58.0, 6.0, 36.0],
+                [-58.0, -72.0, 36.0, 6.0],
+            ],
+        },
     ]
 }
 
@@ -139,8 +180,11 @@ pub fn default_arena(index: usize) -> Option<ArenaDef> {
     default_arenas().into_iter().nth(index)
 }
 
+/// Only the original 3 built-in pack arenas (Scrapyard, Crossfire Court, Octagon)
+/// may omit inline `arenaDef` in packets so existing native binaries always receive
+/// full layout definitions for newer server-side maps like Maze without rebuilding.
 pub fn is_default_arena(index: usize, def: &ArenaDef) -> bool {
-    default_arena(index).as_ref() == Some(def)
+    index < 3 && default_arena(index).as_ref() == Some(def)
 }
 
 fn registry() -> &'static RwLock<Vec<ArenaDef>> {

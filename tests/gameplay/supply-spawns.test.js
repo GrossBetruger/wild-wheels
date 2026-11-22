@@ -11,7 +11,7 @@ function check(world){
   }
 }
 test('all arenas randomize initial supplies with wall, player and pickup clearance',()=>{
-  for(const arena of [0,1,2])for(let seed=1;seed<=40;seed++)check(createBattle(0,arena,()=>seed/100));
+  for(const arena of [0,1,2,3])for(let seed=1;seed<=40;seed++)check(createBattle(0,arena,()=>seed/100));
   assert.notDeepEqual(createBattle(0,0,()=>.1).supplies,createBattle(0,0,()=>.8).supplies);
 });
 for(const engine of ['solo','Rust'])test(`${engine}: respawns choose clear positions and match the seeded simulation`,()=>{

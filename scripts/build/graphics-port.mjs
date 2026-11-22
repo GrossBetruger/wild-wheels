@@ -222,7 +222,10 @@ export function buildGraphicsPack({only=[...drivers.keys()]}={}){
   };
   const once=(name,life,setup,each,options={})=>record(name,{frames:Math.ceil(life*FPS)+1,setup:r=>{hidden(r);setup?.(r);},each,...options},ONCE);
 
-  for(const index of arenas.keys()){
+  // Bake only the 3 original pack arenas; newer server-defined maps render dynamically
+  // from `/api/info` and inline packet `arenaDef` so adding maps stays server-side only.
+  const baseArenas=Math.min(3,arenas.length);
+  for(let index=0;index<baseArenas;index++){
     const view=renderer(),scenery=draw(view,Object.assign(world(0,index),{afk:true}),0).scenery;
     // KnowItOwl's X-ray outlines of the arena are built the first time Dark Humor is drawn for its caster.
     view.draw(Object.assign(world(14,index),{phase:'racing',specialActive:3}),1);
@@ -288,8 +291,8 @@ export function buildGraphicsPack({only=[...drivers.keys()]}={}){
     const single=trail=>capture({setup:r=>{shot(kind)(r);r.projectiles[0].trail=trail;}})[0];
     pack.clip(`trail:${kind}`,FPS,[pack.overlay(single([]),single([{wx:0,wz:0,height:0}]))]);
   }
-  // A unit-length skid mark fading into each arena's ground over six seconds.
-  for(const arena of arenas.keys()){
+  // A unit-length skid mark fading into each base arena's ground over six seconds.
+  for(let arena=0;arena<baseArenas;arena++){
     const view=renderer(),r=Object.assign(world(0,arena),{afk:true}),frames=[];
     for(let i=0;i<=24;i++){r.elapsed=100+i/4;r.skids=[{owner:99,ax:0,az:-.5,bx:0,bz:.5,time:100}];frames.push(pack.frame(draw(view,r,LOOP*2)));}
     pack.clip(`skid:${arena}`,4,frames,ONCE);

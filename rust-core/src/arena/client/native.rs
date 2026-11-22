@@ -427,9 +427,10 @@ mod tests {
             sky: "#ddeeff".into(),
             blocks: vec![[0.0, 0.0, 12.0, 12.0]],
         };
+        let idx = defs.len();
         defs.push(custom.clone());
         set_arena_defs(defs).unwrap();
-        let mut server = NativeArena::new(json!({"maxPlayers":8,"code":"00","arena":3,"bots":1,"dedicated":true,"host":null,"epoch":1,"seed":1,"players":[{"id":0,"name":"P0","driver":0,"role":"driver"}]})).unwrap();
+        let mut server = NativeArena::new(json!({"maxPlayers":8,"code":"00","arena":idx,"bots":1,"dedicated":true,"host":null,"epoch":1,"seed":1,"players":[{"id":0,"name":"P0","driver":0,"role":"driver"}]})).unwrap();
         server.start();
         for _ in 0..241 {
             server
@@ -443,7 +444,7 @@ mod tests {
         // Reset client-side registry back to built-in defaults (simulating an older client binary).
         set_arena_defs(default_arenas()).unwrap();
         let mut client = NativeClient::from_packet(&packet, 0.0).unwrap();
-        assert_eq!(client.view().arena, 3);
+        assert_eq!(client.view().arena, idx);
         assert_eq!(client.view().arena_def, &custom);
         assert_eq!(client.view().blocks, &[[0.0, 0.0, 12.0, 12.0]]);
         for i in 1..=10 {

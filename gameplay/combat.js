@@ -30,6 +30,7 @@ export const arenas = [
   { name: 'Scrapyard', desc: 'Container cover. Wide flanking lanes.', size: 96, ground: '#8b927d', wall: '#d7794d', sky: '#b5d3d9', blocks: [[-40, -35, 34, 10], [40, 35, 34, 10], [-35, 35, 10, 34], [35, -35, 10, 34], [0, 0, 14, 14]] },
   { name: 'Crossfire Court', desc: 'A central fortress. Four ways around.', size: 96, ground: '#8e849b', wall: '#8063b2', sky: '#c8bbd8', blocks: [[0, 0, 28, 28], [-55, 0, 12, 36], [55, 0, 12, 36], [0, -55, 36, 12], [0, 55, 36, 12]] },
   { name: 'Octagon', desc: 'Open eight-sided cage. No cover. Up to 4 players.', size: 64, shape: 'octagon', maxPlayers: 4, ground: '#8c8378', wall: '#c74c48', sky: '#d8cfc4', blocks: [] },
+  { name: 'Maze', desc: 'Twisting hedge labyrinth. Loops, flanks, and ambushes.', size: 96, ground: '#958e7c', wall: '#4d7c58', sky: '#c2dbc8', blocks: [[-11, 22, 24, 6], [22, 11, 6, 24], [11, -22, 24, 6], [-22, -11, 6, 24], [-21, 47, 44, 6], [47, 21, 6, 44], [21, -47, 44, 6], [-47, -21, 6, 44], [-41, 32, 6, 36], [32, 41, 36, 6], [41, -32, 6, 36], [-32, -41, 36, 6], [21, 60, 6, 32], [60, -21, 32, 6], [-21, -60, 6, 32], [-60, 21, 32, 6], [-51, 73, 48, 6], [73, 51, 6, 48], [51, -73, 48, 6], [-73, -51, 6, 48], [-72, 58, 6, 36], [58, 72, 36, 6], [72, -58, 6, 36], [-58, -72, 36, 6]] },
 ];
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 const angleDelta = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
