@@ -29,16 +29,6 @@ pub async fn post(
     if !same_origin(&app, &headers) {
         return error((403, "Use the game from the same server."));
     }
-    let loopback = addr.ip().to_canonical().is_loopback();
-    let local = loopback && headers.get(header::HOST).is_some_and(lan::loopback_host);
-    let https = loopback
-        && app.trust_proxy
-        && headers
-            .get("x-forwarded-proto")
-            .is_some_and(|value| value == "https");
-    if !local && !https {
-        return error((403, "Use HTTPS or connect locally."));
-    }
     let minute = Duration::from_secs(60);
     if !limit(&app, addr.ip(), "text", 10, minute)
         || !limit(&app, Ipv4Addr::UNSPECIFIED.into(), "text-total", 30, minute)

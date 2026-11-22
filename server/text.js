@@ -25,12 +25,7 @@ export function createTextEndpoint(multiplayer, {
     }
 
     try {
-      const origin = multiplayer.security.check(req);
-      const loopback = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress)
-        && ['localhost', '127.0.0.1', '[::1]'].includes(new URL(origin).hostname);
-      if (!multiplayer.security.secure(req) && !loopback) {
-        return reply(403, { error: 'Use HTTPS or connect locally.' });
-      }
+      multiplayer.security.check(req);
       multiplayer.limit(req, 'text', 10, 60000);
       multiplayer.limit(req, 'text-total', 30, 60000, 'all');
       if (req.headers['content-type']?.split(';')[0].trim().toLowerCase() !== 'text/plain') {

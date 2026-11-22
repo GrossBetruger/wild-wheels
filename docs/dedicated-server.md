@@ -60,7 +60,7 @@ Configuration is through environment variables:
 
 ## Save text over HTTP
 
-Both servers accept anonymous `POST /api/text` requests over HTTPS or on a loopback connection. The body is the text to save.
+Both servers accept anonymous `POST /api/text` requests over HTTP or HTTPS, according to the server's hosting configuration. The body is the text to save. Use synthetic values when testing over plain HTTP.
 
 ```sh
 printf '%s' "$TEXT_TO_SAVE" | curl --fail-with-body --header 'Content-Type: text/plain' --data-binary @- http://127.0.0.1:5173/api/text

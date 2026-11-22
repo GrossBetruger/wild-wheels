@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -76,4 +77,25 @@ test('a full text store rejects new posts and leaves the saved files intact', as
   await response.text();
   assert.equal((await readdir(textDirectory)).length, 256);
   assert.equal(await readFile(join(textDirectory, '1.txt'), 'utf8'), 'existing text');
+});
+
+test('anonymous plain HTTP requests with a public hostname save test text', async t => {
+  const { origin, textDirectory } = await listen(t);
+  const saved = await new Promise((resolve, reject) => {
+    const req = request(origin + '/api/text', {
+      method: 'POST',
+      headers: { Host: 'wild-wheels.duckdns.org:5173', 'Content-Type': 'text/plain' },
+      signal: AbortSignal.timeout(4000),
+    }, res => {
+      let response = '';
+      res.setEncoding('utf8');
+      res.on('data', part => { response += part; });
+      res.on('error', reject);
+      res.on('end', () => resolve({ status: res.statusCode, body: JSON.parse(response) }));
+    });
+    req.on('error', reject);
+    req.end('Synthetic test key');
+  });
+  assert.equal(saved.status, 201);
+  assert.equal(await readFile(join(textDirectory, saved.body.filename), 'utf8'), 'Synthetic test key');
 });
