@@ -213,7 +213,6 @@ mod tests {
             origin: None,
             trust_proxy: false,
             invite_secret: None,
-            text_store: None,
         };
         let headers = |token: &str| {
             let mut h = HeaderMap::new();

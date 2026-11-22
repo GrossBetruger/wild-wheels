@@ -60,13 +60,13 @@ Configuration is through environment variables:
 
 ## Save text over HTTP
 
-Set `TEXT_POST_KEY` in the server environment before starting either the dedicated Rust server or the Node server. Generate a key with `openssl rand -hex 32`. Keep the key in the calling environment as well. The endpoint is disabled when the key is unset.
+Both servers accept anonymous `POST /api/text` requests over HTTPS or on a loopback connection. The body is the text to save.
 
 ```sh
-printf 'Authorization: Bearer %s\n' "$TEXT_POST_KEY" | curl --fail-with-body --header @- --header 'Content-Type: text/plain; charset=utf-8' --data-binary 'Hello, Wild Wheels!' http://127.0.0.1:5173/api/text
+printf '%s' "$TEXT_TO_SAVE" | curl --fail-with-body --header 'Content-Type: text/plain' --data-binary @- http://127.0.0.1:5173/api/text
 ```
 
-Each successful request returns HTTP 201 and a JSON object with the generated `filename`. The server saves the exact UTF-8 bytes in `.wild-wheels/text/` (or `$WILD_WHEELS_RUN_DIR/text/` when configured). Posts are limited to 64 KiB and ten attempts per minute per client address after authentication. Use HTTPS for remote requests. Saved files are private server files.
+Each successful request returns HTTP 201 and a JSON object with the generated `filename`. The server saves the exact UTF-8 bytes in private files under `.wild-wheels/text/` (or `$WILD_WHEELS_RUN_DIR/text/` when configured). Limits are 64 KiB per request, ten attempts per minute per client address, 30 attempts per minute per server process, and 256 numbered files. A full directory returns HTTP 507 until a numbered file is moved or deleted by the server operator.
 
 ## Arena and connection lifecycle
 

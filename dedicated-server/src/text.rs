@@ -1,41 +1,31 @@
 use super::*;
-use std::path::PathBuf;
+use axum::Extension;
+use std::{
+    collections::HashSet,
+    fs,
+    io::{self, ErrorKind},
+    net::Ipv4Addr,
+    path::{Path, PathBuf},
+};
 
 pub const MAX_BYTES: usize = 64 * 1024;
+const MAX_FILES: usize = 256;
 
-pub struct TextStore {
-    key: String,
-    directory: PathBuf,
-}
-
-impl TextStore {
-    pub fn from_env() -> Option<Arc<Self>> {
-        let key = std::env::var_os("TEXT_POST_KEY")?;
-        let key = key
-            .into_string()
-            .expect("TEXT_POST_KEY must be hexadecimal");
-        assert!(
-            key.len() == 64 && key.bytes().all(|byte| byte.is_ascii_hexdigit()),
-            "TEXT_POST_KEY must be 64 hexadecimal characters"
-        );
-        let directory = std::env::var_os("WILD_WHEELS_RUN_DIR")
-            .filter(|path| !path.is_empty())
-            .map(PathBuf::from)
-            .unwrap_or_else(|| ".wild-wheels".into())
-            .join("text");
-        Some(Arc::new(Self { key, directory }))
-    }
+pub fn directory() -> PathBuf {
+    std::env::var_os("WILD_WHEELS_RUN_DIR")
+        .filter(|path| !path.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| ".wild-wheels".into())
+        .join("text")
 }
 
 pub async fn post(
     State(app): State<App>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    Extension(directory): Extension<PathBuf>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
-    let Some(store) = app.text_store.clone() else {
-        return error((404, "Not found."));
-    };
     if !same_origin(&app, &headers) {
         return error((403, "Use the game from the same server."));
     }
@@ -49,19 +39,10 @@ pub async fn post(
     if !local && !https {
         return error((403, "Use HTTPS or connect locally."));
     }
-    let presented = headers
-        .get(header::AUTHORIZATION)
-        .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.strip_prefix("Bearer "))
-        .unwrap_or("");
-    if !security::key_matches(&store.key, presented) {
-        let mut reply = error((401, "Send the text posting key as a bearer token."));
-        reply
-            .headers_mut()
-            .insert(header::WWW_AUTHENTICATE, "Bearer".parse().unwrap());
-        return reply;
-    }
-    if !limit(&app, addr.ip(), "text", 10, Duration::from_secs(60)) {
+    let minute = Duration::from_secs(60);
+    if !limit(&app, addr.ip(), "text", 10, minute)
+        || !limit(&app, Ipv4Addr::UNSPECIFIED.into(), "text-total", 30, minute)
+    {
         return error((429, "Too many requests. Try again shortly."));
     }
     let plain_text = headers
@@ -75,10 +56,41 @@ pub async fn post(
     if body.is_empty() || std::str::from_utf8(&body).is_err() {
         return error((400, "Send non-empty UTF-8 text."));
     }
-    let filename = format!("{}.txt", room::token());
-    let path = store.directory.join(&filename);
-    match tokio::task::spawn_blocking(move || sessions::write(&path, &body)).await {
-        Ok(Ok(())) => response(201, json!({"filename": filename})),
+    match tokio::task::spawn_blocking(move || save(&directory, &body)).await {
+        Ok(Ok(Some(filename))) => response(201, json!({"filename": filename})),
+        Ok(Ok(None)) => error((507, "Text storage is full.")),
         _ => error((500, "Unable to save text.")),
     }
+}
+
+fn save(directory: &Path, body: &[u8]) -> io::Result<Option<String>> {
+    let existing = match fs::read_dir(directory) {
+        Ok(entries) => entries
+            .map(|entry| entry.map(|entry| entry.file_name()))
+            .collect::<io::Result<HashSet<_>>>()?,
+        Err(error) if error.kind() == ErrorKind::NotFound => HashSet::new(),
+        Err(error) => return Err(error),
+    };
+    let mut available = (1..=MAX_FILES)
+        .map(|slot| format!("{slot}.txt"))
+        .filter(|name| !existing.contains(std::ffi::OsStr::new(name)))
+        .peekable();
+    if available.peek().is_none() {
+        return Ok(None);
+    }
+    let temporary = directory.join(format!(".{}.tmp", room::token()));
+    let result = (|| {
+        sessions::write(&temporary, body)?;
+        for filename in available {
+            // Publish a complete file without replacing another request's file.
+            match fs::hard_link(&temporary, directory.join(&filename)) {
+                Ok(()) => return Ok(Some(filename)),
+                Err(error) if error.kind() == ErrorKind::AlreadyExists => continue,
+                Err(error) => return Err(error),
+            }
+        }
+        Ok(None)
+    })();
+    let _ = fs::remove_file(temporary);
+    result
 }

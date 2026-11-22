@@ -221,8 +221,8 @@ export class Multiplayer {
     }
     for (const [key, limit] of this.limits) if (now - limit.since > 60000) this.limits.delete(key);
   }
-  limit(req, path, max, window = 1000) {
-    const key = `${req.socket.remoteAddress}:${path}`, now = Date.now(); let limit = this.limits.get(key);
+  limit(req, path, max, window = 1000, peer = req.socket.remoteAddress) {
+    const key = `${peer}:${path}`, now = Date.now(); let limit = this.limits.get(key);
     if (!limit || now - limit.since >= window) { if (!limit && this.limits.size >= 4096) throw problem(429, 'Too many requests. Try again shortly.'); limit = { since: now, count: 0 }; this.limits.set(key, limit); }
     if (++limit.count > max) throw problem(429, 'Too many requests. Try again shortly.');
   }

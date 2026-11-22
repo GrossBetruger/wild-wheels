@@ -1,14 +1,13 @@
 import assert from 'node:assert/strict';
-import { randomBytes } from 'node:crypto';
-import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { createGameServer } from '../../server.js';
 
-async function listen(t, textPostKey) {
+async function listen(t) {
   const textDirectory = await mkdtemp(join(tmpdir(), 'wild-wheels-text-'));
-  const { server } = createGameServer({ textPostKey, textDirectory });
+  const { server } = createGameServer({ textDirectory });
   t.after(async () => {
     server.closeAllConnections();
     await new Promise(resolve => server.close(resolve));
@@ -18,20 +17,19 @@ async function listen(t, textPostKey) {
   return { origin: `http://127.0.0.1:${server.address().port}`, textDirectory };
 }
 
-test('concurrent text posts create separate private files with the original UTF-8 contents', async t => {
-  const key = randomBytes(32).toString('hex');
-  const { origin, textDirectory } = await listen(t, key);
+test('concurrent anonymous text posts create separate private files with the original UTF-8 contents', async t => {
+  const { origin, textDirectory } = await listen(t);
   const texts = ['  First line\nSecond line 🏁\n', '  Another post  '];
   const filenames = await Promise.all(texts.map(async body => {
     const response = await fetch(origin + '/api/text', {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain; charset=utf-8', Authorization: `Bearer ${key}` },
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
       body,
       signal: AbortSignal.timeout(4000),
     });
     assert.equal(response.status, 201);
     const { filename } = await response.json();
-    assert.match(filename, /^[a-f0-9-]+\.txt$/);
+    assert.match(filename, /^\d+\.txt$/);
     assert.equal(await readFile(join(textDirectory, filename), 'utf8'), body);
     const direct = await fetch(origin + '/.wild-wheels/text/' + filename, { signal: AbortSignal.timeout(4000) });
     assert.equal(direct.status, 404);
@@ -40,11 +38,9 @@ test('concurrent text posts create separate private files with the original UTF-
   assert.equal(new Set(filenames).size, 2);
 });
 
-test('unauthorized, oversized or invalid text never creates a file', async t => {
-  const key = randomBytes(32).toString('hex');
-  const { origin, textDirectory } = await listen(t, key);
+test('cross-origin, oversized or invalid text never creates a file', async t => {
+  const { origin, textDirectory } = await listen(t);
   for (const [body, headers, expected] of [
-    ['missing key', { Authorization: '' }, 401],
     ['foreign origin', { Origin: 'https://example.invalid' }, 403],
     ['{}', { 'Content-Type': 'application/json' }, 415],
     ['', {}, 400],
@@ -54,7 +50,7 @@ test('unauthorized, oversized or invalid text never creates a file', async t => 
   ]) {
     const response = await fetch(origin + '/api/text', {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain', Authorization: `Bearer ${key}`, ...headers },
+      headers: { 'Content-Type': 'text/plain', ...headers },
       body,
       duplex: 'half',
       signal: AbortSignal.timeout(4000),
@@ -63,4 +59,21 @@ test('unauthorized, oversized or invalid text never creates a file', async t => 
     await response.text();
   }
   assert.deepEqual(await readdir(textDirectory), []);
+});
+
+test('a full text store rejects new posts and leaves the saved files intact', async t => {
+  const { origin, textDirectory } = await listen(t);
+  for (let slot = 1; slot <= 256; slot++) {
+    await writeFile(join(textDirectory, `${slot}.txt`), 'existing text');
+  }
+  const response = await fetch(origin + '/api/text', {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: 'extra text',
+    signal: AbortSignal.timeout(4000),
+  });
+  assert.equal(response.status, 507);
+  await response.text();
+  assert.equal((await readdir(textDirectory)).length, 256);
+  assert.equal(await readFile(join(textDirectory, '1.txt'), 'utf8'), 'existing text');
 });

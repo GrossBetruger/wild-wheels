@@ -1,19 +1,14 @@
-import { randomUUID, timingSafeEqual } from 'node:crypto';
-import { mkdir, rename, unlink, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { link, mkdir, open, readdir, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 
 const maxBytes = 64 * 1024;
+const maxFiles = 256;
 const utf8 = new TextDecoder('utf-8', { fatal: true });
 
 export function createTextEndpoint(multiplayer, {
-  textPostKey = process.env.TEXT_POST_KEY,
   textDirectory = join(process.env.WILD_WHEELS_RUN_DIR || '.wild-wheels', 'text'),
 } = {}) {
-  if (textPostKey !== undefined && (textPostKey.length !== 64 || /[^a-f0-9]/i.test(textPostKey))) {
-    throw new Error('TEXT_POST_KEY must be 64 hexadecimal characters.');
-  }
-  const authorization = textPostKey && Buffer.from(`Bearer ${textPostKey}`);
-
   return async (req, res) => {
     const reply = (status, value) => {
       if (!req.complete) res.setHeader('Connection', 'close');
@@ -24,7 +19,6 @@ export function createTextEndpoint(multiplayer, {
       });
       res.end(JSON.stringify(value));
     };
-    if (!authorization) return reply(404, { error: 'Not found.' });
     if (req.method !== 'POST') {
       res.setHeader('Allow', 'POST');
       return reply(405, { error: 'Use POST.' });
@@ -37,12 +31,8 @@ export function createTextEndpoint(multiplayer, {
       if (!multiplayer.security.secure(req) && !loopback) {
         return reply(403, { error: 'Use HTTPS or connect locally.' });
       }
-      const presented = Buffer.from(req.headers.authorization ?? '');
-      if (presented.length !== authorization.length || !timingSafeEqual(presented, authorization)) {
-        res.setHeader('WWW-Authenticate', 'Bearer');
-        return reply(401, { error: 'Send the text posting key as a bearer token.' });
-      }
       multiplayer.limit(req, 'text', 10, 60000);
+      multiplayer.limit(req, 'text-total', 30, 60000, 'all');
       if (req.headers['content-type']?.split(';')[0].trim().toLowerCase() !== 'text/plain') {
         return reply(415, { error: 'Use text/plain with UTF-8 encoding.' });
       }
@@ -64,16 +54,8 @@ export function createTextEndpoint(multiplayer, {
         return reply(400, { error: 'Send non-empty UTF-8 text.' });
       }
 
-      await mkdir(textDirectory, { recursive: true, mode: 0o700 });
-      const filename = `${randomUUID()}.txt`;
-      const temporary = join(textDirectory, `.${filename}.tmp`);
-      try {
-        await writeFile(temporary, body, { flag: 'wx', mode: 0o600 });
-        await rename(temporary, join(textDirectory, filename));
-      } catch (error) {
-        if (error.code !== 'EEXIST') await unlink(temporary).catch(() => {});
-        throw error;
-      }
+      const filename = await saveText(textDirectory, body);
+      if (!filename) return reply(507, { error: 'Text storage is full.' });
       return reply(201, { filename });
     } catch (error) {
       if (res.destroyed || req.aborted) return;
@@ -82,4 +64,33 @@ export function createTextEndpoint(multiplayer, {
       });
     }
   };
+}
+
+async function saveText(directory, body) {
+  await mkdir(directory, { recursive: true, mode: 0o700 });
+  const existing = new Set(await readdir(directory));
+  const available = Array.from({ length: maxFiles }, (_, index) => `${index + 1}.txt`)
+    .filter(filename => !existing.has(filename));
+  if (available.length === 0) return;
+  const temporary = join(directory, `.${randomUUID()}.tmp`);
+  const file = await open(temporary, 'wx', 0o600);
+  try {
+    try {
+      await file.writeFile(body);
+      await file.sync();
+    } finally {
+      await file.close();
+    }
+    for (const filename of available) {
+      try {
+        // Publish a complete file without replacing another request's file.
+        await link(temporary, join(directory, filename));
+        return filename;
+      } catch (error) {
+        if (error.code !== 'EEXIST') throw error;
+      }
+    }
+  } finally {
+    await unlink(temporary).catch(() => {});
+  }
 }

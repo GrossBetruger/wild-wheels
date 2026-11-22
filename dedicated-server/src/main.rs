@@ -51,7 +51,6 @@ struct App {
     origin: Option<String>,
     trust_proxy: bool,
     invite_secret: Option<String>,
-    text_store: Option<Arc<text::TextStore>>,
 }
 fn response(status: u16, value: Value) -> Response {
     (StatusCode::from_u16(status).unwrap(), Json(value)).into_response()
@@ -675,7 +674,6 @@ async fn main() {
         origin,
         trust_proxy: std::env::var("TRUST_PROXY").is_ok_and(|v| v == "1"),
         invite_secret,
-        text_store: text::TextStore::from_env(),
     };
     let clock = app.room.clone();
     let clock_board = board_path.clone();
@@ -763,7 +761,12 @@ async fn main() {
         )
         .route("/api/photos/{epoch}/{id}", get(photos::image))
         .route("/api/log", post(report).layer(DefaultBodyLimit::max(8192)))
-        .route("/api/text", post(text::post).layer(DefaultBodyLimit::max(text::MAX_BYTES)))
+        .route(
+            "/api/text",
+            post(text::post)
+                .route_layer(axum::Extension(text::directory()))
+                .layer(DefaultBodyLimit::max(text::MAX_BYTES)),
+        )
         .fallback(http)
         .layer(DefaultBodyLimit::max(2048))
         .layer(axum::middleware::from_fn_with_state(app.clone(), headers))
