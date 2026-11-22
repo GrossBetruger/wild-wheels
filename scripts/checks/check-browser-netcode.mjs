@@ -60,7 +60,7 @@ server.on('upgrade',(...args)=>app.server.emit('upgrade',...args));
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const origin=`http://127.0.0.1:${server.address().port}`;
 const profileDir=await mkdtemp(join(tmpdir(),'wild-wheels-browser-'));
-const child=spawn(chrome,['--headless=new','--remote-debugging-port=0',`--user-data-dir=${profileDir}`,'--no-first-run','--no-default-browser-check','--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-backgrounding-occluded-windows','--window-size=1100,850','about:blank'],{stdio:['ignore','ignore','pipe']});
+const child=spawn(chrome,['--headless=new','--mute-audio','--remote-debugging-port=0',`--user-data-dir=${profileDir}`,'--no-first-run','--no-default-browser-check','--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-backgrounding-occluded-windows','--window-size=1100,850','about:blank'],{stdio:['ignore','ignore','pipe']});
 process.once('exit',()=>child.kill('SIGTERM'));
 let chromeErrors='';child.stderr.on('data',data=>{chromeErrors+=data.toString();});
 const debug=await Promise.race([

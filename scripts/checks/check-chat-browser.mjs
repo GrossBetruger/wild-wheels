@@ -10,7 +10,7 @@ const app=createGameServer();
 await new Promise(resolve=>app.server.listen(0,'127.0.0.1',resolve));
 const origin=`http://127.0.0.1:${app.server.address().port}`;
 const profile=await mkdtemp(join(tmpdir(),'wild-wheels-chat-browser-'));
-const chrome=spawn(process.env.CHROME_PATH??'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',['--headless=new','--remote-debugging-port=0',`--user-data-dir=${profile}`,'--no-first-run','--no-default-browser-check','--disable-background-timer-throttling','--disable-renderer-backgrounding','--window-size=1200,1000','about:blank'],{stdio:['ignore','ignore','pipe']});
+const chrome=spawn(process.env.CHROME_PATH??'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',['--headless=new','--mute-audio','--remote-debugging-port=0',`--user-data-dir=${profile}`,'--no-first-run','--no-default-browser-check','--disable-background-timer-throttling','--disable-renderer-backgrounding','--window-size=1200,1000','about:blank'],{stdio:['ignore','ignore','pipe']});
 let logs='',socket,sequence=0;
 chrome.stderr.on('data',data=>logs+=data);
 const pending=new Map(),contexts=[],errors=[];
