@@ -306,17 +306,29 @@ mod tests {
             1,
             "A local shot must be visible immediately, before another frame or server response"
         );
-        let outbound: Value = serde_json::from_slice(
-            &native
-                .outbound(ClientInput {
-                    keys: 1,
-                    steer: None,
-                })
-                .unwrap(),
-        )
-        .unwrap();
-        assert_eq!(outbound["type"], "input");
-        assert_eq!(outbound["actions"][0]["type"], "fire");
+        let send = |client: &mut NativeClient| -> Value {
+            serde_json::from_slice(
+                &client
+                    .outbound(ClientInput {
+                        keys: 1,
+                        steer: None,
+                    })
+                    .unwrap(),
+            )
+            .unwrap()
+        };
+        // Twenty queued moves drain eight at a time; the fire action waits for move 19.
+        let first = send(&mut native);
+        assert_eq!(first["type"], "input");
+        assert_eq!(first["moves"].as_array().unwrap().len(), 8);
+        assert_eq!(first["actions"], json!([]));
+        let second = send(&mut native);
+        assert_eq!(second["moves"].as_array().unwrap().len(), 8);
+        assert_eq!(second["actions"], json!([]));
+        let third = send(&mut native);
+        assert_eq!(third["moves"].as_array().unwrap().len(), 4);
+        assert_eq!(third["actions"][0]["type"], "fire");
+        assert_eq!(third["actions"][0]["afterMove"], 19);
         assert_eq!(
             native
                 .drain_audio()

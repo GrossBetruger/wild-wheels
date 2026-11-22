@@ -562,9 +562,10 @@ async fn connection(app: App, mut socket: WebSocket) {
     room.disconnect(id, generation);
 }
 // Keep the 60 Hz simulation timer independent of HTTP and WebSocket scheduling.
+// Enable the I/O driver too so macOS parks on kqueue instead of timer-coalesced condvars.
 fn spawn_game_clock(task: impl std::future::Future<Output = ()> + Send + 'static) -> std::thread::JoinHandle<()> {
     std::thread::Builder::new().name("game-clock".into()).spawn(move || {
-        tokio::runtime::Builder::new_current_thread().enable_time().build()
+        tokio::runtime::Builder::new_current_thread().enable_all().build()
             .expect("game clock runtime").block_on(task);
     }).expect("game clock thread")
 }
@@ -574,10 +575,18 @@ fn spawn_game_clock(task: impl std::future::Future<Output = ()> + Send + 'static
 async fn game_clock_advances_while_the_request_thread_is_busy() {
     let (tx, rx) = std::sync::mpsc::channel();
     let clock = spawn_game_clock(async move {
-        tokio::time::sleep(Duration::from_millis(20)).await;
-        tx.send(()).unwrap();
+        let mut interval = tokio::time::interval(Duration::from_nanos(1_000_000_000 / 60));
+        interval.set_missed_tick_behavior(MissedTickBehavior::Burst);
+        let started = Instant::now();
+        let mut ticks = 0u32;
+        while started.elapsed() < Duration::from_millis(250) {
+            interval.tick().await;
+            ticks += 1;
+        }
+        tx.send(ticks).unwrap();
     });
-    rx.recv_timeout(Duration::from_secs(2)).expect("tick while the request thread is blocked");
+    let ticks = rx.recv_timeout(Duration::from_secs(2)).expect("tick while the request thread is blocked");
+    assert!(ticks >= 12, "expected ~60 Hz clock (~15 ticks in 250ms), got {ticks}");
     clock.join().unwrap();
 }
 
@@ -682,13 +691,18 @@ async fn main() {
     let mut stop_clock = app.shutdown.subscribe();
     let clock_task = spawn_game_clock(async move {
         let mut interval = tokio::time::interval(Duration::from_nanos(1_000_000_000 / 60));
-        interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+        // Catch up brief OS timer coalescing so the match clock stays at 60 Hz,
+        // while resetting after long pauses (>250ms) so the server never bursts endlessly.
+        interval.set_missed_tick_behavior(MissedTickBehavior::Burst);
         // For the problem log: a minute of tick costs, late ticks and the longest
         // wait between ticks, reported once a minute while anyone is in the room.
         let (mut costs, mut late, mut longest_gap, mut last) = (Vec::with_capacity(3600), 0u32, Duration::ZERO, Instant::now());
         loop {
             let deadline = tokio::select! {tick=interval.tick()=>tick,_=stop_clock.changed()=>break};
             let woke = Instant::now();
+            if woke.saturating_duration_since(deadline.into_std()) > Duration::from_millis(250) {
+                interval.reset();
+            }
             let mut room = clock.lock().unwrap();
             let acquired = Instant::now();
             let gap = acquired.duration_since(last);
