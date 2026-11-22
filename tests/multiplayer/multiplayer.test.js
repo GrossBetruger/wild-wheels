@@ -245,6 +245,14 @@ test('AFK keeps a player and their scores in the room, prevents combat, and allo
   const back=await post('/api/afk',{afk:false},away.token);assert.equal(back.you,guest.you);assert.equal(back.world.afk,false);assert.equal(back.world.kills,2);
   await post('/api/input',{sequence:0,keys:['arrowup'],actions:[]},back.token);multiplayer.step(1/60);assert.ok(multiplayer.snapshot(room,multiplayer.members.get(back.token)).world.speed>0);
 });
+test('reconnecting via /api/session with afk: true keeps an AFK player out of combat',async t=>{
+  const {post}=await serverFor(t);
+  const host=await post('/api/rooms',{name:'Host',driver:0,arena:0,bots:0});
+  const away=await post('/api/afk',{afk:true},host.token);assert.equal(away.world.afk,true);
+  const stayed=await post('/api/session',{afk:true},away.token);assert.equal(stayed.status,200);assert.equal(stayed.world.afk,true);assert.equal(stayed.players[0].afk,true);
+  assert.equal((await post('/api/session',{afk:'yes'},stayed.token)).status,400);
+  const returned=await post('/api/session',{},stayed.token);assert.equal(returned.status,200);assert.equal(returned.world.afk,false);
+});
 test('a saved room cookie rejoins the same player rather than allocating a second seat',async t=>{
   const {post}=await serverFor(t);const host=await post('/api/rooms',{name:'Host',driver:0,arena:0,bots:0},undefined,{'X-Forwarded-Proto':'https'});
   assert.match(host.cookie,/; Secure/);

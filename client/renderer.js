@@ -50,10 +50,11 @@ class Mesh {
 function multiply(a,b){const out=new Float32Array(16);for(let c=0;c<4;c++)for(let r=0;r<4;r++)for(let k=0;k<4;k++)out[c*4+r]+=a[k*4+r]*b[c*4+k];return out;}
 function cameraMatrix(eye,target,aspect,fov){const z=norm(sub(eye,target)),x=norm(cross([0,1,0],z)),y=cross(z,x),view=new Float32Array([x[0],y[0],z[0],0,x[1],y[1],z[1],0,x[2],y[2],z[2],0,-dot(x,eye),-dot(y,eye),-dot(z,eye),1]);const f=1/Math.tan(fov/2),near=.3,far=1600;return multiply(new Float32Array([f/aspect,0,0,0,0,f,0,0,0,0,(far+near)/(near-far),-1,0,0,2*far*near/(near-far),0]),view);}
 function shader(gl,type,source){const s=gl.createShader(type);gl.shaderSource(s,source);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(s));return s;}
+const MAX_MODEL_BYTES=96*1024*1024;
 export class Renderer {
   constructor(canvas){
     this.canvas=canvas;const gl=this.gl=canvas.getContext('webgl',{antialias:true,alpha:false});if(!gl)throw new Error('This game requires WebGL. Enable hardware acceleration in your browser.');
-    this.models=new Map();this.instances=[];this.quality='auto';this.resolution=1.25;this.fps=0;this.fpsStart=0;this.frameCount=0;this.slowWindows=0;this.fastWindows=0;
+    this.models=new Map();this.modelBytes=0;this.renderFrame=0;this.maxModelBytes=MAX_MODEL_BYTES;this.instances=[];this.quality='auto';this.resolution=1.25;this.fps=0;this.fpsStart=0;this.frameCount=0;this.slowWindows=0;this.fastWindows=0;
     this.tailFolds=new Map();
     this.yudaDrift=new YudaDrift();
     this.chopperTilts=new Map();this.receiptRolls=new ReceiptRolls();this.owlFlight=new OwlFlight();this.batSummons=new Map();
@@ -178,9 +179,40 @@ export class Renderer {
     }
     return report;
   }
+  evictModels(limit=this.maxModelBytes){
+    const gl=this.gl;
+    for(const [key,entry]of this.models){
+      if(this.modelBytes<=limit)break;
+      if(entry.frame===this.renderFrame)continue;
+      this.models.delete(key);this.modelBytes-=entry.bytes;entry.deleted=true;
+      if(entry.buffer)gl.deleteBuffer(entry.buffer);
+    }
+  }
   model(key,x,y,z,angle,build,pitch=0,plumage=null,roll=0){
     let model=this.models.get(key);
-    if(!model){const mesh=new Mesh();this.buildingModel=true;try{build(mesh);}finally{this.buildingModel=false;}const buffer=this.gl.createBuffer();this.gl.bindBuffer(this.gl.ARRAY_BUFFER,buffer);this.gl.bufferData(this.gl.ARRAY_BUFFER,new Float32Array(mesh.data),this.gl.STATIC_DRAW);model={key,buffer,count:mesh.data.length/9,rubble:this.rubbleSamples(mesh.data)};this.models.set(key,model);}
+    if(model){
+      this.models.delete(key);this.models.set(key,model);model.frame=this.renderFrame;
+    }else{
+      const mesh=new Mesh();this.buildingModel=true;try{build(mesh);}finally{this.buildingModel=false;}
+      const vertices=new Float32Array(mesh.data),expectedBytes=vertices.byteLength;
+      if(this.modelBytes+expectedBytes>this.maxModelBytes)this.evictModels(Math.max(0,this.maxModelBytes-expectedBytes));
+      const gl=this.gl,buffer=gl.createBuffer();
+      const upload=()=>{
+        gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,vertices,gl.STATIC_DRAW);
+        if(!expectedBytes||gl.isContextLost?.())return expectedBytes;
+        const allocated=gl.getBufferParameter(gl.ARRAY_BUFFER,gl.BUFFER_SIZE);
+        return typeof allocated==='number'?allocated:expectedBytes;
+      };
+      let allocated=upload();
+      if(allocated<expectedBytes&&this.models.size){this.evictModels(0);allocated=upload();}
+      if(allocated<expectedBytes){
+        if(buffer)gl.deleteBuffer(buffer);
+        if(this.report)this.report(`model-oom:${key}`,'error','model-buffer-allocation-failed',{key,expectedBytes,allocatedBytes:allocated,cachedModels:this.models.size,cachedBytes:this.modelBytes});
+        return;
+      }
+      model={key,buffer,count:mesh.data.length/9,bytes:expectedBytes,frame:this.renderFrame,rubble:this.rubbleSamples(mesh.data)};
+      this.models.set(key,model);this.modelBytes+=expectedBytes;
+    }
     if(this.report&&!Number.isFinite(x+y+z+angle+pitch+roll))this.report(`model:${key}`,'error','model-not-finite',{key,x,y,z,angle,pitch,roll});
     this.instances.push({...model,x,y,z,angle,pitch,plumage,roll});
   }
@@ -579,6 +611,7 @@ export class Renderer {
     }
   }
   drawPreview(driver,color,time){
+    this.renderFrame++;
     this.arenaExhaust=false;
     const gl=this.gl,canvas=this.canvas,width=Math.max(1,Math.round(canvas.clientWidth*this.pixelRatio())),height=Math.max(1,Math.round(canvas.clientHeight*this.pixelRatio()));
     if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;}gl.viewport(0,0,width,height);
@@ -593,6 +626,7 @@ export class Renderer {
     return {...pose,cameraAngle:orbit};
   }
   draw(r,time){
+    this.renderFrame++;
     this.instances=[];
     this.nameplates=[];this.gl.useProgram(this.program);this.gl.uniform1f(this.darknessUniform,0);
     if(r.mode==='combat'){this.drawBattle(r,time);return;}

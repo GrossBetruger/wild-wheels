@@ -71,6 +71,9 @@ pub struct GameSession {
     /// The connection the current client was built from; see `Command::Input`.
     connection: u64,
     pub away: bool,
+    /// True after `set_away(false)` until the fresh resumed connection arrives, so
+    /// stale pre-AFK packets cannot immediately bounce the player back to AFK.
+    resuming: bool,
     focus: FocusAfk,
     observed: Option<(u32, u64)>,
     metrics: crate::metrics::Metrics,
@@ -97,6 +100,7 @@ impl GameSession {
             last_send: 0.0,
             connection: 0,
             away: false,
+            resuming: false,
             focus: Default::default(),
             observed: None,
             metrics: Default::default(),
@@ -129,6 +133,7 @@ impl GameSession {
         }
         self.client = None;
         self.away = false;
+        self.resuming = false;
         self.focus.reset();
         self.status.clear();
     }
@@ -139,6 +144,12 @@ impl GameSession {
         }
         if self.request(Command::Afk(away)) {
             self.away = away;
+            if away {
+                self.resuming = false;
+            } else {
+                self.client = None;
+                self.resuming = true;
+            }
             return true;
         }
         false
@@ -200,6 +211,7 @@ impl GameSession {
                     self.colors.pending = false;
                     self.metrics.connected();
                     self.client = None;
+                    self.resuming = false;
                     self.status = "Connected".into();
                 }
                 Event::Error(error) => {
@@ -210,8 +222,12 @@ impl GameSession {
                     );
                     self.status = error;
                     self.client = None;
+                    self.resuming = false;
                 }
                 Event::Packet(bytes) => {
+                    if self.resuming {
+                        continue;
+                    }
                     self.heard = now;
                     let result = match self.client.as_mut() {
                         Some(client) => client.accept(&bytes, now),
@@ -653,5 +669,55 @@ mod tests {
         assert!(!automated.should_sit_out(1.0, true, Some("racing"), false, true));
         assert!(!automated.should_sit_out(2.0, false, Some("racing"), false, true));
         assert!(!automated.should_sit_out(100.0, false, Some("ready"), false, true));
+    }
+
+    #[test]
+    fn returning_from_afk_ignores_stale_pre_afk_packets_until_reconnected() {
+        use wild_wheels_core::NativeArena;
+
+        let config = serde_json::json!({
+            "maxPlayers": 6, "code": "00", "arena": 0, "bots": 0,
+            "host": null, "dedicated": true, "epoch": 1, "seed": 1,
+            "players": [{"id": 0, "name": "Oren", "driver": 0, "role": "driver", "afk": true}]
+        });
+        let mut arena = NativeArena::new(config).unwrap();
+        let afk_packet = arena.packet_with_cues(0, vec![], vec![]);
+
+        let (cmd_tx, cmd_rx) = crossbeam_channel::bounded(8);
+        let (evt_tx, evt_rx) = crossbeam_channel::bounded(8);
+        let mut session = GameSession::new();
+        session.transport = Some(Transport {
+            events: evt_rx,
+            commands: cmd_tx,
+        });
+        session.client = Some(NativeClient::from_packet(&afk_packet, 1.0).unwrap());
+        session.away = true;
+
+        // Clicking BACK TO ARENA clears the stale client and enters resuming state.
+        assert!(session.set_away(false));
+        assert!(!session.away);
+        assert!(session.client.is_none());
+        assert!(matches!(cmd_rx.try_recv(), Ok(Command::Afk(false))));
+
+        // A stale AFK packet that arrived before Event::Connected must not bounce back to AFK.
+        evt_tx.send(Event::Packet(afk_packet.clone())).unwrap();
+        session.receive(1.1);
+        assert!(!session.away);
+        assert!(session.client.is_none());
+        assert!(cmd_rx.try_recv().is_err());
+
+        // Once the fresh connection is established, subsequent packets are processed normally.
+        evt_tx.send(Event::Connected(2)).unwrap();
+        let active_config = serde_json::json!({
+            "maxPlayers": 6, "code": "00", "arena": 0, "bots": 0,
+            "host": null, "dedicated": true, "epoch": 1, "seed": 1,
+            "players": [{"id": 0, "name": "Oren", "driver": 0, "role": "driver", "afk": false}]
+        });
+        arena.configure(active_config).unwrap();
+        let active_packet = arena.packet_with_cues(0, vec![], vec![]);
+        evt_tx.send(Event::Packet(active_packet)).unwrap();
+        session.receive(1.2);
+        assert!(!session.away);
+        assert!(session.client.is_some());
     }
 }

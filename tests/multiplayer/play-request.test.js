@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { PlayRequestPrompt } from '../../networking/network.js';
+import { PlayRequestPrompt, RoomJoinTracker } from '../../networking/network.js';
 
 test('the host sees who wants to play while guests and live matches get no popup',()=>{
   const state={code:'07',host:0,you:0,startRequest:{id:1,remainingMs:3000},world:{phase:'ready',soundEpoch:1},players:[{id:0,name:'Host'},{id:1,name:'Sam',wantsToPlay:true}]};
@@ -23,4 +23,16 @@ test('a withdrawn request leaves no popup, and later requests show every waiting
   const prompt=new PlayRequestPrompt();assert.deepEqual(prompt.sample({...state,startRequest:null,players:[{id:1,name:'Sam',wantsToPlay:false}]}),[]);
   const next={...state,startRequest:{id:2,remainingMs:3000},players:[{id:1,name:'Sam',wantsToPlay:true},{id:2,name:'Jo',wantsToPlay:true}]};
   assert.deepEqual(prompt.sample(next).map(player=>player.name),['Sam','Jo']);
+});
+
+test('room join tracker signals only when another active player joins or returns from AFK',()=>{
+  const tracker=new RoomJoinTracker();
+  const base={code:'00',you:0,players:[{id:0,name:'Oren',afk:false},{id:1,name:'Sarah',afk:false}]};
+  assert.equal(tracker.sample(base),false);
+  assert.equal(tracker.sample(base),false);
+  assert.equal(tracker.sample({...base,players:[...base.players,{id:2,name:'Mike',afk:false}]}),true);
+  assert.equal(tracker.sample({...base,players:[...base.players,{id:2,name:'Mike',afk:true}]}),false);
+  assert.equal(tracker.sample({...base,players:[...base.players,{id:2,name:'Mike',afk:false}]}),true);
+  assert.equal(tracker.sample({...base,players:[{id:0,name:'Oren',afk:true},{id:1,name:'Sarah',afk:false},{id:2,name:'Mike',afk:false}]}),false);
+  assert.equal(tracker.sample({...base,players:[{id:0,name:'Oren',afk:false},{id:1,name:'Sarah',afk:false},{id:2,name:'Mike',afk:false}]}),false);
 });

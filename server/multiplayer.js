@@ -289,7 +289,14 @@ export class Multiplayer {
       if (req.method !== 'POST') throw problem(405, 'Use POST.');
       this.limit(req, path, path === '/api/input' ? 180 : 15); const body = await this.body(req);
       switch (path) {
-        case '/api/session': { this.applyColorPreference(member, body.color); const state = this.resume(member); sessionCookie(req, res, state.token, this.security); json(200, state); break; }
+        case '/api/session': {
+          if (body.afk !== undefined && body.afk !== null && typeof body.afk !== 'boolean') throw problem(400, 'Choose AFK or back in the arena.');
+          this.applyColorPreference(member, body.color);
+          const state = this.resume(member, { afk: Boolean(body.afk) });
+          sessionCookie(req, res, state.token, this.security);
+          json(200, state);
+          break;
+        }
         case '/api/afk': {
           if (typeof body.afk !== 'boolean') throw problem(400, 'Choose AFK or back in the arena.');
           const state = this.resume(member, { afk: body.afk }); sessionCookie(req, res, state.token, this.security); json(200, state); break;

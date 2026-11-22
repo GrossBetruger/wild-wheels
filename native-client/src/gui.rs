@@ -170,9 +170,12 @@ impl Menu {
     }
 }
 
-/// The system clipboard, for pasting a server address.
+/// The system clipboard, for pasting a server address or chat message (including UTF-8 / Hebrew).
 pub(crate) fn clipboard() -> Option<String> {
-    let output = std::process::Command::new("pbpaste").output().ok()?;
+    let output = std::process::Command::new("pbpaste")
+        .env("LC_CTYPE", "UTF-8")
+        .output()
+        .ok()?;
     let text = String::from_utf8(output.stdout).ok()?;
     Some(text.lines().next()?.trim().to_owned())
 }
@@ -223,6 +226,12 @@ pub fn control(
             }
             handled.push(event.key_code);
         }
+        if screen == Screen::Join && command && event.key_code == KeyCode::KeyV {
+            if let Some(pasted) = clipboard() {
+                menu.typed(&pasted);
+            }
+            continue;
+        }
         match (screen, &event.logical_key) {
             (Screen::Join, Key::Character(text)) if command => {
                 if text.eq_ignore_ascii_case("v")
@@ -252,13 +261,24 @@ pub fn control(
                 acts.push(Act::Racer((menu.driver + racers - 1) % racers))
             }
             (Screen::Join, Key::Enter) => acts.push(Act::Join),
+            (Screen::Join, _) if !command => {
+                if let Some(text) = &event.text {
+                    menu.typed(text);
+                }
+            }
             (Screen::Lobby, Key::Enter) => acts.push(Act::Start),
             (Screen::Connecting, Key::Escape) => acts.push(Act::Leave),
             (Screen::Lobby | Screen::Playing, Key::Escape) => menu.open = true,
             (Screen::Menu, Key::Enter | Key::Escape) if session.away => acts.push(Act::SitOut),
             (Screen::Menu, Key::Escape) => acts.push(Act::Resume),
             (Screen::Lobby | Screen::Playing | Screen::Menu, Key::Character(text))
-                if !command && text.eq_ignore_ascii_case("p") =>
+                if !command
+                    && (text.eq_ignore_ascii_case("p") || event.key_code == KeyCode::KeyP) =>
+            {
+                acts.push(Act::SitOut);
+            }
+            (Screen::Lobby | Screen::Playing | Screen::Menu, _)
+                if !command && event.key_code == KeyCode::KeyP =>
             {
                 acts.push(Act::SitOut);
             }
@@ -320,7 +340,10 @@ pub fn control(
 }
 
 /// Spawns menu widgets beneath a parent node.
-struct Builder<'a, 'w, 's>(&'a mut Commands<'w, 's>);
+struct Builder<'a, 'w, 's> {
+    commands: &'a mut Commands<'w, 's>,
+    font: bevy::text::FontSource,
+}
 impl Builder<'_, '_, '_> {
     fn colors(
         &mut self,
@@ -373,11 +396,11 @@ impl Builder<'_, '_, '_> {
                 },
                 color,
             );
-            self.0
+            self.commands
                 .entity(tile)
                 .insert(BorderColor::all(if chosen { Color::WHITE } else { MUTED }));
             if !taken && !locked {
-                self.0.entity(tile).insert((
+                self.commands.entity(tile).insert((
                     RelativeCursorPosition::default(),
                     Act::Color(index),
                     Tone(color),
@@ -414,7 +437,7 @@ impl Builder<'_, '_, '_> {
         self.text(panel, &hint, 12.0, MUTED);
     }
     fn node(&mut self, parent: Entity, node: Node, color: Color) -> Entity {
-        self.0
+        self.commands
             .spawn((node, BackgroundColor(color), ChildOf(parent)))
             .id()
     }
@@ -438,9 +461,10 @@ impl Builder<'_, '_, '_> {
         self.node(parent, node, Color::NONE)
     }
     fn text(&mut self, parent: Entity, text: &str, size: f32, color: Color) {
-        self.0.spawn((
+        self.commands.spawn((
             Text::new(text),
             TextFont {
+                font: self.font.clone(),
                 font_size: FontSize::Px(size),
                 ..default()
             },
@@ -456,7 +480,7 @@ impl Builder<'_, '_, '_> {
             ..default()
         };
         let button = self.node(parent, node, color);
-        self.0
+        self.commands
             .entity(button)
             .insert((RelativeCursorPosition::default(), act, Tone(color)));
         self.text(button, label, 15.0, Color::WHITE);
@@ -487,6 +511,7 @@ pub fn draw(
     mut menu: ResMut<Menu>,
     session: Res<GameSession>,
     graphics: Res<Graphics>,
+    faces: Option<Res<crate::hud::MenloFaces>>,
 ) {
     if session.joined() && session.colors.preferred != menu.color {
         menu.color = session.colors.preferred.clone();
@@ -501,7 +526,7 @@ pub fn draw(
             menu.server, menu.name, menu.field, menu.driver, menu.notice, menu.color
         ),
         (Screen::Lobby, Some(view)) => format!(
-            "lobby|{}|{}|{}|{}|{}|{}|{:?}|{}|{}|{}|{}",
+            "lobby|{}|{}|{}|{}|{}|{}|{:?}|{}|{}|{}|{}|{:?}",
             view.arena,
             view.actors
                 .iter()
@@ -523,7 +548,8 @@ pub fn draw(
             session.colors.pending,
             session.colors.message,
             view.target_score,
-            view.duration
+            view.duration,
+            session.board
         ),
         _ => format!("{screen:?}|{}|{}", session.away, session.status),
     };
@@ -543,7 +569,11 @@ pub fn draw(
         })
         .id();
     menu.root = Some(root);
-    let mut ui = Builder(&mut commands);
+    let font = faces.map(|f| f.source.clone()).unwrap_or_default();
+    let mut ui = Builder {
+        commands: &mut commands,
+        font,
+    };
     let centered = Node {
         position_type: PositionType::Absolute,
         left: percent(32),
@@ -593,6 +623,67 @@ pub fn draw(
             );
         }
         (Screen::Lobby, Some(view)) => {
+            if let Some(board) = session.board.as_deref() {
+                let lb = ui.column(
+                    root,
+                    Node {
+                        position_type: PositionType::Absolute,
+                        left: px(14),
+                        top: px(14),
+                        width: px(396),
+                        ..default()
+                    },
+                );
+                ui.text(lb, "ALL-TIME LEADERBOARD", 22.0, GOLD);
+                ui.text(lb, "ELO RATING · WINS / GAMES", 12.0, MUTED);
+                let you_elo = crate::hud::player_elo(board, view.player.name.as_deref());
+                match you_elo {
+                    Some((rank, rating, wins, games)) => {
+                        ui.text(
+                            lb,
+                            &format!("YOUR ELO  {rating}  ·  RANK #{rank}  ·  {wins}W / {games}G"),
+                            14.0,
+                            GOLD,
+                        );
+                    }
+                    None => {
+                        ui.text(
+                            lb,
+                            "YOUR ELO  1000  ·  UNRANKED (finish a match to rank)",
+                            13.0,
+                            MUTED,
+                        );
+                    }
+                }
+                let rows = crate::hud::all_time_rows(
+                    board,
+                    view.player.name.as_deref(),
+                    crate::hud::ALL_TIME_ROWS,
+                );
+                if rows.is_empty() {
+                    ui.text(lb, "No matches finished yet", 14.0, MUTED);
+                } else {
+                    for row in rows {
+                        let marker = match row.you {
+                            true => " (YOU)",
+                            false => "",
+                        };
+                        let color = match row.you {
+                            true => GOLD,
+                            false => Color::WHITE,
+                        };
+                        ui.text(
+                            lb,
+                            &format!(
+                                "#{:<2}  {}{}   {} ELO  ·  {} / {}",
+                                row.rank, row.name, marker, row.rating, row.wins, row.games
+                            ),
+                            14.0,
+                            color,
+                        );
+                    }
+                }
+            }
             let panel = ui.column(
                 root,
                 Node {
@@ -656,9 +747,16 @@ pub fn draw(
                 .filter(|a| a.human)
                 .map(|a| {
                     let name = a.name.as_deref().unwrap_or("Racer");
-                    match a.afk {
-                        true => format!("{name} (AFK)"),
-                        false => name.to_owned(),
+                    let elo = session
+                        .board
+                        .as_deref()
+                        .and_then(|b| crate::hud::player_elo(b, Some(name)))
+                        .map(|(_, rating, _, _)| rating);
+                    match (elo, a.afk) {
+                        (Some(rating), true) => format!("{name} ({rating}, AFK)"),
+                        (Some(rating), false) => format!("{name} ({rating})"),
+                        (None, true) => format!("{name} (AFK)"),
+                        (None, false) => name.to_owned(),
                     }
                 })
                 .collect();

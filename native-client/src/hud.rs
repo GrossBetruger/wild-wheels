@@ -371,6 +371,71 @@ pub fn standings<'a>(view: &ClientView<'a>) -> Vec<&'a wild_wheels_core::Actor> 
     });
     racers
 }
+/// One row of the all-time Elo leaderboard: rank, player name, Elo rating, wins, games, and whether it is the viewer.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct AllTimeRow {
+    pub rank: usize,
+    pub name: String,
+    pub rating: i64,
+    pub wins: u64,
+    pub games: u64,
+    pub you: bool,
+}
+
+pub(crate) const ALL_TIME_ROWS: usize = 8;
+
+/// Mirrors `allTimeRows` in `ui/all-time.js`: returns the top `limit` entries
+/// and appends the viewer's own entry if ranked lower than `limit`.
+pub(crate) fn all_time_rows(
+    board: &[(String, f64, u64, u64)],
+    you: Option<&str>,
+    limit: usize,
+) -> Vec<AllTimeRow> {
+    let you_key = you.map(|s| s.trim().to_lowercase()).filter(|s| !s.is_empty());
+    let row = |index: usize, (name, rating, wins, games): &(String, f64, u64, u64)| AllTimeRow {
+        rank: index + 1,
+        name: name.clone(),
+        rating: rating.round() as i64,
+        wins: *wins,
+        games: *games,
+        you: you_key
+            .as_deref()
+            .is_some_and(|key| name.trim().to_lowercase() == key),
+    };
+    let mut top: Vec<AllTimeRow> = board
+        .iter()
+        .take(limit)
+        .enumerate()
+        .map(|(i, p)| row(i, p))
+        .collect();
+    if let Some(key) = you_key.as_deref()
+        && !top.iter().any(|r| r.you)
+        && let Some((index, entry)) = board
+            .iter()
+            .enumerate()
+            .find(|(_, (name, _, _, _))| name.trim().to_lowercase() == key)
+    {
+        top.push(row(index, entry));
+    }
+    top
+}
+
+/// Finds a player's all-time Elo entry (1-based rank, rounded Elo rating, wins, games) by name.
+pub(crate) fn player_elo(
+    board: &[(String, f64, u64, u64)],
+    name: Option<&str>,
+) -> Option<(usize, i64, u64, u64)> {
+    let key = name?.trim().to_lowercase();
+    if key.is_empty() {
+        return None;
+    }
+    board
+        .iter()
+        .enumerate()
+        .find(|(_, (entry_name, _, _, _))| entry_name.trim().to_lowercase() == key)
+        .map(|(i, (_, rating, wins, games))| (i + 1, rating.round() as i64, *wins, *games))
+}
+
 /// Server and game text without emoji, which the HUD's font cannot draw.
 pub fn plain(text: &str) -> String {
     let kept: String = text
@@ -443,24 +508,29 @@ fn readings(
             format!("{name}  {:.0} / {}", a.kills, a.deaths)
         })
         .collect();
-    // Under the match's own standings, the server's all-time board: rating, wins and games played.
+    // Under the match's own standings, the server's all-time board: Elo rating, wins and games played.
     // A server that sent no board shows none; one with an empty board says so.
     let all_time = match board {
         None => String::new(),
         Some(board) => {
-            let rows: String = board
-                .iter()
-                .take(5)
-                .enumerate()
-                .map(|(place, (name, rating, wins, games))| {
-                    format!("\n{}. {name}  {rating:.0} · {wins} / {games}", place + 1)
+            let rows: String = all_time_rows(board, p.name.as_deref(), ALL_TIME_ROWS)
+                .into_iter()
+                .map(|row| {
+                    let marker = match row.you {
+                        true => " (YOU)",
+                        false => "",
+                    };
+                    format!(
+                        "\n{}. {}{}  {} · {} / {}",
+                        row.rank, row.name, marker, row.rating, row.wins, row.games
+                    )
                 })
                 .collect();
             let rows = match rows.is_empty() {
                 true => "\nNo matches finished yet".to_owned(),
                 false => rows,
             };
-            format!("\n\nALL-TIME · RATING · WINS / GAMES{rows}")
+            format!("\n\nALL-TIME · ELO · WINS / GAMES{rows}")
         }
     };
     text(
@@ -753,10 +823,48 @@ fn readings(
 }
 
 /// The browser uses the system monospace font, which on macOS is Menlo; it also
-/// holds the symbols the HUD needs. Elsewhere the built-in font is used.
-/// Keeping the handle keeps the faces loaded for as long as the HUD exists.
-#[derive(Resource)]
-pub struct MenloFaces(#[expect(dead_code)] Handle<Font>);
+/// holds the symbols the HUD needs. We pair it with macOS Hebrew fonts so chat,
+/// player names, and leaderboards render both Latin and Hebrew glyphs cleanly.
+/// Keeping the handles keeps the faces loaded for as long as the UI exists.
+#[derive(Resource, Clone)]
+pub struct MenloFaces {
+    #[expect(dead_code)]
+    handles: Vec<Handle<Font>>,
+    pub source: bevy::text::FontSource,
+}
+
+const SYSTEM_FONT_PATHS: &[&str] = &[
+    "/System/Library/Fonts/Menlo.ttc",
+    "/System/Library/Fonts/SFHebrew.ttf",
+    "/System/Library/Fonts/ArialHB.ttc",
+    "/System/Library/Fonts/Supplemental/Arial.ttf",
+];
+
+pub(crate) fn load_ui_fonts(fonts: &mut Assets<Font>) -> Option<MenloFaces> {
+    let mut handles = Vec::new();
+    for path in SYSTEM_FONT_PATHS {
+        if let Ok(bytes) = std::fs::read(path) {
+            if *path == "/System/Library/Fonts/Supplemental/Arial.ttf" {
+                let _ = fonts.insert(
+                    AssetId::<Font>::default(),
+                    Font::from_bytes(bytes.clone()),
+                );
+            }
+            handles.push(fonts.add(Font::from_bytes(bytes)));
+        }
+    }
+    if handles.is_empty() {
+        return None;
+    }
+    let source = bevy::text::FontSource::List(
+        handles
+            .iter()
+            .cloned()
+            .map(bevy::text::FontSource::Handle)
+            .collect(),
+    );
+    Some(MenloFaces { handles, source })
+}
 
 struct Style {
     size: f32,
@@ -908,14 +1016,13 @@ impl Hud<'_, '_, '_> {
 /// Builds the browser's arena HUD once; `update` fills it in every frame.
 /// Positions and sizes are the browser's CSS, scaled by `K`.
 pub fn setup(mut commands: Commands, mut fonts: ResMut<Assets<Font>>) {
-    let face = match std::fs::read("/System/Library/Fonts/Menlo.ttc") {
-        Ok(bytes) => {
-            // Keeping the handle alive keeps every Menlo face registered by name.
-            let menlo = fonts.add(Font::from_bytes(bytes));
-            commands.insert_resource(MenloFaces(menlo));
-            bevy::text::FontSource::Family("Menlo".into())
+    let face = match load_ui_fonts(&mut fonts) {
+        Some(faces) => {
+            let source = faces.source.clone();
+            commands.insert_resource(faces);
+            source
         }
-        Err(_) => bevy::text::FontSource::default(),
+        None => bevy::text::FontSource::default(),
     };
     let white = Color::WHITE;
     let none = Color::NONE;
@@ -1663,5 +1770,27 @@ mod tests {
         assert_eq!(clock(151.5), "02:31.50");
         assert_eq!(clock(9.256), "00:09.26");
         assert_eq!(clock(-3.0), "00:00.00");
+    }
+
+    #[test]
+    fn all_time_rows_shows_top_eight_and_appends_the_viewer_when_ranked_lower() {
+        let board: Vec<(String, f64, u64, u64)> = (1..=12)
+            .map(|i| (format!("Player {i}"), 1200.0 - (i as f64) * 10.0, 13 - i, 20))
+            .collect();
+        let top = all_time_rows(&board, Some("Player 3"), ALL_TIME_ROWS);
+        assert_eq!(top.len(), 8);
+        assert!(top[2].you);
+        assert_eq!(top[2].rank, 3);
+        let with_low_viewer = all_time_rows(&board, Some("player 11"), ALL_TIME_ROWS);
+        assert_eq!(with_low_viewer.len(), 9);
+        let last = with_low_viewer.last().unwrap();
+        assert_eq!(last.rank, 11);
+        assert_eq!(last.name, "Player 11");
+        assert_eq!(last.rating, 1090);
+        assert!(last.you);
+        assert_eq!(
+            player_elo(&board, Some("Player 11")),
+            Some((11, 1090, 2, 20))
+        );
     }
 }
