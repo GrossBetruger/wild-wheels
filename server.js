@@ -4,12 +4,14 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { Multiplayer } from './server/multiplayer.js';
 import { createTunnelControl } from './server/tunnel-control.js';
+import { createTextEndpoint } from './server/text.js';
 const mime=name=>({'html':'text/html','css':'text/css','svg':'image/svg+xml','wasm':'application/wasm','ogg':'audio/ogg','flac':'audio/flac'})[name.split('.').at(-1)]??'text/javascript';
 const loadFiles=()=>new Map(JSON.parse(readFileSync(new URL('./public-assets.json',import.meta.url))).map(name=>[name==='index.html'?'/':'/'+name,[name,mime(name)]]));
 let files=loadFiles();
 export function createGameServer(options={}){
 const multiplayer=new Multiplayer(options);
-const runtimeHash=createHash('sha256');for(const name of ['server.js','server/chat.js','server/security.js','server/multiplayer.js','server/photo-album.js','server/ngrok.js','server/tunnel-control.js','gameplay/combat.js','gameplay/arena-core.js','gameplay/core-view.js','rust-core.wasm','gameplay/engine.js','gameplay/track.js','package-lock.json'])runtimeHash.update(name).update(readFileSync(new URL(name,import.meta.url)));const runtimeBuild=runtimeHash.digest('hex');
+const postText=createTextEndpoint(multiplayer, options);
+const runtimeHash=createHash('sha256');for(const name of ['server.js','server/chat.js','server/security.js','server/multiplayer.js','server/photo-album.js','server/ngrok.js','server/tunnel-control.js','server/text.js','gameplay/combat.js','gameplay/arena-core.js','gameplay/core-view.js','rust-core.wasm','gameplay/engine.js','gameplay/track.js','package-lock.json'])runtimeHash.update(name).update(readFileSync(new URL(name,import.meta.url)));const runtimeBuild=runtimeHash.digest('hex');
 let buildPromise,buildValue='',buildAt=-Infinity;
 const build=()=>{if(performance.now()-buildAt<500&&buildValue)return Promise.resolve(buildValue);return buildPromise??=(async()=>{files=loadFiles();const hash=createHash('sha256').update(runtimeBuild);for(const name of [...new Set([...files.values()].map(file=>file[0]))])hash.update(name).update(await readFile(new URL(name,import.meta.url)));buildValue=hash.digest('hex').slice(0,10).toUpperCase();buildAt=performance.now();buildPromise=undefined;return buildValue;})().catch(error=>{buildPromise=undefined;throw error;});};
 const server=createServer(async (req, res) => {
@@ -23,6 +25,7 @@ const server=createServer(async (req, res) => {
       res.writeHead(200,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(req.method==='HEAD'?undefined:JSON.stringify({build:fingerprint}));
     }catch(error){res.writeHead(error.status??500);res.end('Build information unavailable');}return;
   }
+  if((req.url??'').split('?')[0]==='/api/text'){await postText(req,res);return;}
   if(await multiplayer.handle(req,res))return;
   if(req.method!=='GET'&&req.method!=='HEAD'){res.writeHead(405);res.end('Method not allowed');return;}
   const route = (req.url || '/').split('?')[0];

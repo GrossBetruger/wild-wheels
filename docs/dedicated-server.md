@@ -58,6 +58,16 @@ Configuration is through environment variables:
 
 `/healthz` reports occupancy, ticks, recent simulation tick p99 and missed tick deadlines. `/build.json` identifies embedded assets and native source. Rebuild the server after changing assets. When changing core code, first rebuild browser Wasm with `npm run build:core`.
 
+## Save text over HTTP
+
+Set `TEXT_POST_KEY` in the server environment before starting either the dedicated Rust server or the Node server. Generate a key with `openssl rand -hex 32`. Keep the key in the calling environment as well. The endpoint is disabled when the key is unset.
+
+```sh
+printf 'Authorization: Bearer %s\n' "$TEXT_POST_KEY" | curl --fail-with-body --header @- --header 'Content-Type: text/plain; charset=utf-8' --data-binary 'Hello, Wild Wheels!' http://127.0.0.1:5173/api/text
+```
+
+Each successful request returns HTTP 201 and a JSON object with the generated `filename`. The server saves the exact UTF-8 bytes in `.wild-wheels/text/` (or `$WILD_WHEELS_RUN_DIR/text/` when configured). Posts are limited to 64 KiB and ten attempts per minute per client address after authentication. Use HTTPS for remote requests. Saved files are private server files.
+
 ## Arena and connection lifecycle
 
 One shared arena uses invitation `?room=00`, with eight combined human/bot slots. The page displays a connection screen until the first shared-arena frame is ready, with a retry action if joining fails. There is no host or captain: every active player has the same room controls, and no browser drives the simulation. Refresh preserves your identity, character, scores and acknowledged movement while rotating your session token. Places expire after 15 minutes without API/socket activity, even if the socket never closed. An actively polling AFK player retains their place.

@@ -330,9 +330,7 @@ impl Logs {
     }
     /// Whether `presented` is the reading key, compared without stopping early.
     pub fn key_matches(&self, presented: &str) -> bool {
-        !self.key.is_empty()
-            && presented.len() == self.key.len()
-            && presented.bytes().zip(self.key.bytes()).fold(0, |different, (a, b)| different | (a ^ b)) == 0
+        crate::security::key_matches(&self.key, presented)
     }
     pub fn limits(&self) -> Limits {
         self.limits

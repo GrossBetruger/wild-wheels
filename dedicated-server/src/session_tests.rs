@@ -4,6 +4,7 @@ fn server(path: std::path::PathBuf) -> App {
     App {
         trust_proxy: false,
         invite_secret: None,
+        text_store: None,
         stats: Default::default(),
         shutdown: tokio::sync::watch::channel(false).0,
         updates: Default::default(),

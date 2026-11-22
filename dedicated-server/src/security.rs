@@ -1,5 +1,11 @@
 use super::*;
 
+pub fn key_matches(expected: &str, presented: &str) -> bool {
+    !expected.is_empty()
+        && presented.len() == expected.len()
+        && presented.bytes().zip(expected.bytes()).fold(0, |different, (a, b)| different | (a ^ b)) == 0
+}
+
 fn valid_host(host:&str)->bool{
     let Ok(uri)=format!("http://{host}").parse::<Uri>() else{return false;};
     uri.path()=="/"&&uri.query().is_none()&&uri.host().is_some()&&uri.authority().is_some_and(|a|a.as_str()==host&&!host.contains('@'))
@@ -65,6 +71,7 @@ mod tests {
             origin: origin.map(str::to_owned),
             trust_proxy: true,
             invite_secret: None,
+            text_store: None,
         }
     }
     #[test]
