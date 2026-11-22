@@ -950,7 +950,7 @@ mod tests {
         assert_eq!(graphics.racers().len(), 16);
         assert_eq!(graphics.racers()[0].name, "Pip the Panda");
         assert_eq!(graphics.racers()[14].ability, "DARK HUMOR");
-        assert_eq!(graphics.racers()[15].name, "Tycoon");
+        assert_eq!(graphics.racers()[15].name, "Tai-Coon");
         assert_eq!(graphics.racers()[15].ability, "KARMIC RACCOONING");
         // Pearococo's eleven tail feathers are drawn by the plumage shader; no
         // other racer has any.

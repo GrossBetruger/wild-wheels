@@ -870,10 +870,6 @@ fn readings(
         .map(|racer| racer.ability.as_str())
         .filter(|_| SPECIALISTS.contains(&p.driver) && view.special_abilities && !p.bomber);
     if let Some(ability) = ability {
-        let label = match (p.special_cooldown > 0.0, p.driver) {
-            (true, _) => format!("F · RECHARGE {:.1}s", p.special_cooldown),
-            _ => format!("F · {ability}"),
-        };
         let karma_ready = p.last_killer.is_some_and(|v| {
             v != p.id
                 && view
@@ -881,6 +877,12 @@ fn readings(
                     .get(v)
                     .is_some_and(|t| !t.inactive && !t.afk && !t.bomber && t.destroyed <= 0.0)
         });
+        let label = match (p.special_cooldown > 0.0, p.driver, karma_ready) {
+            (true, _, _) => format!("F · RECHARGE {:.1}s", p.special_cooldown),
+            (false, 15, false) if p.last_killer.is_none() => format!("F · {ability} (NEEDS KO)"),
+            (false, 15, false) => format!("F · {ability} (RESPAWNING)"),
+            _ => format!("F · {ability}"),
+        };
         let ready = live
             && p.special_cooldown <= 0.0
             && !(p.driver == 12 && p.health >= 6.0)
@@ -1710,9 +1712,16 @@ pub fn update(
     let now = time.elapsed_secs_f64();
     notices.sample(&view, &graphics, now);
     let talking = session.voice.is_talking();
+    let voice_error = session.voice.error();
     let mut voice_parts = Vec::new();
     if talking {
-        voice_parts.push("MIC LIVE".to_owned());
+        if !session.voice.is_socket_ready() {
+            voice_parts.push("MIC LIVE (VOICE RECONNECTING...)".to_owned());
+        } else if let Some(err) = &voice_error {
+            voice_parts.push(format!("MIC LIVE · {err}"));
+        } else {
+            voice_parts.push("MIC LIVE".to_owned());
+        }
     }
     let speaker_names: Vec<_> = session
         .voice
@@ -1729,7 +1738,7 @@ pub fn update(
         voice_parts.push(format!("VOICE: {}", speaker_names.join(", ")));
     }
     if voice_parts.is_empty()
-        && let Some(err) = session.voice.error()
+        && let Some(err) = voice_error
     {
         voice_parts.push(format!("MIC: {err}"));
     }

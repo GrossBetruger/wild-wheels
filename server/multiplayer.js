@@ -75,6 +75,7 @@ export class Multiplayer {
           clearTimeout(authTimer);
           member.voiceSocket?.close(1000, 'Voice connection replaced');
           member.voiceSocket = socket;
+          socket.send(JSON.stringify({ type: 'ready', id: member.id }));
           return;
         }
         if (member.voiceSocket !== socket || this.members.get(member.token) !== member) { socket.close(1000, 'Voice connection replaced'); return; }

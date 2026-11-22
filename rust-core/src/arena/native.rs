@@ -27,6 +27,7 @@ fn special_name(driver: usize) -> &'static str {
         12 => "Six-Heart Recovery",
         13 => "Tax-Audit",
         14 => "Dark Humor",
+        15 => "Karmic Raccooning",
         _ => "special",
     }
 }
@@ -165,6 +166,10 @@ impl NativeArena {
     pub fn drain(&mut self) {
         self.game.global.events.clear();
         self.game.global.voices.clear();
+    }
+    #[cfg(test)]
+    pub(crate) fn game_mut_for_test(&mut self) -> &mut Game {
+        &mut self.game
     }
 }
 

@@ -194,24 +194,35 @@ impl Mixer {
     }
 }
 
+const SILENT_FRAMES_THRESHOLD: u32 = 25; // ~500 ms of bit-for-bit zero samples
+const SILENT_MIC_ERROR: &str = "Mic is silent — check Microphone permission for Terminal";
+
 struct Resampler {
     ratio: f64,
     phase: f64,
     prev: f32,
     has_prev: bool,
     buf: Vec<u8>,
+    frame_peak: f32,
+    heard_signal: bool,
+    silent_frames: u32,
     seq: u16,
+    error_slot: Arc<Mutex<Option<String>>>,
 }
 
 impl Resampler {
-    fn new(input_rate: u32) -> Self {
+    fn new(input_rate: u32, error_slot: Arc<Mutex<Option<String>>>) -> Self {
         Self {
             ratio: f64::from(input_rate) / f64::from(VOICE_SAMPLE_RATE),
             phase: 0.0,
             prev: 0.0,
             has_prev: false,
             buf: Vec::with_capacity(VOICE_FRAME_SAMPLES),
+            frame_peak: 0.0,
+            heard_signal: false,
+            silent_frames: 0,
             seq: 0,
+            error_slot,
         }
     }
 
@@ -220,6 +231,8 @@ impl Resampler {
         self.prev = 0.0;
         self.has_prev = false;
         self.buf.clear();
+        self.frame_peak = 0.0;
+        self.silent_frames = 0;
     }
 
     fn push_mono(&mut self, input: &[f32], tx: &Sender<Vec<u8>>) {
@@ -240,8 +253,32 @@ impl Resampler {
                 .copied()
                 .unwrap_or(*input.last().unwrap());
             let sample = s0 + (s1 - s0) * frac;
+            self.frame_peak = self.frame_peak.max(sample.abs());
             self.buf.push(encode_mulaw_sample(sample));
             if self.buf.len() == VOICE_FRAME_SAMPLES {
+                if self.frame_peak > 0.0 {
+                    if !self.heard_signal {
+                        self.heard_signal = true;
+                        let mut err = self.error_slot.lock().unwrap();
+                        if err.as_deref() == Some(SILENT_MIC_ERROR) {
+                            *err = None;
+                        }
+                    }
+                    self.silent_frames = 0;
+                } else if !self.heard_signal {
+                    self.silent_frames = self.silent_frames.saturating_add(1);
+                    if self.silent_frames == SILENT_FRAMES_THRESHOLD {
+                        *self.error_slot.lock().unwrap() = Some(SILENT_MIC_ERROR.to_owned());
+                        crate::reports::limited(
+                            "voice-mic-silent",
+                            30.0,
+                            "warn",
+                            "voice-mic-silent",
+                            || json!({"silentFrames": SILENT_FRAMES_THRESHOLD}),
+                        );
+                    }
+                }
+                self.frame_peak = 0.0;
                 if let Some(frame) = pack_client_frame(self.seq, &self.buf) {
                     let _ = tx.try_send(frame);
                 }
@@ -272,9 +309,10 @@ pub struct Voice {
     audio_cmd: Option<Sender<AudioCommand>>,
     mixer: Arc<Mutex<Mixer>>,
     talking: Arc<AtomicBool>,
+    socket_ready: Arc<AtomicBool>,
+    input_started: Arc<AtomicBool>,
     error: Arc<Mutex<Option<String>>>,
     connected: bool,
-    input_started: bool,
 }
 
 impl Default for Voice {
@@ -299,9 +337,10 @@ impl Voice {
             audio_cmd: None,
             mixer: Arc::new(Mutex::new(Mixer::default())),
             talking: Arc::new(AtomicBool::new(false)),
+            socket_ready: Arc::new(AtomicBool::new(false)),
+            input_started: Arc::new(AtomicBool::new(false)),
             error: Arc::new(Mutex::new(None)),
             connected: false,
-            input_started: false,
         }
     }
 
@@ -316,7 +355,8 @@ impl Voice {
     pub fn disconnect(&mut self) {
         self.connected = false;
         self.talking.store(false, Ordering::Relaxed);
-        self.input_started = false;
+        self.socket_ready.store(false, Ordering::Relaxed);
+        self.input_started.store(false, Ordering::Relaxed);
         self.mixer.lock().unwrap().clear();
         *self.error.lock().unwrap() = None;
         if let Some(tx) = &self.control {
@@ -332,17 +372,20 @@ impl Voice {
         let prev = self.talking.swap(next, Ordering::Relaxed);
         if next && !prev {
             *self.error.lock().unwrap() = None;
-            if !self.input_started {
-                self.input_started = true;
-                if let Some(tx) = &self.audio_cmd {
-                    let _ = tx.try_send(AudioCommand::EnsureInput);
-                }
+            if !self.input_started.swap(true, Ordering::Relaxed)
+                && let Some(tx) = &self.audio_cmd
+            {
+                let _ = tx.try_send(AudioCommand::EnsureInput);
             }
         }
     }
 
     pub fn is_talking(&self) -> bool {
         self.talking.load(Ordering::Relaxed)
+    }
+
+    pub fn is_socket_ready(&self) -> bool {
+        self.socket_ready.load(Ordering::Relaxed)
     }
 
     pub fn toggle_mute(&self, speaker: usize) {
@@ -373,6 +416,8 @@ impl Voice {
         let (frame_tx, frame_rx) = bounded::<Vec<u8>>(32);
         let (audio_tx, audio_rx) = bounded::<AudioCommand>(8);
         let mixer_net = self.mixer.clone();
+        let ready_net = self.socket_ready.clone();
+        let error_net = self.error.clone();
         let _ = std::thread::Builder::new()
             .name("voice-network".into())
             .spawn(move || {
@@ -382,15 +427,22 @@ impl Voice {
                 else {
                     return;
                 };
-                rt.block_on(network_worker(ctrl_rx, frame_rx, mixer_net));
+                rt.block_on(network_worker(
+                    ctrl_rx, frame_rx, mixer_net, ready_net, error_net,
+                ));
             });
 
         let mixer_out = self.mixer.clone();
         let talking_in = self.talking.clone();
+        let started_in = self.input_started.clone();
         let error_in = self.error.clone();
         let _ = std::thread::Builder::new()
             .name("voice-audio".into())
-            .spawn(move || audio_worker(audio_rx, frame_tx, mixer_out, talking_in, error_in));
+            .spawn(move || {
+                audio_worker(
+                    audio_rx, frame_tx, mixer_out, talking_in, started_in, error_in,
+                )
+            });
 
         self.control = Some(ctrl_tx);
         self.audio_cmd = Some(audio_tx);
@@ -402,6 +454,7 @@ fn audio_worker(
     frame_tx: Sender<Vec<u8>>,
     mixer: Arc<Mutex<Mixer>>,
     talking: Arc<AtomicBool>,
+    input_started: Arc<AtomicBool>,
     error_slot: Arc<Mutex<Option<String>>>,
 ) {
     let _output_stream = start_output_stream(mixer);
@@ -410,20 +463,33 @@ fn audio_worker(
         match cmd {
             AudioCommand::EnsureInput => {
                 if input_stream.is_none() {
-                    match start_input_stream(frame_tx.clone(), talking.clone()) {
+                    match start_input_stream(
+                        frame_tx.clone(),
+                        talking.clone(),
+                        error_slot.clone(),
+                    ) {
                         Ok(stream) => {
                             input_stream = Some(stream);
                             *error_slot.lock().unwrap() = None;
                         }
                         Err(err) => {
                             talking.store(false, Ordering::Relaxed);
-                            *error_slot.lock().unwrap() = Some(err);
+                            input_started.store(false, Ordering::Relaxed);
+                            *error_slot.lock().unwrap() = Some(err.clone());
+                            crate::reports::limited(
+                                "voice-mic-error",
+                                30.0,
+                                "warn",
+                                "voice-mic-error",
+                                || json!({"error": err}),
+                            );
                         }
                     }
                 }
             }
             AudioCommand::StopInput => {
                 input_stream = None;
+                input_started.store(false, Ordering::Relaxed);
             }
         }
     }
@@ -488,6 +554,7 @@ fn start_output_stream(mixer: Arc<Mutex<Mixer>>) -> Option<cpal::Stream> {
 fn start_input_stream(
     frame_tx: Sender<Vec<u8>>,
     talking: Arc<AtomicBool>,
+    error_slot: Arc<Mutex<Option<String>>>,
 ) -> Result<cpal::Stream, String> {
     let host = cpal::default_host();
     let device = host
@@ -499,7 +566,7 @@ fn start_input_stream(
     let config: cpal::StreamConfig = supported.clone().into();
     let channels = usize::from(config.channels.max(1));
     let rate = config.sample_rate;
-    let resampler = Arc::new(Mutex::new(Resampler::new(rate)));
+    let resampler = Arc::new(Mutex::new(Resampler::new(rate, error_slot)));
 
     let stream = match supported.sample_format() {
         cpal::SampleFormat::F32 => {
@@ -594,6 +661,8 @@ async fn network_worker(
     control: Receiver<Control>,
     frames: Receiver<Vec<u8>>,
     mixer: Arc<Mutex<Mixer>>,
+    socket_ready: Arc<AtomicBool>,
+    error_slot: Arc<Mutex<Option<String>>>,
 ) {
     let mut target: Option<(Url, String)> = None;
     loop {
@@ -606,25 +675,43 @@ async fn network_worker(
         }
         while frames.try_recv().is_ok() {}
         let Some((origin, token)) = target.clone() else {
+            socket_ready.store(false, Ordering::Relaxed);
             tokio::time::sleep(Duration::from_millis(25)).await;
             continue;
         };
-        let keep_going = run_socket(&origin, &token, &control, &frames, &mixer, &mut target).await;
+        let keep_going = run_socket(
+            &origin,
+            &token,
+            &control,
+            &frames,
+            &mixer,
+            &socket_ready,
+            &error_slot,
+            &mut target,
+        )
+        .await;
+        socket_ready.store(false, Ordering::Relaxed);
         if !keep_going {
             return;
         }
-        if target.as_ref().is_some_and(|(o, t)| o == &origin && t == &token) {
+        if target
+            .as_ref()
+            .is_some_and(|(o, t)| o == &origin && t == &token)
+        {
             tokio::time::sleep(Duration::from_secs(2)).await;
         }
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn run_socket(
     origin: &Url,
     token: &str,
     control: &Receiver<Control>,
     frames: &Receiver<Vec<u8>>,
     mixer: &Arc<Mutex<Mixer>>,
+    socket_ready: &Arc<AtomicBool>,
+    error_slot: &Arc<Mutex<Option<String>>>,
     target: &mut Option<(Url, String)>,
 ) -> bool {
     let Ok(mut ws_url) = origin.join("api/voice") else {
@@ -644,7 +731,7 @@ async fn run_socket(
         return true;
     };
     request.headers_mut().insert("Origin", origin_header);
-    let Ok((mut socket, _)) = tokio_tungstenite::connect_async_with_config(
+    let mut socket = match tokio_tungstenite::connect_async_with_config(
         request,
         Some(
             tokio_tungstenite::tungstenite::protocol::WebSocketConfig::default()
@@ -654,20 +741,46 @@ async fn run_socket(
         true,
     )
     .await
-    else {
-        return true;
+    {
+        Ok((socket, _)) => socket,
+        Err(err) => {
+            crate::reports::limited(
+                "voice-connect-failed",
+                30.0,
+                "warn",
+                "voice-connect-failed",
+                || json!({"error": err.to_string()}),
+            );
+            return true;
+        }
     };
-    if socket
+    if let Err(err) = socket
         .send(Message::Text(
             json!({"type":"authenticate","token":token})
                 .to_string()
                 .into(),
         ))
         .await
-        .is_err()
     {
+        crate::reports::limited(
+            "voice-auth-failed",
+            30.0,
+            "warn",
+            "voice-auth-failed",
+            || json!({"error": err.to_string()}),
+        );
         return true;
     }
+    socket_ready.store(true, Ordering::Relaxed);
+    {
+        let mut slot = error_slot.lock().unwrap();
+        if slot.as_deref() == Some("Voice channel disconnected") {
+            *slot = None;
+        }
+    }
+    crate::reports::limited("voice-open", 30.0, "info", "voice-open", || json!({}));
+    let mut tick = tokio::time::interval(Duration::from_millis(5));
+    tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut ping_at = tokio::time::Instant::now() + Duration::from_secs(15);
     loop {
         tokio::select! {
@@ -677,10 +790,30 @@ async fn run_socket(
                         mixer.lock().unwrap().push(speaker, &samples, Instant::now());
                     }
                 }
-                Some(Ok(Message::Close(_))) | Some(Err(_)) | None => return true,
+                Some(Ok(Message::Close(frame))) => {
+                    crate::reports::limited(
+                        "voice-closed",
+                        30.0,
+                        "warn",
+                        "voice-closed",
+                        || json!({"reason": frame.as_ref().map(|f| f.reason.to_string()).unwrap_or_default()}),
+                    );
+                    return true;
+                }
+                Some(Err(err)) => {
+                    crate::reports::limited(
+                        "voice-error",
+                        30.0,
+                        "warn",
+                        "voice-error",
+                        || json!({"error": err.to_string()}),
+                    );
+                    return true;
+                }
+                None => return true,
                 Some(Ok(_)) => {}
             },
-            _ = tokio::time::sleep(Duration::from_millis(5)) => {
+            _ = tick.tick() => {
                 if let Ok(cmd) = control.try_recv() {
                     match cmd {
                         Control::Connect(next_origin, next_token) => {
@@ -762,5 +895,98 @@ mod tests {
         mixer.toggle_mute(2);
         assert!(mixer.is_muted(2));
         assert_eq!(mixer.active_speakers(now), vec![1]);
+    }
+
+    #[test]
+    fn resampler_flags_silent_mic_and_clears_once_signal_arrives() {
+        let err = Arc::new(Mutex::new(None));
+        let (tx, rx) = bounded(64);
+        let mut r = Resampler::new(VOICE_SAMPLE_RATE, err.clone());
+        let zeros = vec![0.0f32; VOICE_FRAME_SAMPLES];
+        for _ in 0..SILENT_FRAMES_THRESHOLD {
+            r.push_mono(&zeros, &tx);
+        }
+        assert_eq!(err.lock().unwrap().as_deref(), Some(SILENT_MIC_ERROR));
+        assert!(rx.len() >= SILENT_FRAMES_THRESHOLD as usize);
+
+        let tone = vec![0.25f32; VOICE_FRAME_SAMPLES];
+        r.push_mono(&tone, &tx);
+        assert!(err.lock().unwrap().is_none());
+    }
+
+    #[test]
+    fn voice_socket_authenticates_and_relays_frames_both_ways() {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        rt.block_on(async {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = listener.local_addr().unwrap();
+            let server = tokio::spawn(async move {
+                let (tcp, _) = listener.accept().await.unwrap();
+                let mut ws = tokio_tungstenite::accept_async(tcp).await.unwrap();
+                let auth = match ws.next().await.unwrap().unwrap() {
+                    Message::Text(t) => serde_json::from_str::<serde_json::Value>(&t).unwrap(),
+                    other => panic!("expected auth text, got {other:?}"),
+                };
+                assert_eq!(auth["type"], "authenticate");
+                assert_eq!(auth["token"], "test-token");
+                ws.send(Message::Text(json!({"type":"ready","id":0}).to_string().into()))
+                    .await
+                    .unwrap();
+                let inbound = match ws.next().await.unwrap().unwrap() {
+                    Message::Binary(b) => b,
+                    other => panic!("expected binary voice frame, got {other:?}"),
+                };
+                assert_eq!(inbound.len(), 4 + VOICE_FRAME_SAMPLES);
+                let mut relayed = Vec::with_capacity(2 + inbound.len());
+                relayed.push(3u8);
+                relayed.push(0u8);
+                relayed.extend_from_slice(&inbound);
+                ws.send(Message::Binary(relayed.into())).await.unwrap();
+                let _ = ws.next().await;
+            });
+
+            let (ctrl_tx, ctrl_rx) = bounded(4);
+            let (frame_tx, frame_rx) = bounded(4);
+            let mixer = Arc::new(Mutex::new(Mixer::default()));
+            let ready = Arc::new(AtomicBool::new(false));
+            let err = Arc::new(Mutex::new(None));
+            let origin = Url::parse(&format!("http://{addr}/")).unwrap();
+            let mut target = Some((origin.clone(), "test-token".to_owned()));
+            let mulaw = vec![encode_mulaw_sample(0.3); VOICE_FRAME_SAMPLES];
+            frame_tx.send(pack_client_frame(1, &mulaw).unwrap()).unwrap();
+
+            let mixer_c = mixer.clone();
+            let ready_c = ready.clone();
+            let err_c = err.clone();
+            let client = tokio::spawn(async move {
+                run_socket(
+                    &origin,
+                    "test-token",
+                    &ctrl_rx,
+                    &frame_rx,
+                    &mixer_c,
+                    &ready_c,
+                    &err_c,
+                    &mut target,
+                )
+                .await
+            });
+
+            let deadline = Instant::now() + Duration::from_secs(3);
+            while Instant::now() < deadline {
+                if mixer.lock().unwrap().is_speaking(3, Instant::now()) {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            assert!(ready.load(Ordering::Relaxed));
+            assert!(mixer.lock().unwrap().is_speaking(3, Instant::now()));
+            let _ = ctrl_tx.send(Control::Stop);
+            assert!(!client.await.unwrap());
+            server.await.unwrap();
+        });
     }
 }

@@ -530,7 +530,7 @@ pub fn draw(
             menu.server, menu.name, menu.field, menu.driver, menu.notice, menu.color
         ),
         (Screen::Lobby, Some(view)) => format!(
-            "lobby|{}|{}|{}|{}|{}|{}|{:?}|{}|{}|{}|{}|{:?}|{}|{:?}|{:?}",
+            "lobby|{}|{}|{}|{}|{}|{}|{:?}|{}|{}|{}|{}|{:?}|{}|{}|{:?}|{:?}",
             view.arena,
             view.actors
                 .iter()
@@ -555,6 +555,7 @@ pub fn draw(
             view.duration,
             session.board,
             session.voice.is_talking(),
+            session.voice.is_socket_ready(),
             session.voice.error(),
             view.actors
                 .iter()
@@ -563,10 +564,11 @@ pub fn draw(
                 .collect::<Vec<_>>()
         ),
         (Screen::Menu, Some(view)) => format!(
-            "{screen:?}|{}|{}|{}|{:?}|{:?}",
+            "{screen:?}|{}|{}|{}|{}|{:?}|{:?}",
             session.away,
             session.status,
             session.voice.is_talking(),
+            session.voice.is_socket_ready(),
             session.voice.error(),
             view.actors
                 .iter()
@@ -823,6 +825,13 @@ pub fn draw(
                         px(76),
                     );
                 }
+            }
+            if session.voice.is_talking() {
+                let live = match session.voice.is_socket_ready() {
+                    true => "MIC LIVE",
+                    false => "MIC LIVE (VOICE RECONNECTING...)",
+                };
+                ui.text(panel, live, 12.0, GOLD);
             }
             if let Some(err) = session.voice.error() {
                 ui.text(panel, &format!("MIC: {err}"), 12.0, WARNING);

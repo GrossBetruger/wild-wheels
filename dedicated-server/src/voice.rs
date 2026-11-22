@@ -62,10 +62,10 @@ impl VoiceHub {
         generation: u64,
         payload: &[u8],
     ) -> Result<usize, &'static str> {
-        if !self
+        if self
             .peers
             .get(&sender_id)
-            .is_some_and(|peer| peer.generation == generation)
+            .is_none_or(|peer| peer.generation != generation)
         {
             return Err("replaced by a newer voice connection");
         }
@@ -76,8 +76,7 @@ impl VoiceHub {
             return Err("invalid voice frame size");
         }
         let sample_count = usize::from(u16::from_le_bytes([payload[2], payload[3]]));
-        if sample_count < MIN_SAMPLES
-            || sample_count > MAX_SAMPLES
+        if !(MIN_SAMPLES..=MAX_SAMPLES).contains(&sample_count)
             || payload.len() != HEADER_IN + sample_count
         {
             return Err("voice frame sample count mismatch");
@@ -106,13 +105,15 @@ pub async fn upgrade(
     h: HeaderMap,
     ws: WebSocketUpgrade,
 ) -> Response {
-    if !h.contains_key(header::ORIGIN) || !same_origin(&app, &h) {
+    if !h.contains_key(header::ORIGIN) || !same_origin(&app, &h, addr.ip()) {
+        app.logs.note("warn", "voice-refused", json!({"reason":"origin"}));
         return error((403, "Use the game from the same server."));
     }
     if !limit(&app, addr.ip(), "voice", 16, Duration::from_secs(1)) {
         return error((429, "Too many connections."));
     }
     let Ok(permit) = app.voice_sockets.clone().try_acquire_owned() else {
+        app.logs.note("warn", "voice-refused", json!({"reason":"capacity"}));
         return error((503, "Too many connections."));
     };
     ws.max_message_size(MAX_MESSAGE_BYTES)
@@ -130,23 +131,48 @@ async fn connection(app: App, mut socket: WebSocket) {
     }
     let Ok(Some(Ok(Message::Text(text)))) = timeout(Duration::from_secs(3), socket.next()).await
     else {
+        app.logs.note("warn", "voice-refused", json!({"reason":"auth-timeout"}));
         return;
     };
     let Ok(auth) = serde_json::from_str::<Value>(&text) else {
+        app.logs.note("warn", "voice-refused", json!({"reason":"auth-json"}));
         return;
     };
     if auth["type"] != "authenticate" {
+        app.logs.note("warn", "voice-refused", json!({"reason":"auth-type"}));
         return;
     }
     let Some(token) = auth["token"].as_str() else {
+        app.logs.note("warn", "voice-refused", json!({"reason":"auth-token"}));
         return;
     };
-    let Some(id) = app.room.lock().unwrap().find(token) else {
-        return;
+    let (id, who) = {
+        let room = app.room.lock().unwrap();
+        let Some(id) = room.find(token) else {
+            app.logs.note("warn", "voice-refused", json!({"reason":"unknown-session"}));
+            return;
+        };
+        (id, room.who(id))
     };
     let (tx, mut rx) = mpsc::channel::<Bytes>(QUEUE_DEPTH);
-    let generation = app.voice.lock().unwrap().register(id, tx);
+    let (generation, peers) = {
+        let mut voice = app.voice.lock().unwrap();
+        let generation = voice.register(id, tx);
+        (generation, voice.peers.len())
+    };
+    app.logs.note("info", "voice-open", json!({"who":who,"peers":peers}));
     let (mut sink, mut stream) = socket.split();
+    if !matches!(
+        timeout(
+            Duration::from_secs(2),
+            sink.send(Message::Text(json!({"type":"ready","id":id}).to_string().into())),
+        )
+        .await,
+        Ok(Ok(()))
+    ) {
+        app.voice.lock().unwrap().unregister(id, generation);
+        return;
+    }
     let (pong_tx, mut pong_rx) = mpsc::channel::<Message>(2);
 
     let writer = async move {
@@ -168,16 +194,20 @@ async fn connection(app: App, mut socket: WebSocket) {
                 break;
             }
         }
+        "writer-closed"
     };
 
     let reader_app = app.clone();
     let reader = async move {
         let mut since = Instant::now();
         let mut frames = 0u32;
-        loop {
+        let mut relayed: u64 = 0;
+        let reason = loop {
             let message = match timeout(Duration::from_secs(45), stream.next()).await {
                 Ok(Some(Ok(msg))) => msg,
-                _ => break,
+                Ok(Some(Err(_))) => break "socket-error",
+                Ok(None) => break "eof",
+                Err(_) => break "idle-timeout",
             };
             match message {
                 Message::Binary(data) => {
@@ -187,45 +217,50 @@ async fn connection(app: App, mut socket: WebSocket) {
                     }
                     frames += 1;
                     if frames > MAX_FRAMES_PER_SEC {
-                        break;
+                        break "rate-limit";
                     }
                     if reader_app.room.lock().unwrap().find(token) != Some(id) {
-                        break;
+                        break "session-rotated";
                     }
-                    if reader_app
-                        .voice
-                        .lock()
-                        .unwrap()
-                        .relay(id, generation, &data)
-                        .is_err()
-                    {
-                        break;
+                    match reader_app.voice.lock().unwrap().relay(id, generation, &data) {
+                        Ok(delivered) => {
+                            if delivered > 0 {
+                                relayed += 1;
+                            }
+                        }
+                        Err(reason) => break reason,
                     }
                 }
                 Message::Text(text) => {
                     let Ok(body) = serde_json::from_str::<Value>(&text) else {
-                        break;
+                        break "bad-text";
                     };
                     if body["type"] != "ping" {
-                        break;
+                        break "unknown-text";
                     }
                     if reader_app.room.lock().unwrap().find(token) != Some(id) {
-                        break;
+                        break "session-rotated";
                     }
                     let _ = pong_tx.try_send(Message::Text(json!({"type":"pong"}).to_string().into()));
                 }
                 Message::Ping(_) | Message::Pong(_) => {}
-                Message::Close(_) => break,
+                Message::Close(_) => break "client-close",
             }
-        }
+        };
+        (reason, relayed)
     };
 
-    tokio::select! {
-        _ = writer => {},
-        _ = reader => {},
-        _ = shutdown.changed() => {},
-    }
+    let (reason, relayed) = tokio::select! {
+        reason = writer => (reason, 0u64),
+        res = reader => res,
+        _ = shutdown.changed() => ("shutdown", 0u64),
+    };
     app.voice.lock().unwrap().unregister(id, generation);
+    app.logs.note(
+        "info",
+        "voice-closed",
+        json!({"who":who,"reason":reason,"relayedFrames":relayed}),
+    );
 }
 
 #[cfg(test)]

@@ -4,6 +4,14 @@ project_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 cd -- "$project_dir"
 # shellcheck source=scripts/server/server-process.sh
 source "$project_dir/scripts/server/server-process.sh"
+if [[ -f "$server_state_dir/server.env" ]]; then
+  while IFS='=' read -r key value; do
+    [[ -z $key || $key == \#* ]] && continue
+    if [[ $key =~ ^[A-Za-z_][A-Za-z0-9_]*$ && -z ${!key+x} ]]; then
+      export "$key=$value"
+    fi
+  done < "$server_state_dir/server.env"
+fi
 server_log_file="$server_state_dir/server.log"
 export WILD_WHEELS_SESSION_FILE="${WILD_WHEELS_SESSION_FILE:-$server_state_dir/sessions.json}"
 export WILD_WHEELS_CHAT_FILE="${WILD_WHEELS_CHAT_FILE:-$server_state_dir/chat.json}"

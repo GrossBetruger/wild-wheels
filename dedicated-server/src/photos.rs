@@ -74,8 +74,13 @@ fn valid(bytes: &[u8]) -> bool {
     }
     false
 }
-pub async fn upload(State(app): State<App>, h: HeaderMap, body: Bytes) -> Response {
-    if !same_origin(&app, &h) {
+pub async fn upload(
+    State(app): State<App>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    h: HeaderMap,
+    body: Bytes,
+) -> Response {
+    if !same_origin(&app, &h, addr.ip()) {
         return error((403, "Use the game from the same server."));
     }
     if h.get(header::CONTENT_TYPE)
@@ -122,8 +127,12 @@ pub async fn upload(State(app): State<App>, h: HeaderMap, body: Bytes) -> Respon
     });
     response(200, json!({"ok":true,"id":index}))
 }
-pub async fn list(State(app): State<App>, h: HeaderMap) -> Response {
-    if !same_origin_get(&app, &h) {
+pub async fn list(
+    State(app): State<App>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    h: HeaderMap,
+) -> Response {
+    if !same_origin_get(&app, &h, addr.ip()) {
         return error((403, "Use the game from the same server."));
     }
     let room = app.room.lock().unwrap();
@@ -145,10 +154,11 @@ pub async fn list(State(app): State<App>, h: HeaderMap) -> Response {
 }
 pub async fn image(
     State(app): State<App>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Path((epoch, id)): Path<(u64, usize)>,
     h: HeaderMap,
 ) -> Response {
-    if !same_origin_get(&app, &h) {
+    if !same_origin_get(&app, &h, addr.ip()) {
         return error((403, "Use the game from the same server."));
     }
     let room = app.room.lock().unwrap();
@@ -229,19 +239,20 @@ mod tests {
         let frame = Bytes::from_static(&[
             255, 216, 255, 192, 0, 11, 8, 0, 1, 0, 1, 1, 1, 17, 0, 255, 217,
         ]);
+        let local = ConnectInfo("127.0.0.1:1234".parse().unwrap());
         assert_eq!(
-            upload(State(app.clone()), headers(&driver), frame.clone())
+            upload(State(app.clone()), local, headers(&driver), frame.clone())
                 .await
                 .status(),
             403
         );
         assert_eq!(
-            upload(State(app.clone()), headers(&bomber), frame.clone())
+            upload(State(app.clone()), local, headers(&bomber), frame.clone())
                 .await
                 .status(),
             200
         );
-        let early = list(State(app.clone()), headers(&driver)).await;
+        let early = list(State(app.clone()), local, headers(&driver)).await;
         let early: Value = serde_json::from_slice(
             &axum::body::to_bytes(early.into_body(), 100000)
                 .await
@@ -250,7 +261,7 @@ mod tests {
         .unwrap();
         assert_eq!(early["photos"], json!([]));
         assert_eq!(
-            image(State(app.clone()), Path((2, 0)), headers(&driver))
+            image(State(app.clone()), local, Path((2, 0)), headers(&driver))
                 .await
                 .status(),
             404
@@ -267,7 +278,7 @@ mod tests {
             }
             assert_eq!(room.core.phase(), "finished");
         }
-        let album = list(State(app.clone()), headers(&driver)).await;
+        let album = list(State(app.clone()), local, headers(&driver)).await;
         let album: Value = serde_json::from_slice(
             &axum::body::to_bytes(album.into_body(), 100000)
                 .await
@@ -276,7 +287,7 @@ mod tests {
         .unwrap();
         assert_eq!(album["photos"][0]["name"], "Bomber");
         assert_eq!(album["photos"][0]["url"], "/api/photos/2/0");
-        let photo = image(State(app.clone()), Path((2, 0)), headers(&driver)).await;
+        let photo = image(State(app.clone()), local, Path((2, 0)), headers(&driver)).await;
         assert_eq!(photo.status(), 200);
         assert_eq!(
             axum::body::to_bytes(photo.into_body(), 65536)
@@ -290,13 +301,13 @@ mod tests {
             .control(0, "/api/control", &json!({"action":"start"}))
             .unwrap();
         assert_eq!(
-            image(State(app.clone()), Path((2, 0)), headers(&driver))
+            image(State(app.clone()), local, Path((2, 0)), headers(&driver))
                 .await
                 .status(),
             404
         );
         assert_eq!(
-            list(State(app.clone()), HeaderMap::new()).await.status(),
+            list(State(app.clone()), local, HeaderMap::new()).await.status(),
             401
         );
     }

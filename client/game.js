@@ -52,7 +52,13 @@ const useWeapon = () => network.active ? network.action('fire') : mode === 'comb
 const switchWeapon = () => network.active ? network.action('cycle') : cycleItem(race);
 const chaff = () => network.active ? network.action('chaff') : mode === 'combat' ? releaseChaff(race) : false;
 const turbo = () => network.active ? network.action('turbo') : mode === 'combat' ? useBattleTurbo(race) : useTurbo(race);
-const special = () => network.active ? network.action('special') : useSpecial(race);
+const special = () => {
+  if (race.driver === 15 && mode === 'combat' && battleActive(race) && !(race.destroyed > 0) && !(race.specialCooldown > 0) && race.specialAbilities !== false && !karmaTarget(race, race)) {
+    uiNotice = { text: race.lastKiller == null ? 'KARMIC RACCOONING · NO ONE HAS KO’D YOU YET' : 'KARMIC RACCOONING · LAST KILLER IS RESPAWNING', until: performance.now() + 2400 };
+    return false;
+  }
+  return network.active ? network.action('special') : useSpecial(race);
+};
 const somersault = () => network.active ? network.action('somersault') : mode === 'combat' ? somersaultBattle(race) : false;
 const mobilePanel = document.createElement('div'); mobilePanel.className = 'mobile-panel'; mobilePanel.classList.toggle('hidden', !mobile);
 const mobileHint = document.createElement('span');
@@ -406,7 +412,8 @@ function hud() {
   // The all-time board changes only when a match finishes; it is fetched then and on arriving.
   if(dedicated&&race.phase!==allTimePhase){const arriving=allTimePhase===null;allTimePhase=race.phase;if(arriving||race.phase==='finished')refreshAllTime();}
   document.querySelector('.viewport').classList.toggle('time-stopped',mode==='combat'&&race.timeStop>0);
-  specialButton.classList.toggle('hidden',mode!=='combat'||![5,7,8,9,11,12,13,14,15].includes(race.driver)||race.bomber||race.specialAbilities===false);specialButton.textContent=(race.specialCooldown??0)>0?`F · RECHARGE ${race.specialCooldown.toFixed(1)}s`:`F · ${race.driver===13&&!auditTarget(race,race)?'XYLOPHONE-ATTACK':abilityNames[race.driver]??'SPECIAL'}`;specialButton.disabled=!battleActive(race)||race.destroyed>0||race.specialCooldown>0||race.driver===12&&race.health>=6||race.driver===15&&!karmaTarget(race,race)||frozen(race,race.id);
+  const karmaActiveTarget=race.driver===15?karmaTarget(race,race):null;
+  specialButton.classList.toggle('hidden',mode!=='combat'||![5,7,8,9,11,12,13,14,15].includes(race.driver)||race.bomber||race.specialAbilities===false);specialButton.textContent=(race.specialCooldown??0)>0?`F · RECHARGE ${race.specialCooldown.toFixed(1)}s`:race.driver===15&&!karmaActiveTarget?`F · ${abilityNames[15]} (${race.lastKiller==null?'NEEDS KO':'RESPAWNING'})`:`F · ${race.driver===13&&!auditTarget(race,race)?'XYLOPHONE-ATTACK':abilityNames[race.driver]??'SPECIAL'}`;specialButton.disabled=!battleActive(race)||race.destroyed>0||race.specialCooldown>0||race.driver===12&&race.health>=6||race.driver===15&&!karmaActiveTarget||frozen(race,race.id);
   nightmareButton.classList.toggle('hidden',mode!=='combat'||race.driver!==7||race.bomber||race.specialAbilities===false);
   const nightmareActive=race.nightmareActive??0,nightmareCooldown=race.nightmareCooldown??0;
   nightmareState.textContent=nightmareActive>0?`BURNING · ${nightmareActive.toFixed(1)}s`:nightmareCooldown>0?`RECHARGE · ${nightmareCooldown.toFixed(1)}s`:'DOUBLE X · READY';
@@ -511,7 +518,16 @@ window.addEventListener('keydown', e => {
 window.addEventListener('keyup', e => { const key = gameKey(e); keys.delete(key); if (key === 'v') network.setTalking(false); if (network.active) network.input(); });
 const stepAway = () => { network.setTalking(false); if (!['racing', 'countdown'].includes(race.phase)) return; if (network.active && network.dedicated) { if (!network.afk) network.setAway(true); return; } pause(); };
 window.addEventListener('blur', () => { keys.clear(); stepAway(); }); document.addEventListener('visibilitychange', () => { if (document.hidden) stepAway(); });
-for (const event of ['pointerdown', 'keydown']) window.addEventListener(event, () => { if (network.active) audio.unlock().catch(() => { }); }, { once: true });
+const unlockAudio = () => {
+  if (!network.active) return;
+  audio.unlock().then(() => {
+    network.voice.unlockPlayback();
+    if (audio.context?.state === 'running') {
+      for (const event of ['pointerdown', 'keydown']) window.removeEventListener(event, unlockAudio);
+    }
+  }).catch(() => { });
+};
+for (const event of ['pointerdown', 'keydown']) window.addEventListener(event, unlockAudio);
 document.querySelectorAll('[data-key]').forEach(b => { b.addEventListener('pointerdown', e => { e.preventDefault(); b.setPointerCapture(e.pointerId); keys.add(b.dataset.key); if (b.dataset.key === ' ') useWeapon(); if (network.active) network.input(); }); for (const name of ['pointerup', 'pointercancel', 'lostpointercapture']) b.addEventListener(name, () => { keys.delete(b.dataset.key); if (network.active) network.input(); }); });
 selectDriver(0); updateMapLabels();
 let nextVisualFrame = 0;

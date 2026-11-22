@@ -177,13 +177,13 @@ test('Karmic Raccooning produces a crystal-clear animated announcement with scor
   const queue = new RewardQueue();
   const world = {
     mode: 'combat', phase: 'racing', soundEpoch: 1, arena: 0, elapsed: 10,
-    id: 0, driver: 15, name: 'Tycoon', specialCooldown: 0, lastKarma: null, bots: [],
+    id: 0, driver: 15, name: 'Tai-Coon', specialCooldown: 0, lastKarma: null, bots: [],
   };
   assert.deepEqual(tracker.sample(world), []);
 
   world.specialCooldown = 30;
   world.lastKarma = {
-    id: 1, caster: 0, casterName: 'Tycoon', victim: 1, victimName: 'Rocco',
+    id: 1, caster: 0, casterName: 'Tai-Coon', victim: 1, victimName: 'Rocco',
     swapped: true, casterBefore: 1, casterAfter: 7, victimBefore: 7, victimAfter: 2, time: 10,
   };
   const events = tracker.sample(world);

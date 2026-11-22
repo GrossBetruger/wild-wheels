@@ -83,7 +83,7 @@ impl Actor{
 }
 pub fn recovery_interval(driver:usize)->f64{14.0-2.0*f64::from(DRIVER_CUTENESS[driver%DRIVER_CUTENESS.len()])}
 pub fn hedgehog_recovery_interval(driver:usize)->f64{2.25-0.25*f64::from(DRIVER_CUTENESS[driver%DRIVER_CUTENESS.len()])}
-pub const DRIVER_NAMES:[&str;16]=["Pip the Panda","Rocco the Raccoon","Felix the Fox","Benny the Bear","Ellie the Elephant","Tammy the Cricket","Elon Musk","Houston the RTPL","Avita-Jas","Pearococo","Master-Yuda","R-yeah","Catheterpillar","Fourmidable","KnowItOwl","Tycoon"];
+pub const DRIVER_NAMES:[&str;16]=["Pip the Panda","Rocco the Raccoon","Felix the Fox","Benny the Bear","Ellie the Elephant","Tammy the Cricket","Elon Musk","Houston the RTPL","Avita-Jas","Pearococo","Master-Yuda","R-yeah","Catheterpillar","Fourmidable","KnowItOwl","Tai-Coon"];
 pub fn driver_name(driver:usize)->&'static str { DRIVER_NAMES[driver%DRIVER_NAMES.len()] }
 impl Game {
     pub fn combat_active(&self)->bool{self.global.phase=="racing"}

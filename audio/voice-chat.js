@@ -16,6 +16,7 @@ export class VoiceChat {
   token = null;
   connected = false;
   talking = false;
+  playbackBlocked = false;
   error = '';
   mutedSpeakers = new Set();
   speakers = new Map(); // speakerId -> { lastHeardMs, nextTime }
@@ -32,10 +33,11 @@ export class VoiceChat {
   captureReady = null;
   playbackContext = null;
 
-  constructor({ isAudioEnabled = () => true, getAudioContext = () => null, onChange = () => {} } = {}) {
+  constructor({ isAudioEnabled = () => true, getAudioContext = () => null, onChange = () => {}, log = () => {} } = {}) {
     this.isAudioEnabled = isAudioEnabled;
     this.getAudioContext = getAudioContext;
     this.onChange = onChange;
+    this.log = log;
   }
 
   connect(token) {
@@ -113,6 +115,7 @@ export class VoiceChat {
       this.socket = null;
       this.connected = false;
       clearInterval(this.pingTimer); this.pingTimer = null;
+      if (event.code !== 1000) this.log('warn', 'voice-closed', { code: event.code, reason: event.reason });
       this.onChange();
       if (this.token === token && ![4001, 4003, 4004, 1008].includes(event.code)) {
         clearTimeout(this.reconnectTimer);
@@ -261,11 +264,33 @@ export class VoiceChat {
 
   outputContext() {
     const shared = this.getAudioContext?.();
-    if (shared) return shared;
+    if (shared) {
+      if (this.playbackContext && this.playbackContext !== shared) {
+        this.playbackContext.close().catch(() => {});
+        this.playbackContext = null;
+      }
+      return shared;
+    }
     if (!this.playbackContext && typeof globalThis.AudioContext === 'function') {
       this.playbackContext = new AudioContext({ latencyHint: 'interactive' });
     }
     return this.playbackContext;
+  }
+
+  unlockPlayback() {
+    const ctx = this.outputContext();
+    if (!ctx) return;
+    if (ctx.state === 'suspended') {
+      ctx.resume().then(() => {
+        if (this.playbackBlocked && ctx.state === 'running') {
+          this.playbackBlocked = false;
+          this.onChange();
+        }
+      }).catch(() => {});
+    } else if (this.playbackBlocked && ctx.state === 'running') {
+      this.playbackBlocked = false;
+      this.onChange();
+    }
   }
 
   handleIncoming(buffer) {
@@ -282,7 +307,23 @@ export class VoiceChat {
     if (this.mutedSpeakers.has(frame.speaker) || !this.isAudioEnabled()) return;
     const ctx = this.outputContext();
     if (!ctx) return;
-    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+    if (ctx.state === 'suspended') {
+      ctx.resume().then(() => {
+        if (this.playbackBlocked && ctx.state === 'running') {
+          this.playbackBlocked = false;
+          this.onChange();
+        }
+      }).catch(() => {});
+      if (!this.playbackBlocked) {
+        this.playbackBlocked = true;
+        this.onChange();
+      }
+      return;
+    }
+    if (this.playbackBlocked) {
+      this.playbackBlocked = false;
+      this.onChange();
+    }
     const audioBuffer = ctx.createBuffer(1, frame.samples.length, VOICE_SAMPLE_RATE);
     audioBuffer.copyToChannel(frame.samples, 0);
     const source = ctx.createBufferSource();

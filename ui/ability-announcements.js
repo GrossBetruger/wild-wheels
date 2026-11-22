@@ -27,7 +27,7 @@ export class AbilityUsage {
       this.lastKarmaId=karma.id;
       if(world.phase==='racing'&&world.specialAbilities!==false&&world.elapsed-karma.time<3){
         karmaCaster=karma.caster;
-        const caster=karma.caster===world.id?'YOU':(karma.casterName||'TYCOON').toUpperCase();
+        const caster=karma.caster===world.id?'YOU':(karma.casterName||'TAI-COON').toUpperCase();
         const victim=karma.victim===world.id?'YOU':(karma.victimName||'RIVAL').toUpperCase();
         const title=karma.swapped?'KARMIC RACCOONING · SCORES SWAPPED!':'KARMIC RACCOONING';
         const detail=karma.swapped

@@ -41,7 +41,15 @@ Run alongside the development server:
 PORT=5174 ./dedicated-server/target/release/wild-wheels-server
 ```
 
-Visit `http://localhost:5174`. On GCP, allow inbound TCP to the chosen game port in the VM’s VPC firewall (the console’s “Allow HTTP traffic” checkbox only opens port 80). Direct HTTP works with public hostnames such as DuckDNS without configuring a domain. To encrypt traffic, use an HTTPS reverse proxy. For internet play, run the binary on a reachable machine and put an HTTPS reverse proxy in front of its port, or run `ngrok http 5174` locally. Forward WebSocket upgrades. Set `PUBLIC_ORIGIN=https://your-game.example`, `TRUST_PROXY=1`, `BIND=127.0.0.1`, and a random `INVITE_SECRET` of at least 32 characters. The proxy must run on loopback, preserve Host, and overwrite X-Forwarded-Proto. Share `https://your-game.example/?room=00#invite=YOUR_RANDOM_SECRET`. See [security configuration and tests](security.md). The built-in Node ngrok control is not part of this service.
+Visit `http://localhost:5174`. On GCP, allow inbound TCP to the chosen game port in the VM’s VPC firewall (the console’s “Allow HTTP traffic” checkbox only opens port 80). Direct HTTP works with public hostnames such as DuckDNS without configuring a domain. To encrypt traffic and give browsers a secure context for microphone voice chat, put an HTTPS reverse proxy (such as Caddy with Let’s Encrypt) on loopback in front of the game port. Forward WebSocket upgrades, preserve `Host`, and overwrite `X-Forwarded-Proto`.
+
+On an Ubuntu/Debian VM (with TCP ports 80 and 443 open in the firewall), you can set up Caddy automatically:
+
+```sh
+./scripts/server/setup-https-caddy.sh wildwheels.duckdns.org
+```
+
+The script installs Caddy, proxies `https://<domain>` to `127.0.0.1:5173`, writes `TRUST_PROXY=1` to `.wild-wheels/server.env` (loaded automatically by `./run_server.sh` and `./update_server.sh`), and restarts the managed server so `https://<domain>/?room=00` works directly without an invite fragment. For invite-gated private hosting, also set `PUBLIC_ORIGIN=https://your-game.example`, `BIND=127.0.0.1`, and a random `INVITE_SECRET` of at least 32 characters, then share `https://your-game.example/?room=00#invite=YOUR_RANDOM_SECRET`. See [security configuration and tests](security.md). The built-in Node ngrok control is not part of this service.
 
 Configuration is through environment variables:
 

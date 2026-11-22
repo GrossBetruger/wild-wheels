@@ -344,6 +344,74 @@ mod tests {
         assert_eq!(peer.view().you, 1);
     }
     #[test]
+    fn tai_coon_client_sends_and_triggers_karmic_raccooning() {
+        let mut server = NativeArena::new(json!({"maxPlayers":8,"code":"00","arena":0,"bots":1,"dedicated":true,"host":null,"epoch":1,"seed":1,"players":[{"id":0,"name":"Tai","driver":15,"role":"driver"}]})).unwrap();
+        server.start();
+        for _ in 0..241 {
+            server
+                .step(Frame {
+                    dt: 1.0 / 60.0,
+                    inputs: vec![],
+                })
+                .unwrap();
+        }
+        let mut client = NativeClient::from_packet(&server.packet(0), 0.0).unwrap();
+        assert!(
+            !client.action(ClientAction::Special, 0.05).unwrap(),
+            "Karmic Raccooning must stay unavailable before anyone KOs Tai-Coon"
+        );
+        // Simulate bot 1 KO'ing Tai-Coon (slot 0) and leading in kills, then Tai-Coon respawning.
+        {
+            let _guard = crate::arena::native::KERNEL.lock().unwrap();
+            let game = server.game_mut_for_test();
+            game.actors[1].kills = 3.0;
+            game.actors[0].kills = 0.0;
+            game.actors[0].last_killer = Some(1);
+            game.actors[0].destroyed = 0.0;
+            game.actors[1].destroyed = 0.0;
+        }
+        client.accept(&server.packet(0), 0.1).unwrap();
+        assert!(
+            client.action(ClientAction::Special, 0.12).unwrap(),
+            "Tai-Coon client must accept and queue Special when last_killer is active"
+        );
+        let outbound: Value = serde_json::from_slice(
+            &client
+                .outbound(ClientInput {
+                    keys: 0,
+                    steer: None,
+                })
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(outbound["actions"][0]["type"], "special");
+        let action_id = outbound["actions"][0]["id"].as_u64().unwrap() as u32;
+        server
+            .step(Frame {
+                dt: 1.0 / 60.0,
+                inputs: vec![Input {
+                    actor: 0,
+                    actions: vec![Action {
+                        id: Some(action_id),
+                        kind: "special".into(),
+                        after_move: -1,
+                        ..Action::default()
+                    }],
+                    ..Input::default()
+                }],
+            })
+            .unwrap();
+        client.accept(&server.packet(0), 0.15).unwrap();
+        let view = client.view();
+        assert!(view.actors[1].destroyed > 0.0, "last killer must be KO'd");
+        assert_eq!(view.player.kills, 3.0, "kill scores must swap in Tai-Coon's favor");
+        assert_eq!(view.actors[1].kills, 1.0);
+        let karma = view.last_karma.expect("last_karma announcement must be broadcast");
+        assert!(karma.swapped);
+        assert_eq!(karma.caster, 0);
+        assert_eq!(karma.victim, 1);
+    }
+    #[test]
     fn invalid_packets_and_non_finite_clocks_are_errors() {
         assert!(matches!(
             NativeClient::from_packet(&[], 0.0),

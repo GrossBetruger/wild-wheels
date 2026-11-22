@@ -26,7 +26,7 @@ pub async fn post(
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
-    if !same_origin(&app, &headers) {
+    if !same_origin(&app, &headers, addr.ip()) {
         return error((403, "Use the game from the same server."));
     }
     let minute = Duration::from_secs(60);

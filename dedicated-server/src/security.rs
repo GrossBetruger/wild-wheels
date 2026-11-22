@@ -5,7 +5,13 @@ fn valid_host(host:&str)->bool{
     uri.path()=="/"&&uri.query().is_none()&&uri.host().is_some()&&uri.authority().is_some_and(|a|a.as_str()==host&&!host.contains('@'))
 }
 
-pub fn same_origin(app: &App, h: &HeaderMap) -> bool {
+pub fn trusted_https(app: &App, h: &HeaderMap, peer: IpAddr) -> bool {
+    app.trust_proxy
+        && peer.to_canonical().is_loopback()
+        && h.get("x-forwarded-proto").is_some_and(|v| v == "https")
+}
+
+pub fn same_origin(app: &App, h: &HeaderMap, peer: IpAddr) -> bool {
     if h.get("sec-fetch-site")
         .is_some_and(|v| v == "cross-site" || v == "same-site")
     {
@@ -21,23 +27,26 @@ pub fn same_origin(app: &App, h: &HeaderMap) -> bool {
             let Some(host) = h.get(header::HOST).and_then(|v| v.to_str().ok()) else {
                 return false;
             };
-            format!("http://{host}")
+            let scheme = if trusted_https(app, h, peer) {
+                "https"
+            } else {
+                "http"
+            };
+            format!("{scheme}://{host}")
         }
     };
     origin.to_str().is_ok_and(|v| v == expected)
 }
-pub fn same_origin_get(app: &App, h: &HeaderMap) -> bool {
+pub fn same_origin_get(app: &App, h: &HeaderMap, peer: IpAddr) -> bool {
     !h.get("sec-fetch-site")
         .is_some_and(|v| v == "cross-site" || v == "same-site")
-        && (!h.contains_key(header::ORIGIN) || same_origin(app, h))
+        && (!h.contains_key(header::ORIGIN) || same_origin(app, h, peer))
 }
 pub fn transport(app: &App, h: &HeaderMap, peer: IpAddr) -> bool {
     let Some(host) = h.get(header::HOST).and_then(|v| v.to_str().ok()) else {
         return false;
     };
-    let secure = app.trust_proxy
-        && peer.is_loopback()
-        && h.get("x-forwarded-proto").is_some_and(|v| v == "https");
+    let secure = trusted_https(app, h, peer);
     let actual = format!("{}://{host}", if secure { "https" } else { "http" });
     match &app.origin {
         Some(expected) => &actual == expected,
@@ -72,6 +81,7 @@ mod tests {
     #[test]
     fn exact_origins_and_missing_cookie_metadata() {
         let app = app(Some("https://game.example"));
+        let local = "127.0.0.1".parse().unwrap();
         let mut h = HeaderMap::new();
         h.insert(header::HOST, "game.example".parse().unwrap());
         for origin in [
@@ -81,21 +91,21 @@ mod tests {
             "https://game.example/",
         ] {
             h.insert(header::ORIGIN, origin.parse().unwrap());
-            assert!(!same_origin(&app, &h));
+            assert!(!same_origin(&app, &h, local));
         }
         h.insert(header::ORIGIN, "https://game.example".parse().unwrap());
-        assert!(same_origin(&app, &h));
+        assert!(same_origin(&app, &h, local));
         h.insert("sec-fetch-site", "cross-site".parse().unwrap());
-        assert!(!same_origin(&app, &h));
+        assert!(!same_origin(&app, &h, local));
         h.remove("sec-fetch-site");
         h.remove(header::ORIGIN);
         h.insert(
             header::COOKIE,
             "wild-wheels-session=secret".parse().unwrap(),
         );
-        assert!(!same_origin(&app, &h));
+        assert!(!same_origin(&app, &h, local));
         h.insert("sec-fetch-site", "same-origin".parse().unwrap());
-        assert!(same_origin(&app, &h));
+        assert!(same_origin(&app, &h, local));
     }
     #[test]
     fn only_trusted_loopback_https_proxy_may_serve_public_origin() {
@@ -117,9 +127,9 @@ mod tests {
         let mut headers=HeaderMap::new();
         headers.insert(header::HOST,"wild-wheels.duckdns.org:5173".parse().unwrap());
         headers.insert(header::ORIGIN,"http://wild-wheels.duckdns.org:5173".parse().unwrap());
-        assert!(transport(&app,&headers,peer));assert!(same_origin(&app,&headers));
+        assert!(transport(&app,&headers,peer));assert!(same_origin(&app,&headers,peer));
         headers.insert(header::ORIGIN,"http://attacker.invalid".parse().unwrap());
-        assert!(!same_origin(&app,&headers));
+        assert!(!same_origin(&app,&headers,peer));
         headers.insert(header::HOST,"attacker.invalid:5173".parse().unwrap());
         assert!(!transport(&app,&headers,peer));
     }
@@ -127,12 +137,33 @@ mod tests {
     fn automatic_duckdns_http_origin_needs_no_domain_configuration_but_still_rejects_cross_origin_requests(){
         let app=app(None);let peer="203.0.113.7".parse().unwrap();let mut headers=HeaderMap::new();
         headers.insert(header::HOST,"wild-wheels.duckdns.org:5173".parse().unwrap());headers.insert(header::ORIGIN,"http://wild-wheels.duckdns.org:5173".parse().unwrap());
-        assert!(transport(&app,&headers,peer));assert!(same_origin(&app,&headers));
+        assert!(transport(&app,&headers,peer));assert!(same_origin(&app,&headers,peer));
         headers.remove(header::ORIGIN);headers.insert(header::COOKIE,"wild-wheels-session=secret".parse().unwrap());
-        assert!(same_origin_get(&app,&headers));assert!(!same_origin(&app,&headers));
-        headers.insert("sec-fetch-site","cross-site".parse().unwrap());assert!(!same_origin_get(&app,&headers));headers.remove("sec-fetch-site");
-        headers.insert(header::ORIGIN,"http://attacker.invalid".parse().unwrap());assert!(!same_origin(&app,&headers));assert!(!same_origin_get(&app,&headers));
+        assert!(same_origin_get(&app,&headers,peer));assert!(!same_origin(&app,&headers,peer));
+        headers.insert("sec-fetch-site","cross-site".parse().unwrap());assert!(!same_origin_get(&app,&headers,peer));headers.remove("sec-fetch-site");
+        headers.insert(header::ORIGIN,"http://attacker.invalid".parse().unwrap());assert!(!same_origin(&app,&headers,peer));assert!(!same_origin_get(&app,&headers,peer));
         headers.insert(header::HOST,"wild-wheels.duckdns.org:5173/path".parse().unwrap());assert!(!transport(&app,&headers,peer));
+    }
+    #[test]
+    fn trusted_loopback_https_proxy_works_without_public_origin_and_blocks_spoofing() {
+        let mut app = app(None);
+        let local = "127.0.0.1".parse().unwrap();
+        let remote = "203.0.113.7".parse().unwrap();
+        let mut headers = HeaderMap::new();
+        headers.insert(header::HOST, "wildwheels.duckdns.org".parse().unwrap());
+        headers.insert("x-forwarded-proto", "https".parse().unwrap());
+        headers.insert(header::ORIGIN, "https://wildwheels.duckdns.org".parse().unwrap());
+        assert!(transport(&app, &headers, local));
+        assert!(same_origin(&app, &headers, local));
+        assert!(same_origin_get(&app, &headers, local));
+        assert!(!same_origin(&app, &headers, remote));
+        headers.insert(header::ORIGIN, "http://wildwheels.duckdns.org".parse().unwrap());
+        assert!(!same_origin(&app, &headers, local));
+        headers.insert(header::ORIGIN, "https://attacker.invalid".parse().unwrap());
+        assert!(!same_origin(&app, &headers, local));
+        headers.insert(header::ORIGIN, "https://wildwheels.duckdns.org".parse().unwrap());
+        app.trust_proxy = false;
+        assert!(!same_origin(&app, &headers, local));
     }
     #[test]
     fn rate_limit_bookkeeping_stays_bounded_without_blocking_existing_buckets() {

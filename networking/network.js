@@ -46,7 +46,7 @@ export class NetworkGame {
   constructor({anchor,limits=()=>({}),keys,driver,arena,onState,onLeave,unlock,sound=()=>{},isAudioEnabled=()=>true,getAudioContext=()=>null,role='driver'}){
     this.preferredColor=savedPlayerColor(document.cookie);this.colorDirty=false;this.colorPending=false;this.colorError='';
     Object.assign(this,{limits,keys,driver,arena,onState,onLeave,unlock,sound,isAudioEnabled,getAudioContext,role});this.dedicated=document.body.classList.contains('dedicated-server');
-    this.voice=new VoiceChat({isAudioEnabled:()=>this.isAudioEnabled(),getAudioContext:()=>this.getAudioContext(),onChange:()=>this.updateVoiceUi()});
+    this.voice=new VoiceChat({isAudioEnabled:()=>this.isAudioEnabled(),getAudioContext:()=>this.getAudioContext(),onChange:()=>this.updateVoiceUi(),log:(level,event,data)=>this.log(level,event,data)});
     this.panel=document.createElement('section');this.panel.className='network-panel';this.panel.setAttribute('aria-label','Multiplayer arena lobby');
     const title=this.title=document.createElement('strong');title.textContent='PLAY TOGETHER · UP TO 6 PLAYERS';
     this.name=document.createElement('input');this.name.placeholder='Your name';this.name.value=savedPlayerName(document.cookie);if(this.name.value==='Player')this.name.value='';this.name.maxLength=24;this.name.setAttribute('aria-label','Player name');
@@ -244,7 +244,7 @@ export class NetworkGame {
     const activeNames=this.voice.activeSpeakers().map(id=>names.get(id)).filter(Boolean);
     const parts=[];
     if(talking)parts.push('🎙 MIC LIVE');
-    if(activeNames.length)parts.push(`🔊 ${activeNames.join(', ')}`);
+    if(activeNames.length)parts.push(`🔊 ${activeNames.join(', ')}${this.voice.playbackBlocked?' · CLICK TO HEAR':''}`);
     if(!parts.length&&this.voice.error&&this.active)parts.push(`🎙 ${this.voice.error}`);
     const text=parts.join(' · ');
     if(this.voiceBanner){

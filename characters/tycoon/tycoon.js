@@ -1,4 +1,4 @@
-// Tycoon — super cute Tyrolean raccoon of healing, spirituality, and relaxation,
+// Tai-Coon — super cute Tyrolean she-raccoon of Tai Chi, healing, spirituality, and relaxation,
 // driving a cozy alpine village pickup truck with Karmic Raccooning effects.
 
 function flower(m, x, y, z, r, petalColor, centerColor = '#f7d96c') {
@@ -184,14 +184,18 @@ export function drawTycoon(m, phase, wave) {
     m.ball(side * .66, hy + .7, .22, .11, .14, .06, '#f2b8c4', 6, 4);
     // Soft cocoa-charcoal raccoon bandit mask.
     m.ball(side * .36, hy + .04, .82, .34, .28, .14, mask, 10, 6);
-    // Huge sparkling super-cute eyes!
+    // Huge sparkling super-cute eyes with delicate eyelashes!
     m.ball(side * .34, hy + .06, .92, .21, .24, .08, '#ffffff', 10, 6);
     m.ball(side * .33, hy + .06, .97, .14, .17, .05, dark, 10, 6);
     m.ball(side * .28, hy + .13, 1.01, .065, .075, .025, '#ffffff', 7, 4);
     m.ball(side * .38, hy, 1.0, .035, .035, .02, '#ffffff', 6, 4);
+    m.ball(side * .54, hy + .21, .94, .09, .03, .03, dark, 6, 4);
+    m.ball(side * .58, hy + .15, .93, .08, .028, .03, dark, 6, 4);
     // Cute rosy cheeks!
     m.ball(side * .58, hy - .2, .84, .19, .11, .06, cheek, 8, 4);
   }
+  // Pink alpine lotus blossom tucked sweetly beside her left ear.
+  flower(m, -.64, hy + .52, .34, .14, '#f7b2cc', '#fff2b0');
   // Soft cream forehead stripe & muzzle.
   m.ball(0, hy + .18, .88, .15, .32, .1, belly, 8, 5);
   m.ball(0, hy - .2, .9, .4, .28, .28, belly, 10, 6);

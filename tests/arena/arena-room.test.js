@@ -83,9 +83,9 @@ test('elephant, cricket, Roadster, astronaut sloth, worm pilot and Pearococo sur
   const yuda=ArenaCore.room({code:'12',host:0,arena:0,bots:0,epoch:1,players:[{id:0,name:'Master-Yuda',driver:10,role:'driver'}]});
   const client=new ArenaClient();client.accept(yuda.packet(0),0);client.frame(0,[],0);
   assert.equal(client.present().driver,10);assert.equal(client.present().name,'Master-Yuda');
-  const tycoon=ArenaCore.room({code:'13',host:0,arena:0,bots:0,epoch:1,players:[{id:0,name:'Tycoon',driver:15,role:'driver'}]});
+  const tycoon=ArenaCore.room({code:'13',host:0,arena:0,bots:0,epoch:1,players:[{id:0,name:'Tai-Coon',driver:15,role:'driver'}]});
   const tycoonClient=new ArenaClient();tycoonClient.accept(tycoon.packet(0),0);tycoonClient.frame(0,[],0);
-  assert.equal(tycoonClient.present().driver,15);assert.equal(tycoonClient.present().name,'Tycoon');
+  assert.equal(tycoonClient.present().driver,15);assert.equal(tycoonClient.present().name,'Tai-Coon');
   assert.throws(()=>core.configure({code:'11',host:0,arena:0,bots:0,epoch:1,players:[{id:0,name:'Invalid',driver:16,role:'driver'}]}),/Invalid Rust room/);
 });
 

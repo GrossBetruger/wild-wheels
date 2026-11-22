@@ -97,7 +97,8 @@ async fn headers(State(app): State<App>, request: axum::extract::Request, next: 
     if !peer.is_some_and(|peer| security::transport(&app, request.headers(), peer)) {
         return error((403, "Use the configured HTTPS game origin."));
     }
-    let secure = app.origin.as_ref().is_some_and(|o| o.starts_with("https://"));
+    let secure = app.origin.as_ref().is_some_and(|o| o.starts_with("https://"))
+        || peer.is_some_and(|peer| security::trusted_https(&app, request.headers(), peer));
     let seconds = match request.uri().path() {"/api/updates/check" => 30, _ => 10};
     let mut r = match timeout(Duration::from_secs(seconds), next.run(request)).await {
         Ok(r) => r,
@@ -122,7 +123,7 @@ async fn http(
     let path = uri.path();
     if path.starts_with("/api/") {
         let read_only = method == Method::GET && matches!(path, "/api/leaderboard" | "/api/info");
-        if !(if read_only { same_origin_get(&app, &h) } else { same_origin(&app, &h) }) {
+        if !(if read_only { same_origin_get(&app, &h, addr.ip()) } else { same_origin(&app, &h, addr.ip()) }) {
             return error((403, "Use the game from the same server."));
         }
         if !limit(
@@ -195,7 +196,8 @@ async fn http(
                     let secure = app
                         .origin
                         .as_ref()
-                        .is_some_and(|s| s.starts_with("https://"));
+                        .is_some_and(|s| s.starts_with("https://"))
+                        || security::trusted_https(&app, &h, addr.ip());
                     let cookie=format!("wild-wheels-session={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age={}{}",sessions::LIFETIME,match secure{true=>"; Secure",false=>""});
                     r.headers_mut()
                         .insert(header::SET_COOKIE, cookie.parse().unwrap());
@@ -316,7 +318,7 @@ fn note_request(app: &App, path: &str, body: &Value, outcome: &room::Result<Valu
 }
 /// A client's own problems, sent a few at a time over HTTP, never over the game socket.
 async fn report(State(app): State<App>, ConnectInfo(addr): ConnectInfo<SocketAddr>, h: HeaderMap, body: Bytes) -> Response {
-    if !same_origin(&app, &h) {
+    if !same_origin(&app, &h, addr.ip()) {
         return error((403, "Use the game from the same server."));
     }
     if !limit(&app, addr.ip(), "log", 6, Duration::from_secs(10)) {
@@ -426,7 +428,7 @@ async fn upgrade(
     h: HeaderMap,
     ws: WebSocketUpgrade,
 ) -> Response {
-    if !h.contains_key(header::ORIGIN) || !same_origin(&app, &h) {
+    if !h.contains_key(header::ORIGIN) || !same_origin(&app, &h, addr.ip()) {
         return error((403, "Use the game from the same server."));
     }
     if !limit(&app, addr.ip(), "socket", 16, Duration::from_secs(1)) {

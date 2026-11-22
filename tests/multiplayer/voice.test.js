@@ -14,6 +14,7 @@ import {
   packVoiceFrame,
   unpackServerVoiceFrame,
 } from '../../audio/voice-codec.js';
+import { VoiceChat } from '../../audio/voice-chat.js';
 
 test('mu-law voice codec round-trips silence and sine waves within telephony tolerance', () => {
   assert.equal(encodeMulawSample(0), 0xff);
@@ -81,28 +82,31 @@ test('/api/voice relays authenticated binary voice frames to room peers without 
   const host = await post('/api/rooms', { name: 'Oren', driver: 0, arena: 0, bots: 0 });
   const guest = await post('/api/join', { name: 'Sarah', driver: 1, code: host.code });
 
-  const connectVoice = token => new Promise((resolve, reject) => {
+  const connectVoice = (token, expectedId) => new Promise((resolve, reject) => {
     const ws = new WebSocket(`ws://127.0.0.1:${port}/api/voice`, { origin });
     ws.once('open', () => {
+      ws.once('message', (data, binary) => {
+        try {
+          assert.equal(binary, false);
+          assert.deepEqual(JSON.parse(data.toString()), { type: 'ready', id: expectedId });
+          resolve(ws);
+        } catch (err) {
+          reject(err);
+        }
+      });
       ws.send(JSON.stringify({ type: 'authenticate', token }));
-      resolve(ws);
     });
     ws.once('error', reject);
   });
 
-  const wsHost = await connectVoice(host.token);
-  const wsGuest = await connectVoice(guest.token);
+  const wsHost = await connectVoice(host.token, host.you);
+  const wsGuest = await connectVoice(guest.token, guest.you);
   t.after(() => { wsHost.close(); wsGuest.close(); });
 
   // Verify keepalive ping/pong.
   const pong = new Promise(resolve => wsHost.once('message', (data, binary) => resolve({ binary, msg: JSON.parse(data.toString()) })));
   wsHost.send(JSON.stringify({ type: 'ping' }));
   assert.deepEqual(await pong, { binary: false, msg: { type: 'pong' } });
-
-  // Wait briefly for guest auth to finish before sending audio.
-  const guestPong = new Promise(resolve => wsGuest.once('message', () => resolve()));
-  wsGuest.send(JSON.stringify({ type: 'ping' }));
-  await guestPong;
 
   let hostEchoed = false;
   wsHost.on('message', (_data, binary) => { if (binary) hostEchoed = true; });
@@ -125,4 +129,48 @@ test('/api/voice relays authenticated binary voice frames to room peers without 
   const closed = new Promise(resolve => wsHost.once('close', code => resolve(code)));
   wsHost.send(Buffer.from([1, 2, 3, 4, 5]));
   assert.equal(await closed, 1008);
+});
+
+test('VoiceChat flags playbackBlocked when AudioContext is suspended and clears on unlock', async () => {
+  const started = [];
+  const fakeContext = {
+    state: 'suspended',
+    currentTime: 0,
+    destination: {},
+    resume() {
+      return Promise.resolve();
+    },
+    createBuffer(_ch, len, rate) {
+      return { len, rate, copyToChannel() {} };
+    },
+    createBufferSource() {
+      return {
+        buffer: null,
+        connect() {},
+        start(when) { started.push(when); },
+      };
+    },
+  };
+  let changes = 0;
+  const chat = new VoiceChat({
+    getAudioContext: () => fakeContext,
+    onChange: () => { changes++; },
+  });
+  const payload = packVoiceFrame(1, encodeMulaw(new Float32Array(VOICE_FRAME_SAMPLES).fill(0.2)));
+  const packet = new Uint8Array(2 + payload.length);
+  packet[0] = 2;
+  packet.set(payload, 2);
+
+  chat.handleIncoming(packet.buffer);
+  assert.equal(chat.playbackBlocked, true);
+  assert.equal(started.length, 0);
+  assert.ok(changes > 0);
+
+  fakeContext.state = 'running';
+  fakeContext.currentTime = 1.0;
+  chat.unlockPlayback();
+  assert.equal(chat.playbackBlocked, false);
+
+  chat.handleIncoming(packet.buffer);
+  assert.equal(started.length, 1);
 });
