@@ -1,5 +1,6 @@
 mod benchmark;
 mod chat;
+mod lan;
 mod leaderboard;
 mod logs;
 mod photos;
@@ -45,6 +46,7 @@ struct App {
     room: Arc<Mutex<Room>>,
     limits: Arc<Mutex<HashMap<(IpAddr, String), (Instant, u32)>>>,
     sockets: Arc<Semaphore>,
+    listener: SocketAddr,
     origin: Option<String>,
     trust_proxy: bool,
     invite_secret: Option<String>,
@@ -139,9 +141,15 @@ async fn http(
             return response(200, app.room.lock().unwrap().board.report());
         }
         if path == "/api/info" && method == Method::GET {
+            let addresses = match (&app.origin, h.get(header::HOST)) {
+                (None, Some(host)) if addr.ip().to_canonical().is_loopback() && lan::loopback_host(host) => {
+                    lan::addresses(app.listener)
+                }
+                _ => Vec::new(),
+            };
             return response(
                 200,
-                json!({"dedicated":true,"room":"00","maxPlayers":room::CAPACITY,"addresses":[],"publicOrigin":app.origin,"controlPort":null}),
+                json!({"dedicated":true,"room":"00","maxPlayers":room::CAPACITY,"addresses":addresses,"publicOrigin":app.origin,"controlPort":null}),
             );
         }
         if method != Method::POST {
@@ -645,6 +653,9 @@ async fn main() {
     }));
     logs.note("info", "server-start", json!({"build":BUILD,"revision":REVISION,"port":port,"arena":arena,"bots":bots,"players":room::CAPACITY,"abilities":abilities}));
     room.log = logs.clone();
+    let listener = tokio::net::TcpListener::bind((bind, port))
+        .await
+        .expect("Unable to bind game port");
     let app = App {
         logs,
         stats: Arc::new(Mutex::new(stats::Stats::open(&stats_path).expect("Unable to load saved server stats"))),
@@ -658,6 +669,7 @@ async fn main() {
         room: Arc::new(Mutex::new(room)),
         limits: Default::default(),
         sockets: Arc::new(Semaphore::new(32)),
+        listener: listener.local_addr().expect("Unable to read game listening address"),
         origin,
         trust_proxy: std::env::var("TRUST_PROXY").is_ok_and(|v| v == "1"),
         invite_secret,
@@ -752,9 +764,6 @@ async fn main() {
         .layer(DefaultBodyLimit::max(2048))
         .layer(axum::middleware::from_fn_with_state(app.clone(), headers))
         .with_state(app.clone());
-    let listener = tokio::net::TcpListener::bind((bind, port))
-        .await
-        .expect("Unable to bind game port");
     println!(
         "Wild Wheels Rust: http://{bind}:{port} · one arena · {} players · single async thread",
         room::CAPACITY

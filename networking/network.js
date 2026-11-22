@@ -4,6 +4,7 @@ import {ArenaClient} from '../gameplay/arena-core.js';
 import {createBinaryEncoder} from './binary-wire.js';
 const bootstrapPacket=createBinaryEncoder();
 export const validPlayerName=value=>typeof value==='string'&&value.trim().length>0&&value.length<=24;
+const isLoopbackHost=hostname=>['localhost','localhost.','[::1]'].includes(hostname)||/^127(?:\.\d{1,3}){3}$/.test(hostname);
 
 export function savedPlayerName(cookies){
   const value=cookies.split(';').map(part=>part.trim()).find(part=>part.startsWith('wild-wheels-name='))?.slice(17);
@@ -12,7 +13,7 @@ export function savedPlayerName(cookies){
 
 export function invitationUrl(pageUrl,code,{publicOrigin,lan,invite}={}){
   const page=new URL(pageUrl);
-  const origin=['localhost','127.0.0.1'].includes(page.hostname)?publicOrigin??lan??page.origin:page.origin;
+  const origin=isLoopbackHost(page.hostname)?publicOrigin??lan??page.origin:page.origin;
   const url=new URL(`/?room=${encodeURIComponent(code)}`,origin);if(invite)url.hash=new URLSearchParams({invite}).toString();return url.href;
 }
 

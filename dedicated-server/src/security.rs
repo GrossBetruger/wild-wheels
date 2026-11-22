@@ -61,6 +61,7 @@ mod tests {
             limits: Default::default(),
             logs: crate::logs::Logs::disabled(),
             sockets: Arc::new(Semaphore::new(32)),
+            listener: ([127, 0, 0, 1], 5173).into(),
             origin: origin.map(str::to_owned),
             trust_proxy: true,
             invite_secret: None,
