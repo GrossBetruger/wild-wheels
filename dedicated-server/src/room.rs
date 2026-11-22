@@ -134,6 +134,7 @@ pub struct Room {
 }
 impl Room {
     pub fn new(arena: usize, bots: usize) -> Self {
+        crate::arenas::ensure_loaded();
         let epoch = 1;
         let seed = 1;
         let config = json!({"maxPlayers":CAPACITY,"code":"00","arena":arena,"bots":bots,"host":null,"dedicated":true,"epoch":epoch,"seed":seed,"players":[]});

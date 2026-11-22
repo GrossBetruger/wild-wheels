@@ -689,7 +689,8 @@ export class Renderer {
       for(let i=0;i<8;i++){const a=(i+.5)*Math.PI/4;m.at(Math.sin(a)*(R+20),0,Math.cos(a)*(R+20));m.box(0,0,0,1,16,1,'#666377');m.box(0,15,0,8,1,1,'#eee1b1');m.cone(0,16,0,2,3,arena.wall,4);}
     }else{
       const R=arena.size,span=Math.ceil((R+4)/10)*10,edge=R+2,full=(R+4)*2;
-      for(let x=-span;x<span;x+=10)for(let z=-span;z<span;z+=10)m.box(x+5,-.4,z+5,10,.4,10,(x+z)%20?arena.ground:index?'#978ca5':'#959d86');
+      const alt=index===0?'#959d86':index===1?'#978ca5':rgb(arena.ground).map(c=>Math.min(1,c+11/255));
+      for(let x=-span;x<span;x+=10)for(let z=-span;z<span;z+=10)m.box(x+5,-.4,z+5,10,.4,10,(x+z)%20?arena.ground:alt);
       for(const side of [-1,1]){m.box(side*edge,0,0,4,5,full,arena.wall);m.box(0,0,side*edge,full,5,4,arena.wall);for(let i=-R+6;i<R;i+=15){m.box(side*edge,5,i,4,.5,5,'#eadfb9');m.box(i,5,side*edge,5,.5,4,'#eadfb9');}}
       for(const [x,z,w,d] of arena.blocks){m.box(x,0,z,w,6,d,arena.wall);m.box(x,6,z,w+.3,.35,d+.3,'#c9bfaa');for(let i=-w/2+2;i<w/2;i+=3)m.box(x+i,.2,z-d/2-.05,.25,5.6,.15,'#4c465b');}
       for(let i=0;i<16;i++){const a=i/16*Math.PI*2;m.at(Math.sin(a)*(R+22),0,Math.cos(a)*(R+22));m.box(0,0,0,1,16,1,'#666377');m.box(0,15,0,8,1,1,'#eee1b1');m.cone(0,16,0,2,3,arena.wall,4);}

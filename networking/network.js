@@ -270,6 +270,7 @@ export class NetworkGame {
   async restore(){
     if(this.restoring)return;this.restoring=true;this.restoreOnVisible=false;
     this.connectionStatus();
+    if(this.dedicated)await this.infoReady;
     const body={...(this.colorDirty&&isPlayerColor(this.preferredColor)?{color:this.preferredColor}:{}),...(this.afk||(this.active&&typeof document!=='undefined'&&document.hidden)?{afk:true}:{})};
     try{this.adopt(await this.request('/api/session',body));}
     catch(error){this.log('warn','reconnect-failed',{status:error.status,message:error.message});if(error.status!==401){this.status.textContent=error.message;this.connectionStatus(error.message);if(this.active){const token=this.token;setTimeout(()=>{if(this.token===token)this.restore();},1000);}return;}if(this.active){this.leave('This room is no longer available.',false);return;}await this.infoReady;if(this.invitation)await this.connect('/api/join');}
@@ -349,6 +350,7 @@ export class NetworkGame {
     if(!this.active)return;
     const now=performance.now()/1000;this.lastPacket=now*1000;this.client.accept(packet,now);this.client.frame(0,this.paused?0:this.keys,now);this.client.peek();
     const state=this.client.state();
+    if(state.world.arenaDef&&Number.isInteger(state.world.arena)&&state.world.arena>=0&&state.world.arena<32){arenas[state.world.arena]=state.world.arenaDef;this.onArenas();}
     if(this.joinTracker.sample(state)){this.unlock?.().catch(()=>{});this.sound('playerJoin');}
     const rosterKey=JSON.stringify([state.host,state.you,state.players]);
     this.state=state;if(this.dedicated)this.paused=this.afk;else if(this.afk)this.paused=true;this.leaveButton.classList.remove('hidden');this.micButton.classList.remove('hidden');this.share.classList.remove('hidden');this.copyButton.classList.remove('hidden');this.animalChoice.classList.toggle('hidden',this.dedicated||!this.isHost);
