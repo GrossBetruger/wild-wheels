@@ -10,8 +10,8 @@ function check(world){
     for(const other of world.supplies.slice(i+1))assert.ok(Math.hypot(s.wx-other.wx,s.wz-other.wz)>=16);
   }
 }
-test('both arenas randomize initial supplies with wall, player and pickup clearance',()=>{
-  for(const arena of [0,1])for(let seed=1;seed<=40;seed++)check(createBattle(0,arena,()=>seed/100));
+test('all arenas randomize initial supplies with wall, player and pickup clearance',()=>{
+  for(const arena of [0,1,2])for(let seed=1;seed<=40;seed++)check(createBattle(0,arena,()=>seed/100));
   assert.notDeepEqual(createBattle(0,0,()=>.1).supplies,createBattle(0,0,()=>.8).supplies);
 });
 for(const engine of ['solo','Rust'])test(`${engine}: respawns choose clear positions and match the seeded simulation`,()=>{

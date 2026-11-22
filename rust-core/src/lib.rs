@@ -3,7 +3,7 @@ const SLOTS: usize = 128;
 mod arena;
 pub use arena::native::{NativeArena, Told};
 pub use arena::{NativeClient, ClientInput, ClientAction, ClientError, ClientView};
-pub use arena::{Action,Actor,Frame,Input,Move,MAX_PLAYERS};
+pub use arena::{Action,Actor,Frame,Input,Move,MAX_PLAYERS,ARENA_COUNT,arena_max_players,in_bounds};
 const FIELDS: usize = 16;
 const CLEAR: u32 = 1;
 const CHARGE: u32 = 2;
@@ -18,9 +18,9 @@ pub(crate) const NIGHTMARE_DRIVE: u32 = 256;
 #[repr(C)]
 struct Kart { data: [f64; FIELDS] }
 #[derive(Clone, Copy)]
-struct Arena { size: f64, count: usize, blocks: [[f64; 4]; 32] }
+struct Arena { size: f64, octagon: bool, count: usize, blocks: [[f64; 4]; 32] }
 static mut KARTS: [Kart; SLOTS] = [Kart { data: [0.0; FIELDS] }; SLOTS];
-static mut ARENAS: [Arena; 8] = [Arena { size: 0.0, count: 0, blocks: [[0.0; 4]; 32] }; 8];
+static mut ARENAS: [Arena; 8] = [Arena { size: 0.0, octagon: false, count: 0, blocks: [[0.0; 4]; 32] }; 8];
 static mut CONFIG: [f64; 128] = [0.0; 128];
 #[no_mangle]
 pub extern "C" fn abi_version() -> u32 { 1 }
@@ -42,10 +42,17 @@ pub extern "C" fn set_arena(index: usize, size: f64, count: usize) -> u32 {
         if !block.iter().all(|n| n.is_finite()) || block[2] <= 0.0 || block[3] <= 0.0 { return 0; }
         arena.blocks[i] = block;
     }
-    arena.size = size;arena.count = count;1
+    arena.size = size;arena.octagon = false;arena.count = count;1
+}
+pub(crate) fn set_arena_shape(index: usize, octagon: bool) {
+    if index < 8 {
+        let arena = unsafe { &mut *core::ptr::addr_of_mut!(ARENAS).cast::<Arena>().add(index) };
+        arena.octagon = octagon;
+    }
 }
 fn blocked(arena: &Arena, x: f64, z: f64) -> bool {
-    if x.abs() > arena.size-2.0 || z.abs() > arena.size-2.0 { return true; }
+    let limit = arena.size - 2.0;
+    if x.abs() > limit || z.abs() > limit || (arena.octagon && (x.abs() + z.abs()) * core::f64::consts::FRAC_1_SQRT_2 > limit) { return true; }
     arena.blocks[..arena.count].iter().any(|b| (x-b[0]).abs()<b[2]/2.0+2.0 && (z-b[1]).abs()<b[3]/2.0+2.0)
 }
 fn angle(a: f64, b: f64) -> f64 { (a-b).sin().atan2((a-b).cos()) }

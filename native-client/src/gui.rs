@@ -728,7 +728,7 @@ pub fn draw(
                     &arena.name,
                     Act::Arena(index),
                     index == view.arena,
-                    px(147),
+                    px(116),
                 );
             }
             if let Some(arena) = graphics.arena(view.arena) {
@@ -741,7 +741,9 @@ pub fn draw(
             let row = ui.row(panel);
             ui.button(row, "-", Act::Bots(bots.saturating_sub(1)), BUTTON, px(44));
             ui.text(row, &format!("  {bots}  "), 18.0, Color::WHITE);
-            let more = (bots + 1).min(ROOM_CAPACITY.saturating_sub(people));
+            let arena_cap = wild_wheels_core::arena_max_players(view.arena)
+                .map_or(ROOM_CAPACITY, |cap| cap.min(ROOM_CAPACITY));
+            let more = (bots + 1).min(arena_cap.saturating_sub(people));
             ui.button(row, "+", Act::Bots(more), BUTTON, px(44));
             for (label, field, value, maximum) in [
                 ("KILLS TO WIN", "targetScore", view.target_score as usize, 100),

@@ -619,12 +619,13 @@ async fn main() {
         .unwrap_or_else(|_| "0".into())
         .parse::<usize>()
         .unwrap();
-    assert!(arena < 2, "ARENA must be 0 or 1");
+    assert!(arena < wild_wheels_core::ARENA_COUNT, "ARENA must be 0, 1 or 2");
     let bots = std::env::var("BOTS")
         .unwrap_or_else(|_| "1".into())
         .parse::<usize>()
         .unwrap();
-    assert!(bots < room::CAPACITY, "BOTS must leave a seat free");
+    let max_capacity = wild_wheels_core::arena_max_players(arena).map_or(room::CAPACITY, |cap| cap.min(room::CAPACITY));
+    assert!(bots < max_capacity, "BOTS must leave a seat free");
     let origin = std::env::var("PUBLIC_ORIGIN").ok().map(|s| {
         let uri = s.parse::<Uri>().expect("Invalid PUBLIC_ORIGIN");
         assert!(

@@ -1,7 +1,8 @@
 export const SUPPLY_WALL_CLEARANCE=8, SUPPLY_ACTOR_CLEARANCE=12, SUPPLY_SPACING=16;
 function random(world){let state=(world.supplySeed??1)>>>0||1;state^=state<<13;state^=state>>>17;state^=state<<5;world.supplySeed=state>>>0;return world.supplySeed/4294967296;}
 export function safeSupplyPosition(world,arena,index,x,z){
-  if(Math.abs(x)>arena.size-8||Math.abs(z)>arena.size-8||arena.blocks.some(([bx,bz,w,d])=>Math.abs(x-bx)<w/2+8&&Math.abs(z-bz)<d/2+8))return false;
+  const limit=arena.size-8;
+  if(Math.abs(x)>limit||Math.abs(z)>limit||(arena.shape==='octagon'&&(Math.abs(x)+Math.abs(z))*Math.SQRT1_2>limit)||arena.blocks.some(([bx,bz,w,d])=>Math.abs(x-bx)<w/2+8&&Math.abs(z-bz)<d/2+8))return false;
   if([world,...world.bots].some(actor=>!actor.inactive&&!actor.afk&&!actor.bomber&&!(actor.destroyed>0)&&Math.hypot(actor.wx-x,actor.wz-z)<12))return false;
   return !world.supplies.some((s,i)=>i!==index&&Math.hypot((s.homeWx??s.wx)-x,(s.homeWz??s.wz)-z)<16);
 }

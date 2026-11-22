@@ -58,6 +58,17 @@ export function drawXrayArena(m, arena) {
   };
   // Match the solid scenery, including the inner faces of the perimeter walls.
   for (const [x, z, w, d] of arena.blocks) frame(x, z, w, d, 6.35);
+  if (arena.shape === 'octagon') {
+    const R = arena.size, side = 2 * R * (Math.SQRT2 - 1), corner = R * (Math.SQRT2 - 1);
+    for (let i = 0; i < 8; i++) {
+      m.at(0, 0, 0, i * Math.PI / 4);
+      for (const y of [.08, 5]) m.box(0, y, R, side, thickness, thickness, wall);
+      m.box(corner, .08, R, thickness, 5, thickness, wall);
+      for (const r of [18, 38, 54]) m.box(0, .025, r, 2 * r * (Math.SQRT2 - 1), .025, .035, floor);
+    }
+    m.at(0, 0, 0);
+    return;
+  }
   for (const side of [-1, 1]) { frame(side * (arena.size + 2), 0, 4, (arena.size + 4) * 2, 5); frame(0, side * (arena.size + 2), (arena.size + 4) * 2, 4, 5); }
   // A faint ground reference shows distances and open lanes without revealing the scene.
   for (let n = -arena.size; n <= arena.size; n += 16) { m.box(n, .025, 0, .035, .025, arena.size * 2, floor); m.box(0, .025, n, arena.size * 2, .025, .035, floor); }

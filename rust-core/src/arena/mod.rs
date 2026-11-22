@@ -42,14 +42,44 @@ const _:()=assert!(MAX_PLAYERS>=8&&MAX_PLAYERS<=64,"rooms hold 8 to 64 racers");
 pub use types::*;
 use serde_json::json;
 
+pub const ARENA_COUNT: usize = 3;
+pub fn arena_size(arena: usize) -> f64 {
+    match arena {
+        2 => 64.0,
+        _ => 96.0,
+    }
+}
+pub fn arena_octagon(arena: usize) -> bool {
+    arena == 2
+}
+pub fn arena_max_players(arena: usize) -> Option<usize> {
+    match arena {
+        2 => Some(4),
+        _ => None,
+    }
+}
+pub fn arena_spawn_radius(arena: usize) -> f64 {
+    match arena {
+        2 => 48.0,
+        _ => 78.0,
+    }
+}
+pub fn in_bounds(arena: usize, x: f64, z: f64) -> bool {
+    let limit = arena_size(arena);
+    x.abs() <= limit
+        && z.abs() <= limit
+        && (!arena_octagon(arena) || (x.abs() + z.abs()) * std::f64::consts::FRAC_1_SQRT_2 <= limit)
+}
 pub fn blocks(arena:usize)->&'static [[f64;4]] {
     match arena {
         0=>&[[-40.0,-35.0,34.0,10.0],[40.0,35.0,34.0,10.0],[-35.0,35.0,10.0,34.0],[35.0,-35.0,10.0,34.0],[0.0,0.0,14.0,14.0]],
-        _=>&[[0.0,0.0,28.0,28.0],[-55.0,0.0,12.0,36.0],[55.0,0.0,12.0,36.0],[0.0,-55.0,36.0,12.0],[0.0,55.0,36.0,12.0]],
+        1=>&[[0.0,0.0,28.0,28.0],[-55.0,0.0,12.0,36.0],[55.0,0.0,12.0,36.0],[0.0,-55.0,36.0,12.0],[0.0,55.0,36.0,12.0]],
+        _=>&[],
     }
 }
 pub fn blocked(arena:usize,x:f64,z:f64,padding:f64)->bool {
-    x.abs()>96.0-padding||z.abs()>96.0-padding||blocks(arena).iter().any(|b|(x-b[0]).abs()<b[2]/2.0+padding&&(z-b[1]).abs()<b[3]/2.0+padding)
+    let limit=arena_size(arena)-padding;
+    x.abs()>limit||z.abs()>limit||(arena_octagon(arena)&&(x.abs()+z.abs())*std::f64::consts::FRAC_1_SQRT_2>limit)||blocks(arena).iter().any(|b|(x-b[0]).abs()<b[2]/2.0+padding&&(z-b[1]).abs()<b[3]/2.0+padding)
 }
 pub fn distance(ax:f64,az:f64,bx:f64,bz:f64)->f64 { (ax-bx).hypot(az-bz) }
 pub fn angle(a:f64,b:f64)->f64 { (a-b).sin().atan2((a-b).cos()) }
@@ -89,13 +119,14 @@ impl Game {
     pub fn combat_active(&self)->bool{self.global.phase=="racing"}
     pub fn human_controlled(&self,id:usize)->bool{self.actors[id].human||id==0&&!self.global.multiplayer}
     pub fn from_seed(seed:Seed)->Result<Self,()> {
-        if seed.global.arena>1||!valid_capacity(seed.bots.len()+1)||seed.player.id!=0{return Err(());}
+        if seed.global.arena>=ARENA_COUNT||!valid_capacity(seed.bots.len()+1)||seed.player.id!=0{return Err(());}
         let mut actors=vec![seed.player];actors.extend(seed.bots);
         if actors.iter().enumerate().any(|(i,a)|a.id!=i||a.driver>=DRIVER_NAMES.len()||!a.wx.is_finite()||!a.wz.is_finite()){return Err(());}
-        for i in 0..2 {
+        for i in 0..ARENA_COUNT {
             let config=unsafe{&mut *core::ptr::addr_of_mut!(crate::CONFIG)};
             for (j,b) in blocks(i).iter().enumerate(){config[j*4..j*4+4].copy_from_slice(b);}
-            if crate::set_arena(i,96.0,blocks(i).len())!=1{return Err(());}
+            if crate::set_arena(i,arena_size(i),blocks(i).len())!=1{return Err(());}
+            crate::set_arena_shape(i,arena_octagon(i));
         }
         Ok(Self{global:seed.global,actors,input_ack:[-1;MAX_PLAYERS],movement_ack:[-1;MAX_PLAYERS],action_ack:[-1;MAX_PLAYERS],accepted_action:[-1;MAX_PLAYERS],pending:vec![Vec::new();MAX_PLAYERS],network_time:0.0,room:Default::default()})
     }
@@ -140,7 +171,7 @@ impl Game {
             }
             for action in &input.actions {
                 if !matches!(action.kind.as_str(),"special"|"nightmare"|"fire"|"turbo"|"chaff"|"somersault"|"cycle"|"select"|"bomb")||!action.wx.is_finite()||!action.wz.is_finite()||action.after_move< -1||action.after_move>previous+128{return false;}
-                if action.kind=="bomb"&&(action.wx.abs()>96.0||action.wz.abs()>96.0||action.bomb_kind.as_ref().is_some_and(|s|s!="stink"&&s!="abomb")){return false;}
+                if action.kind=="bomb"&&(!in_bounds(self.global.arena,action.wx,action.wz)||action.bomb_kind.as_ref().is_some_and(|s|s!="stink"&&s!="abomb")){return false;}
                 if action.kind=="select"&&!matches!(action.item.as_str(),"hedgehog"|"missile"){return false;}
             }
         }true

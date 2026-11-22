@@ -22,22 +22,23 @@ fn safe(g: &Globals, actors: &[Actor], index: usize, x: f64, z: f64) -> bool {
         })
 }
 pub(super) fn place(g: &mut Globals, actors: &[Actor], index: usize) -> bool {
+    let limit = arena_size(g.arena) - 8.0;
     let mut candidate = None;
     for _ in 0..128 {
-        let x = (random(g) * 2.0 - 1.0) * 88.0;
-        let z = (random(g) * 2.0 - 1.0) * 88.0;
+        let x = (random(g) * 2.0 - 1.0) * limit;
+        let z = (random(g) * 2.0 - 1.0) * limit;
         if safe(g, actors, index, x, z) {
             candidate = Some((x, z));
             break;
         }
     }
     if candidate.is_none() {
-        let cells = 23;
+        let cells = (limit * 2.0 / 8.0).floor() as usize + 1;
         let start = (random(g) * (cells * cells) as f64).floor() as usize;
         for offset in 0..cells * cells {
             let cell = (start + offset) % (cells * cells);
-            let x = -88.0 + (cell % cells) as f64 * 8.0;
-            let z = -88.0 + (cell / cells) as f64 * 8.0;
+            let x = -limit + (cell % cells) as f64 * 8.0;
+            let z = -limit + (cell / cells) as f64 * 8.0;
             if safe(g, actors, index, x, z) {
                 candidate = Some((x, z));
                 break;

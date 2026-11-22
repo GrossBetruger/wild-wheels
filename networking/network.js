@@ -1,5 +1,6 @@
 import {canChoosePlayerColor, isPlayerColor, savedPlayerColor} from '../gameplay/player-colors.js';
 import { drivers } from '../gameplay/engine.js';
+import { arenas } from '../gameplay/combat.js';
 import {ArenaClient} from '../gameplay/arena-core.js';
 import {createBinaryEncoder} from './binary-wire.js';
 import {VoiceChat} from '../audio/voice-chat.js';
@@ -359,7 +360,8 @@ export class NetworkGame {
     if(this.nameDirty&&!this.namePending&&this.name.value.trim()&&['countdown','racing'].includes(state.world.phase))this.saveName();
     this.updateShare();
     this.abilities.textContent=state.specialAbilities===false?'SPECIAL ABILITIES · OFF':'SPECIAL ABILITIES · ON';this.abilities.disabled=!this.canConfigure;this.abilities.setAttribute('aria-pressed',String(state.specialAbilities!==false));
-    this.botCount.value=String(state.bots);this.botCount.disabled=!this.canConfigure||!['ready','finished'].includes(state.world.phase);for(const option of this.botCount.options)option.disabled=Number(option.value)>(state.maxPlayers??6)-state.players.length;
+    const arenaCap=Math.min(state.maxPlayers??6,arenas[state.world.arena]?.maxPlayers??(state.maxPlayers??6));
+    this.botCount.value=String(state.bots);this.botCount.disabled=!this.canConfigure||!['ready','finished'].includes(state.world.phase);for(const option of this.botCount.options)option.disabled=Number(option.value)>arenaCap-state.players.length;
     this.animalChoice.value=String(state.world.driver);this.animalChoice.disabled=!['ready','finished'].includes(state.world.phase);
     this.status.textContent=`${state.players.length} PLAYER${state.players.length===1?'':'S'} · ${state.bots} BOT${state.bots===1?'':'S'} · ${this.isHost?'Share the link, then press Let’s Battle.':this.role==='bomber'?'Press Let’s Play when you’re ready.':'Choose your racer and press Let’s Play.'}`;
     if(this.dedicated)this.status.textContent=`SHARED ARENA · ${state.players.length} PLAYER${state.players.length===1?'':'S'} · ${state.bots} BOT${state.bots===1?'':'S'} · Anyone can start the match.`;

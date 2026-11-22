@@ -30,7 +30,8 @@ fn default_capacity()->usize{6}
 impl Room {
     pub(super) fn valid(&self)->bool {
         if !(1..=100).contains(&self.target_score) || !(1..=30).contains(&self.match_minutes) {return false;}
-        if self.code.len()!=2||!self.code.bytes().all(|b|b.is_ascii_digit())||!super::valid_capacity(self.max_players)||self.arena>1||self.players.len()>self.max_players||self.bots>self.max_players-self.players.len() {return false;}
+        if self.code.len()!=2||!self.code.bytes().all(|b|b.is_ascii_digit())||!super::valid_capacity(self.max_players)||self.arena>=ARENA_COUNT||self.players.len()>self.max_players||self.bots>self.max_players-self.players.len() {return false;}
+        if arena_max_players(self.arena).is_some_and(|cap| self.players.len() + self.bots > cap) { return false; }
         match (self.dedicated,self.host){
             (true,None)=>{if self.start_request.is_some(){return false;}},
             (false,Some(host))=>{if host>=self.max_players||!self.players.is_empty()&&!self.players.iter().any(|p|p.id==host){return false;}},
@@ -49,8 +50,10 @@ impl Room {
         }true
     }
 }
-fn initial_actor(id:usize,skill:f64,capacity:usize)->Actor {
-    let angle=(id*8/capacity)as f64*std::f64::consts::FRAC_PI_4;let x=angle.sin()*78.0;let z=angle.cos()*78.0;let heading=(-x).atan2(-z);
+fn initial_actor(id:usize,skill:f64,capacity:usize,arena:usize)->Actor {
+    let slots=arena_max_players(arena).map_or(capacity,|cap|cap.min(capacity));
+    let radius=arena_spawn_radius(arena);
+    let angle=((id*8/slots)%8)as f64*std::f64::consts::FRAC_PI_4;let x=angle.sin()*radius;let z=angle.cos()*radius;let heading=(-x).atan2(-z);
     Actor{id,driver:id%DRIVER_NAMES.len(),color:PLAYER_COLORS[id%PLAYER_COLORS.len()].into(),wx:x,wz:z,heading,motion_heading:heading,camera_heading:heading,somersault_camera_start:heading,
         health:3.0,shield:0.0,ammo:START_HEDGEHOGS,missiles:1,turbos:1,item:"hedgehog".into(),fire_cooldown:0.5,chaff:4,skill,..Actor::default()}
 }
@@ -61,7 +64,7 @@ impl Game {
         for i in (1..5).rev(){let j=(random()*(i+1)as f64).floor()as usize;skills.swap(i,j);}
         let global=Globals{special_abilities:room.special_abilities,mode:"combat".into(),phase:"ready".into(),arena:room.arena,countdown:3.0,duration:f64::from(room.match_minutes * 60),target_score:f64::from(room.target_score),rank:6,multiplayer:true,sound_epoch:room.epoch as u64,
             supplies:[(-70.0,-65.0,"missile"),(70.0,65.0,"missile"),(-65.0,70.0,"hedgehog"),(65.0,-70.0,"hedgehog"),(-12.0,48.0,"boost"),(12.0,-48.0,"boost"),(-70.0,0.0,"health"),(70.0,0.0,"health"),(-50.0,-50.0,"hedgeproof"),(50.0,50.0,"tehilim")].into_iter().enumerate().map(|(id,(wx,wz,kind))|Supply{random_spawn:true,id:id as u32,wx,wz,kind:kind.into(),cooldown:match kind{"hedgeproof"|"tehilim"=>30.0,_=>0.0},..Supply::default()}).collect(),..Globals::default()};
-        let mut game=Self::from_seed(Seed{global,player:initial_actor(0,0.85,room.max_players),bots:(1..room.max_players).map(|id|initial_actor(id,skills[id-1],room.max_players)).collect()})?;
+        let mut game=Self::from_seed(Seed{global,player:initial_actor(0,0.85,room.max_players,room.arena),bots:(1..room.max_players).map(|id|initial_actor(id,skills[id-1],room.max_players,room.arena)).collect()})?;
         game.configure_room(room);game.global.supply_seed=state;for index in 0..game.global.supplies.len(){if !supplies::place(&mut game.global,&game.actors,index){game.global.supplies[index].cooldown=0.25;}}Ok(game)
     }
     pub(super) fn configure_room(&mut self,room:&Room){
@@ -117,7 +120,7 @@ impl Game {
             let person=room.players.iter().find(|p|p.id==id);
             let actor=&mut self.actors[id];let was_human=actor.human;let was_bomber=actor.bomber;
             if person.is_some()&&!was_human{
-                *actor=initial_actor(id,actor.skill,room.max_players);actor.joined_after_kill=self.global.kill_sequence;self.pending[id].clear();self.movement_ack[id]= -1;self.action_ack[id]= -1;self.accepted_action[id]= -1;
+                *actor=initial_actor(id,actor.skill,room.max_players,self.global.arena);actor.joined_after_kill=self.global.kill_sequence;self.pending[id].clear();self.movement_ack[id]= -1;self.action_ack[id]= -1;self.accepted_action[id]= -1;
             }
             let active=person.is_some()||bots>0;
             if person.is_none()&&active{bots-=1;}

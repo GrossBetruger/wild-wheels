@@ -69,7 +69,7 @@ impl Client{
         let after=self.ops.iter().filter_map(|op|match op{Op::Pickup{after,..}=>Some(*after),_=>None}).fold(sequence,i64::max);action.after_move=after;
         if actor.bomber{
             let kind=action.bomb_kind.as_deref().unwrap_or("abomb");let resource=match kind{"stink"=>"stinkAmmo",_=>"bombAmmo"};
-            if action.kind!="bomb"||!matches!(kind,"stink"|"abomb")||!self.pred.combat_active()||now-self.received>0.5||!action.wx.is_finite()||!action.wz.is_finite()||action.wx.abs()>96.0||action.wz.abs()>96.0||match kind{"stink"=>actor.stink_ammo==0,_=>actor.bomb_ammo==0}{return false;}
+            if action.kind!="bomb"||!matches!(kind,"stink"|"abomb")||!self.pred.combat_active()||now-self.received>0.5||!action.wx.is_finite()||!action.wz.is_finite()||!in_bounds(self.pred.global.arena,action.wx,action.wz)||match kind{"stink"=>actor.stink_ammo==0,_=>actor.bomb_ammo==0}{return false;}
             action.after_move= -1;let kind=kind.to_string();self.next_action+=1;self.ops.push(Op::Action{action,kind,resource:resource.into(),ready:0,born:now});self.emit("bombDrop",now,Some(format!("action:{}",id)),false);return true;
         }
         if matches!(action.kind.as_str(),"select"|"cycle"){

@@ -946,7 +946,7 @@ mod tests {
     #[test]
     fn embedded_pack_ports_every_racer_state_and_arena() {
         let graphics = Graphics::parse(PACK).expect("valid pack");
-        assert_eq!(graphics.arenas.len(), 2);
+        assert_eq!(graphics.arenas.len(), 3);
         assert_eq!(graphics.racers().len(), 16);
         assert_eq!(graphics.racers()[0].name, "Pip the Panda");
         assert_eq!(graphics.racers()[14].ability, "DARK HUMOR");

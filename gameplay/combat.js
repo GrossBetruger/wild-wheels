@@ -29,16 +29,23 @@ export const DIZZY_DURATION = 8;
 export const arenas = [
   { name: 'Scrapyard', desc: 'Container cover. Wide flanking lanes.', size: 96, ground: '#8b927d', wall: '#d7794d', sky: '#b5d3d9', blocks: [[-40, -35, 34, 10], [40, 35, 34, 10], [-35, 35, 10, 34], [35, -35, 10, 34], [0, 0, 14, 14]] },
   { name: 'Crossfire Court', desc: 'A central fortress. Four ways around.', size: 96, ground: '#8e849b', wall: '#8063b2', sky: '#c8bbd8', blocks: [[0, 0, 28, 28], [-55, 0, 12, 36], [55, 0, 12, 36], [0, -55, 36, 12], [0, 55, 36, 12]] },
+  { name: 'Octagon', desc: 'Open eight-sided cage. No cover. Up to 4 players.', size: 64, shape: 'octagon', maxPlayers: 4, ground: '#8c8378', wall: '#c74c48', sky: '#d8cfc4', blocks: [] },
 ];
 const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 const angleDelta = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 const distance = (a, b) => Math.hypot(a.wx - b.wx, a.wz - b.wz);
 export function combatPose(actor) { return { x: actor.wx, z: actor.wz, tx: Math.sin(actor.heading), tz: Math.cos(actor.heading) }; }
-export function blocked(arena, x, z, padding = 2) { return Math.abs(x) > arena.size - padding || Math.abs(z) > arena.size - padding || arena.blocks.some(([bx, bz, w, d]) => Math.abs(x - bx) < w / 2 + padding && Math.abs(z - bz) < d / 2 + padding); }
+export function inArenaBounds(arena, x, z, padding = 0) {
+  const limit = arena.size - padding;
+  if (Math.abs(x) > limit || Math.abs(z) > limit) return false;
+  return arena.shape !== 'octagon' || (Math.abs(x) + Math.abs(z)) * Math.SQRT1_2 <= limit;
+}
+export function blocked(arena, x, z, padding = 2) { return !inArenaBounds(arena, x, z, padding) || arena.blocks.some(([bx, bz, w, d]) => Math.abs(x - bx) < w / 2 + padding && Math.abs(z - bz) < d / 2 + padding); }
 function clearShot(arena, a, b) { const d = distance(a, b); for (let t = 3; t < d; t += 3)if (blocked(arena, a.wx + (b.wx - a.wx) * t / d, a.wz + (b.wz - a.wz) * t / d, .4)) return false; return true; }
 function spawn(r, actor, initial = false) {
-  const actors = [r, ...r.bots], candidates = Array.from({ length: 8 }, (_, i) => { const angle = i * Math.PI / 4; return { wx: Math.sin(angle) * 78, wz: Math.cos(angle) * 78 }; });
-  const choice = initial ? candidates[Math.floor(actor.id * 8 / 6)] : candidates.sort((a, b) => Math.min(...actors.filter(k => k !== actor && !k.destroyed).map(k => distance(b, k)), 999) - Math.min(...actors.filter(k => k !== actor && !k.destroyed).map(k => distance(a, k)), 999))[0];
+  const arena = arenas[r.arena], radius = arena.shape === 'octagon' ? 48 : 78;
+  const actors = [r, ...r.bots], count = Math.max(1, actors.filter(a => !a.inactive).length), candidates = Array.from({ length: 8 }, (_, i) => { const angle = i * Math.PI / 4; return { wx: Math.sin(angle) * radius, wz: Math.cos(angle) * radius }; });
+  const choice = initial ? candidates[Math.floor(actor.id * 8 / count) % 8] : candidates.sort((a, b) => Math.min(...actors.filter(k => k !== actor && !k.inactive && !k.destroyed).map(k => distance(b, k)), 999) - Math.min(...actors.filter(k => k !== actor && !k.inactive && !k.destroyed).map(k => distance(a, k)), 999))[0];
   actor.wx = choice.wx; actor.wz = choice.wz; actor.heading = Math.atan2(-choice.wx, -choice.wz); actor.speed = 0; actor.health = 3; actor.reverseControls = 0; actor.destroyed = 0; actor.shield = 0; actor.ammo = START_HEDGEHOGS; actor.missiles = 1; actor.turbos = 1; actor.item = 'hedgehog'; actor.fireCooldown = .5; actor.vx = 0; actor.boost = 0; actor.nightmareActive = 0; actor.nightmareCooldown ??= 0; actor.path = [];
   actor.motionHeading = actor.heading; actor.cameraHeading = actor.heading; actor.drift = 0; actor.wasDrifting = false; actor.driftTrail = null; actor.driftEmit = 0;
   actor.intelligenceBonus ??= 0; actor.owlBoosting = false; actor.killStreak = 0; actor.batCooldown = 0; actor.vulcan = 0; actor.healTimer = 0; actor.hedgeShield = 0; actor.tehilim = 0;
@@ -48,8 +55,9 @@ function spawn(r, actor, initial = false) {
 }
 export function createBattle(driver = 0, arena = 0, random = Math.random, {targetScore = 10, matchMinutes = 3} = {}) {
   const r = createRace(driver, 0, random); r.specialAbilities = true; r.timeStop = 0; r.timeOwner = null; r.mode = 'combat'; r.arena = arena; r.duration = matchMinutes * 60; r.targetScore = targetScore; r.id = 0; r.color = drivers[driver].color; r.killFeed = []; r.karmaSequence = 0; r.lastKarma = null; r.driftParticles = []; r.chaffClouds = []; r.chaffSequence = 0; r.bombs = []; r.bombSequence = 0; r.stinkClouds = [];
-  const actors = [r, ...r.bots]; for (const [id, actor] of actors.entries()) Object.assign(actor, { id, wx: 0, wz: 0, heading: 0, kills: 0, deaths: 0, lastKiller: null, bicyclesStolen: 0, health: 3, destroyed: 0, shield: 0, celebrate: 0, fireCooldown: 0, reload: 0, brain: 0, path: [], bomber: false, bombAmmo: 0, bombReload: 0, stinkAmmo: 0 });
-  for (const actor of actors) spawn(r, actor, true);
+  const cap = arenas[arena].maxPlayers;
+  const actors = [r, ...r.bots]; for (const [id, actor] of actors.entries()) Object.assign(actor, { id, wx: 0, wz: 0, heading: 0, kills: 0, deaths: 0, lastKiller: null, bicyclesStolen: 0, health: 3, inactive: Boolean(cap && id >= cap), destroyed: cap && id >= cap ? 1e9 : 0, shield: 0, celebrate: 0, fireCooldown: 0, reload: 0, brain: 0, path: [], bomber: false, bombAmmo: 0, bombReload: 0, stinkAmmo: 0 });
+  for (const actor of actors) if (!actor.inactive) spawn(r, actor, true);
   r.supplies = [[-70, -65, 'missile'], [70, 65, 'missile'], [-65, 70, 'hedgehog'], [65, -70, 'hedgehog'], [-12, 48, 'boost'], [12, -48, 'boost'], [-70, 0, 'health'], [70, 0, 'health'], [-50, -50, 'hedgeproof'], [50, 50, 'tehilim']].map(([wx, wz, kind], id) => ({ id, randomSpawn:true, version: 0, wx, wz, kind, cooldown: ['hedgeproof', 'tehilim'].includes(kind) ? 30 : 0 }));
   r.supplySeed=Math.floor(random()*4294967296)>>>0||1;
   for(let index=0;index<r.supplies.length;index++)if(!placeSupply(r,arenas[arena],index))r.supplies[index].cooldown=.25;
@@ -63,7 +71,7 @@ export function standings(r) {
   return actors.sort((a, b) => b.kills - a.kills || Number(b === host) - Number(a === host) || a.deaths - b.deaths || a.id - b.id);
 }
 export function equipBomber(actor) { Object.assign(actor, { bomber: true, bombAmmo: BOMB_START_AMMO, stinkAmmo: 2, bombReload: 0, speed: 0, shield: 0, destroyed: 0, dizzy: 0 }); return actor; }
-export function validBombTarget(world, point) { return Boolean(point) && Number.isFinite(point.wx) && Number.isFinite(point.wz) && Math.abs(point.wx) <= arenas[world.arena].size && Math.abs(point.wz) <= arenas[world.arena].size; }
+export function validBombTarget(world, point) { return Boolean(point) && Number.isFinite(point.wx) && Number.isFinite(point.wz) && inArenaBounds(arenas[world.arena], point.wx, point.wz, 0); }
 export function dropBomb(world, actor, point, actionId) {
   if (frozen(world, actor.id)) return false;
   const kind = point?.kind ?? 'abomb', resource = kind === 'stink' ? 'stinkAmmo' : 'bombAmmo';
@@ -115,7 +123,7 @@ export function useBattleTurbo(r, actor = r, actionId) {
 }
 export function somersaultBattle(world, actor = world) {
   if (!canAct(world, actor) || (actor.somersaultCooldown ?? 0) > 1e-8) return false;
-  if (world.specialAbilities !== false && actor.driver === 5) { for (let i = 0; i < 128; i++) { const wx = Math.random() * 170 - 85, wz = Math.random() * 170 - 85; if (blocked(arenas[world.arena], wx, wz, 4) || [world, ...world.bots].some(a => a.id !== actor.id && !a.inactive && !a.destroyed && Math.hypot(a.wx - wx, a.wz - wz) < 8)) continue; world.effects.push({ type: 'teleportOut', owner: actor.id, wx: actor.wx, wz: actor.wz, heading: actor.heading, color: actor.color ?? drivers[5].color, age: 0, life: 1.35 }); sound(world, 'teleportOut', actor); Object.assign(actor, { wx, wz, speed: 0 }); world.effects.push({ type: 'teleportIn', owner: actor.id, wx, wz, heading: actor.heading + Math.PI, color: actor.color ?? drivers[5].color, age: 0, life: 1.35 }); sound(world, 'teleportIn', actor); break; } }
+  if (world.specialAbilities !== false && actor.driver === 5) { const span = arenas[world.arena].size - 11; for (let i = 0; i < 128; i++) { const wx = (Math.random() * 2 - 1) * span, wz = (Math.random() * 2 - 1) * span; if (blocked(arenas[world.arena], wx, wz, 4) || [world, ...world.bots].some(a => a.id !== actor.id && !a.inactive && !a.destroyed && Math.hypot(a.wx - wx, a.wz - wz) < 8)) continue; world.effects.push({ type: 'teleportOut', owner: actor.id, wx: actor.wx, wz: actor.wz, heading: actor.heading, color: actor.color ?? drivers[5].color, age: 0, life: 1.35 }); sound(world, 'teleportOut', actor); Object.assign(actor, { wx, wz, speed: 0 }); world.effects.push({ type: 'teleportIn', owner: actor.id, wx, wz, heading: actor.heading + Math.PI, color: actor.color ?? drivers[5].color, age: 0, life: 1.35 }); sound(world, 'teleportIn', actor); break; } }
   actor.somersaultCameraStart = actor.cameraHeading;
   actor.heading += Math.PI; actor.motionHeading = actor.heading;
   actor.drift = 0; actor.wasDrifting = false; actor.driftTrail = null;

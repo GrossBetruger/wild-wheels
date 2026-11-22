@@ -6,12 +6,14 @@ import { randomBytes, randomInt } from 'node:crypto';
 import { networkInterfaces } from 'node:os';
 import { WebSocketServer } from 'ws';
 import { drivers } from '../gameplay/engine.js';
+import { arenas, inArenaBounds } from '../gameplay/combat.js';
 import { ArenaCore, mergeArenaPacket } from '../gameplay/arena-core.js';
 import { ngrokOrigin } from './ngrok.js';
 import { createBinaryEncoder, decodeBinarySnapshot } from '../networking/binary-wire.js';
 const encodeBinarySnapshot = createBinaryEncoder();
 
 const KEYS = new Set(['arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'w', 'a', 's', 'd', 'shift', ' ']);
+const arenaLimit = arena => Math.min(6, arenas[arena]?.maxPlayers ?? 6);
 function matchLimit(value, max) {
   if (!Number.isInteger(value) || value < 1 || value > max) throw problem(400, `Choose a whole number from 1 to ${max}.`);
   return value;
@@ -123,7 +125,7 @@ export class Multiplayer {
   controls(member,body){
     if(member.afk)return;
     if(!Number.isSafeInteger(body.sequence)||body.sequence<0||!Array.isArray(body.keys)||body.keys.length>10||body.keys.some(k=>!KEYS.has(k))||!Array.isArray(body.actions)||body.actions.length>8)throw problem(400,'Invalid controls.');
-    for(const action of body.actions)if(!action||!['special','nightmare','fire','turbo','somersault','chaff','cycle','select','bomb'].includes(action.type)||(action.type==='select'&&!['hedgehog','missile'].includes(action.item))||(action.type==='bomb'&&((!Number.isFinite(action.wx)||!Number.isFinite(action.wz)||Math.abs(action.wx)>96||Math.abs(action.wz)>96)||(action.kind!==undefined&&!['abomb','stink'].includes(action.kind)))))throw problem(400,'Invalid action.');
+    for(const action of body.actions)if(!action||!['special','nightmare','fire','turbo','somersault','chaff','cycle','select','bomb'].includes(action.type)||(action.type==='select'&&!['hedgehog','missile'].includes(action.item))||(action.type==='bomb'&&((!Number.isFinite(action.wx)||!Number.isFinite(action.wz)||!inArenaBounds(arenas[member.room.arena],action.wx,action.wz,0))||(action.kind!==undefined&&!['abomb','stink'].includes(action.kind)))))throw problem(400,'Invalid action.');
     for(const action of body.actions)if(action.id!==undefined&&(!Number.isSafeInteger(action.id)||action.id<0||action.id>0xffffffff||!Number.isSafeInteger(action.afterMove)||action.afterMove< -1||action.afterMove>(member.acceptedMove??-1)+128))throw problem(400,'Invalid action sequence.');
     if(body.epoch!==undefined&&body.epoch!==member.room.core.status.soundEpoch)return;
     if(body.moves!==undefined){
@@ -150,7 +152,7 @@ export class Multiplayer {
   roomConfig(room) { return { code: room.code, arena: room.arena, bots: room.botCount, targetScore: room.targetScore, matchMinutes: room.matchMinutes, specialAbilities: room.specialAbilities !== false, host: room.host, epoch: room.soundEpoch, seed: room.seed ?? 0, players: [...room.members.values()].map(p => ({ id: p.id, name: p.name, color: p.color, driver: p.driver, role: p.role, afk: Boolean(p.afk), wantsToPlay: Boolean(p.wantsToPlay), playRequestRefused: Boolean(p.playRequestRefused) })), startRequest: room.startRequest ? { id: room.startRequest.id, remainingMs: Math.max(0, room.startRequest.deadline - this.startNow()) } : null }; }
   syncRoom(room) { const config = this.roomConfig(room), text = JSON.stringify(config); if (text === room.configText) return; room.core.configure(config); room.configText = text; }
   makeWorld(room) {
-    room.photoAlbum = new PhotoAlbum(); room.startRequest = null; room.soundEpoch = (room.soundEpoch ?? 0) + 1; room.seed = randomInt(0x100000000); room.botCount = Math.min(room.botCount, 6 - room.members.size);
+    room.photoAlbum = new PhotoAlbum(); room.startRequest = null; room.soundEpoch = (room.soundEpoch ?? 0) + 1; room.seed = randomInt(0x100000000); room.botCount = Math.min(room.botCount, Math.max(0, arenaLimit(room.arena) - room.members.size));
     for (const member of room.members.values()) { member.wantsToPlay = false; member.playRequestRefused = false; this.assign(room, member); }
     const config = this.roomConfig(room); room.core = ArenaCore.room(config); room.configText = JSON.stringify(config); this.fixtureWorld?.(room);
   }
@@ -203,9 +205,9 @@ export class Multiplayer {
     for (const member of room.members.values()) { this.members.delete(member.token); const socket = member.socket; member.socket = null; const voice = member.voiceSocket; member.voiceSocket = null; member.stream?.end(); socket?.close(4004, 'Room replaced by host'); voice?.close(4004, 'Room replaced by host'); }
     room.members.clear();
   }
-  roster(room) { room.botCount = Math.min(room.botCount, 6 - room.members.size); this.syncRoom(room); }
+  roster(room) { room.botCount = Math.min(room.botCount, Math.max(0, arenaLimit(room.arena) - room.members.size)); this.syncRoom(room); }
   join(room, body) {
-    const identity = person(body); if (room.members.size >= 6) throw problem(409, 'This room is full (6 players).');
+    const identity = person(body), limit = arenaLimit(room.arena); if (room.members.size >= limit) throw problem(409, limit < 6 ? `${arenas[room.arena].name} is full (${limit} players).` : 'This room is full (6 players).');
     const id = [0, 1, 2, 3, 4, 5].find(slot => !room.members.has(slot)), token = randomBytes(32).toString('hex');
     const used = new Set([...room.members.values()].map(player => player.driver));
     const driver = identity.driver ?? drivers.findIndex((_, index) => !used.has(index));
@@ -309,8 +311,9 @@ export class Multiplayer {
         if (path === '/api/rooms') {
           const current = this.rooms.values().next().value, owner = this.members.get(sessionToken(req));
           if (current && (!owner || owner.room !== current || owner.id !== current.host)) throw problem(403, 'Only the current host can replace this arena. Join using its invitation link.');
-          if (!Number.isInteger(body.arena) || body.arena < 0 || body.arena > 1) throw problem(400, 'Choose an arena.');
-          if (body.bots !== undefined && (!Number.isInteger(body.bots) || body.bots < 0 || body.bots > 5)) throw problem(400, 'Choose 0–5 bots.');
+          if (!Number.isInteger(body.arena) || body.arena < 0 || body.arena >= arenas.length) throw problem(400, 'Choose an arena.');
+          const maxBots = arenaLimit(body.arena) - 1;
+          if (body.bots !== undefined && (!Number.isInteger(body.bots) || body.bots < 0 || body.bots > maxBots)) throw problem(400, `Choose 0–${maxBots} bots.`);
           const code = allocateRoomCode(this.rooms);
           room = { code, invite: randomBytes(32).toString('hex'), arena: body.arena, botCount: body.bots ?? 1, targetScore: matchLimit(body.targetScore === undefined ? 10 : body.targetScore, 100), matchMinutes: matchLimit(body.matchMinutes === undefined ? 3 : body.matchMinutes, 30), host: 0, members: new Map() }; this.makeWorld(room);
           const member = this.join(room, body); for (const old of this.rooms.values()) this.destroyRoom(old); this.rooms.set(code, room);
@@ -414,7 +417,7 @@ export class Multiplayer {
               room[body.action] = matchLimit(body.value, body.action === 'targetScore' ? 100 : 30);
               this.syncRoom(room);
               break;
-            case 'special-abilities': if (typeof body.enabled !== 'boolean') throw problem(400, 'Choose abilities on or off.'); room.specialAbilities = body.enabled; this.syncRoom(room); break; case 'start': if (!['ready', 'finished'].includes(room.core.status.phase)) throw problem(409, 'Match already running.'); this.makeWorld(room); room.core.start(); break; case 'refuse-start': this.refusePlayRequest(member, body.requestId); break; case 'reset': this.makeWorld(room); break; case 'arena': if (!Number.isInteger(body.arena) || body.arena < 0 || body.arena > 1) throw problem(400, 'Choose an arena.'); room.arena = body.arena; this.makeWorld(room); break; case 'bots': if (!['ready', 'finished'].includes(room.core.status.phase)) throw problem(409, 'Change bots before the next match.'); if (!Number.isInteger(body.bots) || body.bots < 0 || body.bots > 6 - room.members.size) throw problem(400, 'Too many bots for this room.'); room.botCount = body.bots; this.makeWorld(room); break; default: throw problem(400, 'Unknown match control.'); }
+            case 'special-abilities': if (typeof body.enabled !== 'boolean') throw problem(400, 'Choose abilities on or off.'); room.specialAbilities = body.enabled; this.syncRoom(room); break; case 'start': if (!['ready', 'finished'].includes(room.core.status.phase)) throw problem(409, 'Match already running.'); this.makeWorld(room); room.core.start(); break; case 'refuse-start': this.refusePlayRequest(member, body.requestId); break; case 'reset': this.makeWorld(room); break; case 'arena': if (!Number.isInteger(body.arena) || body.arena < 0 || body.arena >= arenas.length) throw problem(400, 'Choose an arena.'); if (room.members.size > arenaLimit(body.arena)) throw problem(409, `${arenas[body.arena].name} supports up to ${arenaLimit(body.arena)} players.`); room.arena = body.arena; this.makeWorld(room); break; case 'bots': if (!['ready', 'finished'].includes(room.core.status.phase)) throw problem(409, 'Change bots before the next match.'); if (!Number.isInteger(body.bots) || body.bots < 0 || body.bots > arenaLimit(room.arena) - room.members.size) throw problem(400, 'Too many bots for this room.'); room.botCount = body.bots; this.makeWorld(room); break; default: throw problem(400, 'Unknown match control.'); }
           this.broadcast(room); json(200, { ok: true }); break;
         }
         case '/api/kick': {

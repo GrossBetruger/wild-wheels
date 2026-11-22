@@ -1,4 +1,4 @@
-import { arenas, somersaultPose } from '../gameplay/combat.js';
+import { arenas, inArenaBounds, somersaultPose } from '../gameplay/combat.js';
 import { drivers } from '../gameplay/engine.js';
 
 function visibleBody(arena,eye,actor,height){
@@ -6,7 +6,7 @@ function visibleBody(arena,eye,actor,height){
   for(let step=1;step<distance;step+=2){
     const t=step/distance,x=eye[0]+(actor.wx-eye[0])*t,z=eye[2]+(actor.wz-eye[2])*t,y=eye[1]+(height-eye[1])*t;
     if(y<6&&arena.blocks.some(([bx,bz,w,d])=>Math.abs(x-bx)<w/2&&Math.abs(z-bz)<d/2))return false;
-    if(y<5&&(Math.abs(x)>96||Math.abs(z)>96))return false;
+    if(y<5&&!inArenaBounds(arena,x,z,0))return false;
   }
   return true;
 }

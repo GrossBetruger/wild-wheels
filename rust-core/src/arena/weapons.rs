@@ -23,15 +23,15 @@ impl Game{
     pub(super) fn flip(&mut self,id:usize){
         if !self.active(id)||self.actors[id].somersault_cooldown>1e-8{return;}
         if self.global.special_abilities&&self.actors[id].driver==5&&ability_on(id,1){
-            let a=&self.actors[id];let mut seed=(self.global.elapsed*1000000.0)as u64^(a.wx.to_bits().rotate_left(17))^a.wz.to_bits()^((id+1)as u64*7919);
-            for _ in 0..128{seed=seed.wrapping_mul(6364136223846793005).wrapping_add(1);let x=((seed>>32)%17000)as f64/100.0-85.0;seed=seed.wrapping_mul(6364136223846793005).wrapping_add(1);let z=((seed>>32)%17000)as f64/100.0-85.0;if blocked(self.global.arena,x,z,4.0)||self.actors.iter().any(|b|b.id!=id&&!b.inactive&&b.destroyed<=0.0&&distance(x,z,b.wx,b.wz)<8.0){continue;}let a=&mut self.actors[id];self.global.effects.push(Effect{kind:"teleportOut".into(),owner:Some(id),wx:a.wx,wz:a.wz,heading:Some(a.heading),color:Some(a.color.clone()),life:1.35,..Effect::default()});sound(&mut self.global,"teleportOut",id,a.wx,a.wz,None);a.wx=x;a.wz=z;a.speed=0.0;self.global.effects.push(Effect{kind:"teleportIn".into(),owner:Some(id),wx:x,wz:z,heading:Some(a.heading+std::f64::consts::PI),color:Some(a.color.clone()),life:1.35,..Effect::default()});sound(&mut self.global,"teleportIn",id,x,z,None);break;}
+            let a=&self.actors[id];let span=arena_size(self.global.arena)-11.0;let mut seed=(self.global.elapsed*1000000.0)as u64^(a.wx.to_bits().rotate_left(17))^a.wz.to_bits()^((id+1)as u64*7919);
+            for _ in 0..128{seed=seed.wrapping_mul(6364136223846793005).wrapping_add(1);let x=(((seed>>32)%10000)as f64/5000.0-1.0)*span;seed=seed.wrapping_mul(6364136223846793005).wrapping_add(1);let z=(((seed>>32)%10000)as f64/5000.0-1.0)*span;if blocked(self.global.arena,x,z,4.0)||self.actors.iter().any(|b|b.id!=id&&!b.inactive&&b.destroyed<=0.0&&distance(x,z,b.wx,b.wz)<8.0){continue;}let a=&mut self.actors[id];self.global.effects.push(Effect{kind:"teleportOut".into(),owner:Some(id),wx:a.wx,wz:a.wz,heading:Some(a.heading),color:Some(a.color.clone()),life:1.35,..Effect::default()});sound(&mut self.global,"teleportOut",id,a.wx,a.wz,None);a.wx=x;a.wz=z;a.speed=0.0;self.global.effects.push(Effect{kind:"teleportIn".into(),owner:Some(id),wx:x,wz:z,heading:Some(a.heading+std::f64::consts::PI),color:Some(a.color.clone()),life:1.35,..Effect::default()});sound(&mut self.global,"teleportIn",id,x,z,None);break;}
         }
         let a=&mut self.actors[id];a.somersault_camera_start=a.camera_heading;a.heading+=std::f64::consts::PI;a.motion_heading=a.heading;a.drift=0.0;a.was_drifting=false;a.drift_trail=None;a.somersault=0.55;a.somersault_cooldown=1.0;
     }
     pub(super) fn bomb(&mut self,id:usize,action:&Action){
         if self.global.finish_countdown.is_some()&&!self.human_controlled(id){return;}
         let a=&mut self.actors[id];let kind=action.bomb_kind.as_deref().unwrap_or("abomb");
-        if !a.bomber||a.inactive||a.afk||self.global.phase!="racing"||!matches!(kind,"stink"|"abomb")||action.wx.abs()>96.0||action.wz.abs()>96.0{return;}
+        if !a.bomber||a.inactive||a.afk||self.global.phase!="racing"||!matches!(kind,"stink"|"abomb")||!in_bounds(self.global.arena,action.wx,action.wz){return;}
         let ammo=match kind{"stink"=>&mut a.stink_ammo,_=>&mut a.bomb_ammo};if *ammo==0{return;}*ammo-=1;
         let g=&mut self.global;g.bomb_sequence+=1;g.bombs.push(Bomb{id:g.bomb_sequence,kind:kind.into(),owner:id,wx:action.wx,wz:action.wz,color:a.color.clone(),action_id:action.id,..Bomb::default()});
         sound(g,"bombDrop",id,action.wx,action.wz,action.id.map(|id|format!("action:{}",id)));

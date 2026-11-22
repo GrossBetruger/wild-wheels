@@ -6,7 +6,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::sync::Notify;
-use wild_wheels_core::{Action, Frame, Input, Move, NativeArena, Told, PLAYER_COLORS};
+use wild_wheels_core::{arena_max_players, in_bounds, Action, Frame, Input, Move, NativeArena, Told, ARENA_COUNT, PLAYER_COLORS};
 /// Set once, in rust-core: `wild_wheels_core::MAX_PLAYERS`.
 pub const CAPACITY: usize = wild_wheels_core::MAX_PLAYERS;
 static FULL: std::sync::LazyLock<&'static str> =
@@ -194,11 +194,14 @@ impl Room {
     pub fn count(&self) -> usize {
         self.members.iter().flatten().count()
     }
+    pub fn arena_capacity(&self) -> usize {
+        arena_max_players(self.arena).map_or(CAPACITY, |cap| cap.min(CAPACITY))
+    }
     pub fn config(&self) -> Value {
         json!({"maxPlayers":CAPACITY,"code":"00","arena":self.arena,"bots":self.bots,"host":null,"dedicated":true,"epoch":self.epoch,"seed":self.seed,"specialAbilities":self.abilities,"targetScore":self.target_score,"matchMinutes":self.match_minutes,"players":self.members.iter().enumerate().filter_map(|(id,p)|p.as_ref().map(|p|json!({"id":id,"name":p.name,"driver":p.driver,"color":p.color,"role":p.role,"afk":p.afk}))).collect::<Vec<_>>()})
     }
     pub fn sync(&mut self) {
-        self.bots = self.bots.min(CAPACITY - self.count());
+        self.bots = self.bots.min(self.arena_capacity().saturating_sub(self.count()));
         self.core
             .configure(self.config())
             .expect("validated room configuration");
@@ -266,6 +269,15 @@ impl Room {
             Some(Value::Null) | None => None,
             Some(v) => Some(driver(v)?),
         };
+        if self.count() >= self.arena_capacity() {
+            return Err((
+                409,
+                match arena_max_players(self.arena) {
+                    Some(4) => "Octagon is full (4 players).",
+                    _ => *FULL,
+                },
+            ));
+        }
         let Some(id) = self.members.iter().position(Option::is_none) else {
             return Err((409, *FULL));
         };
@@ -468,17 +480,22 @@ impl Room {
                         self.core.start();
                     }
                     "arena" => {
-                        self.arena = b["arena"]
+                        let next = b["arena"]
                             .as_u64()
-                            .filter(|&a| a < 2)
+                            .filter(|&a| (a as usize) < ARENA_COUNT)
                             .ok_or((400, "Choose an arena."))?
                             as usize;
+                        if arena_max_players(next).is_some_and(|cap| self.count() > cap) {
+                            return Err((409, "Octagon supports up to 4 players."));
+                        }
+                        self.arena = next;
+                        self.bots = self.bots.min(self.arena_capacity().saturating_sub(self.count()));
                         self.reset();
                     }
                     "bots" => {
                         self.bots = b["bots"]
                             .as_u64()
-                            .filter(|&n| n as usize <= CAPACITY - self.count())
+                            .filter(|&n| n as usize <= self.arena_capacity().saturating_sub(self.count()))
                             .ok_or((400, "Too many bots for this room."))?
                             as usize;
                         self.reset();
@@ -573,8 +590,7 @@ impl Room {
                 return bad("Invalid weapon.");
             }
             if a.kind == "bomb"
-                && (a.wx.abs() > 96.0
-                    || a.wz.abs() > 96.0
+                && (!in_bounds(self.arena, a.wx, a.wz)
                     || a.bomb_kind
                         .as_ref()
                         .is_some_and(|s| !matches!(s.as_str(), "stink" | "abomb")))
@@ -1061,5 +1077,31 @@ mod automatic_color_tests {
         }
         room.control(0, "/api/control", &json!({"action":"start"})).unwrap();
         assert_eq!(room.core.player_color(0).unwrap(), color);
+    }
+
+    #[test]
+    fn octagon_enforces_four_player_limit_and_clamps_bots() {
+        let mut room = Room::new(0, 5);
+        for i in 0..3 {
+            room.join(&json!({"name":format!("P{i}"),"driver":i})).unwrap();
+        }
+        room.control(0, "/api/control", &json!({"action":"arena","arena":2})).unwrap();
+        assert_eq!(room.arena, 2);
+        assert_eq!(room.bots, 1, "3 humans + 1 bot = 4 max on Octagon");
+        assert!(room.control(0, "/api/control", &json!({"action":"bots","bots":2})).is_err());
+        room.join(&json!({"name":"P3","driver":3})).unwrap();
+        assert_eq!(room.bots, 0, "4th human replaces the last bot slot");
+        assert_eq!(
+            room.join(&json!({"name":"P4","driver":4})).unwrap_err().0,
+            409,
+            "5th human must be rejected while room is on Octagon"
+        );
+        // Switching back to Scrapyard lets a 5th human join, then switching to Octagon is rejected.
+        room.control(0, "/api/control", &json!({"action":"arena","arena":0})).unwrap();
+        room.join(&json!({"name":"P4","driver":4})).unwrap();
+        assert_eq!(
+            room.control(0, "/api/control", &json!({"action":"arena","arena":2})).unwrap_err().0,
+            409
+        );
     }
 }

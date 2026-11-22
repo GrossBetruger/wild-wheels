@@ -1,7 +1,7 @@
 export const BICYCLE_LANDING=1.2;
 export const BICYCLE_LIFETIME=BICYCLE_LANDING+4;
 export function bicycleLanding(arena,x,z,heading){
-  const blocked=(x,z)=>Math.abs(x)>arena.size-1||Math.abs(z)>arena.size-1||arena.blocks.some(([bx,bz,w,d])=>Math.abs(x-bx)<w/2+1&&Math.abs(z-bz)<d/2+1);
+  const limit=arena.size-1,blocked=(x,z)=>Math.abs(x)>limit||Math.abs(z)>limit||(arena.shape==='octagon'&&(Math.abs(x)+Math.abs(z))*Math.SQRT1_2>limit)||arena.blocks.some(([bx,bz,w,d])=>Math.abs(x-bx)<w/2+1&&Math.abs(z-bz)<d/2+1);
   for(const reach of [7,5,3,0]){const wx=x+Math.sin(heading)*reach,wz=z+Math.cos(heading)*reach;if(!blocked(wx,wz))return {wx,wz};}return {wx:x,wz:z};
 }
 export function bicyclePose(supply){

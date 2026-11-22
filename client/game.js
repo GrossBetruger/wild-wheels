@@ -9,7 +9,7 @@ import { Renderer } from './renderer.js';
 import { RaceAudio } from '../audio/audio.js';
 import { sampleTrack, branches } from '../gameplay/track.js';
 import { useSpecial, abilityNames, frozen, auditTarget, karmaTarget } from '../gameplay/special-abilities.js';
-import { createBattle, battleActive, tickBattle, fireBattle, releaseChaff, useBattleTurbo, somersaultBattle, arenas, standings, incomingMissiles, VULCAN_DURATION, MAX_HEALTH, equipBomber, dropBomb, BOMB_RECHARGE, recoveryInterval, hedgehogRecoveryInterval } from '../gameplay/combat.js';
+import { createBattle, battleActive, tickBattle, fireBattle, releaseChaff, useBattleTurbo, somersaultBattle, arenas, inArenaBounds, standings, incomingMissiles, VULCAN_DURATION, MAX_HEALTH, equipBomber, dropBomb, BOMB_RECHARGE, recoveryInterval, hedgehogRecoveryInterval } from '../gameplay/combat.js';
 import { NetworkGame } from '../networking/network.js';
 import { ordinal, matchResults, battleTieNotice, bicycleResults } from '../ui/results.js';
 import { KillCelebration, ChaffNotice, RingOfFireNotice } from '../ui/combat-notices.js';
@@ -86,7 +86,7 @@ for (const [button, kind, title, count, refill] of [[bombChoice, 'abomb', 'A-bom
 mobileHint.textContent = 'Tap to bomb · Drag to explore · + / − to zoom.'; mobilePanel.append(bombHud, mobileHint, mobileScreenButton); racePanel.append(mobilePanel);
 let bomberPointer = null;
 function dropAt(clientX, clientY) {
-  const target = bombTarget(clientX, clientY, canvas.getBoundingClientRect(), arenas[race.arena].size, renderer.bomberView, renderer.bomberFocus, renderer.bomberZoom ?? 1); if (!target) return;
+  const target = bombTarget(clientX, clientY, canvas.getBoundingClientRect(), arenas[race.arena].size, renderer.bomberView, renderer.bomberFocus, renderer.bomberZoom ?? 1); if (!target || !inArenaBounds(arenas[race.arena], target.wx, target.wz, 0)) return;
   target.kind = bomberWeapon; const dropped = network.active ? network.action('bomb', target) : dropBomb(race, race, target);
   if (!dropped) { mobileHint.textContent = 'Rearming… A-bombs every 10s, stinkbombs in between.'; return; }
   mobileHint.textContent = 'Bomb away! Tap another target when ready.';
@@ -118,7 +118,7 @@ for (const [value, label] of [['race', '🏁 GRAND PRIX'], ['combat', mobile ? '
 document.querySelector('.game-layout').before(modeSwitch);
 const mapSwitch = document.createElement('nav'); mapSwitch.className = 'map-switch'; mapSwitch.setAttribute('aria-label', 'Choose map');
 const mapCaption = document.createElement('strong'); mapCaption.textContent = 'CHOOSE MAP'; mapSwitch.append(mapCaption);
-const mapButtons = Array.from({ length: 2 }, (_, index) => { const button = document.createElement('button'); button.id = `map-choice-${index}`; button.type = 'button'; button.onclick = () => chooseMap(index); mapSwitch.append(button); return button; });
+const mapButtons = Array.from({ length: Math.max(arenas.length, tracks.length) }, (_, index) => { const button = document.createElement('button'); button.id = `map-choice-${index}`; button.type = 'button'; button.onclick = () => chooseMap(index); mapSwitch.append(button); return button; });
 const mapHelp = document.createElement('small'); mapHelp.textContent = 'Choosing another map starts a fresh game.'; mapSwitch.append(mapHelp); modeSwitch.after(mapSwitch);
 const limitInputs = [];
 const limitsRow = document.createElement('div');
@@ -282,7 +282,7 @@ const nightmareTitle=document.createElement('strong'),nightmareState=document.cr
 const abilityAnnouncements=new AbilityAnnouncements(document.querySelector('.viewport'));
 const ringNotice=new RingOfFireNotice(),ringBanner=document.createElement('div');ringBanner.id='ring-of-fire-announcement';ringBanner.className='ring-of-fire-announcement hidden';ringBanner.setAttribute('role','status');ringBanner.setAttribute('aria-atomic','true');const ringTitle=document.createElement('strong'),ringHelp=document.createElement('span');ringTitle.textContent='RING OF FIRE';ringHelp.textContent='KEEP TURNING · LET IT BURN';ringBanner.append(ringTitle,ringHelp);document.querySelector('.viewport').append(ringBanner);
 const chaffNotice=new ChaffNotice(),avertedBanner=document.createElement('div');avertedBanner.id='averted-notice';avertedBanner.className='incoming-warning averted-notice hidden';avertedBanner.setAttribute('role','status');avertedBanner.setAttribute('aria-atomic','true');const avertedTitle=document.createElement('strong'),avertedHelp=document.createElement('span');avertedTitle.textContent='✓ MISSILE AVERTED';avertedHelp.textContent='CHAFF BROKE THE LOCK';avertedBanner.append(avertedTitle,avertedHelp);document.querySelector('.viewport').append(avertedBanner);
-function updateMapLabels(){const maps=mode==='combat'?arenas:tracks,info=maps[track];$('track-name').textContent=info.name;$('track-label').textContent=info.name.toUpperCase();$('track-desc').textContent=info.desc;$('difficulty').textContent=mode==='combat'?'MELEE':info.difficulty;document.querySelector('.race-meta').textContent=mode==='combat'?`${race.targetScore} KILLS · ${race.duration / 60} MIN · 6 FIGHTERS`:'3 LAPS · 6 RACERS';document.querySelector('.race-bar .divider').nextElementSibling.textContent=mode==='combat'?'DEATHMATCH':'GRAND PRIX';for(const button of modeSwitch.children)button.setAttribute('aria-pressed',String(button.id===`mode-${mode}`));for(const [index,button] of mapButtons.entries()){button.textContent=maps[index].name;button.setAttribute('aria-pressed',String(index===track));}const next=maps[(track+1)%maps.length];$('change-track').textContent='NEXT MAP →';$('change-track').setAttribute('aria-label',`Switch to ${next.name}`);}
+function updateMapLabels(){const maps=mode==='combat'?arenas:tracks,info=maps[track];$('track-name').textContent=info.name;$('track-label').textContent=info.name.toUpperCase();$('track-desc').textContent=info.desc;$('difficulty').textContent=mode==='combat'?'MELEE':info.difficulty;document.querySelector('.race-meta').textContent=mode==='combat'?`${race.targetScore} KILLS · ${race.duration / 60} MIN · ${info.maxPlayers ?? 6} FIGHTERS`:'3 LAPS · 6 RACERS';document.querySelector('.race-bar .divider').nextElementSibling.textContent=mode==='combat'?'DEATHMATCH':'GRAND PRIX';for(const button of modeSwitch.children)button.setAttribute('aria-pressed',String(button.id===`mode-${mode}`));for(const [index,button] of mapButtons.entries()){const visible=index<maps.length;button.classList.toggle('hidden',!visible);if(visible){button.textContent=maps[index].name;button.setAttribute('aria-pressed',String(index===track));}}const next=maps[(track+1)%maps.length];$('change-track').textContent='NEXT MAP →';$('change-track').setAttribute('aria-label',`Switch to ${next.name}`);}
 const ammoRack=document.createElement('div');ammoRack.className='ammo-rack';const ammoCards=new Map();
 for(const [type,icon,label] of [['hedgehog','🦔','HEDGEHOGS'],['missile','🚀','MISSILES'],['boost','ϟ','TURBOS']]){
   const button=document.createElement('button');button.className='ammo-card';button.id=`ammo-${type}`;button.type='button';
@@ -315,8 +315,18 @@ function mapPoint(t, route = 0) { const p = sampleTrack(t / (Math.PI * 2), 0, ro
 function drawMap() {
   map.clearRect(0, 0, 280, 126);
   if (mode === 'combat') {
-    map.fillStyle = '#e5e0d9'; map.fillRect(78, 3, 124, 120); map.fillStyle = '#92839d'; for (const [x, z, w, d] of arenas[track].blocks) map.fillRect(140 + (x - w / 2) * .6, 63 + (z - d / 2) * .6, w * .6, d * .6);
-    for (const actor of [race, ...race.bots]) { if (actor.bomber || actor.destroyed || actor.afk) continue; map.fillStyle = actor.color; map.beginPath(); map.arc(140 + actor.wx * .6, 63 + actor.wz * .6, actor === race ? 4 : 3, 0, 7); map.fill(); } return;
+    const arena = arenas[track], scale = arena.shape === 'octagon' ? 58 / arena.size : .6;
+    if (arena.shape === 'octagon') {
+      const r = arena.size * scale, c = r * (Math.SQRT2 - 1);
+      map.beginPath();
+      for (const [i, [ox, oz]] of [[-c, -r], [c, -r], [r, -c], [r, c], [c, r], [-c, r], [-r, c], [-r, -c]].entries()) {
+        if (i === 0) map.moveTo(140 + ox, 63 + oz); else map.lineTo(140 + ox, 63 + oz);
+      }
+      map.closePath(); map.fillStyle = '#e5e0d9'; map.fill(); map.strokeStyle = arena.wall; map.lineWidth = 3; map.stroke();
+    } else {
+      map.fillStyle = '#e5e0d9'; map.fillRect(78, 3, 124, 120); map.fillStyle = '#92839d'; for (const [x, z, w, d] of arena.blocks) map.fillRect(140 + (x - w / 2) * scale, 63 + (z - d / 2) * scale, w * scale, d * scale);
+    }
+    for (const actor of [race, ...race.bots]) { if (actor.bomber || actor.inactive || actor.destroyed || actor.afk) continue; map.fillStyle = actor.color; map.beginPath(); map.arc(140 + actor.wx * scale, 63 + actor.wz * scale, actor === race ? 4 : 3, 0, 7); map.fill(); } return;
   }
   map.beginPath(); for (let i = 0; i <= 120; i++) { const [x, y] = mapPoint(i / 120 * Math.PI * 2); if (i === 0) map.moveTo(x, y); if (i > 0) map.lineTo(x, y); } map.closePath(); map.strokeStyle = '#ded9cf'; map.lineWidth = 17; map.stroke(); map.strokeStyle = '#faf8f0'; map.lineWidth = 10; map.stroke();
   for (const [i, branch] of branches.entries()) { map.beginPath(); for (let j = 0; j <= 40; j++) { const [x, y] = mapPoint((branch.start + (branch.end - branch.start) * j / 40) * Math.PI * 2, i + 1); if (j === 0) map.moveTo(x, y); if (j > 0) map.lineTo(x, y); } map.strokeStyle = '#c6a258'; map.lineWidth = 4; map.stroke(); }
