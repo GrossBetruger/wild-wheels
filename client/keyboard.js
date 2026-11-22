@@ -2,14 +2,14 @@
 const physicalControls = new Map([
   ['KeyW', 'w'], ['KeyA', 'a'], ['KeyS', 's'], ['KeyD', 'd'],
   ['KeyQ', 'q'], ['KeyX', 'x'], ['KeyC', 'c'], ['KeyZ', 'z'],
-  ['KeyF', 'f'], ['KeyP', 'p'],
+  ['KeyF', 'f'], ['KeyP', 'p'], ['KeyV', 'v'],
 ]);
 
 // Fallback for keyboard events that do not provide a physical key code.
 const hebrewControls = new Map([
   ["'", 'w'], ['ש', 'a'], ['ד', 's'], ['ג', 'd'],
   ['/', 'q'], ['ס', 'x'], ['ב', 'c'], ['ז', 'z'],
-  ['כ', 'f'], ['פ', 'p'],
+  ['כ', 'f'], ['פ', 'p'], ['ה', 'v'],
 ]);
 
 export function gameKey(event) {

@@ -6,7 +6,7 @@ import {keyMask} from '../../gameplay/arena-core.js';
 const controls = [
   ['KeyW', "'", 'w'], ['KeyA', 'ש', 'a'], ['KeyS', 'ד', 's'], ['KeyD', 'ג', 'd'],
   ['KeyQ', '/', 'q'], ['KeyX', 'ס', 'x'], ['KeyC', 'ב', 'c'], ['KeyZ', 'ז', 'z'],
-  ['KeyF', 'כ', 'f'], ['KeyP', 'פ', 'p'],
+  ['KeyF', 'כ', 'f'], ['KeyP', 'פ', 'p'], ['KeyV', 'ה', 'v'],
 ];
 
 test('English and Hebrew layouts produce the same controls, including shifted letters', () => {
