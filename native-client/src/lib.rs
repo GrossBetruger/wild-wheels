@@ -1,4 +1,5 @@
 mod app;
+mod arena_mesh;
 mod bench;
 mod chat;
 mod colors;

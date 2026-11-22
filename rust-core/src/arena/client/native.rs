@@ -77,7 +77,8 @@ pub struct ClientView<'a> {
     pub multiplayer: bool,
     pub kill_feed: &'a [Kill],
     pub last_karma: Option<&'a KarmaEvent>,
-    pub blocks: &'static [[f64; 4]],
+    pub arena_def: &'a ArenaDef,
+    pub blocks: &'a [[f64; 4]],
     pub movement_ack: i64,
     pub action_ack: i64,
 }
@@ -229,7 +230,8 @@ impl NativeClient {
             multiplayer: g.multiplayer,
             kill_feed: &g.kill_feed,
             last_karma: g.last_karma.as_ref(),
-            blocks: super::super::blocks(g.arena),
+            arena_def: &game.arena_def,
+            blocks: &game.arena_def.blocks,
             movement_ack: game.movement_ack[you],
             action_ack: game.action_ack[you],
         }
@@ -410,6 +412,56 @@ mod tests {
         assert!(karma.swapped);
         assert_eq!(karma.caster, 0);
         assert_eq!(karma.victim, 1);
+    }
+    #[test]
+    fn client_decodes_and_predicts_unknown_server_defined_arena_without_rebuild() {
+        let mut defs = default_arenas();
+        let custom = ArenaDef {
+            name: "Hex Dome".into(),
+            desc: "Server-only custom arena.".into(),
+            size: 48.0,
+            shape: "octagon".into(),
+            max_players: Some(4),
+            ground: "#708090".into(),
+            wall: "#cc5544".into(),
+            sky: "#ddeeff".into(),
+            blocks: vec![[0.0, 0.0, 12.0, 12.0]],
+        };
+        defs.push(custom.clone());
+        set_arena_defs(defs).unwrap();
+        let mut server = NativeArena::new(json!({"maxPlayers":8,"code":"00","arena":3,"bots":1,"dedicated":true,"host":null,"epoch":1,"seed":1,"players":[{"id":0,"name":"P0","driver":0,"role":"driver"}]})).unwrap();
+        server.start();
+        for _ in 0..241 {
+            server
+                .step(Frame {
+                    dt: 1.0 / 60.0,
+                    inputs: vec![],
+                })
+                .unwrap();
+        }
+        let packet = server.packet(0);
+        // Reset client-side registry back to built-in defaults (simulating an older client binary).
+        set_arena_defs(default_arenas()).unwrap();
+        let mut client = NativeClient::from_packet(&packet, 0.0).unwrap();
+        assert_eq!(client.view().arena, 3);
+        assert_eq!(client.view().arena_def, &custom);
+        assert_eq!(client.view().blocks, &[[0.0, 0.0, 12.0, 12.0]]);
+        for i in 1..=10 {
+            client
+                .advance(
+                    1.0 / 60.0,
+                    ClientInput {
+                        keys: 1,
+                        steer: None,
+                    },
+                    i as f64 / 60.0,
+                )
+                .unwrap();
+        }
+        let p = client.view().player;
+        assert!(custom.in_bounds(p.wx, p.wz, 2.0));
+        // Restore defaults for other tests.
+        set_arena_defs(default_arenas()).unwrap();
     }
     #[test]
     fn invalid_packets_and_non_finite_clocks_are_errors() {

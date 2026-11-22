@@ -118,8 +118,21 @@ for (const [value, label] of [['race', '🏁 GRAND PRIX'], ['combat', mobile ? '
 document.querySelector('.game-layout').before(modeSwitch);
 const mapSwitch = document.createElement('nav'); mapSwitch.className = 'map-switch'; mapSwitch.setAttribute('aria-label', 'Choose map');
 const mapCaption = document.createElement('strong'); mapCaption.textContent = 'CHOOSE MAP'; mapSwitch.append(mapCaption);
-const mapButtons = Array.from({ length: Math.max(arenas.length, tracks.length) }, (_, index) => { const button = document.createElement('button'); button.id = `map-choice-${index}`; button.type = 'button'; button.onclick = () => chooseMap(index); mapSwitch.append(button); return button; });
+const mapButtons = [];
+function ensureMapButtons() {
+  const needed = Math.max(arenas.length, tracks.length);
+  while (mapButtons.length < needed) {
+    const index = mapButtons.length;
+    const button = document.createElement('button');
+    button.id = `map-choice-${index}`;
+    button.type = 'button';
+    button.onclick = () => chooseMap(index);
+    mapHelp.before(button);
+    mapButtons.push(button);
+  }
+}
 const mapHelp = document.createElement('small'); mapHelp.textContent = 'Choosing another map starts a fresh game.'; mapSwitch.append(mapHelp); modeSwitch.after(mapSwitch);
+ensureMapButtons();
 const limitInputs = [];
 const limitsRow = document.createElement('div');
 limitsRow.className = 'match-limits';
@@ -147,7 +160,7 @@ for (const [field, caption, maximum] of [['targetScore', 'Kills to win', 100], [
 function resetMap() { race = newGame(); lastPhase = ''; lastCount = -1; keys.clear(); updateMapLabels(); }
 function chooseMap(index) { if (dedicated && !network.active) return; if (index === track) return; if (network.active) { if (network.canConfigure) network.control('arena', index); return; } track = index; selectedMaps[mode] = index; resetMap(); }
 const network = new NetworkGame({
-  anchor: modeSwitch, limits: () => soloLimits, keys, role: mobile ? 'bomber' : 'driver', driver: () => selected, arena: () => track, unlock: () => audio.unlock(), sound: type => audio.event(type), isAudioEnabled: () => audio.enabled, getAudioContext: () => audio.context, onState: world => {
+  anchor: modeSwitch, limits: () => soloLimits, keys, role: mobile ? 'bomber' : 'driver', driver: () => selected, arena: () => track, onArenas: () => { ensureMapButtons(); updateMapLabels(); }, unlock: () => audio.unlock(), sound: type => audio.event(type), isAudioEnabled: () => audio.enabled, getAudioContext: () => audio.context, onState: world => {
     const changed = mode !== 'combat' || track !== world.arena;
     if (race.soundEpoch !== world.soundEpoch) bomberWeapon = 'abomb';
     if (world.phase === "ready" && (world.targetScore !== race.targetScore || world.duration !== race.duration)) lastPhase = "";

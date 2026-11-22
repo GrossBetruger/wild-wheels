@@ -15,7 +15,7 @@ impl Serialize for GlobalMeta<'_>{fn serialize<S:Serializer>(&self,serializer:S)
     macro_rules! e{($key:literal,$value:expr)=>{map.serialize_entry($key,&$value)?;};}
     e!("locusts",g.locusts);e!("locustSequence",g.locust_sequence);e!("mode",g.mode);e!("phase",g.phase);e!("arena",g.arena);e!("elapsed",g.elapsed);e!("countdown",g.countdown);e!("duration",g.duration);e!("targetScore",g.target_score);e!("finishTime",g.finish_time);e!("finishCountdown",g.finish_countdown);e!("winner",g.winner);e!("multiplayer",g.multiplayer);e!("soundEpoch",g.sound_epoch);e!("soundSequence",g.sound_sequence);e!("shake",g.shake);e!("projectileSequence",g.projectile_sequence);e!("bombSequence",g.bomb_sequence);e!("chaffSequence",g.chaff_sequence);e!("killSequence",g.kill_sequence);
     e!("specialAbilities",g.special_abilities);e!("timeStop",g.time_stop);e!("timeOwner",g.time_owner);
-    e!("host",g.host);e!("bombs",g.bombs);e!("chaffClouds",g.chaff_clouds);e!("stinkClouds",g.stink_clouds);e!("supplies",g.supplies);e!("effects",g.effects);e!("voices",g.voices);e!("killFeed",self.game.viewer_feed(self.viewer));if let Some(karma)=&g.last_karma{e!("lastKarma",karma);}
+    e!("host",g.host);e!("bombs",g.bombs);e!("chaffClouds",g.chaff_clouds);e!("stinkClouds",g.stink_clouds);e!("supplies",g.supplies);e!("effects",g.effects);e!("voices",g.voices);e!("killFeed",self.game.viewer_feed(self.viewer));if let Some(karma)=&g.last_karma{e!("lastKarma",karma);}if !is_default_arena(g.arena,&self.game.arena_def){e!("arenaDef",&self.game.arena_def);}
     let events=self.game.viewer_events(self.viewer);
     e!("events",events);e!("skids",[0u8;0]);e!("driftParticles",[0u8;0]);e!("projectiles",g.projectiles.iter().map(ShotMeta).collect::<Vec<_>>());map.end()
 }}
@@ -78,7 +78,10 @@ pub(super) fn decode_packet(input:&[u8])->Result<(Game,usize),()>{
     let Received{layout,state}=serde_json::from_slice::<Received>(&input[16..16+meta]).map_err(|_|())?;
     let capacity=state.room.get("maxPlayers").and_then(|v|v.as_u64()).unwrap_or(6) as usize;
     if !super::valid_capacity(capacity){return Err(());}
-    if layout.skids>512||layout.particles>512||layout.trails.len()>512||layout.trails.iter().any(|&n|n>24)||layout.skids*6+layout.particles*11+layout.trails.iter().sum::<usize>()*3!=n||state.kind!="state"||state.wire_version!=3||state.you>=capacity||!state.time.is_finite()||state.world.player.id!=state.you||state.world.global.arena>=ARENA_COUNT{return Err(());}
+    let valid_arena = state.world.global.arena < MAX_ARENAS
+        && (state.world.global.arena_def.as_ref().is_some_and(ArenaDef::valid)
+            || state.world.global.arena < arena_count());
+    if layout.skids>512||layout.particles>512||layout.trails.len()>512||layout.trails.iter().any(|&n|n>24)||layout.skids*6+layout.particles*11+layout.trails.iter().sum::<usize>()*3!=n||state.kind!="state"||state.wire_version!=3||state.you>=capacity||!state.time.is_finite()||state.world.player.id!=state.you||!valid_arena{return Err(());}
     let Seed{mut global,player,bots}=state.world;
     if !global.skids.is_empty()||!global.drift_particles.is_empty()||global.projectiles.len()!=layout.trails.len()||global.projectiles.iter().any(|s|!s.trail.is_empty()){return Err(());}
     let mut actors:Vec<_>=(0..capacity).map(|id|Actor{id,inactive:true,destroyed:1e9,..Actor::default()}).collect();let mut seen=[false;MAX_PLAYERS];

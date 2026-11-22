@@ -39,6 +39,8 @@ pub enum Event {
     ColorResult(Result<String, String>),
     /// The all-time leaderboard, best first: each name with its rating, wins and games played.
     Leaderboard(Vec<(String, f64, u64, u64)>),
+    /// Server-published arena catalog from `/api/info`, keeping new maps server-side only.
+    Arenas(Vec<wild_wheels_core::ArenaDef>),
     Packet(Vec<u8>),
     Error(String),
 }
@@ -285,6 +287,12 @@ async fn connect(
     let info = body(client.get(config.origin.join("api/info")?).send().await?).await?;
     if info["dedicated"] != true {
         return Err("Only the dedicated Rust server is supported".into());
+    }
+    if let Some(raw_arenas) = info.get("arenas")
+        && let Ok(defs) = serde_json::from_value::<Vec<wild_wheels_core::ArenaDef>>(raw_arenas.clone())
+        && wild_wheels_core::set_arena_defs(defs.clone()).is_ok()
+    {
+        let _ = events.try_send(Event::Arenas(defs));
     }
     let mut response = None;
     if let Some(identity) = store.get(origin) {

@@ -30,7 +30,7 @@ fn default_capacity()->usize{6}
 impl Room {
     pub(super) fn valid(&self)->bool {
         if !(1..=100).contains(&self.target_score) || !(1..=30).contains(&self.match_minutes) {return false;}
-        if self.code.len()!=2||!self.code.bytes().all(|b|b.is_ascii_digit())||!super::valid_capacity(self.max_players)||self.arena>=ARENA_COUNT||self.players.len()>self.max_players||self.bots>self.max_players-self.players.len() {return false;}
+        if self.code.len()!=2||!self.code.bytes().all(|b|b.is_ascii_digit())||!super::valid_capacity(self.max_players)||self.arena>=arena_count()||self.players.len()>self.max_players||self.bots>self.max_players-self.players.len() {return false;}
         if arena_max_players(self.arena).is_some_and(|cap| self.players.len() + self.bots > cap) { return false; }
         match (self.dedicated,self.host){
             (true,None)=>{if self.start_request.is_some(){return false;}},

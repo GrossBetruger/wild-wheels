@@ -83,6 +83,7 @@ pub struct Globals {
     pub bicycle_sequence:u32,
     pub karma_sequence:u32,
     #[serde(skip_serializing_if="Option::is_none")]pub last_karma:Option<KarmaEvent>,
+    #[serde(skip_serializing_if="Option::is_none")]pub arena_def:Option<super::ArenaDef>,
     #[serde(default="abilities_default")]pub special_abilities:bool,
     pub time_stop:f64,pub time_owner:Option<usize>,
     pub mode:String,pub phase:String,pub arena:usize,pub elapsed:f64,pub countdown:f64,pub duration:f64,pub target_score:f64,
@@ -113,4 +114,4 @@ pub struct Frame { pub dt:f64,pub inputs:Vec<Input> }
 #[derive(Serialize)]
 pub struct View<'a> { #[serde(flatten)]pub global:&'a Globals,#[serde(flatten)]pub player:&'a Actor,pub bots:Vec<&'a Actor> }
 #[derive(Clone)]
-pub struct Game { pub global:Globals,pub actors:Vec<Actor>,pub input_ack:[i64;super::MAX_PLAYERS],pub movement_ack:[i64;super::MAX_PLAYERS],pub action_ack:[i64;super::MAX_PLAYERS],pub accepted_action:[i64;super::MAX_PLAYERS],pub pending:Vec<Vec<Action>>,pub network_time:f64,pub room:BTreeMap<String,Value> }
+pub struct Game { pub global:Globals,pub arena_def:super::ArenaDef,pub actors:Vec<Actor>,pub input_ack:[i64;super::MAX_PLAYERS],pub movement_ack:[i64;super::MAX_PLAYERS],pub action_ack:[i64;super::MAX_PLAYERS],pub accepted_action:[i64;super::MAX_PLAYERS],pub pending:Vec<Vec<Action>>,pub network_time:f64,pub room:BTreeMap<String,Value> }

@@ -44,9 +44,9 @@ export class NetworkGame {
   token=null;state=null;paused=false;sequence=0;actions=[];client=null;rtt=0;lastPing=-Infinity;restoreOnVisible=false;
   // For the problem log: where to report, and when the server was last heard from.
   log=()=>{};lastPacket=0;
-  constructor({anchor,limits=()=>({}),keys,driver,arena,onState,onLeave,unlock,sound=()=>{},isAudioEnabled=()=>true,getAudioContext=()=>null,role='driver'}){
+  constructor({anchor,limits=()=>({}),keys,driver,arena,onState,onLeave,onArenas=()=>{},unlock,sound=()=>{},isAudioEnabled=()=>true,getAudioContext=()=>null,role='driver'}){
     this.preferredColor=savedPlayerColor(document.cookie);this.colorDirty=false;this.colorPending=false;this.colorError='';
-    Object.assign(this,{limits,keys,driver,arena,onState,onLeave,unlock,sound,isAudioEnabled,getAudioContext,role});this.dedicated=document.body.classList.contains('dedicated-server');
+    Object.assign(this,{limits,keys,driver,arena,onState,onLeave,onArenas,unlock,sound,isAudioEnabled,getAudioContext,role});this.dedicated=document.body.classList.contains('dedicated-server');
     this.voice=new VoiceChat({isAudioEnabled:()=>this.isAudioEnabled(),getAudioContext:()=>this.getAudioContext(),onChange:()=>this.updateVoiceUi(),log:(level,event,data)=>this.log(level,event,data)});
     this.panel=document.createElement('section');this.panel.className='network-panel';this.panel.setAttribute('aria-label','Multiplayer arena lobby');
     const title=this.title=document.createElement('strong');title.textContent='PLAY TOGETHER · UP TO 6 PLAYERS';
@@ -283,7 +283,7 @@ export class NetworkGame {
   async refreshInfo(){
     try{
       const response=await fetch('/api/info',{signal:AbortSignal.timeout(2000)});if(!response.ok)return;
-      const info=await response.json();this.dedicated=Boolean(info.dedicated);if(this.dedicated){this.invitation=info.room;this.hostButton.textContent='JOIN SERVER';this.title.textContent='PLAY TOGETHER · UP TO 8 PLAYERS';for(let count=this.botCount.options.length;count<info.maxPlayers;count++){const option=document.createElement('option');option.value=String(count);option.textContent=`${count} BOTS`;this.botCount.append(option);}}this.lan=info.addresses?.[0];this.publicOrigin=info.publicOrigin;this.controlPort=info.controlPort;this.updateShare();
+      const info=await response.json();this.dedicated=Boolean(info.dedicated);if(Array.isArray(info.arenas)&&info.arenas.length){arenas.splice(0,arenas.length,...info.arenas);this.onArenas();}if(this.dedicated){this.invitation=info.room;this.hostButton.textContent='JOIN SERVER';this.title.textContent='PLAY TOGETHER · UP TO 8 PLAYERS';for(let count=this.botCount.options.length;count<info.maxPlayers;count++){const option=document.createElement('option');option.value=String(count);option.textContent=`${count} BOTS`;this.botCount.append(option);}}this.lan=info.addresses?.[0];this.publicOrigin=info.publicOrigin;this.controlPort=info.controlPort;this.updateShare();
     }catch{}
   }
   updateShare(){

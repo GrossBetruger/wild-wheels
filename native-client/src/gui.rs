@@ -530,8 +530,14 @@ pub fn draw(
             menu.server, menu.name, menu.field, menu.driver, menu.notice, menu.color
         ),
         (Screen::Lobby, Some(view)) => format!(
-            "lobby|{}|{}|{}|{}|{}|{}|{:?}|{}|{}|{}|{}|{:?}|{}|{}|{:?}|{:?}",
+            "lobby|{}|{}|{}|{}|{}|{}|{}|{:?}|{}|{}|{}|{}|{:?}|{}|{}|{:?}|{:?}",
             view.arena,
+            session
+                .arenas
+                .iter()
+                .map(|a| a.name.as_str())
+                .collect::<Vec<_>>()
+                .join(","),
             view.actors
                 .iter()
                 .filter(|a| !a.inactive)
@@ -722,17 +728,35 @@ pub fn draw(
             ui.text(panel, "ROOM", 26.0, GOLD);
             ui.text(panel, "ARENA", 13.0, MUTED);
             let arenas = ui.row(panel);
-            for (index, arena) in graphics.arenas().iter().enumerate() {
-                ui.choice(
-                    arenas,
-                    &arena.name,
-                    Act::Arena(index),
-                    index == view.arena,
-                    px(116),
-                );
+            if !session.arenas.is_empty() {
+                for (index, arena) in session.arenas.iter().enumerate() {
+                    ui.choice(
+                        arenas,
+                        &arena.name,
+                        Act::Arena(index),
+                        index == view.arena,
+                        px(116),
+                    );
+                }
+            } else {
+                for (index, arena) in graphics.arenas().iter().enumerate() {
+                    ui.choice(
+                        arenas,
+                        &arena.name,
+                        Act::Arena(index),
+                        index == view.arena,
+                        px(116),
+                    );
+                }
             }
-            if let Some(arena) = graphics.arena(view.arena) {
-                ui.text(panel, &arena.description, 13.0, Color::WHITE);
+            let arena_desc = session
+                .arenas
+                .get(view.arena)
+                .map(|a| a.desc.as_str())
+                .or_else(|| (!view.arena_def.desc.is_empty()).then_some(view.arena_def.desc.as_str()))
+                .or_else(|| graphics.arena(view.arena).map(|a| a.description.as_str()));
+            if let Some(desc) = arena_desc {
+                ui.text(panel, desc, 13.0, Color::WHITE);
             }
             let racers = || view.actors.iter().filter(|a| !a.inactive && !a.bomber);
             let bots = racers().filter(|a| !a.human).count();
@@ -741,7 +765,9 @@ pub fn draw(
             let row = ui.row(panel);
             ui.button(row, "-", Act::Bots(bots.saturating_sub(1)), BUTTON, px(44));
             ui.text(row, &format!("  {bots}  "), 18.0, Color::WHITE);
-            let arena_cap = wild_wheels_core::arena_max_players(view.arena)
+            let arena_cap = view
+                .arena_def
+                .max_players
                 .map_or(ROOM_CAPACITY, |cap| cap.min(ROOM_CAPACITY));
             let more = (bots + 1).min(arena_cap.saturating_sub(people));
             ui.button(row, "+", Act::Bots(more), BUTTON, px(44));

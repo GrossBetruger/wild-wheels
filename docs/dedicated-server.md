@@ -60,7 +60,8 @@ Configuration is through environment variables:
 | `PUBLIC_ORIGIN` | unset | Optional exact HTTP(S) origin; otherwise inferred from the request Host |
 | `TRUST_PROXY` | unset | Set to `1` to trust HTTPS forwarding from a loopback proxy |
 | `INVITE_SECRET` | unset | Random invitation credential, at least 32 characters; required with a public HTTPS origin |
-| `ARENA` | `0` | Initial arena, 0 or 1 |
+| `ARENA` | `0` | Initial arena index (0 = Scrapyard, 1 = Crossfire Court, 2 = Octagon, or custom index) |
+| `WILD_WHEELS_ARENAS_FILE` | unset | Optional JSON file of server-defined arena layouts (`ArenaDef[]`) published via `/api/info` and packets so native and browser clients pick up new maps without rebuilding |
 | `BOTS` | `1` | Initial bots, 0–7; humans replace bot slots |
 | `WILD_WHEELS_SESSION_FILE` | `.wild-wheels/sessions.json` | Private saved sessions; the launcher puts it in its state directory |
 

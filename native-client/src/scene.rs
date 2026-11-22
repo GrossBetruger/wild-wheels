@@ -118,8 +118,8 @@ pub fn fire_ring_rider(index: usize, radius: f32, spin: f32, elapsed: f32) -> (T
 pub struct SceneCache {
     shown: HashMap<(Role, u64), Entity>,
     live: HashSet<(Role, u64)>,
-    /// The arena shown, its scenery and its X-ray outlines.
-    arena: Option<(usize, Entity, Entity)>,
+    /// The arena shown, its definition, its scenery and its X-ray outlines.
+    arena: Option<(usize, wild_wheels_core::ArenaDef, Entity, Entity)>,
     /// Master-Yuda's eased drift lean and the side he last leaned to, per racer.
     leans: HashMap<usize, (f32, f32)>,
     /// Per racer and state (0 boost, 1 rapid fire): whether it is on, and since when.
@@ -875,7 +875,7 @@ pub fn sync(
         for (_, entity) in cache.shown.drain() {
             commands.entity(entity).despawn();
         }
-        if let Some((_, scenery, outlines)) = cache.arena.take() {
+        if let Some((_, _, scenery, outlines)) = cache.arena.take() {
             commands.entity(scenery).despawn();
             commands.entity(outlines).despawn();
         }
@@ -884,33 +884,47 @@ pub fn sync(
         return;
     };
     let view = client.view();
-    if cache.arena.is_none_or(|(arena, ..)| arena != view.arena) {
+    if cache
+        .arena
+        .as_ref()
+        .is_none_or(|(arena, def, ..)| *arena != view.arena || def != view.arena_def)
+    {
         cache.nightmare_zoom = 0.0;
-        if let Some((_, old, outlines)) = cache.arena.take() {
+        if let Some((_, _, old, outlines)) = cache.arena.take() {
             commands.entity(old).despawn();
             commands.entity(outlines).despawn();
         }
-        if let Some(arena) = graphics.arena(view.arena) {
-            let (mesh, xray, color) = (arena.mesh, arena.xray, arena.sky);
-            sky.0 = color;
-            let scenery = commands
-                .spawn((
-                    Mesh3d(graphics.mesh(mesh, [0; 3], Look::Solid, &mut meshes)),
-                    MeshMaterial3d(graphics.surface(Look::Solid)),
-                    Transform::default(),
-                ))
-                .id();
-            let outlines = commands
-                .spawn((
-                    Mesh3d(graphics.mesh(xray, [0; 3], Look::Flat, &mut meshes)),
-                    MeshMaterial3d(graphics.surface(Look::Flat)),
-                    Transform::default(),
-                    RenderLayers::layer(1),
-                    Visibility::Hidden,
-                ))
-                .id();
-            cache.arena = Some((view.arena, scenery, outlines));
-        }
+        let (scenery_mesh, xray_mesh, color) =
+            if wild_wheels_core::is_default_arena(view.arena, view.arena_def)
+                && let Some(arena) = graphics.arena(view.arena)
+            {
+                let (mesh, xray, color) = (arena.mesh, arena.xray, arena.sky);
+                (
+                    graphics.mesh(mesh, [0; 3], Look::Solid, &mut meshes),
+                    graphics.mesh(xray, [0; 3], Look::Flat, &mut meshes),
+                    color,
+                )
+            } else {
+                crate::arena_mesh::build(view.arena_def, &mut meshes)
+            };
+        sky.0 = color;
+        let scenery = commands
+            .spawn((
+                Mesh3d(scenery_mesh),
+                MeshMaterial3d(graphics.surface(Look::Solid)),
+                Transform::default(),
+            ))
+            .id();
+        let outlines = commands
+            .spawn((
+                Mesh3d(xray_mesh),
+                MeshMaterial3d(graphics.surface(Look::Flat)),
+                Transform::default(),
+                RenderLayers::layer(1),
+                Visibility::Hidden,
+            ))
+            .id();
+        cache.arena = Some((view.arena, view.arena_def.clone(), scenery, outlines));
     }
     let (dark, xray) = dark_humor(&view);
     darkness.darken(dark);
@@ -1016,7 +1030,8 @@ pub fn sync(
         if length < 0.01 {
             continue;
         }
-        let play = stage.aged(&format!("skid:{}", view.arena), view.elapsed - skid.time);
+        let skid_arena = view.arena.min(graphics.arenas().len().saturating_sub(1));
+        let play = stage.aged(&format!("skid:{skid_arena}"), view.elapsed - skid.time);
         let mark = at(
             (skid.ax + skid.bx) / 2.0,
             0.0,

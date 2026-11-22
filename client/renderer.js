@@ -688,10 +688,11 @@ export class Renderer {
       }
       for(let i=0;i<8;i++){const a=(i+.5)*Math.PI/4;m.at(Math.sin(a)*(R+20),0,Math.cos(a)*(R+20));m.box(0,0,0,1,16,1,'#666377');m.box(0,15,0,8,1,1,'#eee1b1');m.cone(0,16,0,2,3,arena.wall,4);}
     }else{
-      for(let x=-100;x<100;x+=10)for(let z=-100;z<100;z+=10)m.box(x+5,-.4,z+5,10,.4,10,(x+z)%20?arena.ground:index?'#978ca5':'#959d86');
-      for(const side of [-1,1]){m.box(side*98,0,0,4,5,200,arena.wall);m.box(0,0,side*98,200,5,4,arena.wall);for(let i=-90;i<100;i+=15){m.box(side*98,5,i,4,.5,5,'#eadfb9');m.box(i,5,side*98,5,.5,4,'#eadfb9');}}
+      const R=arena.size,span=Math.ceil((R+4)/10)*10,edge=R+2,full=(R+4)*2;
+      for(let x=-span;x<span;x+=10)for(let z=-span;z<span;z+=10)m.box(x+5,-.4,z+5,10,.4,10,(x+z)%20?arena.ground:index?'#978ca5':'#959d86');
+      for(const side of [-1,1]){m.box(side*edge,0,0,4,5,full,arena.wall);m.box(0,0,side*edge,full,5,4,arena.wall);for(let i=-R+6;i<R;i+=15){m.box(side*edge,5,i,4,.5,5,'#eadfb9');m.box(i,5,side*edge,5,.5,4,'#eadfb9');}}
       for(const [x,z,w,d] of arena.blocks){m.box(x,0,z,w,6,d,arena.wall);m.box(x,6,z,w+.3,.35,d+.3,'#c9bfaa');for(let i=-w/2+2;i<w/2;i+=3)m.box(x+i,.2,z-d/2-.05,.25,5.6,.15,'#4c465b');}
-      for(let i=0;i<16;i++){const a=i/16*Math.PI*2;m.at(Math.sin(a)*118,0,Math.cos(a)*118);m.box(0,0,0,1,16,1,'#666377');m.box(0,15,0,8,1,1,'#eee1b1');m.cone(0,16,0,2,3,arena.wall,4);}
+      for(let i=0;i<16;i++){const a=i/16*Math.PI*2;m.at(Math.sin(a)*(R+22),0,Math.cos(a)*(R+22));m.box(0,0,0,1,16,1,'#666377');m.box(0,15,0,8,1,1,'#eee1b1');m.cone(0,16,0,2,3,arena.wall,4);}
     }
     m.at(0,0,0);this.gl.bindBuffer(this.gl.ARRAY_BUFFER,this.staticBuffer);this.gl.bufferData(this.gl.ARRAY_BUFFER,new Float32Array(m.data),this.gl.STATIC_DRAW);this.staticCount=m.data.length/9;this.track=`arena-${index}`;
   }

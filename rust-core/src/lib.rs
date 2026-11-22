@@ -3,7 +3,10 @@ const SLOTS: usize = 128;
 mod arena;
 pub use arena::native::{NativeArena, Told};
 pub use arena::{NativeClient, ClientInput, ClientAction, ClientError, ClientView};
-pub use arena::{Action,Actor,Frame,Input,Move,MAX_PLAYERS,ARENA_COUNT,arena_max_players,in_bounds};
+pub use arena::{
+    Action, Actor, ArenaDef, Frame, Input, Move, MAX_ARENAS, MAX_PLAYERS, arena_count, arena_def,
+    arena_defs, arena_max_players, default_arenas, in_bounds, is_default_arena, set_arena_defs,
+};
 const FIELDS: usize = 16;
 const CLEAR: u32 = 1;
 const CHARGE: u32 = 2;
@@ -20,7 +23,7 @@ struct Kart { data: [f64; FIELDS] }
 #[derive(Clone, Copy)]
 struct Arena { size: f64, octagon: bool, count: usize, blocks: [[f64; 4]; 32] }
 static mut KARTS: [Kart; SLOTS] = [Kart { data: [0.0; FIELDS] }; SLOTS];
-static mut ARENAS: [Arena; 8] = [Arena { size: 0.0, octagon: false, count: 0, blocks: [[0.0; 4]; 32] }; 8];
+static mut ARENAS: [Arena; 32] = [Arena { size: 0.0, octagon: false, count: 0, blocks: [[0.0; 4]; 32] }; 32];
 static mut CONFIG: [f64; 128] = [0.0; 128];
 #[no_mangle]
 pub extern "C" fn abi_version() -> u32 { 1 }
@@ -34,7 +37,7 @@ pub extern "C" fn state_ptr(slot: usize) -> *mut f64 {
 pub extern "C" fn config_ptr() -> *mut f64 { core::ptr::addr_of_mut!(CONFIG).cast() }
 #[no_mangle]
 pub extern "C" fn set_arena(index: usize, size: f64, count: usize) -> u32 {
-    if index >= 8 || count > 32 || !size.is_finite() || size <= 2.0 { return 0; }
+    if index >= 32 || count > 32 || !size.is_finite() || size <= 2.0 { return 0; }
     let arena = unsafe { &mut *core::ptr::addr_of_mut!(ARENAS).cast::<Arena>().add(index) };
     let config = unsafe { &*core::ptr::addr_of!(CONFIG) };
     for i in 0..count {
@@ -45,7 +48,7 @@ pub extern "C" fn set_arena(index: usize, size: f64, count: usize) -> u32 {
     arena.size = size;arena.octagon = false;arena.count = count;1
 }
 pub(crate) fn set_arena_shape(index: usize, octagon: bool) {
-    if index < 8 {
+    if index < 32 {
         let arena = unsafe { &mut *core::ptr::addr_of_mut!(ARENAS).cast::<Arena>().add(index) };
         arena.octagon = octagon;
     }
@@ -58,7 +61,7 @@ fn blocked(arena: &Arena, x: f64, z: f64) -> bool {
 fn angle(a: f64, b: f64) -> f64 { (a-b).sin().atan2((a-b).cos()) }
 #[no_mangle]
 pub extern "C" fn step(slot: usize, arena_index: usize, steer: f64, dt: f64, flags: u32) -> u32 {
-    if slot>=SLOTS || arena_index>=8 || !steer.is_finite() || steer.abs()>1.0 || !dt.is_finite() || !(0.0..=0.05).contains(&dt) { return 0x80000000; }
+    if slot>=SLOTS || arena_index>=32 || !steer.is_finite() || steer.abs()>1.0 || !dt.is_finite() || !(0.0..=0.05).contains(&dt) { return 0x80000000; }
     let arena = unsafe { &*core::ptr::addr_of!(ARENAS).cast::<Arena>().add(arena_index) };
     if arena.size<=2.0 { return 0x80000000; }
     let kart = unsafe { &mut *core::ptr::addr_of_mut!(KARTS).cast::<Kart>().add(slot) };

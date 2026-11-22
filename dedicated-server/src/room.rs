@@ -6,7 +6,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::sync::Notify;
-use wild_wheels_core::{arena_max_players, in_bounds, Action, Frame, Input, Move, NativeArena, Told, ARENA_COUNT, PLAYER_COLORS};
+use wild_wheels_core::{arena_count, arena_max_players, in_bounds, Action, Frame, Input, Move, NativeArena, Told, PLAYER_COLORS};
 /// Set once, in rust-core: `wild_wheels_core::MAX_PLAYERS`.
 pub const CAPACITY: usize = wild_wheels_core::MAX_PLAYERS;
 static FULL: std::sync::LazyLock<&'static str> =
@@ -274,7 +274,8 @@ impl Room {
                 409,
                 match arena_max_players(self.arena) {
                     Some(4) => "Octagon is full (4 players).",
-                    _ => *FULL,
+                    Some(_) => "This arena is full.",
+                    None => *FULL,
                 },
             ));
         }
@@ -482,11 +483,19 @@ impl Room {
                     "arena" => {
                         let next = b["arena"]
                             .as_u64()
-                            .filter(|&a| (a as usize) < ARENA_COUNT)
+                            .filter(|&a| (a as usize) < arena_count())
                             .ok_or((400, "Choose an arena."))?
                             as usize;
-                        if arena_max_players(next).is_some_and(|cap| self.count() > cap) {
-                            return Err((409, "Octagon supports up to 4 players."));
+                        if let Some(cap) = arena_max_players(next) {
+                            if self.count() > cap {
+                                return Err((
+                                    409,
+                                    match cap {
+                                        4 => "Octagon supports up to 4 players.",
+                                        _ => "Too many players in the room for that arena.",
+                                    },
+                                ));
+                            }
                         }
                         self.arena = next;
                         self.bots = self.bots.min(self.arena_capacity().saturating_sub(self.count()));

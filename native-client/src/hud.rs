@@ -517,7 +517,7 @@ fn hidden(view: &ClientView, eye: Vec3, wx: f64, wz: f64, height: f32) -> bool {
             .blocks
             .iter()
             .any(|[bx, bz, w, d]| (x - bx).abs() < w / 2.0 && (z - bz).abs() < d / 2.0);
-        if (point.y < 6.0 && walled) || (point.y < 5.0 && !wild_wheels_core::in_bounds(view.arena, x, z)) {
+        if (point.y < 6.0 && walled) || (point.y < 5.0 && !view.arena_def.in_bounds(x, z, 0.0)) {
             return true;
         }
         step += 2.0;

@@ -154,7 +154,7 @@ async fn http(
             };
             return response(
                 200,
-                json!({"dedicated":true,"room":"00","maxPlayers":room::CAPACITY,"addresses":addresses,"publicOrigin":app.origin,"controlPort":null}),
+                json!({"dedicated":true,"room":"00","maxPlayers":room::CAPACITY,"addresses":addresses,"publicOrigin":app.origin,"controlPort":null,"arenas":wild_wheels_core::arena_defs()}),
             );
         }
         if method != Method::POST {
@@ -615,11 +615,16 @@ async fn main() {
         .unwrap_or_else(|_| "0.0.0.0".into())
         .parse::<IpAddr>()
         .expect("BIND must be an IP address");
+    if let Some(arenas_path) = std::env::var_os("WILD_WHEELS_ARENAS_FILE") {
+        let text = std::fs::read_to_string(&arenas_path).expect("Unable to read WILD_WHEELS_ARENAS_FILE");
+        let defs: Vec<wild_wheels_core::ArenaDef> = serde_json::from_str(&text).expect("Invalid WILD_WHEELS_ARENAS_FILE JSON");
+        wild_wheels_core::set_arena_defs(defs).expect("Invalid arena definitions in WILD_WHEELS_ARENAS_FILE");
+    }
     let arena = std::env::var("ARENA")
         .unwrap_or_else(|_| "0".into())
         .parse::<usize>()
         .unwrap();
-    assert!(arena < wild_wheels_core::ARENA_COUNT, "ARENA must be 0, 1 or 2");
+    assert!(arena < wild_wheels_core::arena_count(), "ARENA is out of range");
     let bots = std::env::var("BOTS")
         .unwrap_or_else(|_| "1".into())
         .parse::<usize>()
