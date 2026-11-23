@@ -13,10 +13,10 @@
    prompted to comment on arena events in real time and potentially fine-tuned
    later. Deliver the commentary in a natural-sounding human voice.
 
-3. **Automatic HTML-to-texture port for browser UI overlays in native Rust.**
-   Port the browser's HTML/CSS overlays and themed announcements (starting with special
-   ability announcements and reward notices in `ui/ability-announcements.js`,
-   `ui/reward-notice.js`, and `style.css`) into the native Rust Bevy client by
-   rendering the real HTML/CSS to transparent textures at build time, so browser CSS
-   stays the single source of truth and native announcements match the browser
-   visually instead of using plain flat text boxes.
+3. ~~**Automatic HTML-to-texture port for browser UI overlays in native Rust.**~~ **(Done)**
+   Implemented in `scripts/build/ui-port.mjs`, `scripts/build/port-ui.mjs`, and
+   `native-client/src/ui_port.rs`: headless Chrome renders the browser's themed
+   HTML/CSS announcement and reward cards (`ui/ability-announcements.js`,
+   `ui/reward-notice.js`, `style.css`) into transparent 2× RGBA textures (`ui.wwup`)
+   at build time, and `native-client/src/hud.rs` displays them with entrance/exit
+   motion, dynamic subtitles, and radial burst sparks.
