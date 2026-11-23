@@ -509,6 +509,32 @@ pub fn build(def: &ArenaDef, meshes: &mut Assets<Mesh>) -> (Handle<Mesh>, Handle
     )
 }
 
+/// 3D golden directional guide arrow pointing toward +Z, used in front of the
+/// player's kart on Bridges of Königsberg to lead them to the next bridge.
+pub fn euler_arrow_mesh() -> Mesh {
+    let mut m = Builder::default();
+    let gold = hex_linear("#ffe26a");
+    let amber = hex_linear("#d99a26");
+    // Shaft
+    m.box_part(0.0, 0.0, -0.75, 0.65, 0.28, 1.8, gold);
+    m.box_part(0.0, -0.06, -0.75, 0.72, 0.08, 1.85, amber);
+    // Arrowhead (3D prism pointing toward +Z)
+    let tip = [0.0, 0.14, 2.05];
+    let left_t = [-1.25, 0.28, 0.15];
+    let right_t = [1.25, 0.28, 0.15];
+    let left_b = [-1.25, 0.0, 0.15];
+    let right_b = [1.25, 0.0, 0.15];
+    let tip_t = [0.0, 0.28, 2.05];
+    let tip_b = [0.0, 0.0, 2.05];
+    m.tri(left_t, tip_t, right_t, gold);
+    m.tri(right_b, tip_b, left_b, amber);
+    m.quad(left_b, left_t, tip_t, tip_b, amber);
+    m.quad(tip_b, tip_t, right_t, right_b, amber);
+    m.quad(right_b, right_t, left_t, left_b, amber);
+    let _ = tip;
+    m.finish()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

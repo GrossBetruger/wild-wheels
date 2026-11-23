@@ -171,8 +171,19 @@ pub struct Notices {
     ability: Option<Notice>,
     intelligence: Option<u32>,
     reward: Option<Notice>,
+    euler_bridges: u16,
+    euler_on_bridge: Option<(usize, i8)>,
+    euler_hinted: bool,
 }
 impl Notices {
+    /// Live bitmask of distinct Königsberg bridges crossed in the current life,
+    /// combining authoritative server state with immediate local tracking.
+    pub fn euler_mask(&self, view: &ClientView) -> u16 {
+        if view.arena_def.bridges.len() != 7 || view.phase != "racing" || view.player.destroyed > 0.0 {
+            return 0;
+        }
+        view.player.euler_bridges | self.euler_bridges
+    }
     /// Updates every announcement for this frame. `now` is wall-clock seconds.
     fn sample(&mut self, view: &ClientView, graphics: &Graphics, now: f64) {
         let p = view.player;
@@ -489,6 +500,72 @@ impl Notices {
         if self.reward.as_ref().is_some_and(|c| now >= c.until) {
             self.reward = None;
         }
+        // Client-side Euler bridge crossing tracker (matches rust-core/src/arena/euler.rs)
+        // so the live 3D arrow and counter update immediately even before a server restart.
+        if !racing || view.arena_def.bridges.len() != 7 || p.destroyed > 0.0 || p.bomber || p.afk || p.inactive {
+            self.euler_bridges = 0;
+            self.euler_on_bridge = None;
+            self.euler_hinted = false;
+        } else {
+            let bridges = &view.arena_def.bridges;
+            let axis_delta = |b: &[f64; 5]| if b[4] == 1.0 { p.wx - b[0] } else { p.wz - b[1] };
+            let on = |b: &[f64; 5]| {
+                if b[4] == 1.0 {
+                    (p.wx - b[0]).abs() <= b[2] / 2.0 + 0.6 && (p.wz - b[1]).abs() <= b[3] / 2.0
+                } else {
+                    (p.wx - b[0]).abs() <= b[2] / 2.0 && (p.wz - b[1]).abs() <= b[3] / 2.0 + 0.6
+                }
+            };
+            let current = bridges
+                .iter()
+                .enumerate()
+                .find(|(_, b)| on(b))
+                .map(|(idx, b)| (idx, if axis_delta(b) < 0.0 { -1_i8 } else { 1_i8 }));
+            match (self.euler_on_bridge, current) {
+                (None, Some(entry)) => self.euler_on_bridge = Some(entry),
+                (Some((prev, _)), Some(entry)) if prev != entry.0 => self.euler_on_bridge = Some(entry),
+                (Some((idx, entry_side)), None) => {
+                    self.euler_on_bridge = None;
+                    let b = &bridges[idx];
+                    if (p.wx - b[0]).hypot(p.wz - b[1]) <= b[2].max(b[3]) + 10.0 {
+                        let exit_side = if axis_delta(b) < 0.0 { -1_i8 } else { 1_i8 };
+                        if exit_side == -entry_side {
+                            let bit = 1u16 << idx;
+                            if self.euler_bridges & bit != 0 {
+                                self.euler_bridges = bit;
+                                self.euler_hinted = false;
+                            } else {
+                                self.euler_bridges |= bit;
+                                let count = self.euler_bridges.count_ones();
+                                if count == 6 && !self.euler_hinted {
+                                    self.euler_hinted = true;
+                                    self.ability = Some(Notice {
+                                        title: "6 / 7 BRIDGES · EULER SMILES".into(),
+                                        detail: "YOU HIT EULER'S LIMIT · ONE BRIDGE LEFT!".into(),
+                                        color: Some([0x9f, 0xd8, 0xf5]),
+                                        card_key: Some("euler:near".into()),
+                                        started: now,
+                                        until: now + 2.8,
+                                    });
+                                } else if count == 7 {
+                                    self.euler_bridges = 0;
+                                    self.euler_hinted = false;
+                                    self.ability = Some(Notice {
+                                        title: "EULERIAN PATH!".into(),
+                                        detail: "YOU CROSSED ALL 7 BRIDGES ONCE · EULER IS SHOOK".into(),
+                                        color: Some([0xf5, 0xd7, 0x7f]),
+                                        card_key: Some("euler:path".into()),
+                                        started: now,
+                                        until: now + 4.0,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
     }
 }
 
@@ -785,27 +862,17 @@ fn readings(
             },
         );
     }
+    let euler_mask = notices.euler_mask(view);
     if view.phase == "racing"
         && !p.bomber
         && p.destroyed <= 0.0
         && view.arena_def.bridges.len() == 7
-        && let Some(next_idx) = wild_wheels_core::next_euler_bridge(p.wx, p.wz, p.euler_bridges)
+        && wild_wheels_core::next_euler_bridge(p.wx, p.wz, euler_mask).is_some()
     {
-        let b = view.arena_def.bridges[next_idx];
-        let target_angle = (b[0] - p.wx).atan2(b[1] - p.wz);
-        let rel = (target_angle - p.camera_heading)
-            .sin()
-            .atan2((target_angle - p.camera_heading).cos());
-        let arrows = [
-            "\u{2191}", "\u{2197}", "\u{2192}", "\u{2198}", "\u{2193}", "\u{2199}", "\u{2190}",
-            "\u{2196}",
-        ];
-        // Right-handed camera (+Y up, forward +Z => screen-right is -X), so clockwise on screen is -rel.
-        let sector = ((-rel / std::f64::consts::FRAC_PI_4).round() as i32).rem_euclid(8) as usize;
-        let count = p.euler_bridges.count_ones();
+        let count = euler_mask.count_ones();
         let label = match count {
-            6 => format!("EULER  6/7  {}  JUMP FOR #7!", arrows[sector]),
-            _ => format!("EULER  {count}/7  {}  NEXT BRIDGE", arrows[sector]),
+            6 => "EULER  6/7  ·  JUMP FOR #7!".to_owned(),
+            _ => format!("EULER  {count}/7  ·  FOLLOW ARROW"),
         };
         out.insert(
             Id::Euler,
@@ -2111,16 +2178,17 @@ pub fn update(
                     let corner = center + Vec2::new(x as f32, z as f32) * MAP_SCALE - size / 2.0;
                     (node.left, node.top) = (px(corner.x), px(corner.y));
                     (node.width, node.height) = (px(size.x), px(size.y));
+                    let mask = notices.euler_mask(&view);
                     let next = (view.arena_def.bridges.len() == 7 && view.phase == "racing")
                         .then(|| {
                             wild_wheels_core::next_euler_bridge(
                                 view.player.wx,
                                 view.player.wz,
-                                view.player.euler_bridges,
+                                mask,
                             )
                         })
                         .flatten();
-                    color.0 = if view.player.euler_bridges & (1u16 << index) != 0 {
+                    color.0 = if mask & (1u16 << index) != 0 {
                         hex(0x5ce4c0ff)
                     } else if next == Some(index) {
                         hex(0xffe37aff)

@@ -253,14 +253,33 @@ pub struct FollowCamera;
 pub struct XrayCamera;
 #[derive(Component)]
 pub struct DarkFog;
+/// 3D floating golden guide arrow ahead of the player on Bridges of Königsberg.
+#[derive(Component)]
+pub struct EulerArrow;
 
-fn setup(mut commands: Commands, mut fogs: ResMut<Assets<FogMaterial>>) {
+fn setup(
+    mut commands: Commands,
+    mut fogs: ResMut<Assets<FogMaterial>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
     // The browser shades as color * (0.62 + 0.38 * n·l) in display space with no
     // tone mapping. These light levels were matched to it against screenshots.
     commands.insert_resource(GlobalAmbientLight {
         brightness: 783.0,
         ..default()
     });
+    commands.spawn((
+        Mesh3d(meshes.add(crate::arena_mesh::euler_arrow_mesh())),
+        MeshMaterial3d(materials.add(StandardMaterial {
+            base_color: Color::WHITE,
+            unlit: true,
+            ..default()
+        })),
+        Transform::default(),
+        Visibility::Hidden,
+        EulerArrow,
+    ));
     commands.spawn((
         DirectionalLight {
             illuminance: 1920.0,
@@ -854,13 +873,19 @@ fn effects(stage: &mut Stage, view: &ClientView, xray: bool, elapsed: f32) {
     }
 }
 
+type FollowCameras<'w, 's> =
+    Query<'w, 's, (&'static mut Transform, &'static mut Projection), (With<FollowCamera>, Without<EulerArrow>)>;
+
+#[allow(clippy::too_many_arguments)]
 pub fn sync(
     mut commands: Commands,
     session: Res<GameSession>,
+    notices: Res<crate::hud::Notices>,
     assets: SceneAssets,
     mut cache: ResMut<SceneCache>,
     mut players: Query<&mut Ported>,
-    mut cameras: Query<(&mut Transform, &mut Projection), With<FollowCamera>>,
+    mut cameras: FollowCameras,
+    mut arrows: Query<(&mut Transform, &mut Visibility), With<EulerArrow>>,
     mut darkness: Darkness,
 ) {
     let SceneAssets {
@@ -881,6 +906,9 @@ pub fn sync(
         }
         darkness.darken(0.0);
         darkness.see_through(&mut commands, false);
+        for (_, mut vis) in &mut arrows {
+            *vis = Visibility::Hidden;
+        }
         return;
     };
     let view = client.view();
@@ -1097,6 +1125,28 @@ pub fn sync(
         for (_, _, mut xray, mut lens) in &mut darkness.xray {
             *xray = *camera;
             *lens = projection.clone();
+        }
+    }
+    let euler_mask = notices.euler_mask(&view);
+    let arrow_target = (view.phase == "racing"
+        && !p.bomber
+        && p.destroyed <= 0.0
+        && view.arena_def.bridges.len() == 7)
+        .then(|| wild_wheels_core::next_euler_bridge(p.wx, p.wz, euler_mask))
+        .flatten()
+        .map(|idx| view.arena_def.bridges[idx]);
+    for (mut transform, mut vis) in &mut arrows {
+        if let Some(b) = arrow_target {
+            let lead = 9.0;
+            let ax = p.wx as f32 + (p.camera_heading as f32).sin() * lead;
+            let az = p.wz as f32 + (p.camera_heading as f32).cos() * lead;
+            let ay = 2.8 + (view.elapsed as f32 * 4.5).sin() * 0.22;
+            let yaw = (b[0] as f32 - ax).atan2(b[1] as f32 - az);
+            transform.translation = Vec3::new(ax, ay, az);
+            transform.rotation = Quat::from_rotation_y(yaw);
+            *vis = Visibility::Visible;
+        } else {
+            *vis = Visibility::Hidden;
         }
     }
 }
