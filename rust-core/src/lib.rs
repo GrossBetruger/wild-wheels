@@ -1,4 +1,6 @@
 include!(concat!(env!("OUT_DIR"), "/player_colors.rs"));
+#[cfg(test)]
+include!(concat!(env!("OUT_DIR"), "/special_abilities.rs"));
 const SLOTS: usize = 128;
 mod arena;
 pub use arena::native::{NativeArena, Told};

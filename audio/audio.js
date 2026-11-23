@@ -1,5 +1,10 @@
 import {RecordedLaughter} from './recorded-laughter.js';
 import {darkHumorState} from '../characters/knowitowl/dark-humor.js';
+import {arenas} from '../gameplay/combat.js';
+const BRIDGE_PLANKS=['bridgePlankA','bridgePlankB','bridgePlankC'];
+function onBridge(bridges,wx,wz){
+  return Boolean(bridges?.some(([bx,bz,bw,bd,axis])=>axis===1?Math.abs(wx-bx)<=bw/2+.8&&Math.abs(wz-bz)<=bd/2:Math.abs(wx-bx)<=bw/2&&Math.abs(wz-bz)<=bd/2+.8));
+}
 export class RaceAudio {
   enabled=true;
   async unlock(){
@@ -58,6 +63,15 @@ export class RaceAudio {
     // Shutter latch, tray ratchet, then the slide seating with a dry ka-chunk.
     for(const [duration,frequency,volume,delay,type]of [[.012,2600,.3,0,'highpass'],[.032,550,.36,.01,'lowpass'],[.007,1800,.12,.043,'bandpass'],[.009,2200,.11,.063,'highpass'],[.022,1450,.42,.095,'bandpass'],[.018,420,.32,.102,'lowpass']])this.mechanicalClick(duration,frequency,volume,delay,type);
   }
+  woodPlank(pitch=1){
+    if(!this.context||!this.enabled)return;
+    // Dry timber tap, hollow bridge-deck cavity resonance, and a softer settle knock.
+    this.mechanicalClick(.026,1120*pitch,.34,0,'bandpass');
+    this.note(185*pitch,.072,{type:'sine',end:118*pitch,volume:.28});
+    this.note(470*pitch,.042,{type:'triangle',end:380*pitch,volume:.14});
+    this.mechanicalClick(.02,1480*pitch,.16,.024,'bandpass');
+    this.note(260*pitch,.045,{type:'sine',end:175*pitch,delay:.024,volume:.11});
+  }
   fanfare(){
     for(const [delay,pitch] of [[0,392],[.16,523.25],[.32,659.25],[.55,783.99]]){
       this.note(pitch,.38,{delay,volume:.28});this.note(pitch/2,.4,{delay,volume:.12,type:'sine'});
@@ -98,6 +112,9 @@ export class RaceAudio {
     case 'locustSwarm':this.burst(.4,2800,.12);this.note(880,.18,{volume:.08});break;case 'locustPop':this.burst(.12,1800,.15);this.note(440,.1,{end:100,volume:.1});break;case 'teleportIn':this.burst(.22,3600,.13,0,800);for(const [i,f]of [880,1174.66,1567.98].entries())this.note(f,.18,{type:'sine',delay:i*.045,volume:.06});break;
     case 'cameraShutter':this.mechanicalClick(.018,3200,.42,0,'highpass');this.mechanicalClick(.027,1150,.4,.065,'bandpass');this.mechanicalClick(.018,420,.2,.07,'lowpass');break;
     case 'photoSlide':this.projectorSlide();break;
+    case 'bridgePlankA':this.woodPlank(.92);break;
+    case 'bridgePlankB':this.woodPlank(1.03);break;
+    case 'bridgePlankC':this.woodPlank(1.14);break;
     case 'fireRingOut':this.burst(.6,2300,.22,0,180);this.note(90,.35,{type:'sine',end:35,volume:.12});break;
     case 'chaff':this.note(110,.15,{type:'sine',end:45,volume:.4});this.burst(.8,5500,.45,0,900);this.note(880,.2,{type:'sine',end:330,volume:.12,delay:.08});break;
     case 'chaffDivert':this.note(1200,.22,{type:'triangle',end:160,volume:.18});this.burst(.22,3000,.24,0,500);this.note(660,.12,{type:'sine',end:990,volume:.2,delay:.1});this.note(990,.2,{type:'sine',end:1320,volume:.16,delay:.19});break;
@@ -160,6 +177,15 @@ export class RaceAudio {
     if(warp<=0&&this.previousWarp>0){this.stopTimeWarp();if(this.enabled&&r.phase==='racing'){this.note(440,.45,{type:'sine',end:880,volume:.12});this.note(660,.6,{type:'sine',volume:.08});}}
     this.previousWarp=warp;
     const c=this.context,t=c.currentTime,active=r.phase==='racing';this.engineGain.gain.setTargetAtTime(active&&!r.bomber?.09:0,t,.03);const rpm=28+r.speed*.045+Math.sin(r.elapsed*18)*.6;this.engine.frequency.setTargetAtTime(rpm,t,.03);this.harmonic.frequency.setTargetAtTime(rpm*2,t,.03);this.skidGain.gain.setTargetAtTime(active&&r.wasDrifting?.07:0,t,.02);this.jetGain.gain.setTargetAtTime(active&&(r.boost>0||r.somersault>0)?.18:0,t,.025);
+    const bridges=r.arenaDef?.bridges??arenas[r.arena]?.bridges;
+    if(this.enabled&&active&&!r.bomber&&!(r.destroyed>0)&&!(r.somersault>0)&&Math.abs(r.speed??0)>6&&onBridge(bridges,r.wx,r.wz)){
+      if(this.bridgePos){
+        const stepDist=Math.hypot(r.wx-this.bridgePos[0],r.wz-this.bridgePos[1]);
+        if(stepDist<12)this.bridgeDist=(this.bridgeDist??0)+stepDist;
+        if(this.bridgeDist>=2.2){this.bridgeDist%=2.2;const n=this.bridgeStep??0;this.bridgeStep=n+1;this.event(BRIDGE_PLANKS[n%BRIDGE_PLANKS.length]);}
+      }else{this.bridgeDist=1.8;}
+      this.bridgePos=[r.wx,r.wz];
+    }else{this.bridgePos=null;this.bridgeDist=0;}
     const remaining=r.vulcan??0,powered=this.enabled&&active&&remaining>0&&!r.destroyed&&r.finishCountdown==null,firing=powered&&(r.driver===14?r.projectiles.some(s=>s.owner===r.id&&s.vulcan&&s.age<.12):r.item==='hedgehog'&&r.fireCooldown>0);
     this.vulcanGain.gain.setTargetAtTime(powered&&r.driver!==14?.18:0,t,.07);this.vulcanRotor.frequency.setTargetAtTime(firing?130:94,t,.1);this.vulcanBass.frequency.setTargetAtTime(firing?65:47,t,.1);this.vulcanPulse.frequency.setTargetAtTime(firing?24:12,t,.1);
     const warning=Math.ceil(remaining);

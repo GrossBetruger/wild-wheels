@@ -18,21 +18,17 @@ use super::abilities::{DISABLED, press_for_bots};
 use super::*;
 use std::fmt::Write as _;
 
-/// Racers and their abilities, numbered as `ability_on` numbers them.
-const RACERS: [(usize, &[&str]); 9] = [
-    (5, &["Reverse Psychology", "Cricket's Jump"]),
-    (7, &["Reine de la paresse", "Nightmare Fuel"]),
-    (8, &["Special Relativity"]),
-    (9, &["Fashion-Statement"]),
-    (10, &["Reefer Madness (smoke)", "Ring of Fire"]),
-    (11, &["Providence"]),
-    (12, &["Six-Heart Recovery"]),
-    (13, &["Tax-Audit", "Xylophone-Attack"]),
-    (14, &["Dark Humor", "BatYouDidn'tKnow"]),
-];
-/// Racers with no abilities, the plain field.
-const PLAIN: [usize; 6] = [0, 1, 2, 3, 4, 6];
+/// Racers and their abilities, auto-discovered from `gameplay/special-abilities.js`
+/// at build time so new characters and abilities are measured out of the box.
+const RACERS: &[(usize, &[&str])] = crate::SPECIAL_ABILITY_RACERS;
 const STEP: f64 = 1.0 / 60.0;
+
+/// Racers with no special abilities, derived automatically from `DRIVER_NAMES`.
+fn plain_drivers() -> Vec<usize> {
+    (0..DRIVER_NAMES.len())
+        .filter(|d| !RACERS.iter().any(|(r, _)| r == d))
+        .collect()
+}
 
 #[derive(Clone, Copy, PartialEq)]
 enum Field {
@@ -49,13 +45,20 @@ impl Field {
     /// The opponents' racers, seated in turn.
     fn opponents(self, driver: usize) -> Vec<usize> {
         match self {
-            Field::Plain => PLAIN.to_vec(),
+            Field::Plain => plain_drivers(),
             Field::Mixed => RACERS.iter().map(|(d, _)| *d).filter(|d| *d != driver).collect(),
         }
     }
     fn describe(self) -> String {
         match self {
-            Field::Plain => format!("racers with no abilities ({})", PLAIN.map(driver_name).join(", ")),
+            Field::Plain => format!(
+                "racers with no abilities ({})",
+                plain_drivers()
+                    .into_iter()
+                    .map(driver_name)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
             Field::Mixed => "the other racers with abilities, every ability on".into(),
         }
     }
@@ -232,6 +235,27 @@ fn measure(field: Field, driver: usize, list: &[&str], matches: u32, minutes: f6
 }
 
 #[test]
+fn every_character_and_special_ability_is_discovered_automatically() {
+    let mut covered: Vec<usize> = RACERS
+        .iter()
+        .map(|(driver, _)| *driver)
+        .chain(plain_drivers())
+        .collect();
+    covered.sort_unstable();
+    let expected: Vec<usize> = (0..DRIVER_NAMES.len()).collect();
+    assert_eq!(covered, expected, "every character must be classified once");
+    for (driver, abilities) in RACERS {
+        assert!(!abilities.is_empty(), "driver {driver} must list at least one ability");
+    }
+    assert!(
+        RACERS
+            .iter()
+            .any(|(d, list)| *d == 15 && list.contains(&"Karmic Raccooning")),
+        "Tai-Coon's Karmic Raccooning must be auto-discovered from special-abilities.js"
+    );
+}
+
+#[test]
 fn both_together_compares_full_loadout_with_no_abilities_on_matching_seeds() {
     // Neither: net 2 and 1. Both: net 7 and 6, a gain of 5 in each match.
     // Singletons intentionally have very different scores: they are not the baseline.
@@ -265,7 +289,7 @@ fn ability_importance() {
     let mut rows: Vec<(&str, String, Vec<Contribution>)> = Vec::new();
     for field in &fields {
         let _ = writeln!(details, "## {} field: {}\n", field.name(), field.describe());
-        for (driver, list) in RACERS {
+        for &(driver, list) in RACERS {
             let contributions = measure(*field, driver, list, matches, minutes, &mut details);
             let mut labels: Vec<String> = list.iter().map(|ability| (*ability).into()).collect();
             if list.len() > 1 {

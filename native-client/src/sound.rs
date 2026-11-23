@@ -47,6 +47,56 @@ pub struct Heard {
     warning: i64,
     voice_until: f32,
     players: Option<HashSet<usize>>,
+    bridge_pos: Option<[f64; 2]>,
+    bridge_dist: f64,
+    bridge_step: usize,
+}
+
+const BRIDGE_PLANKS: [&str; 3] = [
+    "event:bridgePlankA",
+    "event:bridgePlankB",
+    "event:bridgePlankC",
+];
+
+fn on_bridge(bridges: &[[f64; 5]], wx: f64, wz: f64) -> bool {
+    bridges.iter().any(|&[bx, bz, bw, bd, axis]| {
+        if axis == 1.0 {
+            (wx - bx).abs() <= bw / 2.0 + 0.8 && (wz - bz).abs() <= bd / 2.0
+        } else {
+            (wx - bx).abs() <= bw / 2.0 && (wz - bz).abs() <= bd / 2.0 + 0.8
+        }
+    })
+}
+
+fn step_bridge_wood(
+    pos: &mut Option<[f64; 2]>,
+    dist: &mut f64,
+    step: &mut usize,
+    driving_on_bridge: bool,
+    wx: f64,
+    wz: f64,
+) -> Option<&'static str> {
+    if !driving_on_bridge {
+        *pos = None;
+        *dist = 0.0;
+        return None;
+    }
+    let mut cue = None;
+    if let Some([px, pz]) = *pos {
+        let delta = (wx - px).hypot(wz - pz);
+        if delta < 12.0 {
+            *dist += delta;
+        }
+        if *dist >= 2.2 {
+            *dist %= 2.2;
+            cue = Some(BRIDGE_PLANKS[*step % BRIDGE_PLANKS.len()]);
+            *step += 1;
+        }
+    } else {
+        *dist = 1.8;
+    }
+    *pos = Some([wx, wz]);
+    cue
 }
 
 /// Returns whether a new active human peer joined (or returned from AFK) since the last snapshot,
@@ -264,6 +314,23 @@ pub fn play(
                 cues.push(("event:vulcanEnd".into(), 1.0));
             }
             heard.vulcan = p.vulcan;
+            let on_wood = active
+                && !p.bomber
+                && p.destroyed <= 0.0
+                && p.somersault <= 0.0
+                && p.speed.abs() > 6.0
+                && on_bridge(&view.arena_def.bridges, p.wx, p.wz);
+            let h = &mut *heard;
+            if let Some(plank) = step_bridge_wood(
+                &mut h.bridge_pos,
+                &mut h.bridge_dist,
+                &mut h.bridge_step,
+                on_wood,
+                p.wx,
+                p.wz,
+            ) {
+                cues.push((plank.into(), 1.0));
+            }
             // The recorded layers already carry the browser's gains; here they only switch.
             let firing = powered && p.item == "hedgehog" && p.fire_cooldown > 0.0;
             let rotor = powered && p.driver != 14;
@@ -326,6 +393,9 @@ mod tests {
             "event:explosion",
             "event:victory",
             "event:playerJoin",
+            "event:bridgePlankA",
+            "event:bridgePlankB",
+            "event:bridgePlankC",
             "cue:go",
         ] {
             assert!(sounds.contains_key(name), "{name}");
@@ -344,7 +414,39 @@ mod tests {
                 .chunks_exact(2)
                 .any(|s| i16::from_le_bytes([s[0], s[1]]).unsigned_abs() > 300)
         };
-        assert!(audible("event:fire") && audible("loop:engine") && audible("voice:14:win"));
+        assert!(
+            audible("event:fire")
+                && audible("loop:engine")
+                && audible("voice:14:win")
+                && audible("event:bridgePlankA")
+                && audible("event:bridgePlankB")
+                && audible("event:bridgePlankC")
+        );
+    }
+
+    #[test]
+    fn bridge_wood_steps_trigger_only_while_driving_across_a_bridge() {
+        let bridges = [[0.0, 0.0, 16.0, 10.0, 0.0]];
+        assert!(on_bridge(&bridges, 0.0, 0.0));
+        assert!(!on_bridge(&bridges, 20.0, 0.0));
+        let (mut pos, mut dist, mut step) = (None, 0.0, 0);
+        // Entering the bridge primes the first plank knock right after rolling forward.
+        assert_eq!(step_bridge_wood(&mut pos, &mut dist, &mut step, true, 0.0, -5.0), None);
+        assert_eq!(
+            step_bridge_wood(&mut pos, &mut dist, &mut step, true, 0.0, -4.4),
+            Some("event:bridgePlankA")
+        );
+        assert_eq!(
+            step_bridge_wood(&mut pos, &mut dist, &mut step, true, 0.0, -2.0),
+            Some("event:bridgePlankB")
+        );
+        assert_eq!(
+            step_bridge_wood(&mut pos, &mut dist, &mut step, true, 0.0, 0.4),
+            Some("event:bridgePlankC")
+        );
+        // Leaving the bridge resets cadence cleanly.
+        assert_eq!(step_bridge_wood(&mut pos, &mut dist, &mut step, false, 0.0, 12.0), None);
+        assert!(pos.is_none());
     }
 
     #[test]
