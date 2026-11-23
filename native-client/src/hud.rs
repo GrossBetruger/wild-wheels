@@ -56,6 +56,9 @@ const SHADOW: Color = hex(0x29283bff);
 const MAP_SCALE: f32 = 0.6;
 const MAP_SIZE: Vec2 = Vec2::splat(126.0);
 const SLOTS: usize = 8;
+const MAP_BLOCK_SLOTS: usize = 32;
+const MAP_WATER_SLOTS: usize = 48;
+const MAP_BRIDGE_SLOTS: usize = 16;
 
 /// One piece of text the HUD keeps up to date; an empty reading hides its panel.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -95,6 +98,8 @@ pub enum Part {
     Panel(Id),
     /// The filled length of a progress bar.
     Fill(Id),
+    MapWater(usize),
+    MapBridge(usize),
     MapBlock(usize),
     MapDot(usize),
     /// Anchors a rival's nameplate above their kart.
@@ -1249,7 +1254,15 @@ pub fn setup(mut commands: Commands, mut fonts: ResMut<Assets<Font>>) {
         hex(0xe5e0d9d8),
         none,
     );
-    for index in 0..SLOTS {
+    for index in 0..MAP_WATER_SLOTS {
+        let water = ui.node(map, fixed(Node::default()), hex(0x4f8cb5ff), none);
+        ui.commands.entity(water).insert(Part::MapWater(index));
+    }
+    for index in 0..MAP_BRIDGE_SLOTS {
+        let bridge = ui.node(map, fixed(Node::default()), hex(0xc48f52ff), none);
+        ui.commands.entity(bridge).insert(Part::MapBridge(index));
+    }
+    for index in 0..MAP_BLOCK_SLOTS {
         let block = ui.node(map, fixed(Node::default()), hex(0x92839dff), none);
         ui.commands.entity(block).insert(Part::MapBlock(index));
     }
@@ -1802,6 +1815,36 @@ pub fn update(
             Part::Fill(id) => {
                 let fill = readings.get(&id).and_then(|r| r.fill).unwrap_or(0.0);
                 node.width = percent(fill.clamp(0.0, 1.0) * 100.0);
+            }
+            Part::MapWater(index) => {
+                let rect = view.arena_def.water.get(index).copied().or_else(|| {
+                    index
+                        .checked_sub(view.arena_def.water.len())
+                        .and_then(|bi| view.arena_def.bridges.get(bi))
+                        .map(|b| [b[0], b[1], b[2], b[3]])
+                });
+                show(&mut node, rect.is_some());
+                if let Some([x, z, w, d]) = rect {
+                    let size = Vec2::new(w as f32, d as f32) * MAP_SCALE;
+                    let corner = center + Vec2::new(x as f32, z as f32) * MAP_SCALE - size / 2.0;
+                    (node.left, node.top) = (px(corner.x), px(corner.y));
+                    (node.width, node.height) = (px(size.x), px(size.y));
+                }
+            }
+            Part::MapBridge(index) => {
+                let bridge = view.arena_def.bridges.get(index);
+                show(&mut node, bridge.is_some());
+                if let Some(&[x, z, w, d, axis]) = bridge {
+                    let (bw, bd) = if axis == 1.0 {
+                        (w + 2.0, (d - 2.0).max(2.0))
+                    } else {
+                        ((w - 2.0).max(2.0), d + 2.0)
+                    };
+                    let size = Vec2::new(bw as f32, bd as f32) * MAP_SCALE;
+                    let corner = center + Vec2::new(x as f32, z as f32) * MAP_SCALE - size / 2.0;
+                    (node.left, node.top) = (px(corner.x), px(corner.y));
+                    (node.width, node.height) = (px(size.x), px(size.y));
+                }
             }
             Part::MapBlock(index) => {
                 let block = view.blocks.get(index);

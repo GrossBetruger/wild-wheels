@@ -101,7 +101,7 @@ impl Game{
             let center=shot.orbit_center.as_ref().map_or((point.0,point.1),|p|(p.wx,p.wz));shot.heading=angle+direction*std::f64::consts::FRAC_PI_2;
             shot.wx=center.0+angle.sin()*radius+shot.heading.sin()*speed*fall;shot.wz=center.1+angle.cos()*radius+shot.heading.cos()*speed*fall;
             let sink=((shot.orbit_height-0.25)/1.2).clamp(0.0,0.75);shot.height=shot.orbit_height-sink*age-7.0*fall*fall;shot.vy=-sink-14.0*fall;
-            let impact=shot.height<=0.15||fall>0.0&&blocked(self.global.arena,shot.wx,shot.wz,0.3);if impact{shot.height=shot.height.max(0.15);shot.life=0.0;}(impact,None,Some(point.2))
+            let impact=shot.height<=0.15||fall>0.0&&wall_blocked(self.global.arena,shot.wx,shot.wz,0.3);if impact{shot.height=shot.height.max(0.15);shot.life=0.0;}(impact,None,Some(point.2))
         };
         if let Some(point)=decoy{if shot.orbit_age.is_some(){let (x,z)=(shot.wx,shot.wz);let result=orbit(shot,point,dt);if self.ring_blocks(x,z,shot.wx,shot.wz){shot.quenched=true;shot.life=0.0;return(true,None,None);}return result;}}
         let target=decoy.map(|p|(p.0,p.1)).or_else(||shot.target.and_then(|id|self.actors.get(id)).filter(|a|a.destroyed<=0.0&&!a.afk).map(|a|{let lead=match shot.reflected{true=>(distance(shot.wx,shot.wz,a.wx,a.wz)/shot.speed).min(0.8),false=>0.0};(a.wx+a.motion_heading.sin()*a.speed*0.085*lead,a.wz+a.motion_heading.cos()*a.speed*0.085*lead)}));
@@ -115,7 +115,7 @@ impl Game{
             if self.ring_blocks(previous_x,previous_z,shot.wx,shot.wz){shot.quenched=true;shot.life=0.0;return(true,None,None);}
             if let Some(point)=decoy{if distance(shot.wx,shot.wz,point.0,point.1)<6.0{shot.orbit_age=Some(0.0);shot.orbit_direction=match steering<0.0{true=>-1.0,false=>1.0};shot.orbit_angle=shot.heading-shot.orbit_direction*std::f64::consts::FRAC_PI_2;shot.orbit_radius=shot.speed*0.6/std::f64::consts::TAU;shot.orbit_height=shot.height;shot.orbit_center=Some(Point{wx:shot.wx-shot.orbit_angle.sin()*shot.orbit_radius,wz:shot.wz-shot.orbit_angle.cos()*shot.orbit_radius});shot.chaffed=true;shot.life=shot.life.max(3.0);return orbit(shot,point,dt*(steps-step-1)as f64/steps as f64);}}
             let victim=match decoy.is_some(){true=>None,false=>self.actors.iter().find(|a|a.id!=shot.owner&&!a.bomber&&!a.afk&&a.destroyed<=0.0&&a.shield<=0.0&&distance(a.wx,a.wz,shot.wx,shot.wz)<2.7).map(|a|a.id)};
-            if blocked(self.global.arena,shot.wx,shot.wz,0.3)||victim.is_some(){shot.life=0.0;return(true,victim,decoy.map(|p|p.2));}
+            if wall_blocked(self.global.arena,shot.wx,shot.wz,0.3)||victim.is_some(){shot.life=0.0;return(true,victim,decoy.map(|p|p.2));}
         }(false,None,decoy.map(|p|p.2))
     }
 }

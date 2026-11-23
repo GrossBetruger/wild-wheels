@@ -187,15 +187,201 @@ pub fn scenery_mesh(def: &ArenaDef) -> Mesh {
         }
     } else {
         let span = ((r + 4.0) / 10.0).ceil() as i32 * 10;
+        let cutouts: Vec<[f32; 4]> = def
+            .water
+            .iter()
+            .map(|b| [b[0] as f32, b[1] as f32, b[2] as f32, b[3] as f32])
+            .chain(
+                def.bridges
+                    .iter()
+                    .map(|b| [b[0] as f32, b[1] as f32, b[2] as f32, b[3] as f32]),
+            )
+            .collect();
+        let subtract = |rects: Vec<[f32; 4]>, cut: [f32; 4]| {
+            let (rx0, rx1, rz0, rz1) = (
+                cut[0] - cut[2] * 0.5,
+                cut[0] + cut[2] * 0.5,
+                cut[1] - cut[3] * 0.5,
+                cut[1] + cut[3] * 0.5,
+            );
+            let mut out = Vec::with_capacity(rects.len());
+            for [x0, z0, x1, z1] in rects {
+                if x1 <= rx0 || x0 >= rx1 || z1 <= rz0 || z0 >= rz1 {
+                    out.push([x0, z0, x1, z1]);
+                    continue;
+                }
+                let (ix0, ix1) = (x0.max(rx0), x1.min(rx1));
+                if x0 < ix0 {
+                    out.push([x0, z0, ix0, z1]);
+                }
+                if ix1 < x1 {
+                    out.push([ix1, z0, x1, z1]);
+                }
+                if z0 < rz0 {
+                    out.push([ix0, z0, ix1, z1.min(rz0)]);
+                }
+                if z1 > rz1 {
+                    out.push([ix0, z0.max(rz1), ix1, z1]);
+                }
+            }
+            out
+        };
         let mut x = -span;
         while x < span {
             let mut z = -span;
             while z < span {
                 let col = if (x + z) % 20 != 0 { ground } else { ground_alt };
-                m.box_part(x as f32 + 5.0, -0.4, z as f32 + 5.0, 10.0, 0.4, 10.0, col);
+                if cutouts.is_empty() {
+                    m.box_part(x as f32 + 5.0, -0.4, z as f32 + 5.0, 10.0, 0.4, 10.0, col);
+                } else {
+                    let mut rects = vec![[x as f32, z as f32, (x + 10) as f32, (z + 10) as f32]];
+                    for &cut in &cutouts {
+                        rects = subtract(rects, cut);
+                    }
+                    for [x0, z0, x1, z1] in rects {
+                        m.box_part(
+                            (x0 + x1) * 0.5,
+                            -0.4,
+                            (z0 + z1) * 0.5,
+                            x1 - x0,
+                            0.4,
+                            z1 - z0,
+                            col,
+                        );
+                    }
+                }
                 z += 10;
             }
             x += 10;
+        }
+        if !cutouts.is_empty() {
+            let has_river = |px: f32, pz: f32| {
+                cutouts
+                    .iter()
+                    .any(|c| (px - c[0]).abs() < c[2] * 0.5 && (pz - c[1]).abs() < c[3] * 0.5)
+            };
+            let deep_water = hex_linear("#286187");
+            let mid_water = hex_linear("#3579a4");
+            let streak = hex_linear("#5ea9ce");
+            let quay = hex_linear("#6b686c");
+            let coping = hex_linear("#cfc5b4");
+            let rail = hex_linear("#535666");
+            let bollard = hex_linear("#474957");
+            let pier = hex_linear("#756f66");
+            let deck = hex_linear("#a57c52");
+            let plank = hex_linear("#85613e");
+            let curb = hex_linear("#d5cbb8");
+            let parapet = hex_linear("#8d8577");
+            let iron = hex_linear("#383b4a");
+            let baluster = hex_linear("#474a5a");
+            let pillar = hex_linear("#7c7468");
+            let pillar_cap = hex_linear("#d8ceb8");
+            let lantern = hex_linear("#f5dd84");
+            let lantern_cap = hex_linear("#363846");
+
+            for &[cx, cz, cw, cd] in &cutouts {
+                m.box_part(cx, -0.58, cz, cw, 0.22, cd, deep_water);
+                m.box_part(
+                    cx,
+                    -0.36,
+                    cz,
+                    (cw - 1.4).max(0.5),
+                    0.03,
+                    (cd - 1.4).max(0.5),
+                    mid_water,
+                );
+                let horiz = cw >= cd;
+                let (len, wid) = if horiz { (cw, cd) } else { (cd, cw) };
+                let mut s = -len * 0.5 + 3.0;
+                while s <= len * 0.5 - 3.0 {
+                    let offset = (((cx + cz + s).round() as i32).rem_euclid(3) - 1) as f32
+                        * (wid * 0.22).min(2.2);
+                    if horiz {
+                        m.box_part(cx + s, -0.33, cz + offset, (len * 0.45).min(3.8), 0.02, 0.45, streak);
+                    } else {
+                        m.box_part(cx + offset, -0.33, cz + s, 0.45, 0.02, (len * 0.45).min(3.8), streak);
+                    }
+                    s += 6.5;
+                }
+            }
+            for &[bx, bz, bw, bd] in &def.water {
+                let (cx, cz, cw, cd) = (bx as f32, bz as f32, bw as f32, bd as f32);
+                let (x0, x1, z0, z1) = (cx - cw * 0.5, cx + cw * 0.5, cz - cd * 0.5, cz + cd * 0.5);
+                for (side, z_edge) in [(-1.0_f32, z0), (1.0, z1)] {
+                    let mut x = x0;
+                    while x < x1 - 0.01 {
+                        let seg = (x1 - x).min(2.0);
+                        let mx = x + seg * 0.5;
+                        if (z_edge + side * 0.8).abs() <= r - 0.5 && !has_river(mx, z_edge + side * 0.8) {
+                            m.box_part(mx, -0.45, z_edge + side * 0.25, seg, 0.51, 0.5, quay);
+                            m.box_part(mx, 0.06, z_edge + side * 0.35, seg, 0.18, 0.7, coping);
+                            m.box_part(mx, 0.68, z_edge + side * 0.5, seg, 0.1, 0.14, rail);
+                            if ((mx + 200.0) / 6.0).floor() != ((mx - seg + 200.0) / 6.0).floor() {
+                                m.box_part(mx, 0.24, z_edge + side * 0.5, 0.36, 0.58, 0.36, bollard);
+                            }
+                        }
+                        x += 2.0;
+                    }
+                }
+                for (side, x_edge) in [(-1.0_f32, x0), (1.0, x1)] {
+                    let mut z = z0;
+                    while z < z1 - 0.01 {
+                        let seg = (z1 - z).min(2.0);
+                        let mz = z + seg * 0.5;
+                        if (x_edge + side * 0.8).abs() <= r - 0.5 && !has_river(x_edge + side * 0.8, mz) {
+                            m.box_part(x_edge + side * 0.25, -0.45, mz, 0.5, 0.51, seg, quay);
+                            m.box_part(x_edge + side * 0.35, 0.06, mz, 0.7, 0.18, seg, coping);
+                            m.box_part(x_edge + side * 0.5, 0.68, mz, 0.14, 0.1, seg, rail);
+                            if ((mz + 200.0) / 6.0).floor() != ((mz - seg + 200.0) / 6.0).floor() {
+                                m.box_part(x_edge + side * 0.5, 0.24, mz, 0.36, 0.58, 0.36, bollard);
+                            }
+                        }
+                        z += 2.0;
+                    }
+                }
+            }
+            for &[bx, bz, bw, bd, axis] in &def.bridges {
+                let east_west = axis == 1.0;
+                let (road_w, span_len) = if east_west {
+                    (bd as f32, bw as f32)
+                } else {
+                    (bw as f32, bd as f32)
+                };
+                m.at(
+                    bx as f32,
+                    0.0,
+                    bz as f32,
+                    if east_west { std::f32::consts::FRAC_PI_2 } else { 0.0 },
+                );
+                for pz in [-(span_len * 0.5 - 1.1), 0.0, span_len * 0.5 - 1.1] {
+                    m.box_part(0.0, -0.45, pz, road_w + 1.2, 0.41, 1.3, pier);
+                }
+                m.box_part(0.0, -0.08, 0.0, road_w - 0.8, 0.12, span_len + 1.6, deck);
+                let mut pz = -span_len * 0.5 - 0.4;
+                while pz <= span_len * 0.5 + 0.4 {
+                    m.box_part(0.0, 0.04, pz, road_w - 1.2, 0.025, 0.42, plank);
+                    pz += 1.8;
+                }
+                for side in [-1.0_f32, 1.0] {
+                    let rx = side * (road_w * 0.5 - 0.25);
+                    m.box_part(side * (road_w * 0.5 - 0.55), 0.0, 0.0, 1.1, 0.16, span_len + 1.8, curb);
+                    m.box_part(rx, 0.16, 0.0, 0.55, 0.56, span_len + 1.2, parapet);
+                    m.box_part(rx, 1.25, 0.0, 0.24, 0.14, span_len + 1.2, iron);
+                    let mut bz_i = -span_len * 0.5 + 0.5;
+                    while bz_i <= span_len * 0.5 - 0.5 {
+                        m.box_part(rx, 0.72, bz_i, 0.18, 0.54, 0.18, baluster);
+                        bz_i += 2.0;
+                    }
+                    for ez in [-1.0_f32, 1.0] {
+                        let lz = ez * (span_len * 0.5 + 0.55);
+                        m.box_part(rx, 0.0, lz, 0.95, 2.1, 0.95, pillar);
+                        m.box_part(rx, 2.1, lz, 1.12, 0.18, 1.12, pillar_cap);
+                        m.box_part(rx, 2.28, lz, 0.52, 0.62, 0.52, lantern);
+                        m.box_part(rx, 2.9, lz, 0.68, 0.16, 0.68, lantern_cap);
+                    }
+                }
+                m.at(0.0, 0.0, 0.0, 0.0);
+            }
         }
         let edge = r + 2.0;
         let full = (r + 4.0) * 2.0;
@@ -253,6 +439,37 @@ pub fn xray_mesh(def: &ArenaDef) -> Mesh {
     for &[bx, bz, bw, bd] in &def.blocks {
         frame(&mut m, bx as f32, bz as f32, bw as f32, bd as f32, 6.35);
     }
+    let river_line = hex_linear("#4c91b8");
+    let bridge_line = hex_linear("#d4b16a");
+    for &[bx, bz, bw, bd] in &def.water {
+        let (x, z, w, d) = (bx as f32, bz as f32, bw as f32, bd as f32);
+        for side in [-1.0_f32, 1.0] {
+            m.box_part(x + side * w * 0.5, 0.12, z, th, th, d, river_line);
+            m.box_part(x, 0.12, z + side * d * 0.5, w, th, th, river_line);
+        }
+    }
+    for &[bx, bz, bw, bd, axis] in &def.bridges {
+        let east_west = axis == 1.0;
+        let (road_w, span_len) = if east_west {
+            (bd as f32, bw as f32)
+        } else {
+            (bw as f32, bd as f32)
+        };
+        m.at(
+            bx as f32,
+            0.0,
+            bz as f32,
+            if east_west { std::f32::consts::FRAC_PI_2 } else { 0.0 },
+        );
+        for side in [-1.0_f32, 1.0] {
+            let rx = side * (road_w * 0.5 - 0.25);
+            m.box_part(rx, 1.3, 0.0, th, th, span_len + 1.2, bridge_line);
+            for ez in [-1.0_f32, 1.0] {
+                m.box_part(rx, 0.08, ez * (span_len * 0.5 + 0.55), th, 2.2, th, bridge_line);
+            }
+        }
+        m.at(0.0, 0.0, 0.0, 0.0);
+    }
     let r = def.size as f32;
     if def.is_octagon() {
         let t = std::f32::consts::SQRT_2 - 1.0;
@@ -309,6 +526,9 @@ mod tests {
                 wall: "#cc5544".into(),
                 sky: "#ddeeff".into(),
                 blocks: vec![[0.0, 0.0, 10.0, 10.0]],
+                water: vec![],
+                bridges: vec![],
+                spawns: vec![],
             };
             let solid = scenery_mesh(&def);
             let xray = xray_mesh(&def);
@@ -317,5 +537,29 @@ mod tests {
             assert_eq!(solid.count_vertices() % 3, 0);
             assert_eq!(xray.count_vertices() % 3, 0);
         }
+    }
+
+    #[test]
+    fn builds_valid_meshes_for_river_and_bridge_arenas() {
+        let def = ArenaDef {
+            name: "Bridges of Königsberg".into(),
+            desc: "River and bridges".into(),
+            size: 96.0,
+            shape: "square".into(),
+            max_players: None,
+            ground: "#a89f8d".into(),
+            wall: "#7f7264".into(),
+            sky: "#c6dce8".into(),
+            blocks: vec![],
+            water: vec![[-40.0, 0.0, 40.0, 12.0], [40.0, 0.0, 40.0, 12.0]],
+            bridges: vec![[0.0, 0.0, 16.0, 12.0, 0.0]],
+            spawns: vec![],
+        };
+        let solid = scenery_mesh(&def);
+        let xray = xray_mesh(&def);
+        assert!(solid.count_vertices() > 500);
+        assert!(xray.count_vertices() > 100);
+        assert_eq!(solid.count_vertices() % 3, 0);
+        assert_eq!(xray.count_vertices() % 3, 0);
     }
 }

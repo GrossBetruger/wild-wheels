@@ -61,7 +61,7 @@ impl Game {
                 let strength = source.nightmare_active.clamp(0.0, 1.0);
                 if (3.5..=3.5 + NIGHTMARE_LENGTH * strength).contains(&behind)
                     && side <= 3.0 * strength.sqrt()
-                    && clear(
+                    && wall_clear(
                         self.global.arena,
                         source.wx,
                         source.wz,

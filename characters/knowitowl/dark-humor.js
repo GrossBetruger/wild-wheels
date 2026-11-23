@@ -58,6 +58,22 @@ export function drawXrayArena(m, arena) {
   };
   // Match the solid scenery, including the inner faces of the perimeter walls.
   for (const [x, z, w, d] of arena.blocks) frame(x, z, w, d, 6.35);
+  for (const [x, z, w, d] of arena.water ?? []) {
+    for (const side of [-1, 1]) {
+      m.box(x + side * w / 2, .12, z, thickness, thickness, d, '#4c91b8');
+      m.box(x, .12, z + side * d / 2, w, thickness, thickness, '#4c91b8');
+    }
+  }
+  for (const [x, z, w, d, axis] of arena.bridges ?? []) {
+    const eastWest = axis === 1, roadW = eastWest ? d : w, span = eastWest ? w : d;
+    m.at(x, 0, z, eastWest ? Math.PI / 2 : 0);
+    for (const side of [-1, 1]) {
+      const rx = side * (roadW / 2 - .25);
+      m.box(rx, 1.3, 0, thickness, thickness, span + 1.2, '#d4b16a');
+      for (const ez of [-1, 1]) m.box(rx, .08, ez * (span / 2 + .55), thickness, 2.2, thickness, '#d4b16a');
+    }
+    m.at(0, 0, 0);
+  }
   if (arena.shape === 'octagon') {
     const R = arena.size, side = 2 * R * (Math.SQRT2 - 1), corner = R * (Math.SQRT2 - 1);
     for (let i = 0; i < 8; i++) {

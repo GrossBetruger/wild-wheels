@@ -337,7 +337,18 @@ function drawMap() {
       }
       map.closePath(); map.fillStyle = '#e5e0d9'; map.fill(); map.strokeStyle = arena.wall; map.lineWidth = 3; map.stroke();
     } else {
-      map.fillStyle = '#e5e0d9'; map.fillRect(78, 3, 124, 120); map.fillStyle = '#92839d'; for (const [x, z, w, d] of arena.blocks) map.fillRect(140 + (x - w / 2) * scale, 63 + (z - d / 2) * scale, w * scale, d * scale);
+      map.fillStyle = '#e5e0d9'; map.fillRect(78, 3, 124, 120);
+      if (arena.water?.length || arena.bridges?.length) {
+        map.fillStyle = '#4f8cb5';
+        for (const [x, z, w, d] of arena.water ?? []) map.fillRect(140 + (x - w / 2) * scale, 63 + (z - d / 2) * scale, w * scale, d * scale);
+        for (const [x, z, w, d] of arena.bridges ?? []) map.fillRect(140 + (x - w / 2) * scale, 63 + (z - d / 2) * scale, w * scale, d * scale);
+        map.fillStyle = '#c48f52';
+        for (const [x, z, w, d, axis] of arena.bridges ?? []) {
+          const bw = axis === 1 ? w + 2 : Math.max(2, w - 2), bd = axis === 1 ? Math.max(2, d - 2) : d + 2;
+          map.fillRect(140 + (x - bw / 2) * scale, 63 + (z - bd / 2) * scale, bw * scale, bd * scale);
+        }
+      }
+      map.fillStyle = '#92839d'; for (const [x, z, w, d] of arena.blocks) map.fillRect(140 + (x - w / 2) * scale, 63 + (z - d / 2) * scale, w * scale, d * scale);
     }
     for (const actor of [race, ...race.bots]) { if (actor.bomber || actor.inactive || actor.destroyed || actor.afk) continue; map.fillStyle = actor.color; map.beginPath(); map.arc(140 + actor.wx * scale, 63 + actor.wz * scale, actor === race ? 4 : 3, 0, 7); map.fill(); } return;
   }

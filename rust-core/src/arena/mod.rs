@@ -46,10 +46,15 @@ use serde_json::json;
 
 fn load_kernel_arena(index: usize, def: &ArenaDef) -> Result<(), ()> {
     let config = unsafe { &mut *core::ptr::addr_of_mut!(crate::CONFIG) };
-    for (j, b) in def.blocks.iter().enumerate() {
-        config[j * 4..j * 4 + 4].copy_from_slice(b);
+    let mut count = 0;
+    for b in def.blocks.iter().chain(def.water.iter()) {
+        if count >= 32 {
+            return Err(());
+        }
+        config[count * 4..count * 4 + 4].copy_from_slice(b);
+        count += 1;
     }
-    if crate::set_arena(index, def.size, def.blocks.len()) != 1 {
+    if crate::set_arena(index, def.size, count) != 1 {
         return Err(());
     }
     crate::set_arena_shape(index, def.is_octagon());
@@ -60,6 +65,10 @@ pub fn angle(a:f64,b:f64)->f64 { (a-b).sin().atan2((a-b).cos()) }
 pub fn clear(arena:usize,ax:f64,az:f64,bx:f64,bz:f64)->bool {
     let d=distance(ax,az,bx,bz);let mut t=3.0;
     while t<d {if blocked(arena,ax+(bx-ax)*t/d,az+(bz-az)*t/d,0.4){return false;}t+=3.0;}true
+}
+pub fn wall_clear(arena:usize,ax:f64,az:f64,bx:f64,bz:f64)->bool {
+    let d=distance(ax,az,bx,bz);let mut t=3.0;
+    while t<d {if wall_blocked(arena,ax+(bx-ax)*t/d,az+(bz-az)*t/d,0.4){return false;}t+=3.0;}true
 }
 pub fn sound(g:&mut Globals,kind:&str,owner:usize,x:f64,z:f64,key:Option<String>){
     if !g.multiplayer {g.events.push(json!(kind));return;}

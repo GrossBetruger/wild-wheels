@@ -426,6 +426,9 @@ mod tests {
             wall: "#cc5544".into(),
             sky: "#ddeeff".into(),
             blocks: vec![[0.0, 0.0, 12.0, 12.0]],
+            water: vec![],
+            bridges: vec![],
+            spawns: vec![],
         };
         let idx = defs.len();
         defs.push(custom.clone());

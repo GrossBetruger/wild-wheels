@@ -39,6 +39,14 @@ pub struct ArenaDef {
     pub sky: String,
     #[serde(default)]
     pub blocks: Vec<[f64; 4]>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub water: Vec<[f64; 4]>,
+    /// Bridges spanning water channels: `[x, z, w, d, axis]` where `axis` 0 = spans along Z (N-S),
+    /// 1 = spans along X (E-W).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub bridges: Vec<[f64; 5]>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub spawns: Vec<[f64; 2]>,
 }
 
 impl ArenaDef {
@@ -54,11 +62,28 @@ impl ArenaDef {
             && valid_hex(&self.ground)
             && valid_hex(&self.wall)
             && valid_hex(&self.sky)
-            && self.blocks.len() <= 32
+            && self.blocks.len() + self.water.len() <= 32
             && self
                 .blocks
                 .iter()
                 .all(|b| b.iter().all(|n| n.is_finite()) && b[2] > 0.0 && b[3] > 0.0)
+            && self
+                .water
+                .iter()
+                .all(|b| b.iter().all(|n| n.is_finite()) && b[2] > 0.0 && b[3] > 0.0)
+            && self.bridges.len() <= 16
+            && self.bridges.iter().all(|b| {
+                b.iter().all(|n| n.is_finite())
+                    && b[2] > 0.0
+                    && b[3] > 0.0
+                    && (b[4] == 0.0 || b[4] == 1.0)
+            })
+            && (self.spawns.is_empty()
+                || (self.spawns.len() == 8
+                    && self
+                        .spawns
+                        .iter()
+                        .all(|p| p.iter().all(|n| n.is_finite()) && !self.blocked(p[0], p[1], 4.0))))
     }
     pub fn is_octagon(&self) -> bool {
         self.shape == "octagon"
@@ -70,6 +95,16 @@ impl ArenaDef {
             (self.size - 18.0).max(self.size * 0.65)
         }
     }
+    pub fn spawn_points(&self) -> [[f64; 2]; 8] {
+        if self.spawns.len() == 8 {
+            return std::array::from_fn(|i| self.spawns[i]);
+        }
+        let radius = self.spawn_radius();
+        std::array::from_fn(|i| {
+            let a = i as f64 * std::f64::consts::FRAC_PI_4;
+            [a.sin() * radius, a.cos() * radius]
+        })
+    }
     pub fn in_bounds(&self, x: f64, z: f64, padding: f64) -> bool {
         let limit = self.size - padding;
         x.abs() <= limit
@@ -77,9 +112,15 @@ impl ArenaDef {
             && (!self.is_octagon()
                 || (x.abs() + z.abs()) * std::f64::consts::FRAC_1_SQRT_2 <= limit)
     }
-    pub fn blocked(&self, x: f64, z: f64, padding: f64) -> bool {
+    pub fn wall_blocked(&self, x: f64, z: f64, padding: f64) -> bool {
         !self.in_bounds(x, z, padding)
             || self.blocks.iter().any(|b| {
+                (x - b[0]).abs() < b[2] / 2.0 + padding && (z - b[1]).abs() < b[3] / 2.0 + padding
+            })
+    }
+    pub fn blocked(&self, x: f64, z: f64, padding: f64) -> bool {
+        self.wall_blocked(x, z, padding)
+            || self.water.iter().any(|b| {
                 (x - b[0]).abs() < b[2] / 2.0 + padding && (z - b[1]).abs() < b[3] / 2.0 + padding
             })
     }
@@ -103,6 +144,9 @@ pub fn default_arenas() -> Vec<ArenaDef> {
                 [35.0, -35.0, 10.0, 34.0],
                 [0.0, 0.0, 14.0, 14.0],
             ],
+            water: vec![],
+            bridges: vec![],
+            spawns: vec![],
         },
         ArenaDef {
             name: "Crossfire Court".into(),
@@ -120,6 +164,9 @@ pub fn default_arenas() -> Vec<ArenaDef> {
                 [0.0, -55.0, 36.0, 12.0],
                 [0.0, 55.0, 36.0, 12.0],
             ],
+            water: vec![],
+            bridges: vec![],
+            spawns: vec![],
         },
         ArenaDef {
             name: "Octagon".into(),
@@ -131,6 +178,9 @@ pub fn default_arenas() -> Vec<ArenaDef> {
             wall: "#c74c48".into(),
             sky: "#d8cfc4".into(),
             blocks: vec![],
+            water: vec![],
+            bridges: vec![],
+            spawns: vec![],
         },
     ]
 }
@@ -206,8 +256,14 @@ pub fn arena_max_players(arena: usize) -> Option<usize> {
 pub fn arena_spawn_radius(arena: usize) -> f64 {
     with_arena(arena, ArenaDef::spawn_radius)
 }
+pub fn arena_spawn_points(arena: usize) -> [[f64; 2]; 8] {
+    with_arena(arena, ArenaDef::spawn_points)
+}
 pub fn in_bounds(arena: usize, x: f64, z: f64) -> bool {
     with_arena(arena, |d| d.in_bounds(x, z, 0.0))
+}
+pub fn wall_blocked(arena: usize, x: f64, z: f64, padding: f64) -> bool {
+    with_arena(arena, |d| d.wall_blocked(x, z, padding))
 }
 pub fn blocked(arena: usize, x: f64, z: f64, padding: f64) -> bool {
     with_arena(arena, |d| d.blocked(x, z, padding))

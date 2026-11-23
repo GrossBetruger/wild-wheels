@@ -52,8 +52,8 @@ impl Room {
 }
 fn initial_actor(id:usize,skill:f64,capacity:usize,arena:usize)->Actor {
     let slots=arena_max_players(arena).map_or(capacity,|cap|cap.min(capacity));
-    let radius=arena_spawn_radius(arena);
-    let angle=((id*8/slots)%8)as f64*std::f64::consts::FRAC_PI_4;let x=angle.sin()*radius;let z=angle.cos()*radius;let heading=(-x).atan2(-z);
+    let points=arena_spawn_points(arena);
+    let [x,z]=points[(id*8/slots)%8];let heading=(-x).atan2(-z);
     Actor{id,driver:id%DRIVER_NAMES.len(),color:PLAYER_COLORS[id%PLAYER_COLORS.len()].into(),wx:x,wz:z,heading,motion_heading:heading,camera_heading:heading,somersault_camera_start:heading,
         health:3.0,shield:0.0,ammo:START_HEDGEHOGS,missiles:1,turbos:1,item:"hedgehog".into(),fire_cooldown:0.5,chaff:4,skill,..Actor::default()}
 }

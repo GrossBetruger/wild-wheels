@@ -690,7 +690,88 @@ export class Renderer {
     }else{
       const R=arena.size,span=Math.ceil((R+4)/10)*10,edge=R+2,full=(R+4)*2;
       const alt=index===0?'#959d86':index===1?'#978ca5':rgb(arena.ground).map(c=>Math.min(1,c+11/255));
-      for(let x=-span;x<span;x+=10)for(let z=-span;z<span;z+=10)m.box(x+5,-.4,z+5,10,.4,10,(x+z)%20?arena.ground:alt);
+      const water=arena.water??[],bridges=arena.bridges??[];
+      const cutouts=[...water,...bridges.map(([x,z,w,d])=>[x,z,w,d])];
+      const subtract=(rects,[cx,cz,cw,cd])=>{
+        const rx0=cx-cw/2,rx1=cx+cw/2,rz0=cz-cd/2,rz1=cz+cd/2,out=[];
+        for(const [x0,z0,x1,z1] of rects){
+          if(x1<=rx0||x0>=rx1||z1<=rz0||z0>=rz1){out.push([x0,z0,x1,z1]);continue;}
+          const ix0=Math.max(x0,rx0),ix1=Math.min(x1,rx1);
+          if(x0<ix0)out.push([x0,z0,ix0,z1]);
+          if(ix1<x1)out.push([ix1,z0,x1,z1]);
+          if(z0<rz0)out.push([ix0,z0,ix1,Math.min(z1,rz0)]);
+          if(z1>rz1)out.push([ix0,Math.max(z0,rz1),ix1,z1]);
+        }
+        return out;
+      };
+      for(let x=-span;x<span;x+=10)for(let z=-span;z<span;z+=10){
+        const col=(x+z)%20?arena.ground:alt;
+        if(!cutouts.length){m.box(x+5,-.4,z+5,10,.4,10,col);continue;}
+        let rects=[[x,z,x+10,z+10]];
+        for(const cut of cutouts)rects=subtract(rects,cut);
+        for(const [x0,z0,x1,z1] of rects)m.box((x0+x1)/2,-.4,(z0+z1)/2,x1-x0,.4,z1-z0,col);
+      }
+      if(cutouts.length){
+        const hasRiver=(px,pz)=>cutouts.some(([cx,cz,cw,cd])=>Math.abs(px-cx)<cw/2&&Math.abs(pz-cz)<cd/2);
+        // Sunken river bed, shimmering surface, and downstream current streaks (continuous under bridges).
+        for(const [cx,cz,cw,cd] of cutouts){
+          m.box(cx,-.58,cz,cw,.22,cd,'#286187');
+          m.box(cx,-.36,cz,Math.max(.5,cw-1.4),.03,Math.max(.5,cd-1.4),'#3579a4');
+          const horiz=cw>=cd,len=horiz?cw:cd,wid=horiz?cd:cw;
+          for(let s=-len/2+3;s<=len/2-3;s+=6.5){
+            const offset=(((((Math.round(cx+cz+s)%3)+3)%3)-1))*Math.min(2.2,wid*.22);
+            if(horiz)m.box(cx+s,-.33,cz+offset,Math.min(3.8,len*.45),.02,.45,'#5ea9ce');
+            else m.box(cx+offset,-.33,cz+s,.45,.02,Math.min(3.8,len*.45),'#5ea9ce');
+          }
+        }
+        // Stone quay embankments, coping stones, and low waterfront railings along land-facing riverbanks.
+        for(const [cx,cz,cw,cd] of water){
+          const x0=cx-cw/2,x1=cx+cw/2,z0=cz-cd/2,z1=cz+cd/2;
+          for(const [side,zEdge] of [[-1,z0],[1,z1]]){
+            for(let x=x0;x<x1-.01;x+=2){
+              const seg=Math.min(2,x1-x),mx=x+seg/2;
+              if(Math.abs(zEdge+side*.8)>R-.5||hasRiver(mx,zEdge+side*.8))continue;
+              m.box(mx,-.45,zEdge+side*.25,seg,.51,.5,'#6b686c');
+              m.box(mx,.06,zEdge+side*.35,seg,.18,.7,'#cfc5b4');
+              m.box(mx,.68,zEdge+side*.5,seg,.1,.14,'#535666');
+              if(Math.floor((mx+200)/6)!==Math.floor((mx-seg+200)/6))m.box(mx,.24,zEdge+side*.5,.36,.58,.36,'#474957');
+            }
+          }
+          for(const [side,xEdge] of [[-1,x0],[1,x1]]){
+            for(let z=z0;z<z1-.01;z+=2){
+              const seg=Math.min(2,z1-z),mz=z+seg/2;
+              if(Math.abs(xEdge+side*.8)>R-.5||hasRiver(xEdge+side*.8,mz))continue;
+              m.box(xEdge+side*.25,-.45,mz,.5,.51,seg,'#6b686c');
+              m.box(xEdge+side*.35,.06,mz,.7,.18,seg,'#cfc5b4');
+              m.box(xEdge+side*.5,.68,mz,.14,.1,seg,'#535666');
+              if(Math.floor((mz+200)/6)!==Math.floor((mz-seg+200)/6))m.box(xEdge+side*.5,.24,mz,.36,.58,.36,'#474957');
+            }
+          }
+        }
+        // Bridges spanning over the sunken river: stone piers, timber deck, parapets, and glowing lanterns.
+        for(const [bx,bz,bw,bd,axis] of bridges){
+          const eastWest=axis===1,roadW=eastWest?bd:bw,spanLen=eastWest?bw:bd;
+          m.at(bx,0,bz,eastWest?Math.PI/2:0);
+          for(const pz of [-(spanLen/2-1.1),0,spanLen/2-1.1])m.box(0,-.45,pz,roadW+1.2,.41,1.3,'#756f66');
+          m.box(0,-.08,0,roadW-.8,.12,spanLen+1.6,'#a57c52');
+          for(let z=-spanLen/2-.4;z<=spanLen/2+.4;z+=1.8)m.box(0,.04,z,roadW-1.2,.025,.42,'#85613e');
+          for(const side of [-1,1]){
+            const rx=side*(roadW/2-.25);
+            m.box(side*(roadW/2-.55),0,0,1.1,.16,spanLen+1.8,'#d5cbb8');
+            m.box(rx,.16,0,.55,.56,spanLen+1.2,'#8d8577');
+            m.box(rx,1.25,0,.24,.14,spanLen+1.2,'#383b4a');
+            for(let z=-spanLen/2+.5;z<=spanLen/2-.5;z+=2)m.box(rx,.72,z,.18,.54,.18,'#474a5a');
+            for(const ez of [-1,1]){
+              const lz=ez*(spanLen/2+.55);
+              m.box(rx,0,lz,.95,2.1,.95,'#7c7468');
+              m.box(rx,2.1,lz,1.12,.18,1.12,'#d8ceb8');
+              m.box(rx,2.28,lz,.52,.62,.52,'#f5dd84');
+              m.box(rx,2.9,lz,.68,.16,.68,'#363846');
+            }
+          }
+          m.at(0,0,0);
+        }
+      }
       for(const side of [-1,1]){m.box(side*edge,0,0,4,5,full,arena.wall);m.box(0,0,side*edge,full,5,4,arena.wall);for(let i=-R+6;i<R;i+=15){m.box(side*edge,5,i,4,.5,5,'#eadfb9');m.box(i,5,side*edge,5,.5,4,'#eadfb9');}}
       for(const [x,z,w,d] of arena.blocks){m.box(x,0,z,w,6,d,arena.wall);m.box(x,6,z,w+.3,.35,d+.3,'#c9bfaa');for(let i=-w/2+2;i<w/2;i+=3)m.box(x+i,.2,z-d/2-.05,.25,5.6,.15,'#4c465b');}
       for(let i=0;i<16;i++){const a=i/16*Math.PI*2;m.at(Math.sin(a)*(R+22),0,Math.cos(a)*(R+22));m.box(0,0,0,1,16,1,'#666377');m.box(0,15,0,8,1,1,'#eee1b1');m.cone(0,16,0,2,3,arena.wall,4);}

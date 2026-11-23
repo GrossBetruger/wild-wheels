@@ -40,11 +40,18 @@ export function inArenaBounds(arena, x, z, padding = 0) {
   if (Math.abs(x) > limit || Math.abs(z) > limit) return false;
   return arena.shape !== 'octagon' || (Math.abs(x) + Math.abs(z)) * Math.SQRT1_2 <= limit;
 }
-export function blocked(arena, x, z, padding = 2) { return !inArenaBounds(arena, x, z, padding) || arena.blocks.some(([bx, bz, w, d]) => Math.abs(x - bx) < w / 2 + padding && Math.abs(z - bz) < d / 2 + padding); }
+export function blocked(arena, x, z, padding = 2) {
+  return !inArenaBounds(arena, x, z, padding)
+    || arena.blocks.some(([bx, bz, w, d]) => Math.abs(x - bx) < w / 2 + padding && Math.abs(z - bz) < d / 2 + padding)
+    || (arena.water ?? []).some(([bx, bz, w, d]) => Math.abs(x - bx) < w / 2 + padding && Math.abs(z - bz) < d / 2 + padding);
+}
 function clearShot(arena, a, b) { const d = distance(a, b); for (let t = 3; t < d; t += 3)if (blocked(arena, a.wx + (b.wx - a.wx) * t / d, a.wz + (b.wz - a.wz) * t / d, .4)) return false; return true; }
 function spawn(r, actor, initial = false) {
   const arena = arenas[r.arena], radius = arena.shape === 'octagon' ? 48 : 78;
-  const actors = [r, ...r.bots], count = Math.max(1, actors.filter(a => !a.inactive).length), candidates = Array.from({ length: 8 }, (_, i) => { const angle = i * Math.PI / 4; return { wx: Math.sin(angle) * radius, wz: Math.cos(angle) * radius }; });
+  const actors = [r, ...r.bots], count = Math.max(1, actors.filter(a => !a.inactive).length);
+  const candidates = arena.spawns?.length === 8
+    ? arena.spawns.map(([wx, wz]) => ({ wx, wz }))
+    : Array.from({ length: 8 }, (_, i) => { const angle = i * Math.PI / 4; return { wx: Math.sin(angle) * radius, wz: Math.cos(angle) * radius }; });
   const choice = initial ? candidates[Math.floor(actor.id * 8 / count) % 8] : candidates.sort((a, b) => Math.min(...actors.filter(k => k !== actor && !k.inactive && !k.destroyed).map(k => distance(b, k)), 999) - Math.min(...actors.filter(k => k !== actor && !k.inactive && !k.destroyed).map(k => distance(a, k)), 999))[0];
   actor.wx = choice.wx; actor.wz = choice.wz; actor.heading = Math.atan2(-choice.wx, -choice.wz); actor.speed = 0; actor.health = 3; actor.reverseControls = 0; actor.destroyed = 0; actor.shield = 0; actor.ammo = START_HEDGEHOGS; actor.missiles = 1; actor.turbos = 1; actor.item = 'hedgehog'; actor.fireCooldown = .5; actor.vx = 0; actor.boost = 0; actor.nightmareActive = 0; actor.nightmareCooldown ??= 0; actor.path = [];
   actor.motionHeading = actor.heading; actor.cameraHeading = actor.heading; actor.drift = 0; actor.wasDrifting = false; actor.driftTrail = null; actor.driftEmit = 0;
