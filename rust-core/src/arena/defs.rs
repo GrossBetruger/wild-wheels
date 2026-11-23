@@ -253,9 +253,6 @@ pub fn arena_size(arena: usize) -> f64 {
 pub fn arena_max_players(arena: usize) -> Option<usize> {
     with_arena(arena, |d| d.max_players)
 }
-pub fn arena_spawn_radius(arena: usize) -> f64 {
-    with_arena(arena, ArenaDef::spawn_radius)
-}
 pub fn arena_spawn_points(arena: usize) -> [[f64; 2]; 8] {
     with_arena(arena, ArenaDef::spawn_points)
 }
