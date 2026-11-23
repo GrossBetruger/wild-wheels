@@ -342,9 +342,10 @@ function drawMap() {
         map.fillStyle = '#4f8cb5';
         for (const [x, z, w, d] of arena.water ?? []) map.fillRect(140 + (x - w / 2) * scale, 63 + (z - d / 2) * scale, w * scale, d * scale);
         for (const [x, z, w, d] of arena.bridges ?? []) map.fillRect(140 + (x - w / 2) * scale, 63 + (z - d / 2) * scale, w * scale, d * scale);
-        map.fillStyle = '#c48f52';
-        for (const [x, z, w, d, axis] of arena.bridges ?? []) {
+        for (const [bi, [x, z, w, d, axis]] of (arena.bridges ?? []).entries()) {
           const bw = axis === 1 ? w + 2 : Math.max(2, w - 2), bd = axis === 1 ? Math.max(2, d - 2) : d + 2;
+          const visited = ((race.eulerBridges ?? 0) & (1 << bi)) !== 0;
+          map.fillStyle = visited ? '#5ce4c0' : '#c48f52';
           map.fillRect(140 + (x - bw / 2) * scale, 63 + (z - bd / 2) * scale, bw * scale, bd * scale);
         }
       }

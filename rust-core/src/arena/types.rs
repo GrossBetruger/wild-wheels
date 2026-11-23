@@ -8,6 +8,7 @@ pub struct Point { pub wx:f64, pub wz:f64 }
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(default, rename_all="camelCase")]
 pub struct Sample { pub wx:f64,pub wz:f64,pub height:f64 }
+fn is_zero_u16(v: &u16) -> bool { *v == 0 }
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(default, rename_all="camelCase")]
 pub struct Actor {
@@ -29,6 +30,9 @@ pub struct Actor {
     pub yaw:f64,pub spin:f64,pub stun:f64,pub voice_cooldown:f64,pub wall_cooldown:f64,
     pub drift:f64,pub was_drifting:bool,pub drift_emit:f64,pub drift_trail:Option<Vec<Point>>,
     pub notice:String,pub notice_time:f64,
+    #[serde(default, skip_serializing_if="is_zero_u16")] pub euler_bridges:u16,
+    #[serde(skip)] pub euler_on_bridge:Option<(usize,i8)>,
+    #[serde(skip)] pub euler_hinted:bool,
     #[serde(skip)] pub credits:BTreeMap<usize,f64>,
     #[serde(skip)] pub prediction_crash:bool,
     #[serde(flatten)] pub extra:BTreeMap<String,Value>,

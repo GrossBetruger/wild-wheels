@@ -415,6 +415,7 @@ mod tests {
     }
     #[test]
     fn client_decodes_and_predicts_unknown_server_defined_arena_without_rebuild() {
+        let _reg = super::super::super::defs::REGISTRY_LOCK.lock().unwrap();
         let mut defs = default_arenas();
         let custom = ArenaDef {
             name: "Hex Dome".into(),

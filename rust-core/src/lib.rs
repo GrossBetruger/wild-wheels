@@ -7,7 +7,8 @@ pub use arena::native::{NativeArena, Told};
 pub use arena::{NativeClient, ClientInput, ClientAction, ClientError, ClientView};
 pub use arena::{
     Action, Actor, ArenaDef, Frame, Input, Move, MAX_ARENAS, MAX_PLAYERS, arena_count, arena_def,
-    arena_defs, arena_max_players, default_arenas, in_bounds, is_default_arena, set_arena_defs,
+    arena_defs, arena_max_players, default_arenas, in_bounds, is_default_arena, next_euler_bridge,
+    set_arena_defs,
 };
 const FIELDS: usize = 16;
 const CLEAR: u32 = 1;

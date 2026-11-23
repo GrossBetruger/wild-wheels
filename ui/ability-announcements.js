@@ -45,9 +45,21 @@ export class AbilityUsage {
       }
     }
     for(const a of [world,...world.bots]){
-      const state={driver:a.driver,cooldown:a.specialCooldown??0,boost:a.boost??0,flip:a.somersaultCooldown??0,nightmare:a.nightmareCooldown??0};
+      const state={driver:a.driver,cooldown:a.specialCooldown??0,boost:a.boost??0,flip:a.somersaultCooldown??0,nightmare:a.nightmareCooldown??0,notice:a.notice??''};
       const before=this.previous.get(a.id);this.previous.set(a.id,state);
-      if(!before||before.driver!==a.driver||world.phase!=='racing'||world.specialAbilities===false||a.inactive||a.afk||a.destroyed||a.bomber)continue;
+      if(!before||world.phase!=='racing'||a.inactive||a.afk||a.destroyed||a.bomber)continue;
+      if(state.notice!==before.notice){
+        const who=a.id===world.id?'YOU':(a.name??'RIVAL').toUpperCase();
+        if(state.notice==='EULERIAN PATH!'){
+          events.push({id:`euler:${identity}:${++this.sequence}`,owner:a.id,title:'EULERIAN PATH!',icon:'🌉',color:'#f5d77f',theme:'euler',detail:`${who} CROSSED ALL 7 BRIDGES ONCE · EULER IS SHOOK`,duration:4});
+          continue;
+        }
+        if(state.notice==='6/7 BRIDGES · EULER SMILES'){
+          events.push({id:`euler-near:${identity}:${++this.sequence}`,owner:a.id,title:'6 / 7 BRIDGES · EULER SMILES',icon:'🌉',color:'#9fd8f5',theme:'euler',detail:`${who} HIT EULER’S LIMIT · ONE BRIDGE LEFT!`,duration:2.8});
+          continue;
+        }
+      }
+      if(before.driver!==a.driver||world.specialAbilities===false)continue;
       let card;
       if(state.cooldown>before.cooldown+1){
         if(a.driver===15&&karmaCaster===a.id)continue;

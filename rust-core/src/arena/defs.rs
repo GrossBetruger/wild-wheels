@@ -196,6 +196,9 @@ pub fn is_default_arena(index: usize, def: &ArenaDef) -> bool {
     index < 3 && default_arena(index).as_ref() == Some(def)
 }
 
+#[cfg(test)]
+pub(crate) static REGISTRY_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 fn registry() -> &'static RwLock<Vec<ArenaDef>> {
     static REGISTRY: OnceLock<RwLock<Vec<ArenaDef>>> = OnceLock::new();
     REGISTRY.get_or_init(|| RwLock::new(default_arenas()))

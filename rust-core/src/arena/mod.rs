@@ -6,6 +6,8 @@ mod movement;
 mod weapons;
 mod bat;
 mod bicycles;
+mod euler;
+pub use euler::next_euler_bridge;
 mod tick;
 mod specials;
 mod nightmare;

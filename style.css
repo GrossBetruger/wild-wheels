@@ -4441,6 +4441,20 @@ body.mobile-playing {
   animation: ability-karma-spin 1.8s ease-in-out 2
 }
 
+.ability-announcement[data-theme=euler] .reward-card {
+  max-width: min(500px, 100%);
+  animation-duration: 3.8s;
+  background: radial-gradient(ellipse at 20% 25%, #f5d77f44, transparent 52%), radial-gradient(ellipse at 82% 75%, #5ea9ce44, transparent 55%), linear-gradient(135deg, #163047f2, #234966ee 55%, #5b4a26f0);
+  border: 3px double #f5d77f;
+  border-radius: 22px 10px 22px 10px;
+  box-shadow: 0 0 34px #f5d77f88, inset 0 0 22px #5ea9ce33
+}
+
+.ability-announcement[data-theme=euler] .reward-icon {
+  font-size: 40px;
+  filter: drop-shadow(0 0 12px #f5d77f)
+}
+
 @keyframes ability-karma-spin {
   0% {
     transform: rotate(0deg) scale(.85)

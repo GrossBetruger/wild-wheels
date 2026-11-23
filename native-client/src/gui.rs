@@ -448,8 +448,9 @@ impl Builder<'_, '_, '_> {
     fn column(&mut self, parent: Entity, node: Node) -> Entity {
         let node = Node {
             flex_direction: FlexDirection::Column,
-            row_gap: px(8),
-            padding: UiRect::all(px(18)),
+            row_gap: px(6),
+            padding: UiRect::all(px(12)),
+            overflow: Overflow::scroll_y(),
             ..node
         };
         self.node(parent, node, PANEL)
@@ -457,8 +458,8 @@ impl Builder<'_, '_, '_> {
     fn row(&mut self, parent: Entity) -> Entity {
         let node = Node {
             flex_wrap: FlexWrap::Wrap,
-            column_gap: px(6),
-            row_gap: px(6),
+            column_gap: px(5),
+            row_gap: px(4),
             align_items: AlignItems::Center,
             ..default()
         };
@@ -476,10 +477,19 @@ impl Builder<'_, '_, '_> {
             ChildOf(parent),
         ));
     }
-    fn button(&mut self, parent: Entity, label: &str, act: Act, color: Color, width: Val) {
+    fn button_sized(
+        &mut self,
+        parent: Entity,
+        label: &str,
+        act: Act,
+        color: Color,
+        width: Val,
+        style: (f32, f32, f32),
+    ) {
+        let (font_size, pad_x, pad_y) = style;
         let node = Node {
             width,
-            padding: UiRect::axes(px(10), px(7)),
+            padding: UiRect::axes(px(pad_x), px(pad_y)),
             justify_content: JustifyContent::Center,
             ..default()
         };
@@ -487,14 +497,17 @@ impl Builder<'_, '_, '_> {
         self.commands
             .entity(button)
             .insert((RelativeCursorPosition::default(), act, Tone(color)));
-        self.text(button, label, 15.0, Color::WHITE);
+        self.text(button, label, font_size, Color::WHITE);
+    }
+    fn button(&mut self, parent: Entity, label: &str, act: Act, color: Color, width: Val) {
+        self.button_sized(parent, label, act, color, width, (14.0, 8.0, 5.0));
     }
     fn choice(&mut self, parent: Entity, label: &str, act: Act, chosen: bool, width: Val) {
         let color = match chosen {
             true => SELECTED,
             false => BUTTON,
         };
-        self.button(parent, label, act, color, width);
+        self.button_sized(parent, label, act, color, width, (12.5, 6.0, 4.0));
     }
     fn racers(&mut self, parent: Entity, graphics: &Graphics, chosen: usize, width: f32) {
         let grid = self.row(parent);
@@ -618,19 +631,20 @@ pub fn draw(
                 root,
                 Node {
                     position_type: PositionType::Absolute,
-                    left: px(36),
-                    top: px(36),
-                    width: px(548),
+                    left: px(20),
+                    top: px(16),
+                    max_height: Val::Vh(95.0),
+                    width: px(572),
                     ..default()
                 },
             );
-            ui.text(panel, "WILD WHEELS", 44.0, GOLD);
-            ui.text(panel, "Arena battles on the dedicated server", 16.0, MUTED);
+            ui.text(panel, "WILD WHEELS", 32.0, GOLD);
+            ui.text(panel, "Arena battles on the dedicated server", 14.0, MUTED);
             for (label, field, value) in [
                 ("SERVER", Field::Server, &menu.server),
                 ("YOUR NAME", Field::Name, &menu.name),
             ] {
-                ui.text(panel, label, 13.0, MUTED);
+                ui.text(panel, label, 12.0, MUTED);
                 let editing = menu.field == field;
                 let shown = match editing {
                     true => format!("{value}|"),
@@ -638,18 +652,18 @@ pub fn draw(
                 };
                 ui.choice(panel, &shown, Act::Edit(field), editing, percent(100));
             }
-            ui.text(panel, "RACER", 13.0, MUTED);
-            ui.racers(panel, &graphics, menu.driver, 166.0);
+            ui.text(panel, "RACER", 12.0, MUTED);
+            ui.racers(panel, &graphics, menu.driver, 178.0);
             ui.colors(root, menu.color.as_deref(), None, false, "");
             if let Some(racer) = graphics.racers().get(menu.driver) {
-                ui.text(panel, &racer.description, 15.0, Color::WHITE);
+                ui.text(panel, &racer.description, 13.5, Color::WHITE);
             }
             ui.button(panel, "JOIN THE ARENA", Act::Join, PRIMARY, percent(100));
-            ui.text(panel, &menu.notice, 15.0, WARNING);
+            ui.text(panel, &menu.notice, 13.5, WARNING);
             ui.text(
                 panel,
                 "Tab: switch field   Arrows: choose a racer   Enter: join   Cmd+V: paste",
-                12.0,
+                11.5,
                 MUTED,
             );
         }
@@ -719,14 +733,15 @@ pub fn draw(
                 root,
                 Node {
                     position_type: PositionType::Absolute,
-                    right: px(14),
-                    top: px(14),
-                    width: px(392),
+                    right: px(12),
+                    top: px(10),
+                    max_height: Val::Vh(96.0),
+                    width: px(444),
                     ..default()
                 },
             );
-            ui.text(panel, "ROOM", 26.0, GOLD);
-            ui.text(panel, "ARENA", 13.0, MUTED);
+            ui.text(panel, "ROOM", 20.0, GOLD);
+            ui.text(panel, "ARENA", 11.5, MUTED);
             let arenas = ui.row(panel);
             if !session.arenas.is_empty() {
                 for (index, arena) in session.arenas.iter().enumerate() {
@@ -735,7 +750,7 @@ pub fn draw(
                         &arena.name,
                         Act::Arena(index),
                         index == view.arena,
-                        px(116),
+                        px(135),
                     );
                 }
             } else {
@@ -745,7 +760,7 @@ pub fn draw(
                         &arena.name,
                         Act::Arena(index),
                         index == view.arena,
-                        px(116),
+                        px(135),
                     );
                 }
             }
@@ -756,39 +771,38 @@ pub fn draw(
                 .or_else(|| (!view.arena_def.desc.is_empty()).then_some(view.arena_def.desc.as_str()))
                 .or_else(|| graphics.arena(view.arena).map(|a| a.description.as_str()));
             if let Some(desc) = arena_desc {
-                ui.text(panel, desc, 13.0, Color::WHITE);
+                ui.text(panel, desc, 11.5, Color::WHITE);
             }
             let racers = || view.actors.iter().filter(|a| !a.inactive && !a.bomber);
             let bots = racers().filter(|a| !a.human).count();
             let people = racers().filter(|a| a.human).count();
-            ui.text(panel, "BOTS", 13.0, MUTED);
-            let row = ui.row(panel);
-            ui.button(row, "-", Act::Bots(bots.saturating_sub(1)), BUTTON, px(44));
-            ui.text(row, &format!("  {bots}  "), 18.0, Color::WHITE);
             let arena_cap = view
                 .arena_def
                 .max_players
                 .map_or(ROOM_CAPACITY, |cap| cap.min(ROOM_CAPACITY));
             let more = (bots + 1).min(arena_cap.saturating_sub(people));
-            ui.button(row, "+", Act::Bots(more), BUTTON, px(44));
-            for (label, field, value, maximum) in [
-                ("KILLS TO WIN", "targetScore", view.target_score as usize, 100),
-                ("MINUTES", "matchMinutes", (view.duration / 60.0) as usize, 30),
-            ] {
-                let row = ui.row(panel);
-                ui.text(row, label, 13.0, MUTED);
-                ui.button(row, "-", Act::MatchLimit(field, value.saturating_sub(1).max(1)), BUTTON, px(44));
-                ui.text(row, &format!("  {value}  "), 18.0, Color::WHITE);
-                ui.button(row, "+", Act::MatchLimit(field, (value + 1).min(maximum)), BUTTON, px(44));
-            }
-            ui.text(panel, "SPECIAL ABILITIES", 13.0, MUTED);
             let row = ui.row(panel);
+            ui.text(row, "BOTS", 11.5, MUTED);
+            ui.button_sized(row, "-", Act::Bots(bots.saturating_sub(1)), BUTTON, px(30), (13.0, 4.0, 3.0));
+            ui.text(row, &format!(" {bots} "), 14.0, Color::WHITE);
+            ui.button_sized(row, "+", Act::Bots(more), BUTTON, px(30), (13.0, 4.0, 3.0));
+            ui.text(row, "  ABILITIES", 11.5, MUTED);
             for (label, enabled) in [("On", true), ("Off", false)] {
                 let chosen = view.special_abilities == enabled;
-                ui.choice(row, label, Act::Abilities(enabled), chosen, px(72));
+                ui.choice(row, label, Act::Abilities(enabled), chosen, px(48));
             }
-            ui.text(panel, "RACER", 13.0, MUTED);
-            ui.racers(panel, &graphics, view.player.driver, 175.0);
+            let limits_row = ui.row(panel);
+            for (label, field, value, maximum) in [
+                ("KILLS", "targetScore", view.target_score as usize, 100),
+                ("  MIN", "matchMinutes", (view.duration / 60.0) as usize, 30),
+            ] {
+                ui.text(limits_row, label, 11.5, MUTED);
+                ui.button_sized(limits_row, "-", Act::MatchLimit(field, value.saturating_sub(1).max(1)), BUTTON, px(30), (13.0, 4.0, 3.0));
+                ui.text(limits_row, &format!(" {value} "), 14.0, Color::WHITE);
+                ui.button_sized(limits_row, "+", Act::MatchLimit(field, (value + 1).min(maximum)), BUTTON, px(30), (13.0, 4.0, 3.0));
+            }
+            ui.text(panel, "RACER", 11.5, MUTED);
+            ui.racers(panel, &graphics, view.player.driver, 136.0);
             ui.colors(
                 root,
                 menu.color.as_deref(),
@@ -871,15 +885,12 @@ pub fn draw(
                 PRIMARY,
                 percent(100),
             );
-            ui.button(
-                panel,
-                "Sit out (AFK)  (P)",
-                Act::SitOut,
-                BUTTON,
-                percent(100),
-            );
-            ui.button(panel, "Leave room", Act::Leave, BUTTON, percent(100));
-            ui.text(panel, &session.status, 13.0, WARNING);
+            let actions = ui.row(panel);
+            ui.button(actions, "Sit out (AFK)  (P)", Act::SitOut, BUTTON, px(207));
+            ui.button(actions, "Leave room", Act::Leave, BUTTON, px(207));
+            if !session.status.is_empty() {
+                ui.text(panel, &session.status, 12.0, WARNING);
+            }
         }
         (Screen::Connecting, _) => {
             let panel = ui.column(root, centered);

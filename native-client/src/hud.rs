@@ -91,6 +91,7 @@ pub enum Id {
     Chaff,
     Flip,
     Voice,
+    Euler,
 }
 /// A node the HUD shows, hides, moves or recolors.
 #[derive(Component, Clone, Copy, PartialEq, Debug)]
@@ -165,7 +166,7 @@ pub struct Notices {
     averted: f64,
     burning: bool,
     ring: Option<(bool, f64)>,
-    abilities: HashMap<usize, (usize, f64, f64, f64, f64)>,
+    abilities: HashMap<usize, (usize, f64, f64, f64, f64, String)>,
     last_karma_id: u32,
     ability: Option<Notice>,
     intelligence: Option<u32>,
@@ -345,13 +346,51 @@ impl Notices {
                 a.boost,
                 a.somersault_cooldown,
                 a.nightmare_cooldown,
+                a.notice.clone(),
             );
-            let before = self.abilities.insert(a.id, state);
-            let Some(before) = before.filter(|before| before.0 == a.driver) else {
+            let before = self.abilities.insert(a.id, state.clone());
+            let Some(before) = before else {
                 continue;
             };
             let absent = a.inactive || a.afk || a.destroyed > 0.0 || a.bomber;
-            if !racing || !view.special_abilities || absent {
+            if !racing || absent {
+                continue;
+            }
+            if state.5 != before.5 {
+                let who = match a.id == view.you {
+                    true => "YOU".to_owned(),
+                    false => a.name.as_deref().unwrap_or("RIVAL").to_uppercase(),
+                };
+                if state.5 == "EULERIAN PATH!" {
+                    let event = Notice {
+                        title: "EULERIAN PATH!".into(),
+                        detail: format!("{who} CROSSED ALL 7 BRIDGES ONCE · EULER IS SHOOK"),
+                        color: Some([0xf5, 0xd7, 0x7f]),
+                        card_key: Some("euler:path".into()),
+                        started: now,
+                        until: now + 4.0,
+                    };
+                    if a.id == view.you || used.as_ref().is_none_or(|(mine, _)| !mine) {
+                        used = Some((a.id == view.you, event));
+                    }
+                    continue;
+                }
+                if state.5 == "6/7 BRIDGES · EULER SMILES" {
+                    let event = Notice {
+                        title: "6 / 7 BRIDGES · EULER SMILES".into(),
+                        detail: format!("{who} HIT EULER'S LIMIT · ONE BRIDGE LEFT!"),
+                        color: Some([0x9f, 0xd8, 0xf5]),
+                        card_key: Some("euler:near".into()),
+                        started: now,
+                        until: now + 2.8,
+                    };
+                    if a.id == view.you || used.as_ref().is_none_or(|(mine, _)| !mine) {
+                        used = Some((a.id == view.you, event));
+                    }
+                    continue;
+                }
+            }
+            if before.0 != a.driver || !view.special_abilities {
                 continue;
             }
             let racer = graphics.racers().get(a.driver);
@@ -741,6 +780,40 @@ fn readings(
                 color: Some(match blue {
                     true => Color::srgb_u8(0x4a, 0xba, 0xff),
                     false => Color::srgb_u8(0xff, 0x9a, 0x3c),
+                }),
+                ..default()
+            },
+        );
+    }
+    if view.phase == "racing"
+        && !p.bomber
+        && p.destroyed <= 0.0
+        && view.arena_def.bridges.len() == 7
+        && let Some(next_idx) = wild_wheels_core::next_euler_bridge(p.wx, p.wz, p.euler_bridges)
+    {
+        let b = view.arena_def.bridges[next_idx];
+        let target_angle = (b[0] - p.wx).atan2(b[1] - p.wz);
+        let rel = (target_angle - p.camera_heading)
+            .sin()
+            .atan2((target_angle - p.camera_heading).cos());
+        let arrows = [
+            "\u{2191}", "\u{2197}", "\u{2192}", "\u{2198}", "\u{2193}", "\u{2199}", "\u{2190}",
+            "\u{2196}",
+        ];
+        // Right-handed camera (+Y up, forward +Z => screen-right is -X), so clockwise on screen is -rel.
+        let sector = ((-rel / std::f64::consts::FRAC_PI_4).round() as i32).rem_euclid(8) as usize;
+        let count = p.euler_bridges.count_ones();
+        let label = match count {
+            6 => format!("EULER  6/7  {}  JUMP FOR #7!", arrows[sector]),
+            _ => format!("EULER  {count}/7  {}  NEXT BRIDGE", arrows[sector]),
+        };
+        out.insert(
+            Id::Euler,
+            Reading {
+                text: label,
+                color: Some(match count {
+                    6 => Color::srgb_u8(0x9f, 0xd8, 0xf5),
+                    _ => Color::srgb_u8(0xf5, 0xd7, 0x7f),
                 }),
                 ..default()
             },
@@ -1485,6 +1558,17 @@ pub fn setup(mut commands: Commands, mut fonts: ResMut<Assets<Font>>) {
     }
     ui.banner(
         root,
+        Id::Euler,
+        px(16.0 * K),
+        (
+            boxed(pad(12.0, 5.0), 1.5, 8.0),
+            hex(0x163047d8),
+            hex(0xf5d77faa),
+        ),
+        Style::new(13.0, hex(0xf5d77fff)),
+    );
+    ui.banner(
+        root,
         Id::Incoming,
         percent(31),
         (
@@ -2027,6 +2111,22 @@ pub fn update(
                     let corner = center + Vec2::new(x as f32, z as f32) * MAP_SCALE - size / 2.0;
                     (node.left, node.top) = (px(corner.x), px(corner.y));
                     (node.width, node.height) = (px(size.x), px(size.y));
+                    let next = (view.arena_def.bridges.len() == 7 && view.phase == "racing")
+                        .then(|| {
+                            wild_wheels_core::next_euler_bridge(
+                                view.player.wx,
+                                view.player.wz,
+                                view.player.euler_bridges,
+                            )
+                        })
+                        .flatten();
+                    color.0 = if view.player.euler_bridges & (1u16 << index) != 0 {
+                        hex(0x5ce4c0ff)
+                    } else if next == Some(index) {
+                        hex(0xffe37aff)
+                    } else {
+                        hex(0xc48f52ff)
+                    };
                 }
             }
             Part::MapBlock(index) => {

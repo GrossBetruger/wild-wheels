@@ -24,6 +24,7 @@ class Actor extends Row{
   get intelligenceBonus(){return this.frame.text.actors[this.id]?.intelligenceBonus??0;}
   get bicyclesStolen(){return this.frame.text.actors[this.id]?.bicyclesStolen??0;}
   get lastKiller(){return this.frame.text.actors[this.id]?.lastKiller??null;}
+  get eulerBridges(){return this.frame.text.actors[this.id]?.eulerBridges??0;}
   get specialCooldown(){return this.n(46);}
   get specialActive(){return this.n(47);}
   get healTimer(){return this.n(43);}

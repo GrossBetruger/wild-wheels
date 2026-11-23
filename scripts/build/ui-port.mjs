@@ -104,6 +104,24 @@ export function cardCatalog() {
       title: 'INTELLIGENCE UP!',
       placeholder: '5 ➜ 6 · BICYCLE COLLECTED · CARRY MORE ITEMS',
     },
+    {
+      key: 'euler:path',
+      kind: 'ability',
+      theme: 'euler',
+      color: '#f5d77f',
+      icon: '🌉',
+      title: 'EULERIAN PATH!',
+      placeholder: 'PLAYER CROSSED ALL 7 BRIDGES ONCE · EULER IS SHOOK',
+    },
+    {
+      key: 'euler:near',
+      kind: 'ability',
+      theme: 'euler',
+      color: '#9fd8f5',
+      icon: '🌉',
+      title: '6 / 7 BRIDGES · EULER SMILES',
+      placeholder: 'PLAYER HIT EULER’S LIMIT · ONE BRIDGE LEFT!',
+    },
   );
   return cards;
 }
