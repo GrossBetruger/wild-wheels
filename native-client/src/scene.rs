@@ -358,11 +358,13 @@ pub struct SceneAssets<'w> {
     sky: ResMut<'w, ClearColor>,
     time: Res<'w, Time>,
 }
+type XrayLens<'w, 's> =
+    Query<'w, 's, Lens, (With<XrayCamera>, Without<FollowCamera>, Without<EulerArrow>)>;
 #[derive(SystemParam)]
 pub struct Darkness<'w, 's> {
     fog: Query<'w, 's, &'static MaterialNode<FogMaterial>, With<DarkFog>>,
     fogs: ResMut<'w, Assets<FogMaterial>>,
-    xray: Query<'w, 's, Lens, (With<XrayCamera>, Without<FollowCamera>)>,
+    xray: XrayLens<'w, 's>,
     world: Query<'w, 's, Entity, With<FollowCamera>>,
 }
 type Lens = (
@@ -873,8 +875,18 @@ fn effects(stage: &mut Stage, view: &ClientView, xray: bool, elapsed: f32) {
     }
 }
 
-type FollowCameras<'w, 's> =
-    Query<'w, 's, (&'static mut Transform, &'static mut Projection), (With<FollowCamera>, Without<EulerArrow>)>;
+type FollowCameras<'w, 's> = Query<
+    'w,
+    's,
+    (&'static mut Transform, &'static mut Projection),
+    (With<FollowCamera>, Without<EulerArrow>),
+>;
+type EulerArrows<'w, 's> = Query<
+    'w,
+    's,
+    (&'static mut Transform, &'static mut Visibility),
+    (With<EulerArrow>, Without<FollowCamera>, Without<XrayCamera>),
+>;
 
 #[allow(clippy::too_many_arguments)]
 pub fn sync(
@@ -885,7 +897,7 @@ pub fn sync(
     mut cache: ResMut<SceneCache>,
     mut players: Query<&mut Ported>,
     mut cameras: FollowCameras,
-    mut arrows: Query<(&mut Transform, &mut Visibility), With<EulerArrow>>,
+    mut arrows: EulerArrows,
     mut darkness: Darkness,
 ) {
     let SceneAssets {
@@ -1193,5 +1205,14 @@ mod tests {
         let wind = tail.follow(3.0, (60.0, -40.0), 0.0, dt);
         assert_eq!(wind.swing, 0.0);
         assert_eq!(tail.velocity, 0.0);
+    }
+
+    #[test]
+    fn sync_and_hud_update_have_no_query_conflicts() {
+        let mut world = World::new();
+        let mut sync_sys = IntoSystem::into_system(sync);
+        sync_sys.initialize(&mut world);
+        let mut hud_sys = IntoSystem::into_system(crate::hud::update);
+        hud_sys.initialize(&mut world);
     }
 }
