@@ -20,6 +20,7 @@ mod showcase;
 mod sound;
 mod sprite;
 mod transport;
+mod ui_port;
 mod voice;
 mod xray;
 

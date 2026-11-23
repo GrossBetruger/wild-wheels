@@ -6,6 +6,7 @@ use crate::{
     gui::{Act, Menu, Screen, Tone},
     ported::{Graphics, tint},
     scene::FollowCamera,
+    ui_port::UiCards,
 };
 use bevy::{prelude::*, ui::RelativeCursorPosition};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -106,6 +107,10 @@ pub enum Part {
     Plate(usize),
     /// The nameplate itself, edged in the rival's color.
     PlateEdge(usize),
+    /// Ported HTML/CSS announcement card container (with dynamic subtitle & sparks).
+    HtmlCard(Id),
+    /// Radial burst spark around a ported HTML/CSS announcement card.
+    CardSpark(Id, usize),
 }
 #[derive(Component, Clone, Copy, PartialEq, Debug)]
 pub enum Label {
@@ -113,7 +118,12 @@ pub enum Label {
     /// The large number on a weapon card.
     Count(Id),
     Plate(usize),
+    /// Dynamic detail text overlaid into the ported HTML card's `<small>` slot.
+    CardDetail(Id),
 }
+/// Image node displaying a Chrome-ported HTML/CSS announcement texture.
+#[derive(Component, Clone, Copy, PartialEq, Eq)]
+pub struct HtmlCardArt(Id);
 /// A label's own color, used whenever its reading does not override it.
 #[derive(Component)]
 pub struct Ink(Color);
@@ -138,6 +148,8 @@ struct Notice {
     title: String,
     detail: String,
     color: Option<[u8; 3]>,
+    card_key: Option<String>,
+    started: f64,
     until: f64,
 }
 /// Announcements derived from changes in game state, each mirroring a browser class.
@@ -213,6 +225,8 @@ impl Notices {
                     },
                 ),
                 color: None,
+                card_key: None,
+                started: now,
                 until: 0.0,
             });
         }
@@ -311,6 +325,14 @@ impl Notices {
                         title,
                         detail,
                         color: Some([0x8e, 0xf0, 0xc8]),
+                        card_key: Some(
+                            match karma.swapped {
+                                true => "ability:15:swap",
+                                false => "ability:15",
+                            }
+                            .into(),
+                        ),
+                        started: now,
                         until: now + duration,
                     },
                 ));
@@ -337,12 +359,14 @@ impl Notices {
                 Some((title.to_owned(), detail.to_owned(), color))
             };
             let mut card = None;
+            let mut card_key: Option<String> = None;
             if state.4 > before.4 + 1.0 {
                 card = own(
                     "NIGHTMARE FUEL",
                     "HOUSTON, WE HAVE A PROBLEM",
                     [0xd0, 0x68, 0xff],
                 );
+                card_key = Some("ability:7:nightmare".into());
             }
             if state.1 > before.1 + 1.0 || (a.driver == 10 && state.2 > before.2 + 0.3) {
                 if a.driver == 15 && karma_caster == Some(a.id) {
@@ -351,9 +375,11 @@ impl Notices {
                 card = racer
                     .filter(|racer| !racer.card.0.is_empty())
                     .map(|racer| racer.card.clone());
+                card_key = Some(format!("ability:{}", a.driver));
             }
             if a.driver == 5 && state.3 > before.3 + 0.3 {
                 card = own("CRICKET'S JUMP", "NOW YOU SEE HER...", [0xb7, 0xf3, 0x5b]);
+                card_key = Some("ability:5:jump".into());
             }
             if card.is_some() && a.driver == 13 && a.special_active > 0.0 {
                 card = own(
@@ -361,12 +387,14 @@ impl Notices {
                     "A VERY TAXING PERFORMANCE",
                     [0xff, 0xf2, 0x9b],
                 );
+                card_key = Some("ability:13:xylophone".into());
             }
             let Some((mut title, detail, color)) = card else {
                 continue;
             };
             if a.driver == 8 && a.id != view.you {
                 title = "TIME DILATION".into();
+                card_key = Some("ability:8:rival".into());
             }
             let who = match a.id == view.you {
                 true => "YOU",
@@ -376,6 +404,8 @@ impl Notices {
                 title,
                 detail: format!("{who} · {detail}"),
                 color: Some(color),
+                card_key,
+                started: now,
                 until: now + 2.4,
             };
             // The viewer's own ability takes precedence; otherwise the latest wins.
@@ -405,8 +435,14 @@ impl Notices {
                     base + before,
                     base + bonus
                 ),
-                detail: "BICYCLE COLLECTED · CARRY MORE ITEMS".into(),
+                detail: format!(
+                    "{} -> {} · BICYCLE COLLECTED · CARRY MORE ITEMS",
+                    base + before,
+                    base + bonus
+                ),
                 color: Some([0xc6, 0xad, 0xff]),
+                card_key: Some("reward:intelligence".into()),
+                started: now,
                 until: now + 3.0,
             });
         }
@@ -1381,6 +1417,71 @@ pub fn setup(mut commands: Commands, mut fonts: ResMut<Assets<Font>>) {
             ),
             Style::new(18.0, white),
         );
+        // Ported HTML/CSS announcement card (shown instead of the flat banner when WWUP textures are present).
+        let row = ui.node(
+            root,
+            fixed(Node {
+                display: Display::None,
+                top: percent(match id {
+                    Id::Ability => 13,
+                    _ => 18,
+                }),
+                left: px(0),
+                right: px(0),
+                justify_content: JustifyContent::Center,
+                ..default()
+            }),
+            none,
+            none,
+        );
+        ui.commands.entity(row).insert(Part::HtmlCard(id));
+        let card = ui.node(
+            row,
+            Node {
+                position_type: PositionType::Relative,
+                ..default()
+            },
+            none,
+            none,
+        );
+        ui.commands
+            .entity(card)
+            .insert((ImageNode::default(), HtmlCardArt(id)));
+        let detail = ui.node(
+            card,
+            fixed(Node {
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                ..default()
+            }),
+            none,
+            none,
+        );
+        ui.words(
+            detail,
+            "",
+            Style {
+                bold: true,
+                shadow: true,
+                ..Style::new(12.5, hex(0xf4eaffff))
+            },
+            Some(Label::CardDetail(id)),
+        );
+        for spark_i in 0..10 {
+            let spark = ui.node(
+                card,
+                fixed(Node {
+                    display: Display::None,
+                    width: px(6.0),
+                    height: px(6.0),
+                    border_radius: BorderRadius::MAX,
+                    ..default()
+                }),
+                hex(0xfff3adff),
+                none,
+            );
+            ui.commands.entity(spark).insert(Part::CardSpark(id, spark_i));
+        }
     }
     ui.banner(
         root,
@@ -1698,17 +1799,54 @@ type Labels<'w, 's> = Query<
 >;
 type Lens<'w, 's> = Query<'w, 's, (&'static Camera, &'static GlobalTransform), With<FollowCamera>>;
 
+type HtmlArt<'w, 's> = Query<
+    'w,
+    's,
+    (&'static HtmlCardArt, &'static mut ImageNode, &'static mut Node, &'static Children),
+    (Without<Part>, Without<Card>),
+>;
+type DetailBoxes<'w, 's> = Query<'w, 's, &'static mut Node, (Without<Part>, Without<Card>, Without<HtmlCardArt>)>;
+
+fn notice_for(notices: &Notices, id: Id) -> Option<&Notice> {
+    match id {
+        Id::Ability => notices.ability.as_ref(),
+        Id::Reward => notices.reward.as_ref(),
+        _ => None,
+    }
+}
+
+/// Evaluates the browser's `@keyframes reward-arrive` vertical offset and opacity.
+fn card_motion(notice: &Notice, now: f64) -> (f32, f32) {
+    let span = (notice.until - notice.started).max(0.01);
+    let p = ((now - notice.started) / span).clamp(0.0, 1.0) as f32;
+    if p < 0.12 {
+        let t = p / 0.12;
+        (15.0 * (1.0 - t), t)
+    } else if p < 0.22 {
+        let t = (p - 0.12) / 0.10;
+        (-3.0 * (1.0 - t), 1.0)
+    } else if p <= 0.84 {
+        (0.0, 1.0)
+    } else {
+        let t = (p - 0.84) / 0.16;
+        (-22.0 * t, (1.0 - t).max(0.0))
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn update(
     session: Res<GameSession>,
     menu: Res<Menu>,
     graphics: Res<Graphics>,
+    ui_cards: Res<UiCards>,
     time: Res<Time>,
     mut notices: ResMut<Notices>,
     cameras: Lens,
     mut nodes: Nodes,
     mut labels: Labels,
     mut cards: Cards,
+    mut html_art: HtmlArt,
+    mut detail_boxes: DetailBoxes,
 ) {
     let view = session.client.as_ref().map(|client| client.view());
     let Some(view) = view.filter(|_| menu.screen(&session) == Screen::Playing) else {
@@ -1808,10 +1946,55 @@ pub fn update(
     for (part, mut node, mut color, mut edge) in &mut nodes {
         match *part {
             Part::Root => show(&mut node, true),
-            Part::Panel(id) => show(
-                &mut node,
-                readings.get(&id).is_some_and(|r| !r.text.is_empty()),
-            ),
+            Part::Panel(id) => {
+                let uses_html = notice_for(&notices, id)
+                    .and_then(|n| n.card_key.as_deref())
+                    .and_then(|k| ui_cards.get(k))
+                    .is_some();
+                show(
+                    &mut node,
+                    !uses_html && readings.get(&id).is_some_and(|r| !r.text.is_empty()),
+                );
+            }
+            Part::HtmlCard(id) => {
+                let active_card = notice_for(&notices, id).and_then(|n| {
+                    n.card_key
+                        .as_deref()
+                        .and_then(|k| ui_cards.get(k))
+                        .map(|c| (n, c))
+                });
+                show(&mut node, active_card.is_some());
+                if let Some((notice, _)) = active_card {
+                    let (dy, _) = card_motion(notice, now);
+                    node.margin = UiRect::top(px(dy * K));
+                }
+            }
+            Part::CardSpark(id, index) => {
+                let active_card = notice_for(&notices, id).and_then(|n| {
+                    n.card_key
+                        .as_deref()
+                        .and_then(|k| ui_cards.get(k))
+                        .map(|c| (n, c))
+                });
+                let spark = active_card.and_then(|(notice, ported)| {
+                    let elapsed = (now - notice.started) as f32;
+                    let s = (elapsed - 0.15) / 1.0;
+                    (0.0..=1.0).contains(&s).then(|| {
+                        let scale = K * 0.82;
+                        let ease = 1.0 - (1.0 - s).powi(2);
+                        let angle = (index as f32) * 36.0_f32.to_radians();
+                        let dist = (15.0 + ease * (ported.logical_w * 0.36)) * scale;
+                        let cx = ported.logical_w * 0.5 * scale;
+                        let cy = ported.logical_h * 0.5 * scale;
+                        (cx + angle.cos() * dist - 3.0, cy + angle.sin() * dist - 3.0, 1.0 - s)
+                    })
+                });
+                show(&mut node, spark.is_some());
+                if let Some((x, y, alpha)) = spark {
+                    (node.left, node.top) = (px(x), px(y));
+                    color.0 = Color::srgba(1.0, 0.953, 0.678, alpha);
+                }
+            }
             Part::Fill(id) => {
                 let fill = readings.get(&id).and_then(|r| r.fill).unwrap_or(0.0);
                 node.width = percent(fill.clamp(0.0, 1.0) * 100.0);
@@ -1905,6 +2088,16 @@ pub fn update(
                 Some((_, name, _)) => (name.as_str(), None),
                 None => ("", None),
             },
+            Label::CardDetail(id) => match notice_for(&notices, id) {
+                Some(notice) => {
+                    let (_, alpha) = card_motion(notice, now);
+                    (
+                        notice.detail.as_str(),
+                        Some(Color::srgba(0.957, 0.918, 1.0, alpha)),
+                    )
+                }
+                None => ("", None),
+            },
         };
         if text.0 != value {
             text.0 = value.to_owned();
@@ -1912,6 +2105,31 @@ pub fn update(
         let tinted = tinted.unwrap_or(ink.0);
         if color.0 != tinted {
             color.0 = tinted;
+        }
+    }
+    for (art, mut image, mut node, children) in &mut html_art {
+        let active_card = notice_for(&notices, art.0).and_then(|n| {
+            n.card_key
+                .as_deref()
+                .and_then(|k| ui_cards.get(k))
+                .map(|c| (n, c))
+        });
+        if let Some((notice, ported)) = active_card {
+            let scale = K * 0.82;
+            let (_, alpha) = card_motion(notice, now);
+            if image.image != ported.image {
+                image.image = ported.image.clone();
+            }
+            image.color = Color::srgba(1.0, 1.0, 1.0, alpha);
+            (node.width, node.height) = (px(ported.logical_w * scale), px(ported.logical_h * scale));
+            if let Some(&detail_entity) = children.first()
+                && let Ok(mut detail_node) = detail_boxes.get_mut(detail_entity)
+            {
+                detail_node.left = px(ported.detail_left * scale);
+                detail_node.top = px(ported.detail_top * scale);
+                detail_node.width = px(ported.detail_w * scale);
+                detail_node.height = px(ported.detail_h * scale);
+            }
         }
     }
     for (card, mut tone, mut edge, mut node) in &mut cards {

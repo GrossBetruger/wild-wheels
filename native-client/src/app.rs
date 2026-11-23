@@ -401,7 +401,10 @@ pub fn run(mut config: Config) -> Result<(), Box<dyn Error>> {
         ))
         .init_resource::<crate::hud::Notices>()
         .init_resource::<crate::chat::ChatPanel>()
-        .add_systems(Startup, (crate::gui::setup, crate::hud::setup))
+        .add_systems(
+            Startup,
+            (crate::gui::setup, crate::ui_port::setup, crate::hud::setup),
+        )
         .add_systems(
             Update,
             (

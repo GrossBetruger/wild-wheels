@@ -13,9 +13,10 @@
    prompted to comment on arena events in real time and potentially fine-tuned
    later. Deliver the commentary in a natural-sounding human voice.
 
-3. **Port HTML/browser graphics to native Rust and achieve full graphical feature parity.**
-   Close all remaining visual and UI gaps between the browser client (`client/`, `ui/`,
-   GLSL shaders, HTML/CSS overlays) and the native Rust Bevy client (`native-client/`) —
-   including shader-only effects, distance fog, iridescence/feather sway, animations,
-   lighting, and HUD/menu polish — so the native client matches the browser visually
-   feature-for-feature without drifting out of sync.
+3. **Automatic HTML-to-texture port for browser UI overlays in native Rust.**
+   Port the browser's HTML/CSS overlays and themed announcements (starting with special
+   ability announcements and reward notices in `ui/ability-announcements.js`,
+   `ui/reward-notice.js`, and `style.css`) into the native Rust Bevy client by
+   rendering the real HTML/CSS to transparent textures at build time, so browser CSS
+   stays the single source of truth and native announcements match the browser
+   visually instead of using plain flat text boxes.
