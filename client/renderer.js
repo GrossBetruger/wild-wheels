@@ -971,39 +971,106 @@ export class Renderer {
     }
   }
   eulerGhost(m,effect,time){
-    const t=effect.age??time,bob=Math.sin(t*3.6)*.45,sway=Math.sin(t*2.4)*.14,angle=effect.heading??0;
-    const rise=Math.min(1,t/.8),yBase=1.4+bob-(1-rise)*3.2;
-    // Spectral Prussian-teal & luminous ectoplasm robe floating above the ground.
+    const t=effect.age??time,phase=t*Math.PI,bob=Math.sin(phase*2)*.55,sway=Math.sin(phase)*.16,angle=effect.heading??0;
+    const rise=Math.min(1,t/.8),yBase=1.7+bob-(1-rise)*4.2;
+    // Classic cartoonish ghost sheet with scalloped rippling hem and wagging spectral tail.
     m.at(effect.wx,yBase,effect.wz,angle+sway);
-    m.cone(0,0,0,2.3,5.2,'#46c4b8',10);
-    m.cone(0,.35,0,1.75,4.7,'#9cf7ec',10);
-    // Flowing spectral sleeves reaching forward toward the theorem-breaker.
+    m.cone(0,.6,0,2.75,4.9,'#bdf9f2',12);
+    m.ball(0,3.2,0,2.05,1.85,1.85,'#e2fffc',12,7);
+    for(let i=0;i<8;i++){
+      const a=i*Math.PI/4+phase,ripple=Math.sin(phase*2+i*1.5)*.28;
+      m.ball(Math.sin(a)*2.25,.55+ripple,Math.cos(a)*2.25,.72,.95,.72,i%2?'#c8fcf6':'#8eece2',8,5);
+    }
+    const tailWag=Math.sin(phase*2)*.55;
+    m.ball(tailWag*.45,.55,-2.1,.82,.62,1.15,'#9ef0e6',8,5);
+    m.ball(tailWag,.25,-3.25,.5,.42,.9,'#75e0d6',7,4);
+    m.cone(tailWag*1.3,.15,-4.15,.36,.85,'#5ad0c8',6);
+    // 18th-century Prussian-blue scholar coat lapels, brass buttons, and fluffy white ruffled cravat.
+    m.box(0,3.45,.95,2.55,1.55,1.15,'#234c7d');
     for(const side of [-1,1]){
-      m.box(side*1.55,3.2,.8,.55,.55,1.8,'#7aece0');
-      m.ball(side*1.6,3.25,1.85,.34,.34,.34,'#e4fffb',7,4);
+      m.box(side*.95,3.7,1.45,.68,1.35,.32,'#2f629c');
+      m.ball(side*.68,3.6,1.62,.16,.16,.12,'#ffd85c',6,4);
+      m.ball(side*.68,3.15,1.62,.16,.16,.12,'#ffd85c',6,4);
     }
-    // Pale spectral head with one bright glowing eye and Euler's iconic squinted right eye.
-    m.ball(0,5.2,.15,1.08,1.18,1.02,'#e8fffb',12,7);
-    m.ball(-.36,5.32,1.05,.2,.22,.1,'#fff3a1',8,4);
-    m.box(.36,5.28,1.05,.36,.07,.08,'#264556');
-    // Euler's iconic 18th-century scholar's cap / turban (1753 Emanuel Handmann portrait).
-    m.ball(0,5.95,-.05,1.22,.72,1.18,'#274b68',10,6);
-    m.ball(.28,6.25,-.18,.78,.56,.78,'#346082',8,5);
-    m.box(0,5.68,.15,2.2,.18,2.05,'#f5d77f');
-    // Orbiting golden Königsberg scroll & quill.
-    const orbit=t*2.8;
-    m.at(effect.wx+Math.cos(orbit)*2.8,yBase+3.5+Math.sin(t*5)*.3,effect.wz+Math.sin(orbit)*2.8,orbit);
-    m.box(0,0,0,.9,.28,1.25,'#f7e5b2');
-    m.box(.35,.25,.1,.08,.9,.08,'#f5d77f');
-    // Eerie cyan-gold ectoplasm aura & trailing spectral mist.
-    this.glow.at(effect.wx,yBase+2.4,effect.wz,angle);
+    m.ball(0,4.15,1.52,.62,.48,.42,'#ffffff',8,5);
+    m.ball(0,3.72,1.6,.5,.42,.38,'#e9faff',8,5);
+    m.ball(0,3.34,1.62,.36,.32,.32,'#ffffff',7,4);
+    // Oversized bobblehead cartoon Leonhard Euler (inspired by the iconic 1753 Handmann portrait).
+    m.ball(0,6.15,.15,1.98,2.12,1.88,'#f2fffd',14,8);
+    // Chubby cartoon cheeks & prominent bulbous nose.
+    for(const side of [-1,1])m.ball(side*1.22,5.68,1.25,.46,.34,.32,'#ffc7d6',7,4);
+    m.ball(0,5.95,1.98,.38,.44,.48,'#e0f5f2',8,5);
+    // Wide-open cartoon shouting mouth in mathematical outrage.
+    const shout=.85+.18*Math.sin(phase*4);
+    m.ball(0,5.08,1.76,.62,.46*shout,.32,'#19283b',9,5);
+    m.box(0,5.32,1.92,.78,.14,.14,'#ffffff');
+    m.ball(0,4.85,1.88,.34,.18,.18,'#ff748c',7,4);
+    // Left eye: huge wide-open cartoon eyeball with shocked raised eyebrow.
+    m.ball(-.68,6.52,1.66,.5,.54,.3,'#ffffff',10,6);
+    m.ball(-.66,6.5,1.92,.22,.24,.14,'#132234',8,5);
+    m.ball(-.76,6.62,2.01,.08,.08,.06,'#ffffff',5,3);
+    m.box(-.68,7.18,1.78,.86,.18,.18,'#2c4866');
+    // Right eye: Euler's iconic droopy/squinted blind right eye under a steep angry furrowed brow.
+    m.ball(.68,6.42,1.68,.46,.34,.28,'#c8efe9',8,5);
+    m.box(.68,6.36,1.93,.76,.14,.14,'#1a2d44');
+    m.box(.56,6.92,1.82,.88,.2,.18,'#243e59');
+    // Big chunky 1753 velvet scholar's turban-cap with gold trim & jaunty tilted poof.
+    m.ball(0,7.78,-.05,2.22,1.18,2.14,'#1e4675',12,7);
+    m.ball(.62,8.42,-.28,1.52,1.02,1.48,'#2e619b',10,6);
+    m.ball(-.48,8.25,.12,1.25,.85,1.2,'#28558a',10,6);
+    m.ball(0,7.22,.15,2.28,.34,2.18,'#ffd85c',12,5);
+    m.ball(1.48,8.12,-.18,.48,.48,.48,'#ffd85c',7,4);
+    // Left arm: wagging an accusing cartoon pointer finger straight at the theorem-breaker.
+    const wag=Math.sin(phase*4)*.32;
+    m.box(-2.25,4.1,1.05,.68,.68,2.1,'#2c5d94');
+    m.ball(-2.3,4.15+wag,2.25,.56,.52,.52,'#f2fffd',8,5);
+    m.box(-2.25,4.35+wag,2.95,.24,.24,.95,'#ffffff');
+    // Right arm: raised high waving a GIANT glowing golden feather quill!
+    const quillWave=Math.sin(phase*2)*.4;
+    m.box(2.25,4.65+quillWave,.65,.68,1.9,.68,'#2c5d94');
+    m.ball(2.3,5.68+quillWave,.95,.54,.52,.54,'#f2fffd',8,5);
+    m.box(2.35,7.05+quillWave,1.05,.18,2.9,.18,'#fff2a8');
+    m.ball(2.68,7.75+quillWave,1.05,.52,1.35,.22,'#ffd85c',8,5);
+    m.ball(2.85,8.45+quillWave,1.05,.38,.78,.18,'#fff5bd',7,4);
+    // Orbiting chunky 3D math icons: golden "π", golden "e", golden "Σ", and a 7-bridge Königsberg scroll!
+    const orbit=phase,rSym=4.25,ySym=yBase+6.2;
+    // 1. Giant golden π
+    m.at(effect.wx+Math.cos(orbit)*rSym,ySym+Math.sin(phase*2)*.35,effect.wz+Math.sin(orbit)*rSym,-orbit);
+    m.box(0,.78,0,1.65,.3,.3,'#ffdf5e');
+    m.box(-.44,0,0,.3,1.45,.3,'#ffdf5e');
+    m.box(.44,0,0,.3,1.45,.3,'#ffdf5e');
+    // 2. Giant golden e (Euler's number)
+    const o2=orbit+Math.PI/2;
+    m.at(effect.wx+Math.cos(o2)*rSym,ySym-Math.sin(phase*2)*.35,effect.wz+Math.sin(o2)*rSym,-o2);
+    m.box(0,.68,0,1.2,.28,.28,'#ffdf5e');
+    m.box(0,0,0,1.2,.26,.28,'#ffdf5e');
+    m.box(0,-.68,0,1.2,.28,.28,'#ffdf5e');
+    m.box(-.48,0,0,.28,1.62,.28,'#ffdf5e');
+    m.box(.48,.34,0,.28,.68,.28,'#ffdf5e');
+    // 3. Giant golden Σ
+    const o3=orbit+Math.PI;
+    m.at(effect.wx+Math.cos(o3)*rSym,ySym+Math.sin(phase*2)*.35,effect.wz+Math.sin(o3)*rSym,-o3);
+    m.box(0,.72,0,1.35,.28,.28,'#ffdf5e');
+    m.box(0,-.72,0,1.35,.28,.28,'#ffdf5e');
+    m.box(-.38,.36,0,.3,.65,.28,'#ffdf5e');
+    m.box(.08,0,0,.34,.34,.28,'#ffdf5e');
+    m.box(-.38,-.36,0,.3,.65,.28,'#ffdf5e');
+    // 4. Floating Königsberg 7-bridge slate with 4 land dots and 7 golden bridge bars.
+    const o4=orbit+Math.PI*1.5;
+    m.at(effect.wx+Math.cos(o4)*rSym,ySym-Math.sin(phase*2)*.35,effect.wz+Math.sin(o4)*rSym,-o4);
+    m.box(0,0,0,1.85,1.45,.18,'#1b3554');
+    m.box(0,0,-.02,2.0,1.6,.12,'#ffd85c');
+    for(const [dx,dy] of [[0,0],[0,.45],[0,-.45],[.58,0]])m.ball(dx,dy,.14,.15,.15,.08,'#8cf5e8',6,4);
+    for(const [dx,dy,w,h] of [[-.15,.22,.08,.34],[.15,.22,.08,.34],[-.15,-.22,.08,.34],[.15,-.22,.08,.34],[.28,0,.36,.08],[.34,.26,.36,.08],[.34,-.26,.36,.08]])m.box(dx,dy,.13,w,h,.06,'#ffe169');
+    // Bright cartoonish cyan-gold ectoplasm aura & spooky mist trail.
+    this.glow.at(effect.wx,yBase+4.0,effect.wz,angle);
     for(let i=0;i<10;i++){
-      const a=t*2.4+i*Math.PI/5,r=1.6+Math.sin(t*4+i)*.4;
-      this.glow.particle(Math.sin(a)*r,-1.2+(i%4)*.95,Math.cos(a)*r,.95,[.28,.88,.82]);
+      const a=phase+i*Math.PI/5,r=2.5+Math.sin(phase*2+i)*.45;
+      this.glow.particle(Math.sin(a)*r,-1.8+(i%4)*1.3,Math.cos(a)*r,1.1,[.28,.92,.86]);
     }
-    this.glow.particle(0,2.8,1.1,1.6,[.95,.84,.38]);
-    this.smoke.at(effect.wx,Math.max(.3,yBase-.4),effect.wz);
-    for(let i=0;i<4;i++)this.smoke.particle(Math.sin(t*3+i*1.6)*1.2,i*.45,-i*.6,2.8-i*.35,[.22,.62,.66]);
+    this.glow.particle(0,2.5,2.0,1.7,[1.0,.86,.35]);
+    this.smoke.at(effect.wx,Math.max(.3,yBase-.3),effect.wz);
+    for(let i=0;i<5;i++)this.smoke.particle(Math.sin(phase*2+i*1.3)*1.5,i*.55,-i*.75,3.2-i*.4,[.28,.74,.76]);
     m.at(0,0,0);
   }
   atomicExplosion(m,effect){
