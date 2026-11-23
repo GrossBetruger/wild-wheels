@@ -109,9 +109,9 @@ export function cardCatalog() {
       kind: 'ability',
       theme: 'euler',
       color: '#f5d77f',
-      icon: '🌉',
-      title: 'EULERIAN PATH!',
-      placeholder: 'PLAYER CROSSED ALL 7 BRIDGES ONCE · EULER IS SHOOK',
+      icon: '👻',
+      title: 'EULERIAN PATH ACHIEVED!',
+      placeholder: 'PLAYER BROKE THE THEOREM · EULER’S GHOST HAUNTS THE ARENA!',
     },
     {
       key: 'euler:near',
@@ -119,8 +119,8 @@ export function cardCatalog() {
       theme: 'euler',
       color: '#9fd8f5',
       icon: '🌉',
-      title: '6 / 7 BRIDGES · EULER SMILES',
-      placeholder: 'PLAYER HIT EULER’S LIMIT · ONE BRIDGE LEFT!',
+      title: '6/7 BRIDGES',
+      placeholder: '6/7 bridges, Euler remains confident of his result...',
     },
   );
   return cards;

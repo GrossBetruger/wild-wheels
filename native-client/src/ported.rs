@@ -997,6 +997,7 @@ mod tests {
             "health:3",
             "effect:reverseShockwave",
             "effect:karmaRaccoon",
+            "effect:eulerGhost",
             "overlay:reversePsychology",
             "overlay:reversePsychology:end",
             "effect:explosion",

@@ -50,12 +50,12 @@ export class AbilityUsage {
       if(!before||world.phase!=='racing'||a.inactive||a.afk||a.destroyed||a.bomber)continue;
       if(state.notice!==before.notice){
         const who=a.id===world.id?'YOU':(a.name??'RIVAL').toUpperCase();
-        if(state.notice==='EULERIAN PATH!'){
-          events.push({id:`euler:${identity}:${++this.sequence}`,owner:a.id,title:'EULERIAN PATH!',icon:'🌉',color:'#f5d77f',theme:'euler',detail:`${who} CROSSED ALL 7 BRIDGES ONCE · EULER IS SHOOK`,duration:4});
+        if(state.notice==='EULERIAN PATH ACHIEVED!'){
+          events.push({id:`euler:${identity}:${++this.sequence}`,owner:a.id,title:'EULERIAN PATH ACHIEVED!',icon:'👻',color:'#f5d77f',theme:'euler',detail:`${who} BROKE THE THEOREM · EULER’S GHOST HAUNTS THE ARENA!`,duration:4.2});
           continue;
         }
-        if(state.notice==='6/7 BRIDGES · EULER SMILES'){
-          events.push({id:`euler-near:${identity}:${++this.sequence}`,owner:a.id,title:'6 / 7 BRIDGES · EULER SMILES',icon:'🌉',color:'#9fd8f5',theme:'euler',detail:`${who} HIT EULER’S LIMIT · ONE BRIDGE LEFT!`,duration:2.8});
+        if(state.notice==='6/7 bridges, Euler remains confident of his result...'){
+          events.push({id:`euler-near:${identity}:${++this.sequence}`,owner:a.id,title:'6/7 BRIDGES',icon:'🌉',color:'#9fd8f5',theme:'euler',detail:'6/7 bridges, Euler remains confident of his result...',duration:3.2});
           continue;
         }
       }

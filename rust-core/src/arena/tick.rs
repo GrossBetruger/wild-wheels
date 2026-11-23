@@ -95,7 +95,7 @@ impl Game{
             if (i==0||j==0)&&self.actors[0].wall_cooldown<=0.0{let a=&mut self.actors[0];effect(&mut self.global,"crash",0,a.wx,a.wz,None);a.wall_cooldown=0.6;voice(&mut self.global,a,"hurt",a.wx);}
         }}
         for id in 0..self.actors.len(){if !self.frozen(id){self.collect(id);}}
-        self.euler_tick();
+        self.euler_tick(dt);
         self.global.supplies.retain(|s|s.kind!="bicycle"||s.cooldown<=0.0);
         for id in 0..self.actors.len(){self.bat_fire(id);}
         self.divert_all();

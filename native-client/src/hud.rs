@@ -372,28 +372,28 @@ impl Notices {
                     true => "YOU".to_owned(),
                     false => a.name.as_deref().unwrap_or("RIVAL").to_uppercase(),
                 };
-                if state.5 == "EULERIAN PATH!" {
+                if state.5 == "EULERIAN PATH ACHIEVED!" {
                     let event = Notice {
-                        title: "EULERIAN PATH!".into(),
-                        detail: format!("{who} CROSSED ALL 7 BRIDGES ONCE · EULER IS SHOOK"),
+                        title: "EULERIAN PATH ACHIEVED!".into(),
+                        detail: format!("{who} BROKE THE THEOREM · EULER'S GHOST HAUNTS THE ARENA!"),
                         color: Some([0xf5, 0xd7, 0x7f]),
                         card_key: Some("euler:path".into()),
                         started: now,
-                        until: now + 4.0,
+                        until: now + 4.2,
                     };
                     if a.id == view.you || used.as_ref().is_none_or(|(mine, _)| !mine) {
                         used = Some((a.id == view.you, event));
                     }
                     continue;
                 }
-                if state.5 == "6/7 BRIDGES · EULER SMILES" {
+                if state.5 == "6/7 bridges, Euler remains confident of his result..." {
                     let event = Notice {
-                        title: "6 / 7 BRIDGES · EULER SMILES".into(),
-                        detail: format!("{who} HIT EULER'S LIMIT · ONE BRIDGE LEFT!"),
+                        title: "6/7 BRIDGES".into(),
+                        detail: "6/7 bridges, Euler remains confident of his result...".into(),
                         color: Some([0x9f, 0xd8, 0xf5]),
                         card_key: Some("euler:near".into()),
                         started: now,
-                        until: now + 2.8,
+                        until: now + 3.2,
                     };
                     if a.id == view.you || used.as_ref().is_none_or(|(mine, _)| !mine) {
                         used = Some((a.id == view.you, event));
@@ -540,23 +540,23 @@ impl Notices {
                                 if count == 6 && !self.euler_hinted {
                                     self.euler_hinted = true;
                                     self.ability = Some(Notice {
-                                        title: "6 / 7 BRIDGES · EULER SMILES".into(),
-                                        detail: "YOU HIT EULER'S LIMIT · ONE BRIDGE LEFT!".into(),
+                                        title: "6/7 BRIDGES".into(),
+                                        detail: "6/7 bridges, Euler remains confident of his result...".into(),
                                         color: Some([0x9f, 0xd8, 0xf5]),
                                         card_key: Some("euler:near".into()),
                                         started: now,
-                                        until: now + 2.8,
+                                        until: now + 3.2,
                                     });
                                 } else if count == 7 {
                                     self.euler_bridges = 0;
                                     self.euler_hinted = false;
                                     self.ability = Some(Notice {
-                                        title: "EULERIAN PATH!".into(),
-                                        detail: "YOU CROSSED ALL 7 BRIDGES ONCE · EULER IS SHOOK".into(),
+                                        title: "EULERIAN PATH ACHIEVED!".into(),
+                                        detail: "YOU BROKE THE THEOREM · EULER'S GHOST HAUNTS THE ARENA!".into(),
                                         color: Some([0xf5, 0xd7, 0x7f]),
                                         card_key: Some("euler:path".into()),
                                         started: now,
-                                        until: now + 4.0,
+                                        until: now + 4.2,
                                     });
                                 }
                             }
@@ -867,17 +867,12 @@ fn readings(
         && !p.bomber
         && p.destroyed <= 0.0
         && view.arena_def.bridges.len() == 7
-        && wild_wheels_core::next_euler_bridge(p.wx, p.wz, euler_mask).is_some()
     {
         let count = euler_mask.count_ones();
-        let label = match count {
-            6 => "EULER  6/7  ·  JUMP FOR #7!".to_owned(),
-            _ => format!("EULER  {count}/7  ·  FOLLOW ARROW"),
-        };
         out.insert(
             Id::Euler,
             Reading {
-                text: label,
+                text: format!("BRIDGES  {count}/7"),
                 color: Some(match count {
                     6 => Color::srgb_u8(0x9f, 0xd8, 0xf5),
                     _ => Color::srgb_u8(0xf5, 0xd7, 0x7f),
@@ -2179,19 +2174,8 @@ pub fn update(
                     (node.left, node.top) = (px(corner.x), px(corner.y));
                     (node.width, node.height) = (px(size.x), px(size.y));
                     let mask = notices.euler_mask(&view);
-                    let next = (view.arena_def.bridges.len() == 7 && view.phase == "racing")
-                        .then(|| {
-                            wild_wheels_core::next_euler_bridge(
-                                view.player.wx,
-                                view.player.wz,
-                                mask,
-                            )
-                        })
-                        .flatten();
                     color.0 = if mask & (1u16 << index) != 0 {
                         hex(0x5ce4c0ff)
-                    } else if next == Some(index) {
-                        hex(0xffe37aff)
                     } else {
                         hex(0xc48f52ff)
                     };

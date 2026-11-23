@@ -83,8 +83,15 @@ fn on_bridge(b: &[f64; 5], wx: f64, wz: f64) -> bool {
     }
 }
 
+pub const EULER_CONFIDENT_NOTICE: &str = "6/7 bridges, Euler remains confident of his result...";
+pub const EULER_ACHIEVED_NOTICE: &str = "EULERIAN PATH ACHIEVED!";
+const GHOST_DURATION: f64 = 15.0;
+const GHOST_SPEED: f64 = 22.0;
+const GHOST_KILL_RADIUS: f64 = 5.0;
+const GHOST_RISE_GRACE: f64 = 1.2;
+
 impl Game {
-    pub(super) fn euler_tick(&mut self) {
+    pub(super) fn euler_tick(&mut self, dt: f64) {
         if self.global.phase != "racing" {
             for a in &mut self.actors {
                 a.euler_bridges = 0;
@@ -101,6 +108,7 @@ impl Game {
         }
         let bridges = def.bridges;
         let mut sounds_to_play: Vec<(&'static str, usize, f64, f64)> = Vec::new();
+        let mut spawn_ghosts: Vec<(usize, f64, f64, f64)> = Vec::new();
         for a in &mut self.actors {
             if a.destroyed > 0.0 || a.inactive || a.afk || a.bomber {
                 a.euler_bridges = 0;
@@ -148,16 +156,22 @@ impl Game {
                                 let count = a.euler_bridges.count_ones();
                                 if count == 6 && !a.euler_hinted {
                                     a.euler_hinted = true;
-                                    a.notice = "6/7 BRIDGES · EULER SMILES".into();
-                                    a.notice_time = 2.8;
+                                    a.notice = EULER_CONFIDENT_NOTICE.into();
+                                    a.notice_time = 3.2;
                                     sounds_to_play.push(("pickup", a.id, a.wx, a.wz));
                                 } else if count == 7 {
-                                    a.notice = "EULERIAN PATH!".into();
-                                    a.notice_time = 4.0;
+                                    a.notice = EULER_ACHIEVED_NOTICE.into();
+                                    a.notice_time = 4.2;
                                     a.celebrate = 1.6;
                                     a.euler_bridges = 0;
                                     a.euler_hinted = false;
-                                    sounds_to_play.push(("victory", a.id, a.wx, a.wz));
+                                    // Summon Leonhard Euler's ghost 22 units behind the theorem-breaker!
+                                    let gx = (a.wx - a.heading.sin() * 22.0).clamp(-86.0, 86.0);
+                                    let gz = (a.wz - a.heading.cos() * 22.0).clamp(-86.0, 86.0);
+                                    let gh = (a.wx - gx).atan2(a.wz - gz);
+                                    spawn_ghosts.push((a.id, gx, gz, gh));
+                                    sounds_to_play.push(("karmaRaccoon", a.id, a.wx, a.wz));
+                                    sounds_to_play.push(("dizzy", a.id, gx, gz));
                                 }
                             }
                         }
@@ -168,6 +182,66 @@ impl Game {
         }
         for (kind, id, wx, wz) in sounds_to_play {
             sound(&mut self.global, kind, id, wx, wz, None);
+        }
+        for (owner, wx, wz, heading) in spawn_ghosts {
+            self.global.effects.push(Effect {
+                kind: "eulerGhost".into(),
+                owner: Some(owner),
+                wx,
+                wz,
+                heading: Some(heading),
+                life: GHOST_DURATION,
+                ..Effect::default()
+            });
+        }
+        // Advance every active Euler's Ghost: glides through walls & rivers chasing the
+        // theorem-breaker (or nearest living racer) and kills everyone in its wake!
+        let mut victims: Vec<usize> = Vec::new();
+        for fx in &mut self.global.effects {
+            if fx.kind != "eulerGhost" {
+                continue;
+            }
+            let target = fx
+                .owner
+                .and_then(|id| self.actors.get(id))
+                .filter(|a| !a.inactive && !a.afk && !a.bomber && a.destroyed <= 0.0)
+                .or_else(|| {
+                    self.actors
+                        .iter()
+                        .filter(|a| !a.inactive && !a.afk && !a.bomber && a.destroyed <= 0.0)
+                        .min_by(|a, b| {
+                            distance(fx.wx, fx.wz, a.wx, a.wz)
+                                .total_cmp(&distance(fx.wx, fx.wz, b.wx, b.wz))
+                        })
+                });
+            if let Some(t) = target {
+                let dx = t.wx - fx.wx;
+                let dz = t.wz - fx.wz;
+                let d = dx.hypot(dz);
+                if d > 0.2 {
+                    let step = (GHOST_SPEED * dt).min(d);
+                    fx.wx += dx / d * step;
+                    fx.wz += dz / d * step;
+                    fx.heading = Some(dx.atan2(dz));
+                }
+            }
+            if fx.age >= GHOST_RISE_GRACE {
+                for a in &self.actors {
+                    if !a.inactive
+                        && !a.afk
+                        && !a.bomber
+                        && a.destroyed <= 0.0
+                        && distance(fx.wx, fx.wz, a.wx, a.wz) <= GHOST_KILL_RADIUS
+                        && !victims.contains(&a.id)
+                    {
+                        victims.push(a.id);
+                    }
+                }
+            }
+        }
+        for victim in victims {
+            let hp = self.actors[victim].health.max(6.0);
+            self.damage(victim, usize::MAX, hp, "euler");
         }
     }
 }
@@ -213,36 +287,47 @@ mod tests {
             };
             g.actors[0].wx = entry.0;
             g.actors[0].wz = entry.1;
-            g.euler_tick();
+            g.euler_tick(1.0 / 60.0);
             g.actors[0].wx = exit.0;
             g.actors[0].wz = exit.1;
-            g.euler_tick();
+            g.euler_tick(1.0 / 60.0);
         };
 
         // Crossing 6 distinct bridges hits Euler's mathematical ceiling (6/7).
         for idx in 0..6 {
             cross(&mut game, idx);
         }
-        assert_eq!(game.actors[0].notice, "6/7 BRIDGES · EULER SMILES");
+        assert_eq!(game.actors[0].notice, EULER_CONFIDENT_NOTICE);
 
         // Repeating bridge 0 breaks the streak, so crossing bridge 6 alone does not complete 7/7.
         cross(&mut game, 0);
         cross(&mut game, 6);
-        assert_ne!(game.actors[0].notice, "EULERIAN PATH!");
+        assert_ne!(game.actors[0].notice, EULER_ACHIEVED_NOTICE);
 
         // Death resets the path completely.
         game.actors[0].destroyed = 2.0;
-        game.euler_tick();
+        game.euler_tick(1.0 / 60.0);
         assert_eq!(game.actors[0].euler_bridges, 0);
         game.actors[0].destroyed = 0.0;
         game.actors[0].notice.clear();
 
-        // Crossing all 7 distinct bridges in one life (e.g. via Tammy's Cricket's Jump) triggers EULERIAN PATH!
+        // Crossing all 7 distinct bridges in one life triggers EULERIAN PATH ACHIEVED! and summons Euler's Ghost.
         for idx in 0..7 {
             cross(&mut game, idx);
         }
-        assert_eq!(game.actors[0].notice, "EULERIAN PATH!");
-        assert!(game.actors[0].celebrate > 0.0);
+        assert_eq!(game.actors[0].notice, EULER_ACHIEVED_NOTICE);
+        assert!(game.global.effects.iter().any(|fx| fx.kind == "eulerGhost"));
+        // Advance past the 1.2s rise grace: Euler's Ghost chases the player down and kills them!
+        for _ in 0..60 * 3 {
+            for fx in &mut game.global.effects {
+                fx.age += 1.0 / 60.0;
+            }
+            game.euler_tick(1.0 / 60.0);
+        }
+        assert!(
+            game.actors[0].destroyed > 0.0,
+            "Euler's Ghost must chase down and kill the theorem-breaker"
+        );
         set_arena_defs(default_arenas()).unwrap();
     }
 

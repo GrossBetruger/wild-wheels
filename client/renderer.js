@@ -909,7 +909,7 @@ export class Renderer {
     for(const effect of r.effects){if(effect.type==='reverseShockwave'){drawReverseShockwave(this.glow,this.smoke,effect);continue;}if(effect.type==='locustSpawn'||effect.type==='locustBurst')continue;if(effect.type==='teleportOut'||effect.type==='teleportIn'){
       if(effect.type==='teleportOut'){const pose=departurePose(effect.age);this.teleportKart({x:effect.wx,z:effect.wz},effect.color??drivers[5].color,effect.heading??0,pose.scale,pose.height,pose.pitch);}
       drawTeleportHaze(this,effect,time);continue;
-    }if(effect.type==='karmaRaccoon'){drawKarmaRaccoon(m,this.glow,effect,r.cameraHeading);continue;}if(effect.type==='taxAudit'){drawTaxAudit(m,effect,r.cameraHeading);continue;}if(effect.type==='heartbeat'){const actor=[r,...r.bots].find(a=>a.id===effect.owner),x=actor?.wx??effect.wx,z=actor?.wz??effect.wz,t=effect.age,fade=1-t/effect.life,size=(1+.35*Math.exp(-t*18)+.3*Math.exp(-(((t-.18)*20)**2)))*fade;m.at(x,7+t*.6,z,r.cameraHeading);m.ball(-.28*size,.18*size,0,.38*size,.38*size,.24*size,'#ff779d',10,6);m.ball(.28*size,.18*size,0,.38*size,.38*size,.24*size,'#ff779d',10,6);m.cone(0,.1*size,0,.6*size,-.85*size,'#e94c7f',12);this.glow.at(x,7,z);this.glow.particle(0,0,0,size*1.4,[.5*fade,.08*fade,.17*fade]);continue;}if(effect.type==='fashionSnap'){this.fashionSnap(m,effect,time);continue;}if(effect.type==='fireRingOut'){drawFireRingOut(m,this.glow,this.smoke,effect,time);continue;}if(effect.type==='fireRing'){drawFireRing(m,this.glow,this.smoke,effect,time);continue;}if(effect.type==='yudaSmoke')continue;if(effect.type==='radiation'){this.radiationZone(m,effect,time);continue;}if(effect.type==='ash'){this.ashRemains(m,effect);continue;}if(effect.type==='abomb'){this.atomicExplosion(m,effect);continue;}if(effect.type==='explosion'){this.explosion(m,effect);continue;}for(let i=0;i<10;i++){const a=i*2.4,t=effect.age;m.at(effect.wx+Math.cos(a)*t*8,1+t*4,effect.wz+Math.sin(a)*t*8);m.ball(0,0,0,.12,.12,.12,'#f4dc8b',5,3);}}
+    }if(effect.type==='eulerGhost'){this.eulerGhost(m,effect,time);continue;}if(effect.type==='karmaRaccoon'){drawKarmaRaccoon(m,this.glow,effect,r.cameraHeading);continue;}if(effect.type==='taxAudit'){drawTaxAudit(m,effect,r.cameraHeading);continue;}if(effect.type==='heartbeat'){const actor=[r,...r.bots].find(a=>a.id===effect.owner),x=actor?.wx??effect.wx,z=actor?.wz??effect.wz,t=effect.age,fade=1-t/effect.life,size=(1+.35*Math.exp(-t*18)+.3*Math.exp(-(((t-.18)*20)**2)))*fade;m.at(x,7+t*.6,z,r.cameraHeading);m.ball(-.28*size,.18*size,0,.38*size,.38*size,.24*size,'#ff779d',10,6);m.ball(.28*size,.18*size,0,.38*size,.38*size,.24*size,'#ff779d',10,6);m.cone(0,.1*size,0,.6*size,-.85*size,'#e94c7f',12);this.glow.at(x,7,z);this.glow.particle(0,0,0,size*1.4,[.5*fade,.08*fade,.17*fade]);continue;}if(effect.type==='fashionSnap'){this.fashionSnap(m,effect,time);continue;}if(effect.type==='fireRingOut'){drawFireRingOut(m,this.glow,this.smoke,effect,time);continue;}if(effect.type==='fireRing'){drawFireRing(m,this.glow,this.smoke,effect,time);continue;}if(effect.type==='yudaSmoke')continue;if(effect.type==='radiation'){this.radiationZone(m,effect,time);continue;}if(effect.type==='ash'){this.ashRemains(m,effect);continue;}if(effect.type==='abomb'){this.atomicExplosion(m,effect);continue;}if(effect.type==='explosion'){this.explosion(m,effect);continue;}for(let i=0;i<10;i++){const a=i*2.4,t=effect.age;m.at(effect.wx+Math.cos(a)*t*8,1+t*4,effect.wz+Math.sin(a)*t*8);m.ball(0,0,0,.12,.12,.12,'#f4dc8b',5,3);}}
     for(const cloud of r.stinkClouds??[]){const fade=Math.min(1,(cloud.life-cloud.age)/.7);for(let i=0;i<15;i++){const angle=i*2.399+cloud.age*.2,radius=2+(i%5)*2.6,x=cloud.wx+Math.sin(angle)*radius,z=cloud.wz+Math.cos(angle)*radius,y=1+(i%3)+Math.sin(cloud.age*2+i)*.7;this.smoke.at(x,y,z);this.smoke.particle(0,0,0,(7+cloud.age*2)*Math.sqrt(fade),[.5,.7,.23]);this.glow.at(x,y+.4,z);this.glow.particle(0,0,0,.25*fade,[.15,.3,.04]);}}
     for(const cloud of r.chaffClouds){
       const t=cloud.age,fade=Math.min(1,(cloud.life-t)/1.4),expansion=1-Math.exp(-t*2.5);
@@ -969,6 +969,42 @@ export class Renderer {
       this.glow.at(spark.x,spark.y,spark.z);this.glow.particle(0,0,0,.24*fade,color);
       this.glow.particle(-spark.vx*.035,Math.max(.04-spark.y,-spark.vy*.035),-spark.vz*.035,.14*fade,color);
     }
+  }
+  eulerGhost(m,effect,time){
+    const t=effect.age??time,bob=Math.sin(t*3.6)*.45,sway=Math.sin(t*2.4)*.14,angle=effect.heading??0;
+    const rise=Math.min(1,t/.8),yBase=1.4+bob-(1-rise)*3.2;
+    // Spectral Prussian-teal & luminous ectoplasm robe floating above the ground.
+    m.at(effect.wx,yBase,effect.wz,angle+sway);
+    m.cone(0,0,0,2.3,5.2,'#46c4b8',10);
+    m.cone(0,.35,0,1.75,4.7,'#9cf7ec',10);
+    // Flowing spectral sleeves reaching forward toward the theorem-breaker.
+    for(const side of [-1,1]){
+      m.box(side*1.55,3.2,.8,.55,.55,1.8,'#7aece0');
+      m.ball(side*1.6,3.25,1.85,.34,.34,.34,'#e4fffb',7,4);
+    }
+    // Pale spectral head with one bright glowing eye and Euler's iconic squinted right eye.
+    m.ball(0,5.2,.15,1.08,1.18,1.02,'#e8fffb',12,7);
+    m.ball(-.36,5.32,1.05,.2,.22,.1,'#fff3a1',8,4);
+    m.box(.36,5.28,1.05,.36,.07,.08,'#264556');
+    // Euler's iconic 18th-century scholar's cap / turban (1753 Emanuel Handmann portrait).
+    m.ball(0,5.95,-.05,1.22,.72,1.18,'#274b68',10,6);
+    m.ball(.28,6.25,-.18,.78,.56,.78,'#346082',8,5);
+    m.box(0,5.68,.15,2.2,.18,2.05,'#f5d77f');
+    // Orbiting golden Königsberg scroll & quill.
+    const orbit=t*2.8;
+    m.at(effect.wx+Math.cos(orbit)*2.8,yBase+3.5+Math.sin(t*5)*.3,effect.wz+Math.sin(orbit)*2.8,orbit);
+    m.box(0,0,0,.9,.28,1.25,'#f7e5b2');
+    m.box(.35,.25,.1,.08,.9,.08,'#f5d77f');
+    // Eerie cyan-gold ectoplasm aura & trailing spectral mist.
+    this.glow.at(effect.wx,yBase+2.4,effect.wz,angle);
+    for(let i=0;i<10;i++){
+      const a=t*2.4+i*Math.PI/5,r=1.6+Math.sin(t*4+i)*.4;
+      this.glow.particle(Math.sin(a)*r,-1.2+(i%4)*.95,Math.cos(a)*r,.95,[.28,.88,.82]);
+    }
+    this.glow.particle(0,2.8,1.1,1.6,[.95,.84,.38]);
+    this.smoke.at(effect.wx,Math.max(.3,yBase-.4),effect.wz);
+    for(let i=0;i<4;i++)this.smoke.particle(Math.sin(t*3+i*1.6)*1.2,i*.45,-i*.6,2.8-i*.35,[.22,.62,.66]);
+    m.at(0,0,0);
   }
   atomicExplosion(m,effect){
     const t=effect.age,fade=Math.max(0,1-t/3),radius=Math.min(BOMB_OUTER_RADIUS,t*48);
