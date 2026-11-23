@@ -12,3 +12,10 @@
 2. **Commentator.** A sports commentator powered by a small language model (SLM),
    prompted to comment on arena events in real time and potentially fine-tuned
    later. Deliver the commentary in a natural-sounding human voice.
+
+3. **Port HTML/browser graphics to native Rust and achieve full graphical feature parity.**
+   Close all remaining visual and UI gaps between the browser client (`client/`, `ui/`,
+   GLSL shaders, HTML/CSS overlays) and the native Rust Bevy client (`native-client/`) —
+   including shader-only effects, distance fog, iridescence/feather sway, animations,
+   lighting, and HUD/menu polish — so the native client matches the browser visually
+   feature-for-feature without drifting out of sync.
