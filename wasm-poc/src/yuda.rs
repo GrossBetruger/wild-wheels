@@ -136,15 +136,15 @@ struct ScrapeSpark {
 }
 
 fn build_smoke_mesh() -> Mesh {
-    let mut mesh = Sphere::new(0.42).mesh().uv(12, 8);
+    let mut mesh = Sphere::new(0.65).mesh().uv(14, 10);
     if let Some(bevy::mesh::VertexAttributeValues::Float32x3(positions)) =
         mesh.attribute_mut(Mesh::ATTRIBUTE_POSITION)
     {
         for p in positions.iter_mut() {
             let v = Vec3::from_array(*p);
-            let n1 = (v.x * 7.2 + 0.4).sin() * (v.y * 6.8 - 0.3).cos() * (v.z * 7.0).sin();
-            let n2 = (v.x * 11.4 - v.z * 9.6).sin() * (v.y * 10.2 + 1.1).cos();
-            let disp = 1.0 + n1 * 0.24 + n2 * 0.12;
+            let n1 = (v.x * 4.8 + 0.4).sin() * (v.y * 4.5 - 0.3).cos() * (v.z * 4.6).sin();
+            let n2 = (v.x * 8.2 - v.z * 7.4).sin() * (v.y * 7.6 + 1.1).cos();
+            let disp = 1.0 + n1 * 0.28 + n2 * 0.14;
             *p = (v * disp).to_array();
         }
     }
@@ -177,10 +177,10 @@ fn load(
         ..default()
     });
     let smoke_mesh = meshes.add(build_smoke_mesh());
-    let flame_mesh = meshes.add(Cone::new(0.24, 1.55));
+    let flame_mesh = meshes.add(Cone::new(0.36, 2.5));
     let flame_mat = materials.add(StandardMaterial {
-        base_color: Color::srgba(1.0, 0.62, 0.18, 0.90),
-        emissive: LinearRgba::rgb(9.5, 4.2, 0.85),
+        base_color: Color::srgba(1.0, 0.58, 0.14, 0.96),
+        emissive: LinearRgba::rgb(13.0, 5.4, 0.9),
         unlit: true,
         alpha_mode: AlphaMode::Add,
         cull_mode: None,
@@ -388,23 +388,25 @@ fn ride_yuda(
             for (i, &f_ent) in rig.flames.iter().enumerate() {
                 if let Ok((mut ftf, mut fvis)) = parts.get_mut(f_ent) {
                     if boosting {
-                        let flicker = 0.82 + (now * 58.0 + i as f32 * 2.1).sin() * 0.24;
+                        let flicker = 0.85 + (now * 58.0 + i as f32 * 2.1).sin() * 0.26;
                         *fvis = Visibility::Inherited;
-                        ftf.translation = EXHAUST_TIPS[i] + Vec3::new(0.0, 0.0, -0.72 * flicker);
-                        ftf.scale = Vec3::new(1.0, flicker * 1.15, 1.0);
+                        ftf.translation = EXHAUST_TIPS[i] + Vec3::new(0.0, 0.0, -1.18 * flicker);
+                        ftf.scale = Vec3::new(1.05, flicker * 1.2, 1.05);
                     } else {
                         *fvis = Visibility::Hidden;
                     }
                 }
             }
 
-            // Twin V-twin megaphone exhaust smoke puffs (alternating chug on idle/cruise, thick hot plumes on boost!)
+            // Master-Yuda's iconic thick charcoal-soot rolling-coal exhaust clouds (`YudaExhaust`):
+            // bold dark chug puffs while cruising, and massive persistent 3-second billowing
+            // charcoal smokescreen clouds trailing behind both chrome megaphones while boosting!
             let smoke_interval = if mobile.mobile {
-                if boosting { 0.09 } else { 0.18 }
+                if boosting { 0.08 } else { 0.16 }
             } else if boosting {
-                0.032
+                0.04
             } else {
-                0.075
+                0.085
             };
             rig.smoke_timer += dt;
             if rig.smoke_timer >= smoke_interval {
@@ -412,29 +414,30 @@ fn ride_yuda(
                 let pipe_count = if boosting && !mobile.mobile { 2 } else { 1 };
                 let back = place.rotation * Vec3::NEG_Z;
                 let right = place.rotation * Vec3::X;
-                let speed_factor = (a.speed.abs() as f32 / 520.0).clamp(0.0, 1.2);
                 for _ in 0..pipe_count {
                     let tip_idx = rig.smoke_pipe % 2;
                     rig.smoke_pipe = rig.smoke_pipe.wrapping_add(1);
                     let jitter = (now * 23.0 + rig.smoke_pipe as f32 * 1.7).sin();
                     let jitter2 = (now * 31.0 + rig.smoke_pipe as f32 * 2.3).cos();
-                    let spawn_pos = place.transform_point(EXHAUST_TIPS[tip_idx] + Vec3::new(0.0, 0.0, -0.18));
+                    let spawn_pos = place.transform_point(EXHAUST_TIPS[tip_idx] + Vec3::new(0.0, 0.0, -0.22));
                     let (base_rgb, max_alpha, hot_glow, start_s, end_s, life) = if boosting {
-                        ([0.24, 0.23, 0.27], 0.70, 2.2, 0.45, 2.05, 0.62)
+                        ([0.07, 0.065, 0.075], 0.92, 1.8, 1.15, 3.85, 2.8)
                     } else {
-                        ([0.62, 0.66, 0.72], 0.48, 0.0, 0.34, 1.48, 0.72)
+                        ([0.16, 0.17, 0.19], 0.78, 0.0, 0.72, 2.15, 1.35)
                     };
                     let mat = materials.add(StandardMaterial {
                         base_color: Color::srgba(base_rgb[0], base_rgb[1], base_rgb[2], max_alpha),
-                        emissive: LinearRgba::rgb(hot_glow, hot_glow * 0.38, hot_glow * 0.08),
-                        perceptual_roughness: 0.96,
+                        emissive: LinearRgba::rgb(hot_glow, hot_glow * 0.34, hot_glow * 0.06),
+                        perceptual_roughness: 0.98,
                         metallic: 0.0,
                         alpha_mode: AlphaMode::Blend,
                         ..default()
                     });
-                    let vel = back * (6.5 + speed_factor * 5.0 + if boosting { 7.5 } else { 0.0 })
-                        + right * (jitter * 1.6)
-                        + Vec3::Y * (1.8 + jitter2.abs() * 1.4);
+                    // Persistent world-space clouds: gentle rearward kick that quickly settles
+                    // and rises slowly (`y + age * 0.7` like YudaExhaust), filling the path!
+                    let vel = back * (if boosting { 4.2 } else { 3.5 })
+                        + right * (jitter * if boosting { 1.8 } else { 0.9 })
+                        + Vec3::Y * (0.95 + jitter2.abs() * 0.65);
                     commands.spawn((
                         Mesh3d(assets.smoke_mesh.clone()),
                         MeshMaterial3d(mat.clone()),
@@ -443,7 +446,7 @@ fn ride_yuda(
                             .with_scale(Vec3::splat(start_s)),
                         ExhaustPuff {
                             vel,
-                            spin: Vec3::new(jitter * 2.2, jitter2 * 2.0, -jitter * 1.8),
+                            spin: Vec3::new(jitter * 1.4, jitter2 * 1.3, -jitter * 1.1),
                             age: 0.0,
                             life,
                             start_scale: start_s,
@@ -598,16 +601,21 @@ fn tick_yuda_fx(
             continue;
         }
         let u = p.age / p.life;
-        p.vel *= (1.0 - 2.6 * dt).max(0.2);
-        p.vel.y += 2.2 * dt;
+        p.vel.x *= (1.0 - 3.2 * dt).max(0.1);
+        p.vel.z *= (1.0 - 3.2 * dt).max(0.1);
+        p.vel.y = 0.75 + (1.0 - u) * 0.55;
         tf.translation += p.vel * dt;
         tf.rotation *= Quat::from_euler(EulerRot::XYZ, p.spin.x * dt, p.spin.y * dt, p.spin.z * dt);
-        let scale = p.start_scale + (p.end_scale - p.start_scale) * u.powf(0.72);
+        let scale = p.start_scale + (p.end_scale - p.start_scale) * u.powf(0.65);
         tf.scale = Vec3::splat(scale);
         if let Some(mut mat) = materials.get_mut(&p.mat) {
-            let alpha = p.max_alpha * (1.0 - u).powf(1.35);
-            mat.base_color = Color::srgba(p.base_rgb[0], p.base_rgb[1], p.base_rgb[2], alpha);
-            let cool = (1.0 - u * 3.5).max(0.0);
+            // Stay thick and bold for most of the cloud's life, then dissolve smoothly at the end
+            let fade = if u > 0.78 { ((1.0 - u) / 0.22).powf(1.2) } else { 1.0 };
+            let alpha = p.max_alpha * fade;
+            // Lighten very slightly from deep soot into weathered grey as it ages
+            let lift = u * 0.10;
+            mat.base_color = Color::srgba(p.base_rgb[0] + lift, p.base_rgb[1] + lift, p.base_rgb[2] + lift, alpha);
+            let cool = (1.0 - u * 5.0).max(0.0);
             let glow = p.hot_glow * cool * cool;
             mat.emissive = LinearRgba::rgb(glow, glow * 0.35, glow * 0.06);
         }
