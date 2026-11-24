@@ -171,32 +171,38 @@ fn tick_local_match(
     }
 
     let mut actions = Vec::new();
-    let mut push = |kind: &str, id: &mut u32| {
+    let mut push = |kind: &str, item: &str, id: &mut u32| {
         actions.push(Action {
             id: Some(*id),
             kind: kind.into(),
-            after_move: 0,
+            after_move: -1,
             wx: 0.0,
             wz: 0.0,
-            item: String::new(),
+            item: item.into(),
             bomb_kind: None,
         });
         *id += 1;
     };
-    if keys.just_pressed(KeyCode::KeyE) {
-        push("boost", &mut local.next_action);
-    }
-    if keys.just_pressed(KeyCode::KeyQ) {
-        push("special", &mut local.next_action);
+    if keys.just_pressed(KeyCode::KeyX) || keys.just_pressed(KeyCode::KeyE) {
+        push("turbo", "", &mut local.next_action);
     }
     if keys.just_pressed(KeyCode::KeyF) {
-        push("somersault", &mut local.next_action);
+        push("special", "", &mut local.next_action);
+    }
+    if keys.just_pressed(KeyCode::KeyZ) {
+        push("somersault", "", &mut local.next_action);
     }
     if keys.just_pressed(KeyCode::KeyC) {
-        push("chaff", &mut local.next_action);
+        push("chaff", "", &mut local.next_action);
     }
-    if keys.just_pressed(KeyCode::Tab) {
-        push("cycle", &mut local.next_action);
+    if keys.just_pressed(KeyCode::Tab) || keys.just_pressed(KeyCode::KeyQ) {
+        push("cycle", "", &mut local.next_action);
+    }
+    if keys.just_pressed(KeyCode::Digit1) {
+        push("select", "hedgehog", &mut local.next_action);
+    }
+    if keys.just_pressed(KeyCode::Digit2) {
+        push("select", "missile", &mut local.next_action);
     }
 
     let frame = Frame {

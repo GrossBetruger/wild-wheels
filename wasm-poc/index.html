@@ -96,7 +96,7 @@
     <div id="bottom-right" class="pill">
       <div id="speed">0<small>km/h</small></div>
       <div id="meter"><div id="meter-fill"></div></div>
-      <div id="hint">WASD · Shift Drift · Space Fire · E Boost · Q Special · F Flip</div>
+      <div id="hint">WASD · Shift Drift · Space Fire · Tab/Q Weapon · X Boost · Z Flip · F Special · C Chaff</div>
     </div>
   </div>
   <div id="menu">
@@ -267,7 +267,7 @@
                 `<span class="slot ${s.item==='missile'?'active':''}">🚀 ${s.missiles}</span>` +
                 `<span class="slot">⚡ ${s.turbos}</span>` +
                 `<span class="slot">✨ ${s.chaff}</span>` +
-                `<span class="slot">${s.specialCooldown > 0 ? `Q ${s.specialCooldown.toFixed(0)}s` : 'Q READY'}</span>`;
+                `<span class="slot">${s.specialCooldown > 0 ? `F ${s.specialCooldown.toFixed(0)}s` : 'F READY'}</span>`;
               const kmh = Math.round(Math.abs(s.speed) * 0.24);
               speedEl.innerHTML = `${kmh}<small>km/h</small>`;
               meterFill.style.width = `${Math.min(100, Math.round(kmh / 2.04))}%`;
