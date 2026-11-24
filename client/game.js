@@ -401,7 +401,7 @@ function timeLabel(t) { return `${String(Math.floor(t / 60)).padStart(2, '0')}:$
 let scoreboardKey = '';
 function put(id, value) { const node = $(id); if (node.textContent !== String(value)) node.textContent = value; }
 function hud() {
-  if (beta && touch) {
+  if (touch) {
     document.body.classList.toggle('mobile-bomber', Boolean(race.bomber));
     mobilePanel.classList.toggle('hidden', !race.bomber);
     cameraSwitch.classList.toggle('hidden', !race.bomber);
