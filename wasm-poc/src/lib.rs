@@ -9,6 +9,7 @@ mod scene;
 mod sound;
 mod sprite;
 mod xray;
+mod yuda;
 
 use bevy::asset::AssetMetaCheck;
 use bevy::gltf::GltfAssetLabel;
@@ -207,7 +208,11 @@ const RAPTOR_ENGINES: [(f32, f32, f32); 6] = [
 ];
 
 pub(crate) fn has_blender_model(driver: usize) -> bool {
-    driver == 7 || driver == 8 || driver == knowitowl::DRIVER || BLENDER_MODELS.iter().any(|&(d, _)| d == driver)
+    driver == 7
+        || driver == 8
+        || driver == knowitowl::DRIVER
+        || driver == yuda::DRIVER
+        || BLENDER_MODELS.iter().any(|&(d, _)| d == driver)
 }
 
 #[derive(Resource)]
@@ -477,6 +482,7 @@ fn presentation_app(pack: Vec<u8>, canvas: &str, interactive: bool, mobile: bool
             scene::ArenaPresentationPlugin,
             explosions::ExplosionsPlugin,
             knowitowl::KnowItOwlPlugin,
+            yuda::YudaPlugin,
         ))
         .add_systems(Startup, load_blender_models)
         .add_systems(
