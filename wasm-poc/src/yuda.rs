@@ -12,6 +12,7 @@ pub const DRIVER: usize = 10;
 
 const WHEEL_RADIUS: f32 = 0.92;
 const AXLES: [Vec3; 2] = [Vec3::new(0.0, 0.92, -1.65), Vec3::new(0.0, 0.92, 1.80)];
+const EXHAUST_TIPS: [Vec3; 2] = [Vec3::new(-0.65, 0.67, -2.38), Vec3::new(0.65, 0.67, -2.38)];
 
 pub struct YudaPlugin;
 
@@ -37,12 +38,16 @@ struct YudaAssets {
     spark_mesh: Handle<Mesh>,
     spark_gold: Handle<StandardMaterial>,
     spark_cyan: Handle<StandardMaterial>,
+    smoke_mesh: Handle<Mesh>,
+    flame_mesh: Handle<Mesh>,
+    flame_mat: Handle<StandardMaterial>,
 }
 
 #[derive(Component)]
 struct YudaRig {
     id: usize,
     wheels: [Entity; 2],
+    flames: [Entity; 2],
     rider_clothed: Entity,
     rider_bare: Entity,
     lamp: Option<Entity>,
@@ -52,6 +57,22 @@ struct YudaRig {
     wheelie: f32,
     was_bare: bool,
     spark_timer: f32,
+    smoke_timer: f32,
+    smoke_pipe: usize,
+}
+
+#[derive(Component)]
+struct ExhaustPuff {
+    vel: Vec3,
+    spin: Vec3,
+    age: f32,
+    life: f32,
+    start_scale: f32,
+    end_scale: f32,
+    mat: Handle<StandardMaterial>,
+    base_rgb: [f32; 3],
+    max_alpha: f32,
+    hot_glow: f32,
 }
 
 #[derive(Component)]
@@ -67,6 +88,23 @@ struct ScrapeSpark {
     vel: Vec3,
     age: f32,
     life: f32,
+}
+
+fn build_smoke_mesh() -> Mesh {
+    let mut mesh = Sphere::new(0.42).mesh().uv(12, 8);
+    if let Some(bevy::mesh::VertexAttributeValues::Float32x3(positions)) =
+        mesh.attribute_mut(Mesh::ATTRIBUTE_POSITION)
+    {
+        for p in positions.iter_mut() {
+            let v = Vec3::from_array(*p);
+            let n1 = (v.x * 7.2 + 0.4).sin() * (v.y * 6.8 - 0.3).cos() * (v.z * 7.0).sin();
+            let n2 = (v.x * 11.4 - v.z * 9.6).sin() * (v.y * 10.2 + 1.1).cos();
+            let disp = 1.0 + n1 * 0.24 + n2 * 0.12;
+            *p = (v * disp).to_array();
+        }
+    }
+    mesh.compute_smooth_normals();
+    mesh
 }
 
 fn load(
@@ -93,6 +131,16 @@ fn load(
         alpha_mode: AlphaMode::Add,
         ..default()
     });
+    let smoke_mesh = meshes.add(build_smoke_mesh());
+    let flame_mesh = meshes.add(Cone::new(0.24, 1.55));
+    let flame_mat = materials.add(StandardMaterial {
+        base_color: Color::srgba(1.0, 0.62, 0.18, 0.90),
+        emissive: LinearRgba::rgb(9.5, 4.2, 0.85),
+        unlit: true,
+        alpha_mode: AlphaMode::Add,
+        cull_mode: None,
+        ..default()
+    });
     commands.insert_resource(YudaAssets {
         bike: part("bike"),
         wheel: part("wheel"),
@@ -102,6 +150,9 @@ fn load(
         spark_mesh,
         spark_gold,
         spark_cyan,
+        smoke_mesh,
+        flame_mesh,
+        flame_mat,
     });
 }
 
@@ -112,6 +163,7 @@ fn ride_yuda(
     session: Res<GameSession>,
     mobile: Res<MobileGraphics>,
     assets: Option<Res<YudaAssets>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
     mut rigs: Query<(&mut YudaRig, &mut Transform, &mut Visibility)>,
     mut parts: Query<(&mut Transform, &mut Visibility), Without<YudaRig>>,
     mut lights: Query<&mut PointLight>,
@@ -195,6 +247,79 @@ fn ride_yuda(
                 light.intensity = if boosting { 160_000.0 } else { 85_000.0 };
             }
 
+            // Twin megaphone boost afterburner flames
+            for (i, &f_ent) in rig.flames.iter().enumerate() {
+                if let Ok((mut ftf, mut fvis)) = parts.get_mut(f_ent) {
+                    if boosting {
+                        let flicker = 0.82 + (now * 58.0 + i as f32 * 2.1).sin() * 0.24;
+                        *fvis = Visibility::Inherited;
+                        ftf.translation = EXHAUST_TIPS[i] + Vec3::new(0.0, 0.0, -0.72 * flicker);
+                        ftf.scale = Vec3::new(1.0, flicker * 1.15, 1.0);
+                    } else {
+                        *fvis = Visibility::Hidden;
+                    }
+                }
+            }
+
+            // Twin V-twin megaphone exhaust smoke puffs (alternating chug on idle/cruise, thick hot plumes on boost!)
+            let smoke_interval = if mobile.mobile {
+                if boosting { 0.09 } else { 0.18 }
+            } else if boosting {
+                0.032
+            } else {
+                0.075
+            };
+            rig.smoke_timer += dt;
+            if rig.smoke_timer >= smoke_interval {
+                rig.smoke_timer = 0.0;
+                let pipe_count = if boosting && !mobile.mobile { 2 } else { 1 };
+                let back = place.rotation * Vec3::NEG_Z;
+                let right = place.rotation * Vec3::X;
+                let speed_factor = (a.speed.abs() as f32 / 520.0).clamp(0.0, 1.2);
+                for _ in 0..pipe_count {
+                    let tip_idx = rig.smoke_pipe % 2;
+                    rig.smoke_pipe = rig.smoke_pipe.wrapping_add(1);
+                    let jitter = (now * 23.0 + rig.smoke_pipe as f32 * 1.7).sin();
+                    let jitter2 = (now * 31.0 + rig.smoke_pipe as f32 * 2.3).cos();
+                    let spawn_pos = place.transform_point(EXHAUST_TIPS[tip_idx] + Vec3::new(0.0, 0.0, -0.18));
+                    let (base_rgb, max_alpha, hot_glow, start_s, end_s, life) = if boosting {
+                        ([0.24, 0.23, 0.27], 0.70, 2.2, 0.45, 2.05, 0.62)
+                    } else {
+                        ([0.62, 0.66, 0.72], 0.48, 0.0, 0.34, 1.48, 0.72)
+                    };
+                    let mat = materials.add(StandardMaterial {
+                        base_color: Color::srgba(base_rgb[0], base_rgb[1], base_rgb[2], max_alpha),
+                        emissive: LinearRgba::rgb(hot_glow, hot_glow * 0.38, hot_glow * 0.08),
+                        perceptual_roughness: 0.96,
+                        metallic: 0.0,
+                        alpha_mode: AlphaMode::Blend,
+                        ..default()
+                    });
+                    let vel = back * (6.5 + speed_factor * 5.0 + if boosting { 7.5 } else { 0.0 })
+                        + right * (jitter * 1.6)
+                        + Vec3::Y * (1.8 + jitter2.abs() * 1.4);
+                    commands.spawn((
+                        Mesh3d(assets.smoke_mesh.clone()),
+                        MeshMaterial3d(mat.clone()),
+                        Transform::from_translation(spawn_pos)
+                            .with_rotation(Quat::from_euler(EulerRot::XYZ, jitter * 3.1, jitter2 * 3.1, 0.0))
+                            .with_scale(Vec3::splat(start_s)),
+                        ExhaustPuff {
+                            vel,
+                            spin: Vec3::new(jitter * 2.2, jitter2 * 2.0, -jitter * 1.8),
+                            age: 0.0,
+                            life,
+                            start_scale: start_s,
+                            end_scale: end_s,
+                            mat,
+                            base_rgb,
+                            max_alpha,
+                            hot_glow,
+                        },
+                    ));
+                }
+            }
+
             // Emit scraping metallic sparks from the inside exhaust pipe when drifting!
             if drifting && !mobile.mobile {
                 rig.spark_timer += dt;
@@ -234,7 +359,8 @@ fn ride_yuda(
                 0.0,
             );
             let none = Entity::PLACEHOLDER;
-            let (mut wheels, mut rider_clothed, mut rider_bare, mut lamp) = ([none; 2], none, none, None);
+            let (mut wheels, mut flames, mut rider_clothed, mut rider_bare, mut lamp) =
+                ([none; 2], [none; 2], none, none, None);
             let root = commands
                 .spawn((WorldAssetRoot(assets.bike.clone()), place, Visibility::Visible))
                 .with_children(|bike| {
@@ -243,6 +369,18 @@ fn ride_yuda(
                             .spawn((
                                 WorldAssetRoot(assets.wheel.clone()),
                                 Transform::from_translation(axle),
+                            ))
+                            .id();
+                    }
+                    let back_rot = Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2);
+                    for (slot, tip) in flames.iter_mut().zip(EXHAUST_TIPS) {
+                        *slot = bike
+                            .spawn((
+                                Mesh3d(assets.flame_mesh.clone()),
+                                MeshMaterial3d(assets.flame_mat.clone()),
+                                Transform::from_translation(tip + Vec3::new(0.0, 0.0, -0.75))
+                                    .with_rotation(back_rot),
+                                Visibility::Hidden,
                             ))
                             .id();
                     }
@@ -276,6 +414,7 @@ fn ride_yuda(
             commands.entity(root).insert(YudaRig {
                 id: a.id,
                 wheels,
+                flames,
                 rider_clothed,
                 rider_bare,
                 lamp,
@@ -285,6 +424,8 @@ fn ride_yuda(
                 wheelie: 0.0,
                 was_bare: false,
                 spark_timer: 0.0,
+                smoke_timer: 0.0,
+                smoke_pipe: 0,
             });
         }
     }
@@ -304,10 +445,34 @@ fn ride_yuda(
 fn tick_yuda_fx(
     mut commands: Commands,
     time: Res<Time>,
-    mut jackets: Query<(Entity, &mut Transform, &mut FlyingJacket), Without<ScrapeSpark>>,
-    mut sparks: Query<(Entity, &mut Transform, &mut ScrapeSpark), Without<FlyingJacket>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut jackets: Query<(Entity, &mut Transform, &mut FlyingJacket), (Without<ScrapeSpark>, Without<ExhaustPuff>)>,
+    mut sparks: Query<(Entity, &mut Transform, &mut ScrapeSpark), (Without<FlyingJacket>, Without<ExhaustPuff>)>,
+    mut puffs: Query<(Entity, &mut Transform, &mut ExhaustPuff), (Without<FlyingJacket>, Without<ScrapeSpark>)>,
 ) {
     let dt = time.delta_secs().min(0.05);
+    for (ent, mut tf, mut p) in &mut puffs {
+        p.age += dt;
+        if p.age >= p.life {
+            materials.remove(&p.mat);
+            commands.entity(ent).despawn();
+            continue;
+        }
+        let u = p.age / p.life;
+        p.vel *= (1.0 - 2.6 * dt).max(0.2);
+        p.vel.y += 2.2 * dt;
+        tf.translation += p.vel * dt;
+        tf.rotation *= Quat::from_euler(EulerRot::XYZ, p.spin.x * dt, p.spin.y * dt, p.spin.z * dt);
+        let scale = p.start_scale + (p.end_scale - p.start_scale) * u.powf(0.72);
+        tf.scale = Vec3::splat(scale);
+        if let Some(mut mat) = materials.get_mut(&p.mat) {
+            let alpha = p.max_alpha * (1.0 - u).powf(1.35);
+            mat.base_color = Color::srgba(p.base_rgb[0], p.base_rgb[1], p.base_rgb[2], alpha);
+            let cool = (1.0 - u * 3.5).max(0.0);
+            let glow = p.hot_glow * cool * cool;
+            mat.emissive = LinearRgba::rgb(glow, glow * 0.35, glow * 0.06);
+        }
+    }
     for (ent, mut tf, mut j) in &mut jackets {
         j.age += dt;
         if j.age >= j.life {
