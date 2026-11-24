@@ -53,3 +53,31 @@
    of each character's special ability. Export compact policy weights for fast,
    deterministic inference directly inside `rust-core` (with adjustable difficulty
    tiers so bots stay fun rather than unbeatably robotic).
+
+6. **Play-of-the-Match highlight replay with cinematic camera.**
+   Leverage `rust-core`'s deterministic simulation to record lightweight match
+   inputs and automatically score peak moments (multi-kills, A-bomb wipes,
+   river-jump ambushes, Euler's Ghost rampages), then play back a 5–6 second
+   slow-motion highlight from a dynamic chase/orbit camera at match end (pairs
+   naturally with #2 Commentator).
+
+7. **Procedural / AI-generated server-defined arenas with auto-validation.**
+   Build on inline `ArenaDef` streaming (which already delivers new arenas with
+   walls, rivers, bridges, and custom spawns to both browser and native clients
+   without rebuilding) to generate fresh themed maps and automatically verify
+   spawn fairness, river/bridge connectivity, bot navigability, and sightlines
+   before hosting them.
+
+8. **Automated balance & meta tuning lab.**
+   Expand `rust-core`'s headless simulation (`ability-importance`, `lethality`)
+   into a tournament optimizer across all 16 characters, arenas, and player
+   counts — detecting dominant or underperforming abilities and pickups and
+   proposing parameter tweaks backed by before/after win-rate and pacing curves.
+
+9. **Shrink and speed up `graphics.wwgp` via hierarchical / transform-driven port.**
+   Replace per-frame baked dynamic meshes in `graphics.wwgp` (~47 MB) with static
+   rigid-part meshes animated by `Transform` hierarchies (or delta-encoded
+   transforms) while keeping 100% visual parity with `client/renderer.js`. Reduces
+   binary size and build times, and eliminates runtime zlib decompression,
+   mid-battle GPU mesh uploads, and 12-second cache eviction churn in
+   `native-client/src/ported.rs`.
