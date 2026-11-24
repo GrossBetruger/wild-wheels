@@ -58,7 +58,7 @@ jobs:
           retention-days: 30
   native-server:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -69,12 +69,13 @@ jobs:
           cache: npm
       - run: ./install_ubuntu.sh
       - run: sudo apt-get install -y --no-install-recommends shellcheck
-      - run: shellcheck install_ubuntu.sh run_server.sh run_client.sh kill_server.sh update_server.sh scripts/server/server-process.sh scripts/checks/check-ubuntu-install.sh
+      - run: shellcheck install_ubuntu.sh run_server.sh run_client.sh kill_server.sh update_server.sh scripts/build/build-experimental.sh scripts/server/server-process.sh scripts/checks/check-ubuntu-install.sh
       - run: npm ci --ignore-scripts
       - run: cargo +1.90.0 test --locked --manifest-path dedicated-server/Cargo.toml
       - run: cargo +1.90.0 test --locked --manifest-path rust-core/Cargo.toml arena::client::native
       - run: cargo +1.90.0 build --locked --manifest-path rust-core/Cargo.toml --example replay_native_client
       - run: npm run test:native-parity
-      - run: cargo +1.90.0 build --release --locked --manifest-path dedicated-server/Cargo.toml
+      - run: CARGO_BUILD_JOBS=2 bash scripts/build/build-experimental.sh dedicated-server/target/experimental
+      - run: WILD_WHEELS_EXPERIMENTAL_DIR=dedicated-server/target/experimental cargo +1.90.0 build --release --locked --manifest-path dedicated-server/Cargo.toml
       - run: npm run test:server-commands
       - run: npm run test:dedicated -- --seconds 10

@@ -10,7 +10,7 @@ On a GCP VM, choose **Ubuntu 24.04 LTS** explicitly (the boot image is selectabl
 ./install_ubuntu.sh
 ```
 
-The installer also supports Debian. It installs build tools and a pinned Rust toolchain for x86_64 or arm64. Run it without `sudo`; it uses sudo only for system packages and installs Rust for your user. It verifies the official Rust installer’s SHA-256 before execution.
+The installer also supports Debian. It installs build tools, Node.js, FFmpeg and a pinned Rust toolchain for x86_64 or arm64. Run it without `sudo`; it uses sudo only for system packages and installs Rust for your user. It verifies the official Rust installer’s SHA-256 before execution. On an existing Linux deployment, make sure `node` and `ffmpeg` are installed before the first web update that builds Bevy.
 
 Build and run from the repository root (the launcher finds Rust even before you open a new SSH shell):
 
@@ -18,14 +18,14 @@ Build and run from the repository root (the launcher finds Rust even before you 
 ./run_server.sh
 ```
 
-Use `PORT=5174 ./run_server.sh` to choose another port. It rebuilds changed code/assets before starting and uses one compiler job by default for small VMs. It returns after starting the server detached, so closing SSH keeps the game running. Logs append to `.wild-wheels/server.log`. It prevents duplicate managed starts.
+Use `PORT=5174 ./run_server.sh` to choose another port. The launcher bundles the experimental Bevy WASM client, so **3D BEVY (BETA)** on the homepage opens `/experimental/` on the same port. Its first build installs the pinned Bevy Rust toolchain and matching `wasm-bindgen` CLI as needed. The launcher uses one compiler job by default for small VMs. It returns after starting the server detached, so closing SSH keeps the game running. Logs append to `.wild-wheels/server.log`. It prevents duplicate managed starts.
 
 ```sh
 ./kill_server.sh
 ./update_server.sh
 ```
 
-The update command stops the managed server, pulls `main` with fast-forward only, then builds and starts it again. If the pull fails, it tries to restart the existing version. Custom environment settings such as `PORT=5174` should also be passed to the update command. These commands manage servers started by the launcher; stop a previously foreground server with Ctrl+C once before switching.
+The update command pulls `main` with fast-forward only, builds the server and Bevy bundle, then restarts the managed server. The running version keeps serving while the build runs and stays online if the pull or build fails. Pass custom environment settings such as `PORT=5174` to terminal updates as well. These commands manage servers started by the launcher; stop a previously foreground server with Ctrl+C once before switching.
 
 The shared-room panel includes **Check for updates**. Connected players can check GitHub; when a newer server commit exists, **Update server** runs the same update script between matches. The checkout must be clean and on `main`. The requesting browser waits for the new build and reloads automatically, restoring its saved session. Update output is in `.wild-wheels/update.log` (or the configured launcher state directory). Install this version once using `./update_server.sh` over SSH to make the buttons available on an existing server.
 

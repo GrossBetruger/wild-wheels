@@ -6,19 +6,33 @@ import {execFileSync,spawn} from 'node:child_process';
 import {createServer} from 'node:net';
 const i=process.argv.indexOf('--binary'),binary=resolve(i<0?'dedicated-server/target/release/wild-wheels-server':process.argv[i+1]);
 const root=await mkdtemp(join(tmpdir(),'wild-wheels-commands-')),repo=join(root,'repo'),target=join(root,'target'),tools=join(root,'tools'),state=join(root,'state');
-await Promise.all([mkdir(join(repo,'scripts/server'),{recursive:true}),mkdir(join(target,'release'),{recursive:true}),mkdir(tools)]);
+await Promise.all([mkdir(join(repo,'scripts/server'),{recursive:true}),mkdir(join(repo,'scripts/build'),{recursive:true}),mkdir(join(target,'release'),{recursive:true}),mkdir(tools)]);
 for(const name of ['run_server.sh','kill_server.sh','update_server.sh','scripts/server/server-process.sh'])await copyFile(new URL('../../'+name,import.meta.url),join(repo,name));
 await copyFile(binary,join(target,'release/wild-wheels-server'));
-// Exercise lifecycle with the real native executable; compilation is tested separately.
-await writeFile(join(tools,'cargo'),'#!/usr/bin/env bash\nexit 0\n');await chmod(join(tools,'cargo'),0o755);
+// Exercise lifecycle with the real bundled executable; compilation is tested separately.
+await writeFile(join(repo,'scripts/build/build-experimental.sh'),'#!/usr/bin/env bash\nset -eu\nmkdir -p "$1"\nif [[ -f release-marker ]]; then cp release-marker "$1/release-marker"; fi\n');
+await writeFile(join(tools,'cargo'),'#!/usr/bin/env bash\ntest -d "$WILD_WHEELS_EXPERIMENTAL_DIR"\n');await chmod(join(tools,'cargo'),0o755);
 const probe=createServer();await new Promise(r=>probe.listen(0,'127.0.0.1',r));const port=probe.address().port;await new Promise(r=>probe.close(r));
 const env={...process.env,PATH:tools+':'+process.env.PATH,CARGO_TARGET_DIR:target,WILD_WHEELS_RUN_DIR:state,PORT:String(port),BIND:'127.0.0.1',BOTS:'0',GIT_AUTHOR_NAME:'Test',GIT_AUTHOR_EMAIL:'test@example.invalid',GIT_COMMITTER_NAME:'Test',GIT_COMMITTER_EMAIL:'test@example.invalid'};
 const command=(name,args=[])=>execFileSync(name,args,{cwd:repo,env,encoding:'utf8',timeout:15000});
 const shell=name=>command('bash',[join(repo,name)]),git=(...args)=>command('git',args);
 const health=async()=>{for(let tries=0;tries<40;tries++){try{if((await fetch(`http://127.0.0.1:${port}/healthz`)).ok)return true;}catch{}await new Promise(r=>setTimeout(r,50));}return false;};
+const experimental=async()=>{
+  const base=`http://127.0.0.1:${port}/experimental/`;
+  const page=await fetch(base);
+  assert.equal(page.status,200);
+  assert.match(await page.text(),/Launch Bevy WASM/);
+  for(const [path,type] of [['pkg/wild_wheels_wasm_poc.js','text/javascript'],['pkg/wild_wheels_wasm_poc_bg.wasm','application/wasm'],['graphics.wwgp','application/octet-stream'],['sounds.wwsp','application/octet-stream'],['assets/models/debris_girder.glb','model/gltf-binary']]){
+    const asset=await fetch(base+path,{method:'HEAD'});
+    assert.equal(asset.status,200,path);
+    assert.equal(asset.headers.get('content-type').split(';')[0],type,path);
+  }
+  assert.equal((await fetch(base+'Cargo.toml')).status,404);
+};
 let unrelated;
 try{
   shell('run_server.sh');assert.equal(await health(),true,'Server must survive launcher exit');const first=await readFile(join(state,'server.pid'),'utf8');
+  await experimental();
   const pid=Number(first.split('\n')[0]);process.kill(pid,'SIGHUP');assert.equal(await health(),true,'Server must survive SSH-style hangup');
   assert.match(shell('run_server.sh'),/already running/);assert.equal(await readFile(join(state,'server.pid'),'utf8'),first);
   git('init','--initial-branch=main');git('add','.');git('commit','-m','Initial launcher');git('init','--bare',join(root,'remote.git'));git('remote','add','origin',join(root,'remote.git'));git('push','origin','main');
@@ -47,6 +61,8 @@ try{
   const started=await post('/api/updates/install',player.value.token);assert.equal(started.status,200);assert.equal(started.value.updating,true);
   let restarted=false;for(let tries=0;tries<100;tries++){await new Promise(r=>setTimeout(r,100));try{if(await readFile(join(state,'server.pid'),'utf8')!==first&&await health()){try{await access(join(state,'lock'));}catch{restarted=true;break;}}}catch{}}
   assert.equal(restarted,true,'Web update must restart the managed native service');
+  assert.equal(await readFile(join(target,'experimental/release-marker'),'utf8'),'updated\n','Web update must build the experimental bundle from the pulled checkout');
+  await experimental();
   const statsAfter=await (await fetch(`http://127.0.0.1:${port}/statsz`)).json();
   const healthAfter=await (await fetch(`http://127.0.0.1:${port}/healthz`)).json();
   assert.ok(statsAfter.total.ticks>statsBefore.total.ticks,'Historical ticks must continue across update');

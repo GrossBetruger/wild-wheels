@@ -142,14 +142,22 @@ class OfflineContext {
   createBuffer(channels,length){const data=Array.from({length:channels},()=>new Float32Array(Math.floor(length)));return{length:Math.floor(length),duration:Math.floor(length)/this.sampleRate,getChannelData:channel=>data[channel]};}
   // Recorded clips are decoded to mono at the pack's rate by the system converter.
   async decodeAudioData(bytes){
+    if(process.platform!=='darwin'){
+      const pcm=execFileSync('ffmpeg',['-nostdin','-v','error','-i','pipe:0','-ac','1','-ar',String(this.sampleRate),'-f','s16le','pipe:1'],{input:Buffer.from(bytes),timeout:30000,maxBuffer:16*1024*1024});
+      return this.pcmBuffer(pcm);
+    }
     const directory=mkdtempSync(join(tmpdir(),'wild-wheels-sound-'));
     try{
       const source=join(directory,'clip'),decoded=join(directory,'clip.wav');writeFileSync(source,Buffer.from(bytes));
       execFileSync('afconvert',['-f','WAVE','-d',`LEI16@${this.sampleRate}`,'-c','1',source,decoded],{stdio:'ignore'});
-      const wav=readFileSync(decoded),at=wav.indexOf('data')+8,buffer=this.createBuffer(1,(wav.length-at)/2),samples=buffer.getChannelData(0);
-      for(let i=0;i<samples.length;i++)samples[i]=wav.readInt16LE(at+i*2)/32768;
-      return buffer;
+      const wav=readFileSync(decoded);
+      return this.pcmBuffer(wav.subarray(wav.indexOf('data')+8));
     }finally{rmSync(directory,{recursive:true,force:true});}
+  }
+  pcmBuffer(pcm){
+    const buffer=this.createBuffer(1,pcm.length/2),samples=buffer.getChannelData(0);
+    for(let i=0;i<samples.length;i++)samples[i]=pcm.readInt16LE(i*2)/32768;
+    return buffer;
   }
   async resume(){}
   // Renders [from, from+seconds) of everything scheduled so far.

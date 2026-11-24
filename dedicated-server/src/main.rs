@@ -222,7 +222,10 @@ async fn http(
             report["timezone"] = json!("UTC");
             response(200, report)
         }
-        "/build.json" => response(200, json!({"build":BUILD,"revision":REVISION})),
+        "/build.json" => {
+            let failed = app.updates.try_lock().is_ok_and(|mut updates| updates.failed());
+            response(200, json!({"build":BUILD,"revision":REVISION,"updateFailed":failed}))
+        }
         "/logz" | "/logz/all" => {
             // Collecting everything is the heavier request, so it is allowed less often.
             let everything = path == "/logz/all";
@@ -294,7 +297,7 @@ async fn http(
                 .insert(header::LOCATION, "/experimental/".parse().unwrap());
             r
         }
-        p if p.starts_with("/experimental/") => {
+        p if p.starts_with("/experimental/") && !ASSETS.iter().any(|asset| asset.0 == "/experimental/") => {
             let rel = match p.strip_prefix("/experimental/").unwrap_or("") {
                 "" => "index.html",
                 other => other,
@@ -335,7 +338,7 @@ async fn http(
                 Err(_) => error((404, "Experimental Bevy WASM asset not found.")),
             }
         }
-        _ => match ASSETS.iter().find(|a| a.0 == path) {
+        _ => match ASSETS.iter().find(|a| a.0 == path || (path == "/experimental/index.html" && a.0 == "/experimental/")) {
             Some((_, mime, data)) => {
                 let mut r = Response::new(match method == Method::HEAD {
                     true => Body::empty(),

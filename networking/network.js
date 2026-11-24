@@ -189,13 +189,16 @@ export class NetworkGame {
     this.updateServerButton.disabled=true;this.checkUpdatesButton.disabled=true;
     try{
       await this.request('/api/updates/install',{});this.updating=true;this.keys.clear();this.updateStatus.textContent='Updating server… Reconnecting automatically.';
-      const deadline=Date.now()+600000;
+      const deadline=Date.now()+30*60*1000;
       while(Date.now()<deadline){
         await new Promise(resolve=>setTimeout(resolve,1500));
+        let build;
         try{
-          const response=await fetch('/build.json',{signal:AbortSignal.timeout(3000)}),build=await response.json();
-          if(response.ok&&build.revision&&build.revision!==this.serverUpdate.current){location.reload();return;}
+          const response=await fetch('/build.json',{signal:AbortSignal.timeout(3000)});
+          if(response.ok)build=await response.json();
         }catch{}
+        if(build?.revision&&build.revision!==this.serverUpdate.current){location.reload();return;}
+        if(build?.updateFailed)throw new Error('Update failed. The current server is still running. Check .wild-wheels/update.log.');
       }
       throw new Error('Update is taking longer than expected. Check .wild-wheels/update.log on the server.');
     }catch(error){this.updating=false;this.updateStatus.textContent=error.message;this.updateServerButton.disabled=false;this.checkUpdatesButton.disabled=false;}

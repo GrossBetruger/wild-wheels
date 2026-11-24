@@ -18,3 +18,16 @@ server_running(){
   status=$(ps -p "$server_pid" -o stat= 2>/dev/null) || return 1
   [[ $actual == "$server_executable" && $status != *Z* ]]
 }
+server_stop(){
+  if ! server_running; then rm -f -- "$server_pid_file"; printf '%s\n' 'No managed server is running.'; return 0; fi
+  kill -TERM "$server_pid"
+  local attempt
+  for ((attempt=0;attempt<100;attempt++)); do
+    if ! server_running; then rm -f -- "$server_pid_file"; printf '%s\n' 'Server stopped.'; return 0; fi
+    sleep 0.1
+  done
+  # Recheck process identity before escalation; never signal a reused PID.
+  if server_running; then kill -KILL "$server_pid"; fi
+  rm -f -- "$server_pid_file"
+  printf '%s\n' 'Server stopped after shutdown timeout.'
+}

@@ -1,7 +1,7 @@
 use serde_json::{json, Value};
 use std::{
     path::PathBuf,
-    process::Stdio,
+    process::{Child, Stdio},
     time::{Duration, Instant},
 };
 use tokio::{process::Command, time::timeout};
@@ -10,9 +10,27 @@ use tokio::{process::Command, time::timeout};
 pub struct Updates {
     root: Option<PathBuf>,
     checked: Option<(Instant, String)>,
-    started: bool,
+    child: Option<Child>,
+    failed: bool,
 }
 impl Updates {
+    fn in_progress(&mut self) -> bool {
+        let Some(child) = &mut self.child else {
+            return false;
+        };
+        if let Ok(Some(status)) = child.try_wait() {
+            self.child = None;
+            self.failed = !status.success();
+            return false;
+        }
+        true
+    }
+
+    pub fn failed(&mut self) -> bool {
+        self.in_progress();
+        self.failed
+    }
+
     pub fn discover() -> Self {
         let root = std::env::current_dir().ok().filter(|root| {
             std::env::var("WILD_WHEELS_MANAGED").as_deref() == Ok("1")
@@ -59,7 +77,7 @@ impl Updates {
         Ok(())
     }
     pub async fn check(&mut self) -> crate::room::Result<Value> {
-        if self.started {
+        if self.in_progress() {
             return Err((409, "The server is already updating."));
         }
         self.validate_checkout().await?;
@@ -89,7 +107,7 @@ impl Updates {
         )
     }
     pub async fn start(&mut self) -> crate::room::Result<Value> {
-        if self.started {
+        if self.in_progress() {
             return Err((409, "The server is already updating."));
         }
         let (_, latest) = self
@@ -109,7 +127,7 @@ impl Updates {
             .map(PathBuf::from)
             .unwrap_or_else(|| root.join(".wild-wheels"))
             .join("update.log");
-        tokio::task::spawn_blocking(move || -> std::io::Result<()> {
+        let child = tokio::task::spawn_blocking(move || -> std::io::Result<Child> {
             let mut options = std::fs::OpenOptions::new();
             options.create(true).append(true);
             #[cfg(unix)]
@@ -127,8 +145,7 @@ impl Updates {
                 .stdin(Stdio::null())
                 .stderr(output.try_clone()?)
                 .stdout(output)
-                .spawn()?;
-            Ok(())
+                .spawn()
         })
         .await
         .map_err(|_| (503, "Could not start the updater."))?
@@ -138,7 +155,9 @@ impl Updates {
                 "Could not start the updater. Check the server update log.",
             )
         })?;
-        self.started = true;
-        Ok(json!({"updating":true,"latest":latest}))
+        let result = json!({"updating":true,"latest":latest});
+        self.child = Some(child);
+        self.failed = false;
+        Ok(result)
     }
 }

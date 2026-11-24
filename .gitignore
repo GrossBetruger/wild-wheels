@@ -11,7 +11,7 @@ native-client/target/
 wasm-poc/target/
 wasm-poc/pkg/
 wasm-poc/graphics.wwgp
-wasm-poc/sounds.wwgp
+wasm-poc/sounds.wwsp
 wasm-poc/perf-log.jsonl
 
 .wild-wheels/

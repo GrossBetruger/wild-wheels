@@ -1,5 +1,42 @@
 use sha2::{Digest, Sha256};
-use std::{env, fs, path::PathBuf};
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+};
+
+fn experimental_asset(code: &mut String, hash: &mut Sha256, route: &str, path: &Path) {
+    let mime = match path.extension().and_then(|extension| extension.to_str()) {
+        Some("html") => "text/html; charset=utf-8",
+        Some("css") => "text/css; charset=utf-8",
+        Some("js") => "text/javascript; charset=utf-8",
+        Some("wasm") => "application/wasm",
+        Some("glb") => "model/gltf-binary",
+        Some("png") => "image/png",
+        Some("wwgp" | "wwsp") => "application/octet-stream",
+        _ => panic!("Unexpected experimental asset type: {}", path.display()),
+    };
+    println!("cargo:rerun-if-changed={}", path.display());
+    hash.update(route);
+    hash.update(fs::read(path).unwrap_or_else(|error| panic!("{}: {error}", path.display())));
+    code.push_str(&format!("({route:?},{mime:?},include_bytes!({path:?})),\n"));
+}
+
+fn experimental_models(code: &mut String, hash: &mut Sha256, directory: &Path, prefix: &str) {
+    println!("cargo:rerun-if-changed={}", directory.display());
+    let mut entries: Vec<_> = fs::read_dir(directory).unwrap().map(|entry| entry.unwrap()).collect();
+    entries.sort_by_key(|entry| entry.file_name());
+    for entry in entries {
+        let file_type = entry.file_type().unwrap();
+        let route = format!("{prefix}/{}", entry.file_name().to_str().unwrap());
+        if file_type.is_dir() {
+            experimental_models(code, hash, &entry.path(), &route);
+        }
+        if file_type.is_file() && matches!(entry.path().extension().and_then(|extension| extension.to_str()), Some("glb" | "png")) {
+            experimental_asset(code, hash, &route, &entry.path());
+        }
+    }
+}
+
 fn main() {
     let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap())
         .parent()
@@ -53,6 +90,19 @@ fn main() {
             _ => format!("/{name}"),
         };
         code += &format!("({route:?},{mime:?},include_bytes!({:?})),\n", path);
+    }
+    println!("cargo:rerun-if-env-changed=WILD_WHEELS_EXPERIMENTAL_DIR");
+    if let Some(directory) = env::var_os("WILD_WHEELS_EXPERIMENTAL_DIR") {
+        let generated = fs::canonicalize(root.join(directory)).expect("Experimental asset build directory");
+        let source = root.join("wasm-poc");
+        experimental_asset(&mut code, &mut hash, "/experimental/", &source.join("index.html"));
+        for name in ["app.css", "app.js"] {
+            experimental_asset(&mut code, &mut hash, &format!("/experimental/{name}"), &source.join(name));
+        }
+        for name in ["graphics.wwgp", "sounds.wwsp", "pkg/wild_wheels_wasm_poc.js", "pkg/wild_wheels_wasm_poc_bg.wasm"] {
+            experimental_asset(&mut code, &mut hash, &format!("/experimental/{name}"), &generated.join(name));
+        }
+        experimental_models(&mut code, &mut hash, &source.join("assets"), "/experimental/assets");
     }
     // Build identity also changes with native service/core sources.
     fn sources(path: PathBuf, hash: &mut Sha256) {

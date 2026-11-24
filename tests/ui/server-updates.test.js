@@ -39,3 +39,13 @@ test('updating waits for a new server build and reloads even if main advanced be
   await NetworkGame.prototype.updateServer.call(network);
   assert.equal(reloads,1);assert.equal(network.keys.size,0);assert.equal(network.updateServerButton.disabled,true);
 });
+test('a failed build reports the failure and re-enables web updates',async t=>{
+  const network=panel();network.serverUpdate={available:true,current:'old-build'};network.keys=new Set();
+  network.request=async()=>({updating:true});
+  t.mock.method(globalThis,'setTimeout',callback=>{queueMicrotask(callback);return 0;});
+  t.mock.method(globalThis,'fetch',async()=>({ok:true,json:async()=>({revision:'old-build',updateFailed:true})}));
+  await NetworkGame.prototype.updateServer.call(network);
+  assert.equal(network.updateStatus.textContent,'Update failed. The current server is still running. Check .wild-wheels/update.log.');
+  assert.equal(network.updateServerButton.disabled,false);
+  assert.equal(network.checkUpdatesButton.disabled,false);
+});
