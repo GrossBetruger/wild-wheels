@@ -50,6 +50,7 @@ if (beta && touch) document.body.classList.add('bevy-touch');
 const bevyImport = beta
   ? import('./bevy-presentation.js').then(({ BevyPresentation }) => {
       bevy = new BevyPresentation(canvas, clientLog, touch);
+      characterPreview.uplifted = bevy;
       return bevy;
     }).catch(error => {
       clientLog.note('error', 'bevy-startup-failed', { message: error.message });

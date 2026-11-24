@@ -6,6 +6,7 @@ mod knowitowl;
 mod pearococo;
 mod plumage;
 mod ported;
+mod preview;
 mod ryeah;
 mod scene;
 mod sound;
@@ -487,6 +488,7 @@ fn presentation_app(pack: Vec<u8>, canvas: &str, interactive: bool, mobile: bool
             explosions::ExplosionsPlugin,
             knowitowl::KnowItOwlPlugin,
             pearococo::PearococoPlugin,
+            preview::PreviewPlugin,
             ryeah::RYeahPlugin,
             yuda::YudaPlugin,
         ))
@@ -754,6 +756,7 @@ fn sync_blender_models(
     mut commands: Commands,
     time: Res<Time>,
     session: Res<app::GameSession>,
+    preview: Res<crate::preview::Preview>,
     mobile: Res<MobileGraphics>,
     models: Option<Res<BlenderModels>>,
     mut existing: Query<
@@ -776,7 +779,7 @@ fn sync_blender_models(
 ) {
     let Some(models) = models else { return };
     let Some(client) = session.client.as_ref() else { return };
-    let view = client.view();
+    let view = preview.on_stage(client.view());
     let t = time.elapsed_secs();
     let dt = time.delta_secs().min(0.05);
     let mut alive_static = std::collections::HashSet::new();

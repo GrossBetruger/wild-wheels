@@ -596,13 +596,16 @@ fn racers(stage: &mut Stage, view: &ClientView, bats: &Bats, dt: f32, now: f32, 
                 at(a.wx, height, a.wz, a.heading),
             );
         }
-        let pips = stage.clip(&format!("health:{}", (a.health.max(0.0) as usize).min(6)));
-        stage.show(
-            Role::Health,
-            a.id,
-            pips,
-            at(a.wx, 0.0, a.wz, view.player.heading),
-        );
+        // The lobby's stand-in racer is not in the match and has no health to show.
+        if a.id != crate::preview::ID {
+            let pips = stage.clip(&format!("health:{}", (a.health.max(0.0) as usize).min(6)));
+            stage.show(
+                Role::Health,
+                a.id,
+                pips,
+                at(a.wx, 0.0, a.wz, view.player.heading),
+            );
+        }
         let active = [
             a.shield,
             a.hedge_shield,
@@ -846,6 +849,7 @@ fn effects(stage: &mut Stage, view: &ClientView, xray: bool, elapsed: f32, drift
 pub fn sync(
     mut commands: Commands,
     session: Res<GameSession>,
+    preview: Res<crate::preview::Preview>,
     assets: SceneAssets,
     mut cache: ResMut<SceneCache>,
     shake: Option<Res<crate::explosions::CameraShake>>,
@@ -944,7 +948,7 @@ pub fn sync(
         .collect();
     racers(
         &mut stage,
-        &view,
+        &preview.on_stage(client.view()),
         &bats,
         time.delta_secs().min(0.05),
         time.elapsed_secs(),

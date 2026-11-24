@@ -350,6 +350,7 @@ fn drive_pearococo(
     mut commands: Commands,
     time: Res<Time>,
     session: Res<GameSession>,
+    preview: Res<crate::preview::Preview>,
     mobile: Res<MobileGraphics>,
     assets: Option<Res<PearococoAssets>>,
     mut rigs: Query<(Entity, &mut PearococoRig, &mut Transform, &mut Visibility)>,
@@ -365,7 +366,7 @@ fn drive_pearococo(
     let Some(client) = session.client.as_ref() else {
         return;
     };
-    let view = client.view();
+    let view = preview.on_stage(client.view());
     let t = time.elapsed_secs();
     let dt = time.delta_secs().min(0.05);
     let mut alive = HashSet::new();

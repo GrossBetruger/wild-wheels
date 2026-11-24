@@ -267,6 +267,7 @@ fn ride_yuda(
     mut commands: Commands,
     time: Res<Time>,
     session: Res<GameSession>,
+    preview: Res<crate::preview::Preview>,
     mobile: Res<MobileGraphics>,
     assets: Option<Res<YudaAssets>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
@@ -277,7 +278,7 @@ fn ride_yuda(
 ) {
     let Some(assets) = assets else { return };
     let Some(client) = session.client.as_ref() else { return };
-    let view = client.view();
+    let view = preview.on_stage(client.view());
     let (now, dt) = (time.elapsed_secs(), time.delta_secs().min(0.05));
     let mut alive = HashSet::new();
 

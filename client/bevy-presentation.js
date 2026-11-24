@@ -127,7 +127,9 @@ export class BevyPresentation {
   }
 
   updateMobileLevel() {
-    const level = this.inView && this.supported && !document.hidden && !this.failed ? this.quality.level : mobileIdle;
+    // The lobby's character preview needs frames even while the arena is scrolled out of view.
+    const previewing = performance.now() - (this.previewAt ?? -Infinity) < 500;
+    const level = (this.inView && this.supported || previewing) && !document.hidden && !this.failed ? this.quality.level : mobileIdle;
     if (level === this.mobileLevel || !this.bindings) return;
     this.bindings.set_mobile_presentation_level(level);
     if (level === mobileIdle || this.mobileLevel === mobileIdle) this.quality.reset();
@@ -253,6 +255,34 @@ export class BevyPresentation {
       this.fail('bevy-frame-failed', error);
       return false;
     }
+  }
+
+  // Show a racer on the Bevy client's preview stage and return its newest
+  // frame as ImageData, or null when none has arrived since the last call.
+  preview({ driver, color, clock, yaw, celebrate, boost, tall, width, height }) {
+    const { bindings } = this;
+    if (this.failed || !bindings?.show_character_preview || !bindings.presentation_ready() || !(width > 0 && height > 0)) return null;
+    // Rows of the copied image are unpadded only at widths that are multiples of 64.
+    const pixels = Math.min(this.mobile ? 1 : 1.5, devicePixelRatio || 1);
+    const columns = Math.max(64, Math.round(width * pixels / 64) * 64), rows = Math.max(32, Math.round(columns * height / width));
+    this.previewAt = performance.now();
+    try {
+      bindings.show_character_preview(driver, color, clock, yaw, celebrate, Boolean(boost), tall, columns, rows);
+      const bytes = bindings.take_character_preview();
+      if (bytes.length < 8) return null;
+      const size = new DataView(bytes.buffer, bytes.byteOffset, 8), frameWidth = size.getUint32(0, true), frameHeight = size.getUint32(4, true);
+      if (bytes.length !== 8 + frameWidth * frameHeight * 4) return null;
+      return new ImageData(new Uint8ClampedArray(bytes.buffer, bytes.byteOffset + 8, frameWidth * frameHeight * 4), frameWidth, frameHeight);
+    } catch (error) {
+      this.log.limited('bevy-preview-failed', 15000, 'warn', 'bevy-preview-failed', { message: error?.message });
+      return null;
+    }
+  }
+
+  hidePreview() {
+    if (this.previewAt === undefined) return;
+    this.previewAt = undefined;
+    try { this.bindings?.hide_character_preview?.(); } catch { /* The preview falls back to the regular renderer. */ }
   }
 
   measureMobile(now) {
