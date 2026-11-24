@@ -86,7 +86,7 @@ fn on_bridge(b: &[f64; 5], wx: f64, wz: f64) -> bool {
 pub const EULER_CONFIDENT_NOTICE: &str = "6/7 bridges, Euler remains confident of his result...";
 pub const EULER_ACHIEVED_NOTICE: &str = "EULERIAN PATH ACHIEVED!";
 const GHOST_DURATION: f64 = 1e6;
-const GHOST_SPEED: f64 = 38.0;
+const GHOST_SPEED: f64 = 15.0;
 const GHOST_KILL_RADIUS: f64 = 5.5;
 const GHOST_RISE_GRACE: f64 = 1.0;
 
