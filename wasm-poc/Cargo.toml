@@ -19,6 +19,8 @@ bevy = { version = "=0.20.1", default-features = false, features = [
     "bevy_audio",
     "wav",
     "bevy_gltf",
+    "gltf_animation",
+    "morph",
     "bevy_scene",
     "keyboard",
     "mouse",
