@@ -7,12 +7,20 @@
 //!   mane billowing dynamically in rotor downwash, speed, boost, and turns!
 //! - Ground rotor-wash dust & golden sparkle rings when boosting or somersaulting.
 use crate::{MobileGraphics, Presentation, app::GameSession, ported, scene};
-use bevy::gltf::GltfAssetLabel;
+use bevy::animation::graph::AnimationNodeIndex;
+use bevy::gltf::{Gltf, GltfAssetLabel};
+use bevy::mesh::morph::MorphWeights;
 use bevy::prelude::*;
 use std::collections::HashSet;
-use std::f32::consts::{PI, TAU};
+use std::f32::consts::{FRAC_PI_2, PI, TAU};
 
 pub const DRIVER: usize = 11;
+
+const LION_CLIPS: [&str; 4] = ["hang", "boost", "roar", "fire"];
+const HANG: usize = 0;
+const BOOST: usize = 1;
+const ROAR: usize = 2;
+const FIRE: usize = 3;
 
 /// Exact local-space position of the Bell 206 Vulcan cannon muzzle crown.
 /// Used by `scene.rs` to align R-Yeah's hedgehogs so they stream straight out of the barrel!
@@ -23,7 +31,7 @@ const MAIN_ROTOR_OFFSET: Vec3 = Vec3::new(1.3, 4.5 + 6.15 * 0.6, -0.4 - 0.2 * 0.
 const TAIL_ROTOR_OFFSET: Vec3 = Vec3::new(1.3 + 0.26 * 0.6, 4.5 + 3.8 * 0.6, -0.4 - 6.1 * 0.6);
 const VULCAN_SOCKET: Vec3 = Vec3::new(1.3, 4.56, 1.50);
 
-/// Local-space center of the hanging lion's head (matching `hanging_pt(0, 4.02, 0.30)`).
+/// Local-space helper matching `hanging_model` in `build_ryeah.py`.
 fn hanging_lion_local(x: f32, y: f32, z: f32) -> Vec3 {
     let (c, s) = (0.27_f32.cos(), 0.27_f32.sin());
     let (cp, sp) = (0.18_f32.cos(), 0.18_f32.sin());
@@ -45,12 +53,18 @@ impl Plugin for RYeahPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, load).add_systems(
             Update,
-            (fly_ryeah, tick_rotor_wash)
+            (rig_ryeah, fly_ryeah, tick_rotor_wash)
                 .chain()
                 .after(scene::sync)
                 .in_set(Presentation),
         );
     }
+}
+
+#[derive(Clone)]
+struct LionMoves {
+    graph: Handle<AnimationGraph>,
+    clips: [AnimationNodeIndex; LION_CLIPS.len()],
 }
 
 #[derive(Resource)]
@@ -59,7 +73,9 @@ struct RYeahAssets {
     main_rotor: Handle<WorldAsset>,
     tail_rotor: Handle<WorldAsset>,
     vulcan_barrels: Handle<WorldAsset>,
+    lion_gltf: Handle<Gltf>,
     lion: Handle<WorldAsset>,
+    moves: Option<LionMoves>,
     mane_lock_mesh: Handle<Mesh>,
     mane_mats: [Handle<StandardMaterial>; 4],
     rotor_blur_mesh: Handle<Mesh>,
@@ -81,9 +97,16 @@ struct ManeLockSlot {
     base_scale: f32,
 }
 
+struct LionSkeleton {
+    player: Entity,
+    lids: Option<Entity>,
+}
+
 #[derive(Component)]
 struct RYeahRig {
     id: usize,
+    lion_root: Entity,
+    skeleton: Option<LionSkeleton>,
     main_rotor: Entity,
     rotor_blur: Entity,
     tail_rotor: Entity,
@@ -99,6 +122,8 @@ struct RYeahRig {
     prev_heading: f32,
     turn_swing: f32,
     wash_timer: f32,
+    weights: [f32; LION_CLIPS.len()],
+    blink: f32,
 }
 
 #[derive(Component)]
@@ -207,7 +232,9 @@ fn load(
         main_rotor: part("main_rotor"),
         tail_rotor: part("tail_rotor"),
         vulcan_barrels: part("vulcan_barrels"),
+        lion_gltf: assets.load("models/ryeah_lion.glb"),
         lion: part("lion"),
+        moves: None,
         mane_lock_mesh: meshes.add(build_mane_lock_mesh()),
         mane_mats,
         rotor_blur_mesh: meshes.add(Cylinder::new(4.7 * 0.6, 0.03)),
@@ -256,6 +283,130 @@ fn load(
     });
 }
 
+#[allow(clippy::too_many_arguments)]
+fn rig_ryeah(
+    mut commands: Commands,
+    mobile: Res<MobileGraphics>,
+    assets: Option<ResMut<RYeahAssets>>,
+    models: Res<Assets<Gltf>>,
+    mut graphs: ResMut<Assets<AnimationGraph>>,
+    mut rigs: Query<&mut RYeahRig>,
+    family: Query<&Children>,
+    names: Query<&Name>,
+    mut players: Query<&mut AnimationPlayer>,
+    morphs: Query<(), With<MorphWeights>>,
+) {
+    let Some(mut assets) = assets else { return };
+    for mut rig in &mut rigs {
+        if rig.skeleton.is_some() {
+            continue;
+        }
+        let (mut player, mut lids, mut head) = (None, None, None);
+        for part in family.iter_descendants(rig.lion_root) {
+            if players.contains(part) {
+                player = Some(part);
+            }
+            if morphs.contains(part) {
+                lids = Some(part);
+            }
+            if names.get(part).is_ok_and(|n| n.as_str() == "head") {
+                head = Some(part);
+            }
+        }
+        let (Some(player), Some(head)) = (player, head) else {
+            continue;
+        };
+        if assets.moves.is_none() {
+            let Some(model) = models.get(&assets.lion_gltf) else {
+                continue;
+            };
+            let mut graph = AnimationGraph::new();
+            let root = graph.root;
+            let mut nodes = [root; LION_CLIPS.len()];
+            for (index, name) in LION_CLIPS.into_iter().enumerate() {
+                if let Some(clip) = model.named_animations.get(name) {
+                    nodes[index] = graph.add_clip(clip.clone(), 1.0, root);
+                }
+            }
+            assets.moves = Some(LionMoves {
+                graph: graphs.add(graph),
+                clips: nodes,
+            });
+        }
+        let Some(moves) = assets.moves.clone() else {
+            continue;
+        };
+        let Ok(mut playing) = players.get_mut(player) else {
+            continue;
+        };
+        for (index, clip) in moves.clips.into_iter().enumerate() {
+            playing
+                .play(clip)
+                .repeat()
+                .set_weight(if index == HANG { 1.0 } else { 0.0 });
+        }
+        commands.entity(player).insert(AnimationGraphHandle(moves.graph));
+
+        // Attach the 64 cohesive lion mane tufts to the `head` bone via the +90 deg X socket
+        // so the entire mane tilts, turns, and roars with R-Yeah's head!
+        let head_hinge = hanging_lion_local(0.0, 3.65, 0.52);
+        let head_center_rel = hanging_lion_local(0.0, 4.02, 0.30) - head_hinge;
+        let ring_specs: &[(u8, usize, f32, f32, f32)] = if mobile.mobile {
+            &[
+                (0, 9, 0.42, -0.30, 1.02),
+                (1, 13, 0.88, 0.14, 1.05),
+            ]
+        } else {
+            &[
+                (0, 10, 0.28, -0.44, 0.92),
+                (1, 14, 0.56, -0.32, 0.98),
+                (2, 18, 0.78, -0.10, 1.04),
+                (3, 22, 0.94, 0.16, 1.00),
+            ]
+        };
+        let mut mane_locks = Vec::new();
+        commands.entity(head).with_children(|head_ent| {
+            head_ent
+                .spawn((
+                    Transform::from_rotation(Quat::from_rotation_x(FRAC_PI_2)),
+                    Visibility::Inherited,
+                ))
+                .with_children(|socket| {
+                    for &(ring, count, rad, z_off, base_scale) in ring_specs {
+                        for i in 0..count {
+                            let angle = (i as f32) * TAU / (count as f32) + (ring as f32) * 0.28;
+                            let base_pos = head_center_rel
+                                + Vec3::new(angle.sin() * rad, angle.cos() * rad, z_off);
+                            let mat_idx = ((ring as usize) + (i % 2)).min(3);
+                            let mat = assets.mane_mats[mat_idx].clone();
+                            let ent = socket
+                                .spawn((
+                                    Mesh3d(assets.mane_lock_mesh.clone()),
+                                    MeshMaterial3d(mat),
+                                    Transform::from_translation(base_pos),
+                                    Visibility::Inherited,
+                                ))
+                                .id();
+                            let phase =
+                                (ring as f32) * 0.75 + angle.sin() * 1.35 + angle.cos() * 0.55;
+                            mane_locks.push(ManeLockSlot {
+                                entity: ent,
+                                base_pos,
+                                ring,
+                                angle,
+                                phase,
+                                base_scale,
+                            });
+                        }
+                    }
+                });
+        });
+        rig.mane_locks = mane_locks;
+        rig.skeleton = Some(LionSkeleton { player, lids });
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 fn fly_ryeah(
     mut commands: Commands,
     time: Res<Time>,
@@ -265,6 +416,8 @@ fn fly_ryeah(
     mut rigs: Query<(Entity, &mut RYeahRig, &mut Transform, &mut Visibility)>,
     mut parts: Query<(&mut Transform, &mut Visibility), (Without<RYeahRig>, Without<PointLight>)>,
     mut lights: Query<&mut PointLight>,
+    mut players: Query<&mut AnimationPlayer>,
+    mut morphs: Query<&mut MorphWeights>,
 ) {
     let Some(assets) = assets else { return };
     let Some(client) = session.client.as_ref() else {
@@ -321,6 +474,47 @@ fn fly_ryeah(
                 0.0
             };
             rig.turn_swing += (turn_target - rig.turn_swing) * (1.0 - (-dt * 8.0).exp());
+
+            // 0. Blend lion skeletal clips (hang / boost / roar / fire) + eyelid blink!
+            let target_clip = if a.celebrate > 0.0 {
+                ROAR
+            } else if boost {
+                BOOST
+            } else if vulcan_active || recently_fired {
+                FIRE
+            } else {
+                HANG
+            };
+            let blend = 1.0 - (-dt * 10.0).exp();
+            for (i, w) in rig.weights.iter_mut().enumerate() {
+                let goal = if i == target_clip { 1.0 } else { 0.0 };
+                *w += (goal - *w) * blend;
+            }
+            rig.blink -= dt;
+            if rig.blink < -0.18 {
+                rig.blink = 2.4 + ((t * 1.7 + a.id as f32).sin().abs()) * 2.8;
+            }
+            let blink_w = if rig.blink < 0.0 {
+                let u = (-rig.blink / 0.18).clamp(0.0, 1.0);
+                (u * PI).sin()
+            } else {
+                0.0
+            };
+            if let (Some(skel), Some(moves)) = (&rig.skeleton, &assets.moves) {
+                if let Ok(mut playing) = players.get_mut(skel.player) {
+                    for (i, &node) in moves.clips.iter().enumerate() {
+                        if let Some(anim) = playing.animation_mut(node) {
+                            anim.set_weight(rig.weights[i]);
+                        }
+                    }
+                }
+                if let Some(lids_ent) = skel.lids
+                    && let Ok(mut mw) = morphs.get_mut(lids_ent)
+                    && let Some(w0) = mw.weights_mut().first_mut()
+                {
+                    *w0 = blink_w;
+                }
+            }
 
             // 1. Main & tail rotors (forward cyclic tilt on boost)
             let target_tilt = if boost { 0.26 } else { 0.04 * speed_norm };
@@ -447,7 +641,8 @@ fn fly_ryeah(
                 }
             }
         } else {
-            // Spawn full articulated R-Yeah rig!
+            // Spawn full articulated R-Yeah rig! (Mane tufts attach in `rig_ryeah` once skeleton arrives.)
+            let mut lion_root = Entity::PLACEHOLDER;
             let mut main_rotor = Entity::PLACEHOLDER;
             let mut rotor_blur = Entity::PLACEHOLDER;
             let mut tail_rotor = Entity::PLACEHOLDER;
@@ -455,31 +650,13 @@ fn fly_ryeah(
             let mut muzzle_outer = Entity::PLACEHOLDER;
             let mut muzzle_core = Entity::PLACEHOLDER;
             let mut muzzle_light = None;
-            let mut mane_locks = Vec::new();
-
-            let head_center = hanging_lion_local(0.0, 4.02, 0.30);
-
-            // Desktop: 64 fine overlapping fur tufts across 4 concentric spherical dome rings
-            // forming a clean, lush, unmistakable lion's mane crown!
-            // Mobile: 22 tufts across 2 rings for crisp mobile perf.
-            let ring_specs: &[(u8, usize, f32, f32, f32)] = if mobile.mobile {
-                &[
-                    (0, 9, 0.42, -0.30, 1.02),
-                    (1, 13, 0.88, 0.14, 1.05),
-                ]
-            } else {
-                &[
-                    (0, 10, 0.28, -0.44, 0.92),
-                    (1, 14, 0.56, -0.32, 0.98),
-                    (2, 18, 0.78, -0.10, 1.04),
-                    (3, 22, 0.94, 0.16, 1.00),
-                ]
-            };
 
             let root = commands
                 .spawn((WorldAssetRoot(assets.chopper.clone()), tf))
                 .with_children(|parent| {
-                    parent.spawn((WorldAssetRoot(assets.lion.clone()), Transform::IDENTITY));
+                    lion_root = parent
+                        .spawn((WorldAssetRoot(assets.lion.clone()), Transform::IDENTITY))
+                        .id();
 
                     main_rotor = parent
                         .spawn((
@@ -538,43 +715,13 @@ fn fly_ryeah(
                                 .id(),
                         );
                     }
-
-                    // Spawn concentric spherical rings of fine golden-amber lion mane tufts!
-                    let mut idx = 0usize;
-                    for &(ring, count, rad, z_off, base_scale) in ring_specs {
-                        for i in 0..count {
-                            let angle = (i as f32) * TAU / (count as f32) + (ring as f32) * 0.28;
-                            let base_pos = head_center
-                                + Vec3::new(angle.sin() * rad, angle.cos() * rad, z_off);
-                            // Darker chestnut inner rings transitioning to sunlit golden-amber outer crown
-                            let mat_idx = ((ring as usize) + (i % 2)).min(3);
-                            let mat = assets.mane_mats[mat_idx].clone();
-                            let ent = parent
-                                .spawn((
-                                    Mesh3d(assets.mane_lock_mesh.clone()),
-                                    MeshMaterial3d(mat),
-                                    Transform::from_translation(base_pos),
-                                ))
-                                .id();
-                            // Spatially coherent phase so wind ripples smoothly across the mane!
-                            let phase = (ring as f32) * 0.75 + angle.sin() * 1.35 + angle.cos() * 0.55;
-                            mane_locks.push(ManeLockSlot {
-                                entity: ent,
-                                base_pos,
-                                ring,
-                                angle,
-                                phase,
-                                base_scale,
-                            });
-                            idx += 1;
-                        }
-                    }
-                    let _ = idx;
                 })
                 .id();
 
             commands.entity(root).insert(RYeahRig {
                 id: a.id,
+                lion_root,
+                skeleton: None,
                 main_rotor,
                 rotor_blur,
                 tail_rotor,
@@ -582,7 +729,7 @@ fn fly_ryeah(
                 muzzle_outer,
                 muzzle_core,
                 muzzle_light,
-                mane_locks,
+                mane_locks: Vec::new(),
                 rotor_angle: 0.0,
                 rotor_tilt: 0.0,
                 vulcan_angle: 0.0,
@@ -590,6 +737,8 @@ fn fly_ryeah(
                 prev_heading: a.heading as f32,
                 turn_swing: 0.0,
                 wash_timer: 0.0,
+                weights: [1.0, 0.0, 0.0, 0.0],
+                blink: 2.0 + a.id as f32 * 0.7,
             });
         }
     }

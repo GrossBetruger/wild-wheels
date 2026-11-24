@@ -1,20 +1,25 @@
 """Headless Blender 5.3 PBR generator for Pearococo (#9):
-- Opulent Rococo royal chariot (porcelain cream, rose velvet seat, 24K gold scrollwork,
-  strings of nacreous pearls, 9-fluted scallop-shell prow w/ amethyst cabochon)
-- Spinning gilded carriage wheel (pearl rim, 10 tapered gold spokes, rose-gold hub)
-- Her Majesty Pearococo (silk pink pannier gown w/ ivory lace, teal peacock neck/head,
-  gold beak, powdered Rococo curls, pearl earrings & necklace, 8-point gold tiara)
-- Articulated royal right wing/hand pivoted at shoulder for her regal celebration wave!
+- Rigid Rococo royal chariot (`pearococo_chariot.glb`) & gilded wheels (`pearococo_wheel.glb`)
+- Skinned royal peacock queen (`pearococo_queen.glb`) on a 10-bone skeleton (`rigging.py`)
+  with 3 animation clips (`poise`, `wave`, `boost`) and aristocratic eyelid blink shape keys!
 
 Run: /opt/homebrew/bin/blender --background --python wasm-poc/blender/build_pearococo.py
 """
 import math
 import os
+import sys
 import bpy
 import bmesh
 from mathutils import Matrix, Vector
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.dont_write_bytecode = True
+HERE = os.path.dirname(os.path.abspath(__file__))
+if HERE not in sys.path:
+    sys.path.insert(0, HERE)
+import rigging  # noqa: E402
+from rigging import RX, RY, RZ, wave  # noqa: E402
+
+ROOT = os.path.dirname(HERE)
 OUT_DIR = os.path.join(ROOT, "assets", "models")
 os.makedirs(OUT_DIR, exist_ok=True)
 
@@ -38,37 +43,18 @@ def make_mat(name, color, metallic=0.0, roughness=0.4, coat=0.0, emission=None, 
     return mat
 
 
-def to_blender(x, y, z):
-    """Game/Bevy (X right, Y up, Z forward) -> Blender (X right, Y=-Z, Z=Y up)."""
+def loc(x, y, z):
+    """Model space (x across, y up, z forward) -> Blender space (x, -z, y)."""
     return Vector((x, -z, y))
 
 
-def add_obj(name, bm, mat, smooth=True):
-    mesh = bpy.data.meshes.new(name)
-    bm.to_mesh(mesh)
-    bm.free()
-    if smooth:
-        for p in mesh.polygons:
-            p.use_smooth = True
-    obj = bpy.data.objects.new(name, mesh)
-    obj.data.materials.append(mat)
-    bpy.context.collection.objects.link(obj)
-    return obj
-
-
-def add_sphere(bm, center, rx, ry, rz, segs=16, rings=10, rot=None):
-    m = Matrix.Translation(center)
-    if rot is not None:
-        m = m @ rot.to_4x4()
-    m = m @ Matrix.Diagonal((rx, rz, ry, 1.0))
+def add_sphere(bm, center, rx, ry, rz, segs=16, rings=10):
+    m = Matrix.Translation(center) @ Matrix.Diagonal((rx, rz, ry, 1.0))
     bmesh.ops.create_uvsphere(bm, u_segments=segs, v_segments=rings, radius=1.0, matrix=m)
 
 
-def add_box(bm, center, sx, sy, sz, rot=None):
-    m = Matrix.Translation(center)
-    if rot is not None:
-        m = m @ rot.to_4x4()
-    m = m @ Matrix.Diagonal((sx, sz, sy, 1.0))
+def add_box(bm, center, sx, sy, sz):
+    m = Matrix.Translation(center) @ Matrix.Diagonal((sx, sz, sy, 1.0))
     bmesh.ops.create_cube(bm, size=1.0, matrix=m)
 
 
@@ -89,140 +75,109 @@ def add_tube(bm, p0, p1, r0, r1=None, segs=10):
     )
 
 
-def add_scroll(bm, x, y, z, side=1.0):
-    """Elegant Baroque spiral filigree scroll built from smooth connected tubes."""
-    pts = []
-    for i in range(14):
-        a = i * 0.38
-        r = 0.48 * (1.0 - i / 18.0)
-        pts.append(to_blender(x + side * math.cos(a) * r, y + math.sin(a) * r, z))
-    for i in range(len(pts) - 1):
-        r = 0.075 * (1.0 - i / 22.0)
-        add_tube(bm, pts[i], pts[i + 1], r, r * 0.96, segs=7)
-    add_sphere(bm, pts[-1], 0.065, 0.065, 0.065, segs=8, rings=5)
+def make_piece(name, bm, mat, bucket):
+    mesh = bpy.data.meshes.new(name)
+    bm.to_mesh(mesh)
+    bm.free()
+    for p in mesh.polygons:
+        p.use_smooth = True
+    obj = bpy.data.objects.new(name, mesh)
+    obj.data.materials.append(mat)
+    bpy.context.collection.objects.link(obj)
+    rigging.bind(obj)
+    bucket.append(obj)
+    return obj
 
 
-def export_glb(filename):
-    path = os.path.join(OUT_DIR, filename)
-    bpy.ops.export_scene.gltf(
-        filepath=path,
-        export_format="GLB",
-        export_yup=True,
-        export_apply=True,
-    )
-    print(f"Exported {path} ({os.path.getsize(path) / 1024:.1f} KB)")
+# --- Skinned Queen Skeleton & Animation Clips ---
+def queen_bones():
+    return [
+        ("gown", None, (0.0, 2.04, 0.0)),
+        ("torso", "gown", (0.0, 2.48, 0.08)),
+        ("neck", "torso", (0.0, 3.12, 0.16)),
+        ("head", "neck", (0.0, 3.92, 0.30)),
+        ("curl_l", "head", (-0.50, 4.46, 0.24)),
+        ("curl_r", "head", (0.50, 4.46, 0.24)),
+        ("wing_l", "torso", (-0.64, 2.72, 0.47)),
+        ("wing_r_upper", "torso", (0.64, 2.72, 0.47)),
+        ("wing_r_fore", "wing_r_upper", (0.92, 2.62, 0.67)),
+        ("wing_r_hand", "wing_r_fore", (1.06, 3.28, 0.85)),
+    ]
 
 
-def build_chariot():
-    clear_scene()
-    # Linear-space opulent Rococo palace materials
-    mat_porcelain = make_mat("RococoPorcelain", (0.98, 0.90, 0.72), metallic=0.05, roughness=0.18, coat=0.95)
-    mat_gold = make_mat("RococoGold24K", (0.92, 0.66, 0.20), metallic=0.94, roughness=0.16, coat=0.4)
-    mat_velvet = make_mat("RococoVelvet", (0.58, 0.12, 0.34), metallic=0.04, roughness=0.76)
-    mat_rose = make_mat("RococoRoseSilk", (0.90, 0.38, 0.62), metallic=0.12, roughness=0.28, coat=0.6)
-    mat_pearl = make_mat("RococoPearl", (1.0, 0.97, 0.92), metallic=0.18, roughness=0.12, coat=1.0)
-    mat_amethyst = make_mat(
-        "RococoAmethyst", (0.68, 0.22, 0.72), metallic=0.22, roughness=0.08, coat=1.0,
-        emission=(0.35, 0.08, 0.42), emission_strength=0.45,
-    )
-
-    bm_porc = bmesh.new()
-    bm_gold = bmesh.new()
-    bm_velv = bmesh.new()
-    bm_rose = bmesh.new()
-    bm_pearl = bmesh.new()
-    bm_gem = bmesh.new()
-
-    # Main porcelain hull (shifted +0.13 in Y matching renderer.js mesh.at(0, .13, 0))
-    yo = 0.13
-    add_sphere(bm_porc, to_blender(0, 0.96 + yo, 0.0), 1.62, 0.52, 2.48, segs=24, rings=12)
-    # Velvet royal seat cushion & backrest
-    add_sphere(bm_velv, to_blender(0, 1.32 + yo, -0.60), 1.14, 0.46, 1.18, segs=18, rings=10)
-    add_sphere(bm_velv, to_blender(0, 1.72 + yo, -1.35), 1.05, 0.55, 0.34, segs=16, rings=8)
-
-    for side in (-1.0, 1.0):
-        # Gilded side rails & lower chassis trim
-        add_box(bm_gold, to_blender(side * 1.42, 1.16 + yo, 0.0), 0.20, 0.23, 3.48)
-        add_tube(bm_gold, to_blender(side * 1.56, 1.78 + yo, -1.85), to_blender(side * 1.56, 1.78 + yo, 1.45), 0.06, 0.06, segs=8)
-        # Rose silk side panel insert
-        add_sphere(bm_rose, to_blender(side * 1.50, 1.13 + yo, 0.15), 0.13, 0.34, 1.28, segs=14, rings=8)
-        # Baroque gold filigree scrolls along sides & front
-        for z in (-1.80, -0.45, 1.00):
-            add_scroll(bm_gold, side * 1.58, 1.48 + yo, z, side)
-        add_scroll(bm_gold, side * 0.80, 1.48 + yo, 2.35, side)
-        # Strings of luminous nacreous pearls crowning both rails
-        for i in range(9):
-            add_sphere(bm_pearl, to_blender(side * 1.58, 1.85 + yo, -1.80 + i * 0.40), 0.095, 0.095, 0.095, segs=10, rings=6)
-        # Front rose cheek bolster
-        add_sphere(bm_rose, to_blender(side * 1.30, 1.46 + yo, 2.05), 0.32, 0.38, 0.20, segs=12, rings=8)
-        # Axle housings connecting chassis to wheels
-        for z in (-1.55, 1.45):
-            add_tube(bm_gold, to_blender(side * 1.15, 0.84 + yo, z), to_blender(side * 1.78, 0.84 + yo, z), 0.085, 0.085, segs=8)
-
-    # Iconic 9-fluted Rococo scallop-shell prow alternating 24K gold & porcelain!
-    for i in range(9):
-        a = (i - 4) * 0.19
-        target = bm_gold if i % 2 == 1 else bm_porc
-        add_sphere(target, to_blender(math.sin(a) * 0.78, 1.55 + yo + math.cos(a) * 0.34, 2.40), 0.12, 0.50, 0.13, segs=12, rings=7)
-    # Glowing faceted amethyst cabochon centerpiece in golden bezel
-    add_sphere(bm_gold, to_blender(0, 1.42 + yo, 2.48), 0.24, 0.25, 0.10, segs=14, rings=8)
-    add_sphere(bm_gem, to_blender(0, 1.42 + yo, 2.54), 0.19, 0.20, 0.11, segs=14, rings=8)
-
-    add_obj("Chariot_Porcelain", bm_porc, mat_porcelain)
-    add_obj("Chariot_Gold", bm_gold, mat_gold)
-    add_obj("Chariot_Velvet", bm_velv, mat_velvet)
-    add_obj("Chariot_Rose", bm_rose, mat_rose)
-    add_obj("Chariot_Pearls", bm_pearl, mat_pearl)
-    add_obj("Chariot_Amethyst", bm_gem, mat_amethyst)
-
-    export_glb("pearococo_chariot.glb")
+def pose_poise(t):
+    s = wave(t, 1)
+    s2 = wave(t, 2, 0.4)
+    return {
+        "gown": RZ(s * 0.025),
+        "torso": RX(s2 * 0.025) @ RY(s * 0.04),
+        "neck": RX(-0.04 + s2 * 0.035) @ RY(wave(t, 1, 0.4) * 0.07),
+        "head": RY(wave(t, 1, 0.7) * 0.10) @ RX(0.03 - s2 * 0.03),
+        "curl_l": RZ(wave(t, 2, 0.9) * 0.09) @ RX(wave(t, 2, 0.5) * 0.05),
+        "curl_r": RZ(-wave(t, 2, 0.9) * 0.09) @ RX(wave(t, 2, 0.5) * 0.05),
+        "wing_l": RZ(s * 0.04),
+        # Right wing rests delicately at her side in cruise
+        "wing_r_upper": RX(0.75) @ RZ(-0.22 + s * 0.04),
+        "wing_r_fore": RX(0.32),
+        "wing_r_hand": RZ(s * 0.06),
+    }
 
 
-def build_wheel():
-    """Spinning gilded Rococo carriage wheel centered at axle (0, 0, 0)."""
-    clear_scene()
-    mat_rim = make_mat("WheelPorcelain", (0.98, 0.92, 0.78), metallic=0.08, roughness=0.22, coat=0.85)
-    mat_gold = make_mat("WheelGold", (0.92, 0.66, 0.20), metallic=0.94, roughness=0.16, coat=0.4)
-    mat_rose = make_mat("WheelHubRose", (0.92, 0.36, 0.60), metallic=0.25, roughness=0.20, coat=0.9)
-
-    bm_rim = bmesh.new()
-    bm_gold = bmesh.new()
-    bm_rose = bmesh.new()
-
-    # Smooth circular pearl-ivory wheel rim (24-segment torus built from connected tubes)
-    segs = 24
-    r_wheel = 0.76
-    for i in range(segs):
-        a0 = i * math.tau / segs
-        a1 = (i + 1) * math.tau / segs
-        p0 = to_blender(0.0, math.sin(a0) * r_wheel, math.cos(a0) * r_wheel)
-        p1 = to_blender(0.0, math.sin(a1) * r_wheel, math.cos(a1) * r_wheel)
-        add_tube(bm_rim, p0, p1, 0.125, 0.125, segs=8)
-        # Inner gold trim ring
-        g0 = to_blender(0.0, math.sin(a0) * (r_wheel - 0.11), math.cos(a0) * (r_wheel - 0.11))
-        g1 = to_blender(0.0, math.sin(a1) * (r_wheel - 0.11), math.cos(a1) * (r_wheel - 0.11))
-        add_tube(bm_gold, g0, g1, 0.045, 0.045, segs=6)
-
-    # 10 delicate tapered gold spokes
-    for i in range(10):
-        a = i * math.tau / 10.0
-        p_out = to_blender(0.0, math.sin(a) * (r_wheel - 0.08), math.cos(a) * (r_wheel - 0.08))
-        add_tube(bm_gold, Vector((0, 0, 0)), p_out, 0.055, 0.038, segs=7)
-
-    # Ornate gold hub & rose-jewel cap
-    add_sphere(bm_gold, Vector((0, 0, 0)), 0.19, 0.23, 0.23, segs=14, rings=8)
-    add_sphere(bm_rose, to_blender(0.14, 0.0, 0.0), 0.08, 0.12, 0.12, segs=12, rings=6)
-    add_sphere(bm_rose, to_blender(-0.14, 0.0, 0.0), 0.08, 0.12, 0.12, segs=12, rings=6)
-
-    add_obj("Wheel_Rim", bm_rim, mat_rim)
-    add_obj("Wheel_Gold", bm_gold, mat_gold)
-    add_obj("Wheel_Cap", bm_rose, mat_rose)
-
-    export_glb("pearococo_wheel.glb")
+def pose_wave(t):
+    w = wave(t, 2)
+    s = wave(t, 1)
+    return {
+        "gown": RZ(s * 0.03),
+        "torso": RX(-0.06) @ RY(0.08 + s * 0.05),
+        "neck": RX(-0.08) @ RY(0.06),
+        "head": RX(-0.10) @ RY(0.10 + s * 0.08),
+        "curl_l": RZ(wave(t, 2, 0.8) * 0.14),
+        "curl_r": RZ(-wave(t, 2, 0.8) * 0.14),
+        "wing_l": RZ(0.06 + s * 0.04),
+        # Signature aristocratic upright royal wrist-swivel wave!
+        "wing_r_upper": RX(-0.14) @ RZ(0.10 + s * 0.05),
+        "wing_r_fore": RX(-0.08) @ RZ(w * 0.08),
+        "wing_r_hand": RZ(w * 0.34) @ RY(w * 0.16),
+    }
 
 
-def build_queen():
-    """Her Majesty Pearococo in her silk pannier gown, powdered curls, pearls, and tiara."""
+def pose_boost(t):
+    f = wave(t, 2)
+    return {
+        "gown": RX(0.08),
+        "torso": RX(0.16 + f * 0.025),
+        "neck": RX(-0.12 + f * 0.03),
+        "head": RX(-0.08),
+        "curl_l": RX(0.28 + f * 0.08) @ RZ(0.12),
+        "curl_r": RX(0.28 + f * 0.08) @ RZ(-0.12),
+        "wing_l": RX(0.20) @ RZ(0.12),
+        "wing_r_upper": RX(0.85) @ RZ(-0.30),
+        "wing_r_fore": RX(0.42),
+        "wing_r_hand": RX(0.15),
+    }
+
+
+QUEEN_CLIPS = [
+    ("poise", 48, pose_poise),
+    ("wave", 48, pose_wave),
+    ("boost", 30, pose_boost),
+]
+
+
+def add_blink_shape_key(lids_obj):
+    shut = [v.co.copy() for v in lids_obj.data.vertices]
+    brow_z = max(v.co.z for v in lids_obj.data.vertices)
+    for v in lids_obj.data.vertices:
+        v.co.z = brow_z - (brow_z - v.co.z) * 0.06
+        v.co.y += 0.02
+    lids_obj.shape_key_add(name="Basis")
+    key = lids_obj.shape_key_add(name="blink")
+    for idx, co in enumerate(shut):
+        key.data[idx].co = co
+    key.value = 0.0
+
+
+def build_queen_rig():
     clear_scene()
     mat_pink = make_mat("GownPinkSilk", (0.90, 0.36, 0.60), metallic=0.06, roughness=0.36, coat=0.45)
     mat_blush = make_mat("GownBlushSilk", (0.98, 0.68, 0.80), metallic=0.04, roughness=0.38, coat=0.35)
@@ -238,163 +193,148 @@ def build_queen():
         emission=(0.55, 0.14, 0.34), emission_strength=0.6,
     )
 
-    bm_pink = bmesh.new()
-    bm_blush = bmesh.new()
-    bm_lace = bmesh.new()
-    bm_teal = bmesh.new()
-    bm_neck = bmesh.new()
-    bm_gold = bmesh.new()
-    bm_pearl = bmesh.new()
-    bm_ew = bmesh.new()
-    bm_ep = bmesh.new()
-    bm_dia = bmesh.new()
+    body_parts = []
 
-    # Wide Rococo silk pannier skirt + blush side bustles + scalloped ivory lace
-    add_sphere(bm_pink, to_blender(0, 2.04, 0.0), 1.38, 0.80, 0.88, segs=22, rings=12)
+    # 1. Silk pannier gown & scalloped ivory lace
+    rigging.carry(gown=1.0)
+    bm = bmesh.new()
+    add_sphere(bm, loc(0, 2.04, 0.0), 1.38, 0.80, 0.88, segs=22, rings=12)
+    make_piece("GownMain", bm, mat_pink, body_parts)
+    bm = bmesh.new()
     for side in (-1.0, 1.0):
-        add_sphere(bm_blush, to_blender(side * 0.95, 2.10, 0.0), 0.56, 0.62, 0.74, segs=16, rings=10)
+        add_sphere(bm, loc(side * 0.95, 2.10, 0.0), 0.56, 0.62, 0.74, segs=16, rings=10)
+    make_piece("GownBustles", bm, mat_blush, body_parts)
+    bm = bmesh.new()
+    for side in (-1.0, 1.0):
         for i in range(7):
             a = i * math.pi / 6.0
-            add_sphere(bm_lace, to_blender(side * (0.73 + math.sin(a) * 0.63), 1.78 + math.cos(a) * 0.15, 0.56), 0.17, 0.15, 0.14, segs=10, rings=6)
+            add_sphere(bm, loc(side * (0.73 + math.sin(a) * 0.63), 1.78 + math.cos(a) * 0.15, 0.56), 0.17, 0.15, 0.14, segs=10, rings=6)
+    make_piece("GownLace", bm, mat_lace, body_parts)
 
-    # Iridescent sapphire-teal peacock torso, graceful swan neck & regal head
-    add_sphere(bm_teal, to_blender(0, 2.85, 0.13), 0.56, 0.68, 0.54, segs=18, rings=10)
-    add_sphere(bm_neck, to_blender(0, 3.46, 0.21), 0.30, 0.76, 0.30, segs=16, rings=10)
-    add_sphere(bm_neck, to_blender(0, 4.18, 0.35), 0.54, 0.59, 0.50, segs=20, rings=12)
-
-    # Sculpted golden peacock beak
-    add_tube(bm_gold, to_blender(0, 4.06, 0.68), to_blender(0, 4.01, 1.24), 0.20, 0.03, segs=12)
-
+    # 2. Peacock bodice & pearl necklace
+    rigging.carry(torso=1.0)
+    bm = bmesh.new()
+    add_sphere(bm, loc(0, 2.85, 0.13), 0.56, 0.68, 0.54, segs=18, rings=10)
+    make_piece("BodiceTeal", bm, mat_teal, body_parts)
+    bm = bmesh.new()
     for side in (-1.0, 1.0):
-        # Expressive eyes, aristocratic lashes & rosy blush
-        add_sphere(bm_ew, to_blender(side * 0.30, 4.30, 0.73), 0.14, 0.19, 0.08, segs=12, rings=8)
-        add_sphere(bm_ep, to_blender(side * 0.30, 4.31, 0.79), 0.065, 0.11, 0.035, segs=10, rings=6)
-        add_box(bm_ep, to_blender(side * 0.31, 4.48, 0.74), 0.24, 0.035, 0.045)
-        add_sphere(bm_pink, to_blender(side * 0.39, 4.06, 0.70), 0.13, 0.065, 0.04, segs=10, rings=6)
-        # Powdered Rococo sausage curls framing the face
-        for i in range(3):
-            add_sphere(bm_lace, to_blender(side * 0.50, 4.46 - i * 0.20, 0.24), 0.20, 0.16, 0.26, segs=12, rings=8)
-        # Dangling pearl drop earrings & pearl necklace
-        add_sphere(bm_pearl, to_blender(side * 0.56, 3.90, 0.31), 0.095, 0.115, 0.095, segs=10, rings=6)
         for i in range(5):
-            add_sphere(bm_pearl, to_blender(side * (0.08 + i * 0.08), 2.96 - i * 0.05, 0.63), 0.08, 0.08, 0.08, segs=8, rings=5)
+            add_sphere(bm, loc(side * (0.08 + i * 0.08), 2.96 - i * 0.05, 0.63), 0.08, 0.08, 0.08, segs=8, rings=5)
+    make_piece("NecklacePearls", bm, mat_pearl, body_parts)
 
-    # Powdered Rococo bouffant pouf, 8-point 24K gold tiara & pink diamond finial!
-    add_sphere(bm_lace, to_blender(0, 4.70, 0.26), 0.44, 0.20, 0.40, segs=16, rings=8)
+    # 3. Graceful sapphire swan neck
+    rigging.carry(neck=1.0)
+    bm = bmesh.new()
+    add_sphere(bm, loc(0, 3.46, 0.21), 0.30, 0.76, 0.30, segs=16, rings=10)
+    make_piece("SwanNeck", bm, mat_neck, body_parts)
+
+    # 4. Head, beak, eyes, bouffant pouf & 8-point gold tiara
+    rigging.carry(head=1.0)
+    bm = bmesh.new()
+    add_sphere(bm, loc(0, 4.18, 0.35), 0.54, 0.59, 0.50, segs=20, rings=12)
+    make_piece("HeadSapphire", bm, mat_neck, body_parts)
+    bm = bmesh.new()
+    add_tube(bm, loc(0, 4.06, 0.68), loc(0, 4.01, 1.24), 0.20, 0.03, segs=12)
     for i in range(8):
         a = i * math.tau / 8.0
-        p0 = to_blender(math.sin(a) * 0.33, 4.76, 0.26 + math.cos(a) * 0.29)
-        p1 = to_blender(math.sin(a) * 0.36, 5.06, 0.26 + math.cos(a) * 0.32)
-        add_tube(bm_gold, p0, p1, 0.075, 0.02, segs=8)
-        add_sphere(bm_pearl, p1, 0.045, 0.045, 0.045, segs=8, rings=4)
-    add_sphere(bm_dia, to_blender(0, 5.14, 0.26), 0.13, 0.16, 0.13, segs=12, rings=8)
+        add_tube(bm, loc(math.sin(a) * 0.33, 4.76, 0.26 + math.cos(a) * 0.29),
+                 loc(math.sin(a) * 0.36, 5.06, 0.26 + math.cos(a) * 0.32), 0.075, 0.02, segs=8)
+    make_piece("HeadBeakTiaraGold", bm, mat_gold, body_parts)
+    bm = bmesh.new()
+    for i in range(8):
+        a = i * math.tau / 8.0
+        add_sphere(bm, loc(math.sin(a) * 0.36, 5.06, 0.26 + math.cos(a) * 0.32), 0.045, 0.045, 0.045, segs=8, rings=4)
+    make_piece("TiaraPearls", bm, mat_pearl, body_parts)
+    bm = bmesh.new()
+    add_sphere(bm, loc(0, 5.14, 0.26), 0.13, 0.16, 0.13, segs=12, rings=8)
+    make_piece("TiaraDiamond", bm, mat_diamond, body_parts)
+    bm = bmesh.new()
+    add_sphere(bm, loc(0, 4.70, 0.26), 0.44, 0.20, 0.40, segs=16, rings=8)
+    make_piece("HairPouf", bm, mat_lace, body_parts)
+    bm = bmesh.new()
+    for side in (-1.0, 1.0):
+        add_sphere(bm, loc(side * 0.30, 4.30, 0.73), 0.14, 0.19, 0.08, segs=12, rings=8)
+    make_piece("EyeWhite", bm, mat_eye_w, body_parts)
+    bm = bmesh.new()
+    for side in (-1.0, 1.0):
+        add_sphere(bm, loc(side * 0.30, 4.31, 0.79), 0.065, 0.11, 0.035, segs=10, rings=6)
+        add_box(bm, loc(side * 0.31, 4.48, 0.74), 0.24, 0.035, 0.045)
+    make_piece("EyePupilLashes", bm, mat_eye_p, body_parts)
+    bm = bmesh.new()
+    for side in (-1.0, 1.0):
+        add_sphere(bm, loc(side * 0.39, 4.06, 0.70), 0.13, 0.065, 0.04, segs=10, rings=6)
+    make_piece("CheekBlush", bm, mat_pink, body_parts)
 
-    # Delicate left wing resting on the golden chariot rail
-    add_sphere(bm_blush, to_blender(-0.64, 2.72, 0.47), 0.28, 0.42, 0.26, segs=12, rings=8)
-    add_sphere(bm_teal, to_blender(-0.88, 2.34, 0.70), 0.19, 0.30, 0.20, segs=12, rings=8)
-    add_sphere(bm_lace, to_blender(-1.00, 2.17, 0.87), 0.21, 0.13, 0.22, segs=12, rings=8)
-    add_sphere(bm_gold, to_blender(-0.96, 2.22, 0.82), 0.17, 0.055, 0.17, segs=10, rings=5)
+    # 5. Secondary-motion powdered Rococo curls & dangling pearl drop earrings!
+    for side, bone in ((-1.0, "curl_l"), (1.0, "curl_r")):
+        rigging.carry(**{bone: 1.0})
+        bm = bmesh.new()
+        for i in range(3):
+            add_sphere(bm, loc(side * 0.50, 4.46 - i * 0.20, 0.24), 0.20, 0.16, 0.26, segs=12, rings=8)
+        make_piece(f"Curls_{bone}", bm, mat_lace, body_parts)
+        bm = bmesh.new()
+        add_sphere(bm, loc(side * 0.56, 3.90, 0.31), 0.095, 0.115, 0.095, segs=10, rings=6)
+        make_piece(f"Earring_{bone}", bm, mat_pearl, body_parts)
 
-    add_obj("Queen_Pink", bm_pink, mat_pink)
-    add_obj("Queen_Blush", bm_blush, mat_blush)
-    add_obj("Queen_Lace", bm_lace, mat_lace)
-    add_obj("Queen_Teal", bm_teal, mat_teal)
-    add_obj("Queen_Neck", bm_neck, mat_neck)
-    add_obj("Queen_Gold", bm_gold, mat_gold)
-    add_obj("Queen_Pearls", bm_pearl, mat_pearl)
-    add_obj("Queen_EyeWhite", bm_ew, mat_eye_w)
-    add_obj("Queen_Pupil", bm_ep, mat_eye_p)
-    add_obj("Queen_Diamond", bm_dia, mat_diamond)
+    # 6. Delicate left wing resting on the golden rail
+    rigging.carry(wing_l=1.0)
+    bm = bmesh.new()
+    add_sphere(bm, loc(-0.64, 2.72, 0.47), 0.28, 0.42, 0.26, segs=12, rings=8)
+    make_piece("WingLBlush", bm, mat_blush, body_parts)
+    bm = bmesh.new()
+    add_sphere(bm, loc(-0.88, 2.34, 0.70), 0.19, 0.30, 0.20, segs=12, rings=8)
+    make_piece("WingLTeal", bm, mat_teal, body_parts)
+    bm = bmesh.new()
+    add_sphere(bm, loc(-1.00, 2.17, 0.87), 0.21, 0.13, 0.22, segs=12, rings=8)
+    make_piece("WingLGlove", bm, mat_lace, body_parts)
+    bm = bmesh.new()
+    add_sphere(bm, loc(-0.96, 2.22, 0.82), 0.17, 0.055, 0.17, segs=10, rings=5)
+    make_piece("WingLBracelet", bm, mat_gold, body_parts)
 
-    export_glb("pearococo_queen.glb")
+    # 7. Articulated 3-bone right wing & opera-gloved royal hand (built in upright wave pose)
+    rigging.carry(wing_r_upper=1.0)
+    bm = bmesh.new()
+    add_sphere(bm, loc(0.64, 2.72, 0.47), 0.30, 0.38, 0.27, segs=12, rings=8)
+    make_piece("WingRBlush", bm, mat_blush, body_parts)
+    bm = bmesh.new()
+    add_sphere(bm, loc(0.88, 2.62, 0.67), 0.19, 0.29, 0.19, segs=12, rings=8)
+    make_piece("WingRTeal", bm, mat_teal, body_parts)
 
+    rigging.carry(wing_r_fore=1.0)
+    bm = bmesh.new()
+    add_tube(bm, loc(0.96, 2.60, 0.75), loc(1.06, 3.28, 0.85), 0.14, 0.11, segs=10)
+    make_piece("WingRForeGlove", bm, mat_lace, body_parts)
+    bm = bmesh.new()
+    add_sphere(bm, loc(1.01, 3.08, 0.82), 0.16, 0.055, 0.16, segs=12, rings=5)
+    make_piece("WingRBracelet", bm, mat_gold, body_parts)
 
-def build_wing():
-    """Articulated royal right wing/gloved hand pivoted at shoulder (0, 0, 0)."""
-    clear_scene()
-    mat_blush = make_mat("WingBlush", (0.98, 0.68, 0.80), metallic=0.04, roughness=0.38, coat=0.35)
-    mat_teal = make_mat("WingTeal", (0.06, 0.38, 0.48), metallic=0.42, roughness=0.22, coat=0.85)
-    mat_glove = make_mat("WingOperaGlove", (0.98, 0.93, 0.84), metallic=0.04, roughness=0.36, coat=0.4)
-    mat_gold = make_mat("WingBraceletGold", (0.94, 0.68, 0.22), metallic=0.94, roughness=0.16)
-
-    bm_blush = bmesh.new()
-    bm_teal = bmesh.new()
-    bm_glove = bmesh.new()
-    bm_gold = bmesh.new()
-
-    # Relative to shoulder socket (0.64, 2.72, 0.47)
-    add_sphere(bm_blush, to_blender(0.0, 0.0, 0.0), 0.30, 0.38, 0.27, segs=12, rings=8)
-    add_sphere(bm_teal, to_blender(0.24, -0.10, 0.20), 0.19, 0.29, 0.19, segs=12, rings=8)
-    add_tube(bm_glove, to_blender(0.32, -0.12, 0.28), to_blender(0.42, 0.56, 0.38), 0.14, 0.11, segs=10)
-    add_sphere(bm_gold, to_blender(0.37, 0.36, 0.35), 0.16, 0.055, 0.16, segs=12, rings=5)
-    # Upright gloved royal hand
-    add_sphere(bm_glove, to_blender(0.44, 0.66, 0.38), 0.20, 0.22, 0.095, segs=12, rings=8)
+    rigging.carry(wing_r_hand=1.0)
+    bm = bmesh.new()
+    add_sphere(bm, loc(1.08, 3.38, 0.85), 0.20, 0.22, 0.095, segs=12, rings=8)
     for finger in range(4):
-        add_sphere(bm_glove, to_blender(0.44 + (finger - 1.5) * 0.095, 0.92, 0.38), 0.045, 0.16, 0.06, segs=8, rings=5)
-    add_sphere(bm_glove, to_blender(0.22, 0.64, 0.41), 0.09, 0.11, 0.07, segs=8, rings=5)
+        add_sphere(bm, loc(1.08 + (finger - 1.5) * 0.095, 3.64, 0.85), 0.045, 0.16, 0.06, segs=8, rings=5)
+    add_sphere(bm, loc(0.86, 3.36, 0.88), 0.09, 0.11, 0.07, segs=8, rings=5)
+    make_piece("WingRHand", bm, mat_lace, body_parts)
 
-    add_obj("Wing_Blush", bm_blush, mat_blush)
-    add_obj("Wing_Teal", bm_teal, mat_teal)
-    add_obj("Wing_Glove", bm_glove, mat_glove)
-    add_obj("Wing_Gold", bm_gold, mat_gold)
+    # 8. Eyelids mesh with `blink` shape key (carried by `head`)
+    rigging.carry(head=1.0)
+    lids_parts = []
+    bm = bmesh.new()
+    for side in (-1.0, 1.0):
+        add_sphere(bm, loc(side * 0.30, 4.31, 0.76), 0.155, 0.205, 0.09, segs=12, rings=6)
+    lids = make_piece("Queen_Eyelids", bm, mat_neck, lids_parts)
+    bpy.context.view_layer.objects.active = lids
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    add_blink_shape_key(lids)
 
-    export_glb("pearococo_wing.glb")
-
-
-def render_preview():
-    clear_scene()
-    for name, offset in [
-        ("pearococo_chariot.glb", (0, 0, 0)),
-        ("pearococo_queen.glb", (0, 0, 0)),
-        ("pearococo_wing.glb", (0.64, 2.72, 0.47)),
-        ("pearococo_wheel.glb", (-1.82, 0.97, -1.55)),
-        ("pearococo_wheel.glb", (1.82, 0.97, -1.55)),
-        ("pearococo_wheel.glb", (-1.82, 0.97, 1.45)),
-        ("pearococo_wheel.glb", (1.82, 0.97, 1.45)),
-    ]:
-        before = set(bpy.data.objects)
-        bpy.ops.import_scene.gltf(filepath=os.path.join(OUT_DIR, name))
-        added = [o for o in bpy.data.objects if o not in before and o.parent is None]
-        bx, by, bz = to_blender(*offset)
-        for o in added:
-            o.location = (bx, by, bz)
-
-    cam_data = bpy.data.cameras.new("Cam")
-    cam = bpy.data.objects.new("Cam", cam_data)
-    bpy.context.collection.objects.link(cam)
-    cam.location = to_blender(6.2, 4.8, 6.4)
-    direction = to_blender(0.0, 2.5, 0.2) - cam.location
-    cam.rotation_euler = direction.to_track_quat('-Z', 'Y').to_euler()
-    bpy.context.scene.camera = cam
-
-    sun_data = bpy.data.lights.new("Sun", type='SUN')
-    sun_data.energy = 3.6
-    sun = bpy.data.objects.new("Sun", sun_data)
-    bpy.context.collection.objects.link(sun)
-    sun.rotation_euler = (math.radians(52), math.radians(-22), math.radians(36))
-
-    world = bpy.data.worlds.new("World")
-    bpy.context.scene.world = world
-    world.use_nodes = True
-    bg = world.node_tree.nodes.get("Background")
-    bg.inputs[0].default_value = (0.14, 0.12, 0.24, 1.0)
-    bg.inputs[1].default_value = 0.85
-
-    scene = bpy.context.scene
-    scene.render.engine = "CYCLES"
-    scene.cycles.device = "CPU"
-    scene.cycles.samples = 24
-    scene.render.resolution_x = 800
-    scene.render.resolution_y = 600
-    out_img = "/Users/orenkoriat/.gemini/antigravity-cli/brain/7e29a728-e29b-408d-ad2f-f93959640962/scratch/pearococo_preview.png"
-    scene.render.filepath = out_img
-    bpy.ops.render.render(write_still=True)
-    print(f"Rendered preview to {out_img}")
+    body = rigging.join(body_parts, "Queen_Body")
+    bones = queen_bones()
+    rig = rigging.build_armature("QueenRig", bones)
+    rigging.skin(rig, body, lids)
+    rigging.author_clips(rig, bones, QUEEN_CLIPS)
+    rigging.export_rig(os.path.join(OUT_DIR, "pearococo_queen.glb"), QUEEN_CLIPS)
+    return rig
 
 
 if __name__ == "__main__":
-    build_chariot()
-    build_wheel()
-    build_queen()
-    build_wing()
-    render_preview()
+    build_queen_rig()

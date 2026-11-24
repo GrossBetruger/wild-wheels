@@ -11,14 +11,20 @@ use crate::{
     plumage::{PlumageMaterial, Wind, feather_coordinates},
     ported, scene,
 };
+use bevy::animation::graph::AnimationNodeIndex;
 use bevy::camera::visibility::NoFrustumCulling;
-use bevy::gltf::GltfAssetLabel;
-use bevy::mesh::{MeshTag, PrimitiveTopology};
+use bevy::gltf::{Gltf, GltfAssetLabel};
+use bevy::mesh::{MeshTag, PrimitiveTopology, morph::MorphWeights};
 use bevy::prelude::*;
 use std::collections::HashSet;
 use std::f32::consts::{PI, TAU};
 
 pub const DRIVER: usize = 9;
+
+const QUEEN_CLIPS: [&str; 3] = ["poise", "wave", "boost"];
+const POISE: usize = 0;
+const WAVE: usize = 1;
+const BOOST: usize = 2;
 
 const WHEEL_RADIUS: f32 = 0.76;
 const WHEEL_AXLES: [Vec3; 4] = [
@@ -27,7 +33,6 @@ const WHEEL_AXLES: [Vec3; 4] = [
     Vec3::new(-1.82, 0.97, 1.45),
     Vec3::new(1.82, 0.97, 1.45),
 ];
-const WING_SOCKET: Vec3 = Vec3::new(0.64, 2.72, 0.47);
 const TAIL_ROOT: Vec3 = Vec3::new(0.0, 1.75, -1.05);
 
 pub struct PearococoPlugin;
@@ -36,7 +41,7 @@ impl Plugin for PearococoPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, load).add_systems(
             Update,
-            (drive_pearococo, tick_fairy_boost)
+            (rig_pearococo, drive_pearococo, tick_fairy_boost)
                 .chain()
                 .after(scene::sync)
                 .in_set(Presentation),
@@ -44,12 +49,19 @@ impl Plugin for PearococoPlugin {
     }
 }
 
+#[derive(Clone)]
+struct QueenMoves {
+    graph: Handle<AnimationGraph>,
+    clips: [AnimationNodeIndex; QUEEN_CLIPS.len()],
+}
+
 #[derive(Resource)]
 struct PearococoAssets {
     chariot: Handle<WorldAsset>,
     wheel: Handle<WorldAsset>,
+    queen_gltf: Handle<Gltf>,
     queen: Handle<WorldAsset>,
-    wing: Handle<WorldAsset>,
+    moves: Option<QueenMoves>,
     feathers: [Handle<Mesh>; 11],
     plumage_mat: Handle<PlumageMaterial>,
     star_mesh: Handle<Mesh>,
@@ -60,11 +72,17 @@ struct PearococoAssets {
     mist_lavender: Handle<StandardMaterial>,
 }
 
+struct QueenSkeleton {
+    player: Entity,
+    lids: Option<Entity>,
+}
+
 #[derive(Component)]
 struct PearococoRig {
     id: usize,
+    queen_root: Entity,
+    skeleton: Option<QueenSkeleton>,
     wheels: [Entity; 4],
-    wing: Entity,
     feathers: [Entity; 11],
     shimmer_light: Option<Entity>,
     spin: f32,
@@ -74,6 +92,8 @@ struct PearococoRig {
     swing_vel: f32,
     press: f32,
     fairy_timer: f32,
+    weights: [f32; QUEEN_CLIPS.len()],
+    blink: f32,
 }
 
 #[derive(Component)]
@@ -225,8 +245,9 @@ fn load(
     commands.insert_resource(PearococoAssets {
         chariot: part("chariot"),
         wheel: part("wheel"),
+        queen_gltf: assets.load("models/pearococo_queen.glb"),
         queen: part("queen"),
-        wing: part("wing"),
+        moves: None,
         feathers,
         plumage_mat,
         star_mesh: meshes.add(Cuboid::new(0.26, 0.26, 0.26)),
@@ -265,6 +286,66 @@ fn load(
 }
 
 #[allow(clippy::too_many_arguments)]
+fn rig_pearococo(
+    mut commands: Commands,
+    assets: Option<ResMut<PearococoAssets>>,
+    models: Res<Assets<Gltf>>,
+    mut graphs: ResMut<Assets<AnimationGraph>>,
+    mut rigs: Query<&mut PearococoRig>,
+    family: Query<&Children>,
+    mut players: Query<&mut AnimationPlayer>,
+    morphs: Query<(), With<MorphWeights>>,
+) {
+    let Some(mut assets) = assets else { return };
+    for mut rig in &mut rigs {
+        if rig.skeleton.is_some() {
+            continue;
+        }
+        let (mut player, mut lids) = (None, None);
+        for part in family.iter_descendants(rig.queen_root) {
+            if players.contains(part) {
+                player = Some(part);
+            }
+            if morphs.contains(part) {
+                lids = Some(part);
+            }
+        }
+        let Some(player) = player else { continue };
+        if assets.moves.is_none() {
+            let Some(model) = models.get(&assets.queen_gltf) else {
+                continue;
+            };
+            let mut graph = AnimationGraph::new();
+            let root = graph.root;
+            let mut nodes = [root; QUEEN_CLIPS.len()];
+            for (index, name) in QUEEN_CLIPS.into_iter().enumerate() {
+                if let Some(clip) = model.named_animations.get(name) {
+                    nodes[index] = graph.add_clip(clip.clone(), 1.0, root);
+                }
+            }
+            assets.moves = Some(QueenMoves {
+                graph: graphs.add(graph),
+                clips: nodes,
+            });
+        }
+        let Some(moves) = assets.moves.clone() else {
+            continue;
+        };
+        let Ok(mut playing) = players.get_mut(player) else {
+            continue;
+        };
+        for (index, clip) in moves.clips.into_iter().enumerate() {
+            playing
+                .play(clip)
+                .repeat()
+                .set_weight(if index == POISE { 1.0 } else { 0.0 });
+        }
+        commands.entity(player).insert(AnimationGraphHandle(moves.graph));
+        rig.skeleton = Some(QueenSkeleton { player, lids });
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 fn drive_pearococo(
     mut commands: Commands,
     time: Res<Time>,
@@ -277,6 +358,8 @@ fn drive_pearococo(
         (Without<PearococoRig>, Without<PointLight>),
     >,
     mut lights: Query<&mut PointLight>,
+    mut players: Query<&mut AnimationPlayer>,
+    mut morphs: Query<&mut MorphWeights>,
 ) {
     let Some(assets) = assets else { return };
     let Some(client) = session.client.as_ref() else {
@@ -317,13 +400,42 @@ fn drive_pearococo(
                 }
             }
 
-            // 2. Royal right wing aristocratic wrist-wave on celebration
-            if let Ok((mut wing_tf, _)) = parts.get_mut(rig.wing) {
-                if a.celebrate > 0.0 {
-                    let wave = (t * 8.0).sin() * 0.24;
-                    wing_tf.rotation = Quat::from_euler(EulerRot::XYZ, -0.15, 0.0, wave);
-                } else {
-                    wing_tf.rotation = Quat::from_euler(EulerRot::XYZ, 0.92, 0.0, -0.25);
+            // 2. Blend skinned queen clips (`poise` / `wave` / `boost`) + slow aristocratic blink!
+            let target_clip = if a.celebrate > 0.0 {
+                WAVE
+            } else if boost {
+                BOOST
+            } else {
+                POISE
+            };
+            let blend = 1.0 - (-dt * 9.0).exp();
+            for (i, w) in rig.weights.iter_mut().enumerate() {
+                let goal = if i == target_clip { 1.0 } else { 0.0 };
+                *w += (goal - *w) * blend;
+            }
+            rig.blink -= dt;
+            if rig.blink < -0.24 {
+                rig.blink = 2.8 + ((t * 1.3 + a.id as f32).sin().abs()) * 3.0;
+            }
+            let blink_w = if rig.blink < 0.0 {
+                let u = (-rig.blink / 0.24).clamp(0.0, 1.0);
+                (u * PI).sin()
+            } else {
+                0.0
+            };
+            if let (Some(skel), Some(moves)) = (&rig.skeleton, &assets.moves) {
+                if let Ok(mut playing) = players.get_mut(skel.player) {
+                    for (i, &node) in moves.clips.iter().enumerate() {
+                        if let Some(anim) = playing.animation_mut(node) {
+                            anim.set_weight(rig.weights[i]);
+                        }
+                    }
+                }
+                if let Some(lids_ent) = skel.lids
+                    && let Ok(mut mw) = morphs.get_mut(lids_ent)
+                    && let Some(w0) = mw.weights_mut().first_mut()
+                {
+                    *w0 = blink_w;
                 }
             }
 
@@ -441,17 +553,19 @@ fn drive_pearococo(
                 }
             }
         } else {
-            // Spawn opulent Pearococo chariot + queen + 4 wheels + wing + 11 iridescent tail feathers!
+            // Spawn opulent Pearococo chariot + skinned queen + 4 wheels + 11 iridescent tail feathers!
             let none = Entity::PLACEHOLDER;
+            let mut queen_root = none;
             let mut wheels = [none; 4];
-            let mut wing = none;
             let mut feathers = [none; 11];
             let mut shimmer_light = None;
 
             let root = commands
                 .spawn((WorldAssetRoot(assets.chariot.clone()), tf, Visibility::Visible))
                 .with_children(|parent| {
-                    parent.spawn((WorldAssetRoot(assets.queen.clone()), Transform::IDENTITY));
+                    queen_root = parent
+                        .spawn((WorldAssetRoot(assets.queen.clone()), Transform::IDENTITY))
+                        .id();
                     for (slot, axle) in wheels.iter_mut().zip(WHEEL_AXLES) {
                         *slot = parent
                             .spawn((
@@ -460,12 +574,6 @@ fn drive_pearococo(
                             ))
                             .id();
                     }
-                    wing = parent
-                        .spawn((
-                            WorldAssetRoot(assets.wing.clone()),
-                            Transform::from_translation(WING_SOCKET),
-                        ))
-                        .id();
                     for (i, slot) in feathers.iter_mut().enumerate() {
                         *slot = parent
                             .spawn((
@@ -498,8 +606,9 @@ fn drive_pearococo(
 
             commands.entity(root).insert(PearococoRig {
                 id: a.id,
+                queen_root,
+                skeleton: None,
                 wheels,
-                wing,
                 feathers,
                 shimmer_light,
                 spin: 0.0,
@@ -509,6 +618,8 @@ fn drive_pearococo(
                 swing_vel: 0.0,
                 press: 0.0,
                 fairy_timer: 0.0,
+                weights: [1.0, 0.0, 0.0],
+                blink: 2.2 + a.id as f32 * 0.8,
             });
         }
     }
