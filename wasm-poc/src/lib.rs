@@ -68,6 +68,8 @@ static QUEUED_ACTIONS: Mutex<Vec<(String, String)>> = Mutex::new(Vec::new());
 static INCOMING_PACKETS: Mutex<Vec<Vec<u8>>> = Mutex::new(Vec::new());
 static OUTBOUND_TEXT: Mutex<Option<String>> = Mutex::new(None);
 static INVALID_PACKETS: AtomicU32 = AtomicU32::new(0);
+static PRESENTATION_FRAME: Mutex<Option<Vec<u8>>> = Mutex::new(None);
+static PRESENTATION_READY: AtomicBool = AtomicBool::new(false);
 static PAUSED: AtomicBool = AtomicBool::new(false);
 static INPUT_BLOCKED: AtomicBool = AtomicBool::new(false);
 static ONLINE_MODE: AtomicBool = AtomicBool::new(false);
@@ -261,12 +263,6 @@ pub fn start_game(
     match_minutes: u32,
     special_abilities: bool,
 ) {
-    console_error_panic_hook::set_once();
-    let leaked: &'static [u8] = Box::leak(pack.into_boxed_slice());
-    let _ = PACK_BYTES.set(leaked);
-    let leaked_sound: &'static [u8] = Box::leak(sound_pack.into_boxed_slice());
-    let _ = SOUND_BYTES.set(leaked_sound);
-
     let arena_count = wild_wheels_core::arena_defs().len().max(1);
     let cfg = LaunchConfig {
         driver: driver.min(15),
@@ -282,51 +278,115 @@ pub fn start_game(
         special_abilities,
     };
     PAUSED.store(false, Ordering::Relaxed);
+    let _ = SOUND_BYTES.set(Box::leak(sound_pack.into_boxed_slice()));
 
-    let mut bevy_app = App::new();
-    bevy_app
-        .add_plugins(
-            DefaultPlugins
-                .set(AssetPlugin {
-                    meta_check: AssetMetaCheck::Never,
-                    ..default()
-                })
-                .set(WindowPlugin {
-                    primary_window: Some(Window {
-                        title: "Wild Wheels — Bevy WASM".into(),
-                        canvas: Some("#bevy-canvas".into()),
-                        fit_canvas_to_parent: true,
-                        prevent_default_event_handling: true,
-                        resolution: WindowResolution::new(1280, 720),
-                        ..default()
-                    }),
-                    ..default()
-                }),
-        )
+    presentation_app(pack, "#bevy-canvas", true, false)
         .insert_resource(cfg)
+        .add_plugins(sound::GameAudioPlugin)
+        .add_systems(Startup, (start_local_match, publish_metadata))
+        .add_systems(Update, (tick_local_match.before(Presentation), sound::play.after(Presentation)))
+        .run();
+}
+
+#[derive(SystemSet, Clone, Copy, Debug, Eq, Hash, PartialEq)]
+struct Presentation;
+
+#[derive(Resource)]
+pub(crate) struct MobileGraphics(pub bool);
+
+#[wasm_bindgen]
+pub fn start_presentation(pack: Vec<u8>, mobile: bool) {
+    let mut app = presentation_app(pack, "#bevy-canvas", false, mobile);
+    if mobile {
+        use bevy::winit::{UpdateMode, WinitSettings};
+        use std::time::Duration;
+        app.insert_resource(WinitSettings {
+            focused_mode: UpdateMode::reactive_low_power(Duration::from_secs_f64(1.0 / 30.0)),
+            unfocused_mode: UpdateMode::reactive_low_power(Duration::from_secs_f64(1.0 / 30.0)),
+        });
+    }
+    app.add_systems(Update, apply_presentation_frame.before(Presentation)).run();
+}
+
+#[wasm_bindgen]
+pub fn present_frame(packet: Vec<u8>) {
+    if let Ok(mut frame) = PRESENTATION_FRAME.lock() {
+        *frame = Some(packet);
+    }
+}
+
+#[wasm_bindgen]
+pub fn presentation_ready() -> bool {
+    PRESENTATION_READY.load(Ordering::Relaxed)
+}
+
+fn apply_presentation_frame(mut session: ResMut<app::GameSession>) {
+    let Some(packet) = PRESENTATION_FRAME.lock().ok().and_then(|mut frame| frame.take()) else {
+        return;
+    };
+    let result = match session.client.as_mut() {
+        Some(client) => client.replace_presentation(&packet),
+        None => NativeClient::from_packet(&packet, 0.0).map(|client| {
+            session.client = Some(client);
+        }),
+    };
+    if result.is_err() {
+        INVALID_PACKETS.fetch_add(1, Ordering::Relaxed);
+        return;
+    }
+    PRESENTATION_READY.store(true, Ordering::Relaxed);
+}
+
+fn presentation_app(pack: Vec<u8>, canvas: &str, interactive: bool, mobile: bool) -> App {
+    console_error_panic_hook::set_once();
+    let _ = PACK_BYTES.set(Box::leak(pack.into_boxed_slice()));
+    let plugins = DefaultPlugins
+        .set(AssetPlugin { meta_check: AssetMetaCheck::Never, ..default() })
+        .set(WindowPlugin {
+            primary_window: Some(Window {
+                title: "Wild Wheels — Bevy WASM".into(),
+                canvas: Some(canvas.into()),
+                fit_canvas_to_parent: true,
+                prevent_default_event_handling: interactive,
+                resolution: WindowResolution::new(1280, 720),
+                resize_constraints: match mobile {
+                    true => bevy::window::WindowResizeConstraints {
+                        min_width: 1.0,
+                        min_height: 1.0,
+                        ..default()
+                    },
+                    false => default(),
+                },
+                ..default()
+            }),
+            ..default()
+        });
+    let mut bevy_app = App::new();
+    bevy_app.add_plugins(match interactive {
+        true => plugins,
+        false => plugins.disable::<bevy::audio::AudioPlugin>(),
+    });
+    bevy_app
+        .insert_resource(MobileGraphics(mobile))
         .insert_resource(app::GameSession::default())
         .insert_resource(scene::Capture(None))
         .add_plugins((
             ported::PortedGraphicsPlugin,
             scene::ArenaPresentationPlugin,
-            sound::GameAudioPlugin,
             explosions::ExplosionsPlugin,
         ))
-        .add_systems(Startup, (start_local_match, load_blender_models, publish_metadata))
+        .add_systems(Startup, load_blender_models)
         .add_systems(
             Update,
             (
-                tick_local_match,
                 scene::sync,
                 sync_blender_models,
                 tick_exhaust_particles,
                 ported::animate,
-                sound::play,
             )
-                .chain(),
+                .chain().in_set(Presentation),
         );
-
-    bevy_app.run();
+    bevy_app
 }
 
 fn load_blender_models(
@@ -429,6 +489,7 @@ fn sync_blender_models(
     mut commands: Commands,
     time: Res<Time>,
     session: Res<app::GameSession>,
+    mobile: Res<MobileGraphics>,
     models: Option<Res<BlenderModels>>,
     mut existing: Query<(Entity, &BlenderRacer, &mut Transform, &mut Visibility), Without<HoustonRig>>,
     mut rigs: Query<(Entity, &HoustonRig, &mut Transform, &mut Visibility), Without<BlenderRacer>>,
@@ -765,18 +826,20 @@ fn sync_blender_models(
                                 }
                             }
                         }
-                        plume_light = ship
-                            .spawn((
-                                PointLight {
-                                    color: Color::srgb(0.45, 0.72, 1.0),
-                                    intensity: 18_000.0,
-                                    range: 22.0,
-                                    shadow_maps_enabled: false,
-                                    ..default()
-                                },
-                                Transform::from_xyz(0.0, 1.45, -5.2),
-                            ))
-                            .id();
+                        if !mobile.0 {
+                            plume_light = ship
+                                .spawn((
+                                    PointLight {
+                                        color: Color::srgb(0.45, 0.72, 1.0),
+                                        intensity: 18_000.0,
+                                        range: 22.0,
+                                        shadow_maps_enabled: false,
+                                        ..default()
+                                    },
+                                    Transform::from_xyz(0.0, 1.45, -5.2),
+                                ))
+                                .id();
+                        }
                         for (i, side) in [-1.0f32, 1.0f32].into_iter().enumerate() {
                             rcs_ents[i] = ship
                                 .spawn((

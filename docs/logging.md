@@ -140,9 +140,10 @@ never logged. Player names and whatever text a client's error carries are.
 
 3D Bevy Beta reports as `bevy-wasm` when playing online on the dedicated server.
 It reports the same `slow-minute` and `match-frames` metrics, including server
-snapshot gaps and ping. `bevy-startup` records WASM and asset load times and time
-to the first HUD state. `bevy-startup-failed`, `hud-error`, and `packet-invalid`
-identify failures in the game client. Use `source=bevy-wasm` to find these reports.
+snapshot gaps and ping. `bevy-startup` records WASM and graphics load times and
+time to the first Bevy frame. `bevy-startup-failed`, `bevy-frame-invalid`, and
+`bevy-frame-failed` identify renderer failures. Use `source=bevy-wasm` to find
+these reports.
 Server socket events include the connection's reported `client` label. Older
 clients that omit it appear as `unknown`.
 

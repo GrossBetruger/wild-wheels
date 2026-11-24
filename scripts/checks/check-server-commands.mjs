@@ -21,12 +21,21 @@ const experimental=async()=>{
   const base=`http://127.0.0.1:${port}/experimental/`;
   const page=await fetch(base);
   assert.equal(page.status,200);
-  assert.match(await page.text(),/Launch Bevy WASM/);
+  const regular=await fetch(`http://127.0.0.1:${port}/`);
+  assert.equal(await page.text(),await regular.text(),'The renderer routes must serve the same HTML');
   for(const [path,type] of [['pkg/wild_wheels_wasm_poc.js','text/javascript'],['pkg/wild_wheels_wasm_poc_bg.wasm','application/wasm'],['graphics.wwgp','application/octet-stream'],['sounds.wwsp','application/octet-stream'],['assets/models/debris_girder.glb','model/gltf-binary']]){
     const asset=await fetch(base+path,{method:'HEAD'});
     assert.equal(asset.status,200,path);
     assert.equal(asset.headers.get('content-type').split(';')[0],type,path);
   }
+  const wasm=base+'pkg/wild_wheels_wasm_poc_bg.wasm';
+  const compressed=await fetch(wasm,{method:'HEAD',headers:{'Accept-Encoding':'gzip'}});
+  const identity=await fetch(wasm,{method:'HEAD',headers:{'Accept-Encoding':'gzip;q=0, *;q=1'}});
+  assert.equal(compressed.headers.get('content-encoding'),'gzip');
+  assert.equal(compressed.headers.get('vary'),'Accept-Encoding');
+  assert.equal(compressed.headers.get('content-type'),'application/wasm');
+  assert.equal(identity.headers.get('content-encoding'),null);
+  assert.ok(Number(compressed.headers.get('content-length'))<Number(identity.headers.get('content-length'))/2);
   assert.equal((await fetch(base+'Cargo.toml')).status,404);
 };
 let unrelated;

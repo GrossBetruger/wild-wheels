@@ -39,5 +39,8 @@ trap 'rm -rf -- "$staging"' EXIT
 "$bindgen" --target web --no-typescript --out-dir "$staging" "$target_dir/$target/release/wild_wheels_wasm_poc.wasm"
 node scripts/build/port-graphics.mjs "$staging/graphics.wwgp"
 node scripts/build/port-sounds.mjs "$staging/sounds.wwsp"
-mv -f -- "$staging/wild_wheels_wasm_poc.js" "$staging/wild_wheels_wasm_poc_bg.wasm" "$output/pkg/"
-mv -f -- "$staging/graphics.wwgp" "$staging/sounds.wwsp" "$output/"
+for artifact in wild_wheels_wasm_poc.js wild_wheels_wasm_poc_bg.wasm graphics.wwgp; do
+  gzip -n -c -- "$staging/$artifact" > "$staging/$artifact.gz"
+done
+mv -f -- "$staging/wild_wheels_wasm_poc.js" "$staging/wild_wheels_wasm_poc.js.gz" "$staging/wild_wheels_wasm_poc_bg.wasm" "$staging/wild_wheels_wasm_poc_bg.wasm.gz" "$output/pkg/"
+mv -f -- "$staging/graphics.wwgp" "$staging/graphics.wwgp.gz" "$staging/sounds.wwsp" "$output/"

@@ -1,8 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {ArenaCore} from '../../gameplay/arena-core.js';
+import {ArenaClient,ArenaCore} from '../../gameplay/arena-core.js';
 import {createBattle,tickBattle} from '../../gameplay/combat.js';
 import {decodeBinarySnapshot} from '../../networking/binary-wire.js';
+
+test('a renderer receives the predicted movement shown by the arena client',()=>{
+  const seed=createBattle();Object.assign(seed,{phase:'racing',wx:-65,wz:0,heading:0,motionHeading:0,cameraHeading:0,supplies:[]});
+  const core=new ArenaCore(seed),client=new ArenaClient();
+  client.accept(core.packet(),0);
+  client.frame(1/30,['arrowup'],1/30);
+  const shown=client.present();
+  const rendered=decodeBinarySnapshot(client.presentationPacket()).world;
+  assert.ok(rendered.wz>0,'the renderer sees locally predicted acceleration before another server snapshot');
+  assert.deepEqual([rendered.wx,rendered.wz,rendered.speed],[shown.wx,shown.wz,shown.speed]);
+});
 
 test('a Rust-owned arena advances driving, AI, collisions and pickups through frame commands',()=>{
   const seed=createBattle();Object.assign(seed,{phase:'racing',supplies:[]});

@@ -300,6 +300,7 @@ fn setup_assets(
 fn detect_explosions(
     mut commands: Commands,
     session: Res<GameSession>,
+    mobile: Res<crate::MobileGraphics>,
     assets: Option<Res<ExplosionAssets>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut seen: ResMut<SeenBlasts>,
@@ -332,6 +333,7 @@ fn detect_explosions(
                 &mut seen.seed,
                 origin,
                 scale,
+                mobile.0,
             );
         }
     }
@@ -345,23 +347,27 @@ fn spawn_blast(
     seed: &mut u64,
     origin: Vec3,
     scale: f32,
+    mobile: bool,
 ) {
+    let particle_scale = if mobile { 0.25 } else { 1.0 } * scale.sqrt();
     // 1. Dynamic warm orange-gold blast PointLight (illuminates floor, karts, and smoke undersides!)
-    commands.spawn((
-        PointLight {
-            color: Color::srgb(1.0, 0.56, 0.18),
-            intensity: 1_900_000.0 * scale,
-            range: 46.0 * scale,
-            shadow_maps_enabled: false,
-            ..default()
-        },
-        Transform::from_translation(origin + Vec3::Y * 1.4),
-        BlastLight {
-            age: 0.0,
-            life: 1.15 * scale.sqrt(),
-            peak: 1_900_000.0 * scale,
-        },
-    ));
+    if !mobile {
+        commands.spawn((
+            PointLight {
+                color: Color::srgb(1.0, 0.56, 0.18),
+                intensity: 1_900_000.0 * scale,
+                range: 46.0 * scale,
+                shadow_maps_enabled: false,
+                ..default()
+            },
+            Transform::from_translation(origin + Vec3::Y * 1.4),
+            BlastLight {
+                age: 0.0,
+                life: 1.15 * scale.sqrt(),
+                peak: 1_900_000.0 * scale,
+            },
+        ));
+    }
 
     // 2. Blinding white-hot initial core flash
     commands.spawn((
@@ -414,7 +420,8 @@ fn spawn_blast(
     ));
 
     // 3c. Blender Mantaflow 6x6 volumetric fire+smoke flipbook billboards (4 staggered plumes)
-    for k in 0..4 {
+    let flipbooks = if mobile { 1 } else { 4 };
+    for k in 0..flipbooks {
         let is_hero = k == 0;
         let a = (k as f32) * 2.09 + next_rand(seed) * 0.9;
         let rad = if is_hero { 0.0 } else { (1.2 + next_rand(seed) * 1.4) * scale };
@@ -453,7 +460,7 @@ fn spawn_blast(
     }
 
     // 4. Rolling, buoyant multi-temperature fireball lobes (18 lobes)
-    let fire_count = (18.0 * scale.sqrt()) as usize;
+    let fire_count = (18.0 * particle_scale) as usize;
     for i in 0..fire_count {
         let a = next_rand(seed) * std::f32::consts::TAU;
         let elev = next_rand(seed) * 0.85;
@@ -490,11 +497,12 @@ fn spawn_blast(
 
     // 5. Turbulent cauliflower-displaced smoke column + ground dust skirt with real internal
     //    fiery glow cooling into dark soot and dissolving smoothly via alpha-blend!
-    let smoke_count = (28.0 * scale.sqrt()) as usize;
+    let smoke_count = (28.0 * particle_scale) as usize;
+    let skirt_count = if mobile { 2 } else { 8 };
     for i in 0..smoke_count {
         let a = (i as f32 / smoke_count as f32) * std::f32::consts::TAU + next_rand(seed) * 0.45;
-        let is_skirt = i < 8;
-        let is_core = i >= 8 && i % 2 == 0;
+        let is_skirt = i < skirt_count;
+        let is_core = !is_skirt && i % 2 == 0;
         let (spd_h, spd_y, buoy, start_s, end_s, base_rgb, max_alpha, hot_glow, y0) = if is_skirt {
             // Fast low rolling ground-skirt dust/soot wave behind the shockwave!
             (
@@ -581,7 +589,7 @@ fn spawn_blast(
     }
 
     // 6a. 10 Blender-sculpted 3D bent metal wreckage chunks (.glb) with real bounce physics!
-    let glb_debris_count = (10.0 * scale.sqrt()) as usize;
+    let glb_debris_count = if mobile { 0 } else { (10.0 * particle_scale) as usize };
     for i in 0..glb_debris_count {
         let a = next_rand(seed) * std::f32::consts::TAU;
         let spd_h = (8.0 + next_rand(seed) * 20.0) * scale;
@@ -624,7 +632,7 @@ fn spawn_blast(
     }
 
     // 6b. 18 Physics-simulated spinning, bouncing 3D splinters & red-hot shrapnel chunks!
-    let splinter_count = (18.0 * scale.sqrt()) as usize;
+    let splinter_count = (18.0 * particle_scale) as usize;
     for i in 0..splinter_count {
         let a = next_rand(seed) * std::f32::consts::TAU;
         let spd_h = (9.0 + next_rand(seed) * 24.0) * scale;
@@ -679,7 +687,7 @@ fn spawn_blast(
     }
 
     // 7. 34 High-velocity ricocheting incandescent spark streaks!
-    let spark_count = (34.0 * scale.sqrt()) as usize;
+    let spark_count = (34.0 * particle_scale) as usize;
     for i in 0..spark_count {
         let a = next_rand(seed) * std::f32::consts::TAU;
         let spd_h = (16.0 + next_rand(seed) * 32.0) * scale;

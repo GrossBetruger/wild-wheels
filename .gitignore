@@ -11,6 +11,7 @@ native-client/target/
 wasm-poc/target/
 wasm-poc/pkg/
 wasm-poc/graphics.wwgp
+wasm-poc/graphics.wwgp.gz
 wasm-poc/sounds.wwsp
 wasm-poc/perf-log.jsonl
 

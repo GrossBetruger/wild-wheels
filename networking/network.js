@@ -44,9 +44,9 @@ export class NetworkGame {
   token=null;state=null;paused=false;sequence=0;actions=[];client=null;rtt=0;lastPing=-Infinity;restoreOnVisible=false;
   // For the problem log: where to report, and when the server was last heard from.
   log=()=>{};lastPacket=0;
-  constructor({anchor,limits=()=>({}),keys,driver,arena,onState,onLeave,onArenas=()=>{},unlock,sound=()=>{},isAudioEnabled=()=>true,getAudioContext=()=>null,role='driver'}){
+  constructor({anchor,limits=()=>({}),keys,driver,arena,onState,onLeave,onArenas=()=>{},unlock,sound=()=>{},isAudioEnabled=()=>true,getAudioContext=()=>null,role='driver',clientType='browser',offline=false}){
     this.preferredColor=savedPlayerColor(document.cookie);this.colorDirty=false;this.colorPending=false;this.colorError='';
-    Object.assign(this,{limits,keys,driver,arena,onState,onLeave,onArenas,unlock,sound,isAudioEnabled,getAudioContext,role});this.dedicated=document.body.classList.contains('dedicated-server');
+    Object.assign(this,{limits,keys,driver,arena,onState,onLeave,onArenas,unlock,sound,isAudioEnabled,getAudioContext,role,clientType});this.dedicated=document.body.classList.contains('dedicated-server');
     this.voice=new VoiceChat({isAudioEnabled:()=>this.isAudioEnabled(),getAudioContext:()=>this.getAudioContext(),onChange:()=>this.updateVoiceUi(),log:(level,event,data)=>this.log(level,event,data)});
     this.panel=document.createElement('section');this.panel.className='network-panel';this.panel.setAttribute('aria-label','Multiplayer arena lobby');
     const title=this.title=document.createElement('strong');title.textContent='PLAY TOGETHER · UP TO 6 PLAYERS';
@@ -104,6 +104,7 @@ export class NetworkGame {
     this.readyDialog.addEventListener('cancel',event=>{event.preventDefault();this.refusePlayRequest();});
     this.readyDialog.addEventListener('keydown',event=>event.stopPropagation());
     }
+    if(offline){this.panel.classList.add('hidden');this.invitation='';return;}
     this.infoReady=this.refreshInfo();
     if(!this.dedicated)this.infoTimer=setInterval(()=>{if(this.active&&this.isHost)this.refreshInfo();},5000);
     this.timer=setInterval(()=>this.input(),1000/30);
@@ -403,7 +404,7 @@ export class NetworkGame {
   stream(){
     const token=this.token,url=new URL('/api/socket',location.href);url.protocol=location.protocol==='https:'?'wss:':'ws:';const socket=this.socket=new WebSocket(url);
     socket.binaryType='arraybuffer';const opened=performance.now();
-    socket.onopen=()=>{if(this.token===token){this.client.resend();socket.send(JSON.stringify({type:'authenticate',token,client:'browser'}));}};
+    socket.onopen=()=>{if(this.token===token){this.client.resend();socket.send(JSON.stringify({type:'authenticate',token,client:this.clientType}));}};
     socket.onmessage=event=>{try{if(this.token!==token)return;if(event.data instanceof ArrayBuffer){this.accept(event.data);return;}if(typeof event.data!=='string'||event.data.length>2048)throw new Error();const state=JSON.parse(event.data);if(state.type!=='pong')throw new Error();if(state.sent===this.lastPing)this.rtt=Math.max(0,Math.min(.3,performance.now()/1000-state.sent));}catch(error){this.log('error','socket-message-invalid',{message:error?.message,binary:event.data instanceof ArrayBuffer,size:event.data?.byteLength??event.data?.length});socket.close();}};
     socket.onerror=()=>{};
     socket.onclose=event=>{if(this.token!==token||this.socket!==socket)return;this.log(event.code===1000?'info':'warn','socket-closed',{code:event.code,reason:event.reason,clean:event.wasClean,openSeconds:Math.round((performance.now()-opened)/1000),waitingBytes:socket.bufferedAmount,sinceServerMs:Math.round(performance.now()-this.lastPacket)});this.keys.clear();if([4001,4003,4004].includes(event.code)){if(this.awayPending||this.connecting)return;this.leave(event.code===4003?'You were removed by the host.':event.code===4004?'The host replaced this room. Open the new invitation.':'This player resumed in another tab.',false);return;}if(this.afk&&typeof document!=='undefined'&&document.hidden){this.restoreOnVisible=true;this.status.textContent='AFK · Reconnects when you return to this tab.';return;}this.status.textContent='Reconnecting to the room…';setTimeout(()=>{if(this.token===token)this.restore();},500);};

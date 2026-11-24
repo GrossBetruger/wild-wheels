@@ -33,6 +33,7 @@ export class ArenaClient{
   outbound(keys){return JSON.parse(this.read(this.core.client_outbound(keyMask(keys))));}
   outboundText(keys){return this.read(this.core.client_outbound(keyMask(keys)));}
   snapshot(){return JSON.parse(this.read(this.core.client_snapshot()));}
+  presentationPacket(){const bytes=this.core.client_presentation_packet();this.view.rebind();if(!bytes)throw new Error('Unable to encode the rendered arena');return new Uint8Array(this.core.memory.buffer,this.core.game_output_ptr(),bytes);}
   resend(){this.core.client_resend();}
   peek(){return this.view.refresh(this.core.client_present());}
   present(){const view=this.peek();this.core.client_drain();return view;}

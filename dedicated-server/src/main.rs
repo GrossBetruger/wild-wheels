@@ -19,7 +19,7 @@ use axum::{
         ws::{Message, WebSocket},
         ConnectInfo, DefaultBodyLimit, State, WebSocketUpgrade,
     },
-    http::{header, HeaderMap, Method, StatusCode, Uri},
+    http::{header, HeaderMap, HeaderValue, Method, StatusCode, Uri},
     response::{IntoResponse, Response},
     routing::{get, post},
     Json, Router,
@@ -297,25 +297,31 @@ async fn http(
                 .insert(header::LOCATION, "/experimental/".parse().unwrap());
             r
         }
-        p if p.starts_with("/experimental/") && !ASSETS.iter().any(|asset| asset.0 == "/experimental/") => {
+        p if p.starts_with("/experimental/") && p != "/experimental/" && p != "/experimental/index.html"
+            && !ASSETS.iter().any(|asset| asset.0 == "/experimental/graphics.wwgp") => {
             let rel = match p.strip_prefix("/experimental/").unwrap_or("") {
                 "" => "index.html",
                 other => other,
             };
             let allowed = !rel.contains("..")
                 && !rel.starts_with('/')
+                && !rel.ends_with(".gz")
                 && rel
                     .bytes()
                     .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-' | b'/'))
                 && (matches!(
                     rel,
-                    "index.html" | "app.css" | "app.js" | "graphics.wwgp" | "sounds.wwsp"
+                    "graphics.wwgp" | "sounds.wwsp"
                 ) || rel.starts_with("pkg/")
                     || rel.starts_with("assets/"));
             if !allowed {
                 return error((404, "Not found."));
             }
-            let file_path = std::path::Path::new("wasm-poc").join(rel);
+            let source = std::path::Path::new("wasm-poc");
+            let gzip = source.join(format!("{rel}.gz"));
+            let compressed = matches!(rel, "graphics.wwgp" | "pkg/wild_wheels_wasm_poc.js" | "pkg/wild_wheels_wasm_poc_bg.wasm");
+            let encoding = (compressed && gzip.is_file()).then(|| accepts_gzip(&h));
+            let file_path = match encoding { Some(true) => gzip, _ => source.join(rel) };
             match std::fs::read(&file_path) {
                 Ok(bytes) => {
                     let mime = match rel.rsplit('.').next().unwrap_or("") {
@@ -327,30 +333,50 @@ async fn http(
                         "png" => "image/png",
                         _ => "application/octet-stream",
                     };
-                    let mut r = Response::new(match method == Method::HEAD {
-                        true => Body::empty(),
-                        false => Body::from(bytes),
-                    });
-                    r.headers_mut()
-                        .insert(header::CONTENT_TYPE, mime.parse().unwrap());
-                    r
+                    static_response(&method, mime, Bytes::from(bytes), encoding)
                 }
                 Err(_) => error((404, "Experimental Bevy WASM asset not found.")),
             }
         }
-        _ => match ASSETS.iter().find(|a| a.0 == path || (path == "/experimental/index.html" && a.0 == "/experimental/")) {
+        _ => match ASSETS.iter().find(|a| a.0 == path || (matches!(path, "/experimental/" | "/experimental/index.html") && a.0 == "/")) {
             Some((_, mime, data)) => {
-                let mut r = Response::new(match method == Method::HEAD {
-                    true => Body::empty(),
-                    false => Body::from(*data),
-                });
-                r.headers_mut()
-                    .insert(header::CONTENT_TYPE, mime.parse().unwrap());
-                r
+                let gzip = COMPRESSED_ASSETS.iter().find(|asset| asset.0 == path).map(|asset| asset.1);
+                let encoding = gzip.map(|_| accepts_gzip(&h));
+                let data = gzip.filter(|_| encoding == Some(true)).unwrap_or(data);
+                static_response(&method, mime, Bytes::from_static(data), encoding)
             }
             None => error((404, "Not found.")),
         },
     }
+}
+
+fn accepts_gzip(headers: &HeaderMap) -> bool {
+    let mut wildcard = false;
+    for item in headers.get_all(header::ACCEPT_ENCODING).iter()
+        .filter_map(|value| value.to_str().ok()).flat_map(|value| value.split(',')) {
+        let mut fields = item.split(';');
+        let coding = fields.next().unwrap_or_default().trim();
+        let accepted = fields.filter_map(|field| field.split_once('='))
+            .find(|(key, _)| key.trim().eq_ignore_ascii_case("q"))
+            .is_none_or(|(_, q)| q.trim().parse::<f32>().is_ok_and(|q| q > 0.0 && q <= 1.0));
+        if coding.eq_ignore_ascii_case("gzip") { return accepted; }
+        if coding == "*" { wildcard = accepted; }
+    }
+    wildcard
+}
+
+fn static_response(method: &Method, mime: &str, bytes: Bytes, encoding: Option<bool>) -> Response {
+    let length = bytes.len();
+    let mut response = Response::new(match *method == Method::HEAD {
+        true => Body::empty(),
+        false => Body::from(bytes),
+    });
+    let headers = response.headers_mut();
+    headers.insert(header::CONTENT_TYPE, mime.parse().unwrap());
+    headers.insert(header::CONTENT_LENGTH, length.into());
+    if encoding.is_some() { headers.insert(header::VARY, HeaderValue::from_static("Accept-Encoding")); }
+    if encoding == Some(true) { headers.insert(header::CONTENT_ENCODING, HeaderValue::from_static("gzip")); }
+    response
 }
 /// Notes a room request in the problem log: refusals, and the ones that change
 /// who is playing or how. Chat and controls are not noted, nor is anything secret.

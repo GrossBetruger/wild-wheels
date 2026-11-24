@@ -149,6 +149,11 @@ static mut STATUS:[f64;4]=[0.0;4];
 #[no_mangle]pub extern "C" fn client_present()->usize{
     let Some(client)=(unsafe{&*core::ptr::addr_of!(CLIENT)})else{return 0;};super::presentation::present(&client.display,client.viewer)
 }
+#[no_mangle]pub extern "C" fn client_presentation_packet()->usize{
+    let Some(client)=(unsafe{&*core::ptr::addr_of!(CLIENT)})else{return 0;};
+    let output=unsafe{&mut *core::ptr::addr_of_mut!(super::OUTPUT)};
+    match client.display.encode_packet(client.viewer,output){Ok(())=>output.len(),Err(_)=>0}
+}
 #[no_mangle]pub extern "C" fn client_action(len:usize,now:f64)->u32{
     if len>2048||!now.is_finite(){return 0;}
     let input=unsafe{core::slice::from_raw_parts(super::game_io_ptr(),len)};

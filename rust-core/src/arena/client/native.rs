@@ -136,6 +136,17 @@ impl NativeClient {
         self.inner.accept(game, viewer, now);
         Ok(())
     }
+    /// Use a frame already predicted by a separate client for rendering only.
+    pub fn replace_presentation(&mut self, packet: &[u8]) -> Result<(), ClientError> {
+        let _guard = super::super::native::KERNEL
+            .lock()
+            .map_err(|_| ClientError::KernelUnavailable)?;
+        let (game, viewer) =
+            super::super::packet::decode_packet(packet).map_err(|_| ClientError::InvalidPacket)?;
+        self.inner.viewer = viewer;
+        self.inner.display = game;
+        Ok(())
+    }
     pub fn advance(&mut self, dt: f64, input: ClientInput, now: f64) -> Result<(), ClientError> {
         if !dt.is_finite() || !(0.0..=0.05).contains(&dt) || !now.is_finite() || !input.valid() {
             return Err(ClientError::InvalidInput);

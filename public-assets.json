@@ -19,6 +19,7 @@
   "characters/catheterpillar/catheterpillar.js",
   "characters/tycoon/tycoon.js",
   "client/character-preview.js",
+  "client/bevy-presentation.js",
   "client/log.js",
   "client/preview-pose.js",
   "characters/pearococo/pearococo.js",

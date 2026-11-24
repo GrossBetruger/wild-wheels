@@ -46,6 +46,7 @@ fn main() {
         serde_json::from_slice(&fs::read(root.join("public-assets.json")).unwrap()).unwrap();
     println!("cargo:rerun-if-changed=../public-assets.json");
     let mut code = String::from("pub static ASSETS:&[(&str,&str,&[u8])]=&[\n");
+    let mut compressed = String::from("pub static COMPRESSED_ASSETS:&[(&str,&[u8])]=&[\n");
     let mut hash = Sha256::new();
     for name in assets {
         assert!(!name.contains("..") && !name.starts_with('/'));
@@ -95,12 +96,14 @@ fn main() {
     if let Some(directory) = env::var_os("WILD_WHEELS_EXPERIMENTAL_DIR") {
         let generated = fs::canonicalize(root.join(directory)).expect("Experimental asset build directory");
         let source = root.join("wasm-poc");
-        experimental_asset(&mut code, &mut hash, "/experimental/", &source.join("index.html"));
-        for name in ["app.css", "app.js"] {
-            experimental_asset(&mut code, &mut hash, &format!("/experimental/{name}"), &source.join(name));
-        }
         for name in ["graphics.wwgp", "sounds.wwsp", "pkg/wild_wheels_wasm_poc.js", "pkg/wild_wheels_wasm_poc_bg.wasm"] {
-            experimental_asset(&mut code, &mut hash, &format!("/experimental/{name}"), &generated.join(name));
+            let route = format!("/experimental/{name}");
+            experimental_asset(&mut code, &mut hash, &route, &generated.join(name));
+            if name != "sounds.wwsp" {
+                let gzip = generated.join(format!("{name}.gz"));
+                println!("cargo:rerun-if-changed={}", gzip.display());
+                compressed.push_str(&format!("({route:?},include_bytes!({gzip:?})),\n"));
+            }
         }
         experimental_models(&mut code, &mut hash, &source.join("assets"), "/experimental/assets");
     }
@@ -129,6 +132,8 @@ fn main() {
         .replace("<body class=\"dedicated-server\">", &format!("<body class=\"dedicated-server\" data-build=\"{build}\">"));
     fs::write(&dedicated_index, stamped).unwrap();
     code += &format!("];\npub const BUILD:&str={build:?};");
+    code += &compressed;
+    code += "];";
     let git = |args: &[&str]| std::process::Command::new("git").args(args).current_dir(&root).output().ok().filter(|out|out.status.success()).map(|out|String::from_utf8_lossy(&out.stdout).trim().to_owned()).unwrap_or_default();
     let revision = git(&["rev-parse", "HEAD"]);
     for target in ["HEAD", "refs/heads/main"] {

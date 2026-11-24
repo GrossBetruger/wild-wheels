@@ -226,7 +226,7 @@ pub struct XrayCamera;
 #[derive(Component)]
 pub struct DarkFog;
 
-fn setup(mut commands: Commands, mut fogs: ResMut<Assets<FogMaterial>>) {
+fn setup(mut commands: Commands, mut fogs: ResMut<Assets<FogMaterial>>, mobile: Res<crate::MobileGraphics>) {
     // The browser shades as color * (0.62 + 0.38 * n·l) in display space with no
     // tone mapping. These light levels were matched to it against screenshots.
     commands.insert_resource(GlobalAmbientLight {
@@ -246,8 +246,7 @@ fn setup(mut commands: Commands, mut fogs: ResMut<Assets<FogMaterial>>) {
         far: 1600.0,
         ..default()
     });
-    let world = commands
-        .spawn((
+    let mut world = commands.spawn((
             Camera3d::default(),
             lens.clone(),
             Tonemapping::None,
@@ -255,12 +254,13 @@ fn setup(mut commands: Commands, mut fogs: ResMut<Assets<FogMaterial>>) {
             Transform::from_xyz(0.0, 65.0, -75.0).looking_at(Vec3::ZERO, Vec3::Y),
             IsDefaultUiCamera,
             FollowCamera,
-        ))
-        .id();
+        ));
+    if mobile.0 { world.insert(Msaa::Off); }
+    let world = world.id();
     // Dark Humor: fog covers the world, then X-ray silhouettes are drawn over the
     // fog with no walls in the way, and the menus and HUD come last. This camera
     // renders only while its caster's arena is dark; the HUD moves onto it then.
-    commands.spawn((
+    let mut xray = commands.spawn((
         Camera3d::default(),
         Camera {
             order: 1,
@@ -274,6 +274,7 @@ fn setup(mut commands: Commands, mut fogs: ResMut<Assets<FogMaterial>>) {
         RenderLayers::layer(1),
         XrayCamera,
     ));
+    if mobile.0 { xray.insert(Msaa::Off); }
     commands.spawn((
         Node {
             position_type: PositionType::Absolute,

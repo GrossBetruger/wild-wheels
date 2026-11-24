@@ -19,11 +19,36 @@ import { canChoosePlayerColor, playerColors, savedPlayerColor, applyPlayerColors
 import { ClientLog, FrameHealth, startReporting } from './log.js';
 import { allTimeRows, loadAllTime } from '../ui/all-time.js';
 const $ = id => document.getElementById(id);
+const beta = location.pathname === '/experimental/' || location.pathname === '/experimental/index.html';
+const soloBeta = beta && document.body.classList.contains('dedicated-server') && new URLSearchParams(location.search).get('solo') === '1';
+if (soloBeta) {
+  document.body.classList.remove('dedicated-server');
+  $('arena-connection')?.remove();
+}
+const alternateClient = document.querySelector('.experimental-button');
+function rendererLink() {
+  const target = new URL(location.href);
+  target.pathname = beta ? '/' : '/experimental/';
+  target.searchParams.delete('solo');
+  alternateClient.href = target.href;
+}
+rendererLink();
+alternateClient.addEventListener('click', rendererLink);
+if (beta) {
+  alternateClient.textContent = 'REGULAR CLIENT';
+  alternateClient.title = 'Return to the regular renderer';
+}
 const canvas = $('game'), map = $('map').getContext('2d');
 canvas.tabIndex = 0;
 const keys = new Set(), audio = new RaceAudio(), renderer = new Renderer(canvas);
 // This browser's problems, reported to the server's log; see docs/logging.md.
-const clientLog = new ClientLog({ build: document.body.dataset.build ?? '' }), frameHealth = new FrameHealth((level, event, data) => clientLog.note(level, event, data));
+const clientLog = new ClientLog({ client: beta ? 'bevy-wasm' : 'browser', build: document.body.dataset.build ?? '' }), frameHealth = new FrameHealth((level, event, data) => clientLog.note(level, event, data));
+let bevy;
+const touch = usesMobileControls(navigator.maxTouchPoints, matchMedia('(pointer:coarse)').matches);
+if (beta && touch) document.body.classList.add('bevy-touch');
+if (beta) import('./bevy-presentation.js').then(({ BevyPresentation }) => {
+  bevy = new BevyPresentation(canvas, clientLog, touch);
+}).catch(error => clientLog.note('error', 'bevy-startup-failed', { message: error.message }));
 addEventListener('error', event => clientLog.limited(`error:${event.message}`, 30000, 'error', 'js-error', { message: event.message, at: `${(event.filename ?? '').split('/').slice(-2).join('/')}:${event.lineno}:${event.colno}`, stack: event.error?.stack }));
 addEventListener('unhandledrejection', event => clientLog.limited(`rejection:${event.reason?.message ?? event.reason}`, 30000, 'error', 'js-rejection', { message: String(event.reason?.message ?? event.reason), stack: event.reason?.stack }));
 canvas.addEventListener('webglcontextlost', () => clientLog.note('error', 'graphics-lost', {}));
@@ -31,20 +56,31 @@ renderer.report = (key, level, event, data) => clientLog.limited(key, 30000, lev
 const characterPreview = new CharacterPreview(document.querySelector('.racer-panel'));
 let uiNotice = null;
 let nextVisibilityReport = 0;
-const mobile = usesMobileControls(navigator.maxTouchPoints, matchMedia('(pointer:coarse)').matches); document.body.classList.toggle('mobile-bomber', mobile);
+const mobile = touch && !beta; document.body.classList.toggle('mobile-bomber', mobile);
 const racePanel = document.querySelector('.race-panel'); let mobileImmersive = false, mobileNativeFullscreen = false;
+if (beta && touch) racePanel.append(document.querySelector('.touch-controls'));
 function exitMobileFullscreen() { mobileImmersive = false; mobileNativeFullscreen = false; racePanel.classList.remove('mobile-fullscreen'); document.body.classList.remove('mobile-playing'); mobileScreenButton.textContent = 'FULL SCREEN'; if (document.fullscreenElement === racePanel) document.exitFullscreen().catch(() => { }); }
 function enterMobileFullscreen() {
-  if (!mobile) return; mobileImmersive = true; racePanel.classList.add('mobile-fullscreen'); document.body.classList.add('mobile-playing'); mobileScreenButton.textContent = 'EXIT FULL SCREEN';
+  if (!touch) return; mobileImmersive = true; racePanel.classList.add('mobile-fullscreen'); document.body.classList.add('mobile-playing'); mobileScreenButton.textContent = 'EXIT FULL SCREEN';
   if (!document.fullscreenElement && racePanel.requestFullscreen) racePanel.requestFullscreen().then(() => { mobileNativeFullscreen = true; }).catch(() => { });
 }
 document.addEventListener('fullscreenchange', () => { if (document.fullscreenElement === racePanel) mobileNativeFullscreen = true; if (mobileNativeFullscreen && !document.fullscreenElement) exitMobileFullscreen(); });
 const dedicated = document.body.classList.contains('dedicated-server');
-let race = applyPlayerColors(mobile ? equipBomber(createBattle()) : dedicated ? createBattle() : createRace(), savedPlayerColor(document.cookie)), lastTime = 0, selected = 0, track = 0, mode = mobile || dedicated ? 'combat' : 'race', lastPhase = '', lastCount = -1;
+let race = applyPlayerColors(mobile ? equipBomber(createBattle()) : dedicated || beta ? createBattle() : createRace(), savedPlayerColor(document.cookie)), lastTime = 0, selected = 0, track = 0, mode = mobile || dedicated || beta ? 'combat' : 'race', lastPhase = '', lastCount = -1;
 const renderControls = document.createElement('div'); renderControls.className = 'render-controls'; const graphicsLabel = document.createElement('label'); graphicsLabel.textContent = 'GRAPHICS ';
 const qualitySelect = document.createElement('select'); qualitySelect.setAttribute('aria-label', 'Graphics quality'); for (const [value, label] of [['auto', 'Auto'], ['high', 'High'], ['balanced', 'Balanced'], ['low', 'Low']]) { const option = document.createElement('option'); option.value = value; option.textContent = label; qualitySelect.append(option); } qualitySelect.onchange = () => renderer.setQuality(qualitySelect.value); graphicsLabel.append(qualitySelect);
+if (beta && touch) { qualitySelect.value = 'low'; renderer.setQuality('low'); }
 const fpsMeter = document.createElement('span'); fpsMeter.id = 'render-fps'; fpsMeter.textContent = 'Measuring FPS…'; fpsMeter.title = renderer.gpuName; renderControls.append(graphicsLabel, fpsMeter); if (renderer.softwareGPU) { const warning = document.createElement('span'); warning.textContent = 'SOFTWARE GPU'; warning.title = 'Chrome is rendering graphics without hardware acceleration.'; renderControls.append(warning); } document.querySelector('.race-panel').append(renderControls);
 const buildLabel = document.createElement('span'); buildLabel.id = 'build-version'; buildLabel.textContent = document.body.dataset.build ? `BUILD ${document.body.dataset.build}` : 'BUILD …'; buildLabel.title = 'Compare this build ID on both computers after refreshing.'; renderControls.append(buildLabel);
+if (beta && (dedicated || soloBeta)) {
+  const soloLink = document.createElement('a');
+  const target = new URL(location.href);
+  if (soloBeta) target.searchParams.delete('solo');
+  else target.searchParams.set('solo', '1');
+  soloLink.href = target.href;
+  soloLink.textContent = soloBeta ? 'ONLINE ARENA' : 'SOLO VS BOTS';
+  renderControls.append(soloLink);
+}
 globalThis.__syncBuildLabel?.();
 const soloLimits = {targetScore: 10, matchMinutes: 3};
 const newGame = () => { if (mobile) bomberWeapon = 'abomb'; return applyPlayerColors(mode === 'combat' ? (mobile ? equipBomber(createBattle(selected, track, Math.random, soloLimits)) : createBattle(selected, track, Math.random, soloLimits)) : createRace(selected, track), network.preferredColor); };
@@ -160,7 +196,7 @@ for (const [field, caption, maximum] of [['targetScore', 'Kills to win', 100], [
 function resetMap() { race = newGame(); lastPhase = ''; lastCount = -1; keys.clear(); updateMapLabels(); }
 function chooseMap(index) { if (dedicated && !network.active) return; if (index === track) return; if (network.active) { if (network.canConfigure) network.control('arena', index); return; } track = index; selectedMaps[mode] = index; resetMap(); }
 const network = new NetworkGame({
-  anchor: modeSwitch, limits: () => soloLimits, keys, role: mobile ? 'bomber' : 'driver', driver: () => selected, arena: () => track, onArenas: () => { ensureMapButtons(); updateMapLabels(); }, unlock: () => audio.unlock(), sound: type => audio.event(type), isAudioEnabled: () => audio.enabled, getAudioContext: () => audio.context, onState: world => {
+  anchor: modeSwitch, limits: () => soloLimits, keys, role: mobile ? 'bomber' : 'driver', clientType: clientLog.client, offline: soloBeta, driver: () => selected, arena: () => track, onArenas: () => { ensureMapButtons(); updateMapLabels(); }, unlock: () => audio.unlock(), sound: type => audio.event(type), isAudioEnabled: () => audio.enabled, getAudioContext: () => audio.context, onState: world => {
     const changed = mode !== 'combat' || track !== world.arena;
     if (race.soundEpoch !== world.soundEpoch) bomberWeapon = 'abomb';
     if (world.phase === "ready" && (world.targetScore !== race.targetScore || world.duration !== race.duration)) lastPhase = "";
@@ -314,9 +350,12 @@ function announceFinish() {
 function finishText() { return (battleTieNotice(race) ? battleTieNotice(race) + ' · ' : '') + `${mode === 'combat' ? `${race.kills} KILLS` : timeLabel(race.finishTime)} · ${mode === 'combat' ? 'BATTLE' : 'RACE'} ENDING IN ${Math.ceil(race.finishCountdown)}…`; }
 function draw() {
   characterPreview.frame(performance.now(), selected, race.color ?? drivers[selected].color, race.phase, race.specialAbilities !== false);
-  renderer.draw(race, race.elapsed); drawMap();
+  const drawnByBevy = bevy?.draw(race, network.active ? network.client : null);
+  if (!drawnByBevy) renderer.draw(race, race.elapsed);
+  if (beta) qualitySelect.disabled = Boolean(drawnByBevy);
+  drawMap();
   const visible = new Set();
-  for (const plate of renderer.nameplates ?? []) {
+  for (const plate of drawnByBevy ? [] : renderer.nameplates ?? []) {
     visible.add(plate.id); let label = nameplateNodes.get(plate.id);
     if (!label) { label = document.createElement('span'); label.className = 'kart-nameplate'; nameplateNodes.set(plate.id, label); nameplateLayer.append(label); }
     if (label.textContent !== plate.name) label.textContent = plate.name;
@@ -362,6 +401,11 @@ function timeLabel(t) { return `${String(Math.floor(t / 60)).padStart(2, '0')}:$
 let scoreboardKey = '';
 function put(id, value) { const node = $(id); if (node.textContent !== String(value)) node.textContent = value; }
 function hud() {
+  if (beta && touch) {
+    document.body.classList.toggle('mobile-bomber', Boolean(race.bomber));
+    mobilePanel.classList.toggle('hidden', !race.bomber);
+    cameraSwitch.classList.toggle('hidden', !race.bomber);
+  }
   if (race.elapsed + .5 < rewardElapsed) rewardRound++; rewardElapsed = race.elapsed;
   const epoch = [mode, race.soundEpoch, race.arena, race.id, race.driver, rewardRound].join(':');
   if (epoch !== rewardEpoch) { rewardEpoch = epoch; rewardNotice.reset(); }
@@ -514,13 +558,13 @@ function hud() {
 function showDriver(index) { selected = index;[...$('drivers').children].forEach((b, i) => { b.classList.toggle('selected', i === index); b.setAttribute('aria-pressed', String(i === index)); }); const d = drivers[index]; $('driver-name').textContent = d.name; $('driver-desc').textContent = d.desc; $('intelligence-stat').parentElement.title = 'Carrying limits: ' + itemCapacity(index, 'hedgehog') + ' hedgehogs, ' + itemCapacity(index, 'missile') + ' missiles, ' + itemCapacity(index, 'boost') + ' turbos, ' + itemCapacity(index, 'abomb') + ' of each bomb.'; $('cuteness-stat').parentElement.title = 'Arena: recovers one heart every ' + recoveryInterval(index) + ' seconds without taking damage, up to 3 hearts. Replenishes one hedgehog every ' + hedgehogRecoveryInterval(index) + ' seconds.'; $('fuel-stat').parentElement.title = 'Each turbo lasts ' + boostDuration(index) + ' seconds.'; $('driver-number').textContent = String(index + 1).padStart(2, '0'); for (const [id, value] of [['fuel-stat', d.fuel], ['speed-stat', d.speed], ['handling-stat', d.handling], ['accel-stat', d.accel], ['cuteness-stat', d.cuteness], ['intelligence-stat', d.intelligence]]) { $(id).replaceChildren(...Array.from({ length: 5 }, (_, i) => Object.assign(document.createElement('i'), { className: i < value ? 'on' : '' }))); } }
 function selectDriver(index) { if (network.active) { network.chooseDriver(index); return; } showDriver(index); race = newGame(); lastPhase = ''; }
 drivers.forEach((d, i) => { const b = document.createElement('button'); b.className = 'driver'; b.textContent = d.emoji; b.title = d.name; b.setAttribute('aria-label', d.name); b.onclick = () => selectDriver(i); $('drivers').append(b); });
-async function start() { if (!network.hasName) { network.focusName(); return; } if (!network.active && network.invitation) { await network.connect('/api/join'); if (!network.active) return; } if (dedicated && !network.active) return; if (mobile) enterMobileFullscreen(); audio.unlock().catch(() => { $('sound').textContent = 'CLICK FOR SOUND'; }); if (network.active) { if (network.paused) { network.pause(); return; } if (network.canControl) { network.control('start'); return; } network.requestPlay(); return; } if (race.phase === 'paused') { race.phase = race.resumePhase || 'racing'; return; } if (race.phase === 'racing' || race.phase === 'countdown') return; race = newGame(); race.name = network.name.value.trim(); network.rememberName(); race.phase = 'countdown'; lastCount = -1; tone(400); }
+async function start() { if (!network.hasName) { network.focusName(); return; } if (!network.active && network.invitation) { await network.connect('/api/join'); if (!network.active) return; } if (dedicated && !network.active) return; if (race.bomber && touch) enterMobileFullscreen(); audio.unlock().catch(() => { $('sound').textContent = 'CLICK FOR SOUND'; }); if (network.active) { if (network.paused) { network.pause(); return; } if (network.canControl) { network.control('start'); return; } network.requestPlay(); return; } if (race.phase === 'paused') { race.phase = race.resumePhase || 'racing'; return; } if (race.phase === 'racing' || race.phase === 'countdown') return; race = newGame(); race.name = network.name.value.trim(); network.rememberName(); race.phase = 'countdown'; lastCount = -1; tone(400); }
 function pause() { if (network.active) { network.pause(); return; } if (race.phase === 'paused') { race.phase = race.resumePhase; return; } if (!['racing', 'countdown'].includes(race.phase)) return; race.resumePhase = race.phase; race.phase = 'paused'; keys.clear(); }
 $('start').onclick = start; $('pause').onclick = pause; $('restart').onclick = () => { if (dedicated) return; if (network.active) { network.control('reset'); return; } race = newGame(); lastPhase = ''; keys.clear(); };
 $('change-track').onclick = () => chooseMap((track + 1) % mapButtons.length);
 $('sound').textContent = 'SOUND ON'; $('sound').setAttribute('aria-label', 'Mute sound');
 $('sound').onclick = () => { audio.toggle(); $('sound').textContent = audio.enabled ? 'SOUND ON' : 'SOUND OFF'; $('sound').setAttribute('aria-label', audio.enabled ? 'Mute sound' : 'Enable sound'); tone(660); };
-$('fullscreen').onclick = async () => { try { if (document.fullscreenElement) { await document.exitFullscreen(); return; } await document.querySelector('.viewport').requestFullscreen(); } catch { uiNotice = { text: 'Fullscreen unavailable in this browser', until: performance.now() + 3000 }; } };
+$('fullscreen').onclick = async () => { try { if (document.fullscreenElement) { await document.exitFullscreen(); return; } await (beta && touch ? racePanel : document.querySelector('.viewport')).requestFullscreen(); } catch { uiNotice = { text: 'Fullscreen unavailable in this browser', until: performance.now() + 3000 }; } };
 window.addEventListener('keydown', e => {
   if (e.target !== chat.input || !returnsToGame(e, race.phase)) return;
   e.preventDefault(); e.stopPropagation();
@@ -566,4 +610,34 @@ for (const event of ['pointerdown', 'keydown']) window.addEventListener(event, u
 document.querySelectorAll('[data-key]').forEach(b => { b.addEventListener('pointerdown', e => { e.preventDefault(); b.setPointerCapture(e.pointerId); keys.add(b.dataset.key); if (b.dataset.key === ' ') useWeapon(); if (network.active) network.input(); }); for (const name of ['pointerup', 'pointercancel', 'lostpointercapture']) b.addEventListener(name, () => { keys.delete(b.dataset.key); if (network.active) network.input(); }); });
 selectDriver(0); updateMapLabels();
 let nextVisualFrame = 0;
-function frame(t) { if (t + 1 < nextVisualFrame) { requestAnimationFrame(frame); return; } nextVisualFrame = Math.max(nextVisualFrame + 1000 / 60, t + 1); const dt = lastTime ? Math.min((t - lastTime) / 1000, .05) : 0; lastTime = t; renderer.recordFrame(t); frameHealth.frame(t, network.active && race.phase === 'racing' && !document.hidden, network.lastPacket, network.rtt, { match: race.soundEpoch, seconds: race.elapsed }); const performanceText = `${renderer.fps || '…'} FPS · ${renderer.pixelRatio().toFixed(2)}×${network.active ? ` · ${network.rtt ? Math.round(network.rtt * 1000) : '…'} ms ping` : ''}`; if (fpsMeter.textContent !== performanceText) fpsMeter.textContent = performanceText; if (network.active) { race = network.render(dt) ?? race; } if (!network.active && mode === 'combat') tickBattle(race, keys, dt); if (!network.active && mode === 'race') tick(race, keys, dt); for (const event of race.events) { audio.event(event); if (event === 'victory' || event === 'finish') announceFinish(); } race.events.length = 0; const priority = { win: 5, lap: 4, cheer: 3, hurt: 2, pass: 1 }; race.voices.sort((a, b) => priority[b.cue] - priority[a.cue]); for (const call of race.voices) audio.voice(call); race.voices.length = 0; audio.update(race); draw(); if (photography.requested) photography.afterDraw(); hud(); if (dedicated && network.active && !document.body.classList.contains('arena-connected')) document.body.classList.add('arena-connected'); requestAnimationFrame(frame); } requestAnimationFrame(frame);
+function frame(t) {
+  if (t + 1 < nextVisualFrame) { requestAnimationFrame(frame); return; }
+  nextVisualFrame = Math.max(nextVisualFrame + 1000 / 60, t + 1);
+  const dt = lastTime ? Math.min((t - lastTime) / 1000, .05) : 0;
+  lastTime = t;
+  renderer.recordFrame(t);
+  frameHealth.frame(t, network.active && race.phase === 'racing' && !document.hidden, network.lastPacket, network.rtt, { match: race.soundEpoch, seconds: race.elapsed });
+  const graphics = bevy ? bevy.status : `${renderer.pixelRatio().toFixed(2)}×`;
+  const frameRateLabel = bevy?.active && touch ? 'UI FPS' : 'FPS';
+  const performanceText = `${renderer.fps || '…'} ${frameRateLabel} · ${graphics}${network.active ? ` · ${network.rtt ? Math.round(network.rtt * 1000) : '…'} ms ping` : ''}`;
+  if (fpsMeter.textContent !== performanceText) fpsMeter.textContent = performanceText;
+  if (network.active) race = network.render(dt) ?? race;
+  if (!network.active && mode === 'combat') tickBattle(race, keys, dt);
+  if (!network.active && mode === 'race') tick(race, keys, dt);
+  for (const event of race.events) {
+    audio.event(event);
+    if (event === 'victory' || event === 'finish') announceFinish();
+  }
+  race.events.length = 0;
+  const priority = { win: 5, lap: 4, cheer: 3, hurt: 2, pass: 1 };
+  race.voices.sort((a, b) => priority[b.cue] - priority[a.cue]);
+  for (const call of race.voices) audio.voice(call);
+  race.voices.length = 0;
+  audio.update(race);
+  draw();
+  if (photography.requested) photography.afterDraw();
+  hud();
+  if (dedicated && network.active && !document.body.classList.contains('arena-connected')) document.body.classList.add('arena-connected');
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
