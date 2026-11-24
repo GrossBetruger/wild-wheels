@@ -13,9 +13,11 @@ use bevy::asset::AssetMetaCheck;
 use bevy::gltf::GltfAssetLabel;
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
+use bevy::winit::{UpdateMode, WinitSettings};
 use serde_json::json;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Mutex, OnceLock};
+use std::time::Duration;
 use wasm_bindgen::prelude::*;
 use wild_wheels_core::{Action, ClientAction, ClientInput, Frame, Input, NativeArena, NativeClient};
 
@@ -70,6 +72,10 @@ static OUTBOUND_TEXT: Mutex<Option<String>> = Mutex::new(None);
 static INVALID_PACKETS: AtomicU32 = AtomicU32::new(0);
 static PRESENTATION_FRAME: Mutex<Option<Vec<u8>>> = Mutex::new(None);
 static PRESENTATION_READY: AtomicBool = AtomicBool::new(false);
+// Mobile profiles are ordered from highest detail to idle in bevy-presentation.js.
+const MOBILE_IDLE: u32 = 4;
+static MOBILE_LEVEL: AtomicU32 = AtomicU32::new(1);
+static MOBILE_FRAMES: AtomicU32 = AtomicU32::new(0);
 static PAUSED: AtomicBool = AtomicBool::new(false);
 static INPUT_BLOCKED: AtomicBool = AtomicBool::new(false);
 static ONLINE_MODE: AtomicBool = AtomicBool::new(false);
@@ -292,18 +298,49 @@ pub fn start_game(
 struct Presentation;
 
 #[derive(Resource)]
-pub(crate) struct MobileGraphics(pub bool);
+pub(crate) struct MobileGraphics {
+    mobile: bool,
+    level: u32,
+}
+
+impl MobileGraphics {
+    fn detail<T: Copy>(&self, desktop: T, mobile: [T; 4]) -> T {
+        match self.mobile {
+            true => mobile[self.level.min(3) as usize],
+            false => desktop,
+        }
+    }
+}
+
+fn mobile_rendering(graphics: Res<MobileGraphics>) -> bool {
+    graphics.level != MOBILE_IDLE
+}
+
+fn mobile_update_mode(level: u32) -> UpdateMode {
+    let wait = match level {
+        MOBILE_IDLE => Duration::from_millis(200),
+        3 => Duration::from_millis(50),
+        _ => Duration::from_secs_f64(1.0 / 30.0),
+    };
+    UpdateMode::Reactive {
+        wait,
+        react_to_device_events: false,
+        react_to_user_events: false,
+        react_to_window_events: false,
+    }
+}
 
 #[wasm_bindgen]
 pub fn start_presentation(pack: Vec<u8>, mobile: bool) {
     let mut app = presentation_app(pack, "#bevy-canvas", false, mobile);
     if mobile {
-        use bevy::winit::{UpdateMode, WinitSettings};
-        use std::time::Duration;
         app.insert_resource(WinitSettings {
-            focused_mode: UpdateMode::reactive_low_power(Duration::from_secs_f64(1.0 / 30.0)),
-            unfocused_mode: UpdateMode::reactive_low_power(Duration::from_secs_f64(1.0 / 30.0)),
-        });
+            focused_mode: mobile_update_mode(1),
+            unfocused_mode: mobile_update_mode(1),
+        })
+        .configure_sets(Update, Presentation.run_if(mobile_rendering))
+        .add_systems(PreUpdate, apply_mobile_level)
+        .add_systems(Last, count_mobile_frame.run_if(mobile_rendering));
     }
     app.add_systems(Update, apply_presentation_frame.before(Presentation)).run();
 }
@@ -318,6 +355,55 @@ pub fn present_frame(packet: Vec<u8>) {
 #[wasm_bindgen]
 pub fn presentation_ready() -> bool {
     PRESENTATION_READY.load(Ordering::Relaxed)
+}
+
+#[wasm_bindgen]
+pub fn set_mobile_presentation_level(level: u32) {
+    MOBILE_LEVEL.store(level.min(MOBILE_IDLE), Ordering::Relaxed);
+}
+
+#[wasm_bindgen]
+pub fn mobile_presentation_frames() -> u32 {
+    MOBILE_FRAMES.load(Ordering::Relaxed)
+}
+
+fn count_mobile_frame() {
+    if presentation_ready() {
+        MOBILE_FRAMES.fetch_add(1, Ordering::Relaxed);
+    }
+}
+
+fn apply_mobile_level(
+    mut commands: Commands,
+    mut graphics: ResMut<MobileGraphics>,
+    mut settings: ResMut<WinitSettings>,
+    mut world: Query<(Entity, &mut Camera), (With<scene::FollowCamera>, Without<scene::XrayCamera>)>,
+    mut xray: Query<(Entity, &mut Camera), (With<scene::XrayCamera>, Without<scene::FollowCamera>)>,
+) {
+    let level = MOBILE_LEVEL.load(Ordering::Relaxed);
+    if level == graphics.level {
+        return;
+    }
+    let was_idle = graphics.level == MOBILE_IDLE;
+    let idle = level == MOBILE_IDLE;
+    graphics.level = level;
+    settings.focused_mode = mobile_update_mode(level);
+    settings.unfocused_mode = settings.focused_mode;
+    if idle == was_idle {
+        return;
+    }
+    for (entity, mut camera) in &mut world {
+        camera.is_active = !idle;
+        if idle {
+            commands.entity(entity).insert(bevy::ui::IsDefaultUiCamera);
+        }
+    }
+    if idle {
+        for (entity, mut camera) in &mut xray {
+            camera.is_active = false;
+            commands.entity(entity).remove::<bevy::ui::IsDefaultUiCamera>();
+        }
+    }
 }
 
 fn apply_presentation_frame(mut session: ResMut<app::GameSession>) {
@@ -367,7 +453,7 @@ fn presentation_app(pack: Vec<u8>, canvas: &str, interactive: bool, mobile: bool
         false => plugins.disable::<bevy::audio::AudioPlugin>(),
     });
     bevy_app
-        .insert_resource(MobileGraphics(mobile))
+        .insert_resource(MobileGraphics { mobile, level: 1 })
         .insert_resource(app::GameSession::default())
         .insert_resource(scene::Capture(None))
         .add_plugins((
@@ -612,7 +698,10 @@ fn sync_blender_models(
                 let right_dir = tf.rotation * Vec3::X;
                 let up_dir = tf.rotation * Vec3::Y;
                 let seed = (t * 60.0) as usize;
-                let emit_count = if nightmare { 3 } else if firing { 2 } else { 2 };
+                let emit_count = match (mobile.mobile, firing || nightmare) {
+                    (true, false) => 0,
+                    _ => mobile.detail(if nightmare { 3 } else { 2 }, [1, 1, 0, 0]),
+                };
                 for k in 0..emit_count {
                     let eng = RAPTOR_ENGINES[(seed + k * 2 + a.id) % 3];
                     let jitter = ((seed * 37 + k * 17) % 100) as f32 / 100.0 - 0.5;
@@ -813,7 +902,7 @@ fn sync_blender_models(
                             flames.push((outer, inner, ex, ey, er));
                             // 4 Mach shock diamonds behind each of the 3 main RVac bells
                             if idx < 3 {
-                                for di in 0..4 {
+                                for di in 0..mobile.detail(4, [2, 2, 2, 2]) {
                                     let d = ship
                                         .spawn((
                                             Mesh3d(models.diamond_mesh.clone()),
@@ -826,7 +915,7 @@ fn sync_blender_models(
                                 }
                             }
                         }
-                        if !mobile.0 {
+                        if !mobile.mobile {
                             plume_light = ship
                                 .spawn((
                                     PointLight {

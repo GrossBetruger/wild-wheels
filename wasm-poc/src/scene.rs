@@ -255,7 +255,7 @@ fn setup(mut commands: Commands, mut fogs: ResMut<Assets<FogMaterial>>, mobile: 
             IsDefaultUiCamera,
             FollowCamera,
         ));
-    if mobile.0 { world.insert(Msaa::Off); }
+    if mobile.mobile { world.insert(Msaa::Off); }
     let world = world.id();
     // Dark Humor: fog covers the world, then X-ray silhouettes are drawn over the
     // fog with no walls in the way, and the menus and HUD come last. This camera
@@ -274,7 +274,7 @@ fn setup(mut commands: Commands, mut fogs: ResMut<Assets<FogMaterial>>, mobile: 
         RenderLayers::layer(1),
         XrayCamera,
     ));
-    if mobile.0 { xray.insert(Msaa::Off); }
+    if mobile.mobile { xray.insert(Msaa::Off); }
     commands.spawn((
         Node {
             position_type: PositionType::Absolute,
@@ -674,7 +674,7 @@ fn racers(stage: &mut Stage, view: &ClientView, bats: &Bats, dt: f32, now: f32, 
     }
 }
 
-fn effects(stage: &mut Stage, view: &ClientView, xray: bool, elapsed: f32) {
+fn effects(stage: &mut Stage, view: &ClientView, xray: bool, elapsed: f32, drift_limit: usize) {
     // In X-ray, the viewer's own bombs and everyone else's are told apart by color.
     let side = |owner: usize| match owner == view.you {
         true => crate::xray::OWN,
@@ -788,7 +788,8 @@ fn effects(stage: &mut Stage, view: &ClientView, xray: bool, elapsed: f32) {
         let play = stage.aged("cloud:stink", cloud.age);
         stage.show(Role::Stink, index, play, at(cloud.wx, 0.0, cloud.wz, 0.0));
     }
-    for (index, particle) in view.drift_particles.iter().enumerate() {
+    let recent_drift = view.drift_particles.len().saturating_sub(drift_limit);
+    for (index, particle) in view.drift_particles.iter().enumerate().skip(recent_drift) {
         // Master-Yuda's motorcycle throws its own sparks in the browser.
         if view
             .actors
@@ -842,6 +843,7 @@ pub fn sync(
     mut players: Query<&mut Ported>,
     mut cameras: Query<(&mut Transform, &mut Projection), With<FollowCamera>>,
     mut darkness: Darkness,
+    mobile: Res<crate::MobileGraphics>,
 ) {
     let SceneAssets {
         mut graphics,
@@ -978,21 +980,22 @@ pub fn sync(
             at(p.wx, p.height, p.wz, p.heading),
         );
     }
+    let trail_stride = mobile.detail(3, [4, 5, 7, 9]);
     for p in view.projectiles {
-        // Every third sample leaves a puff that shrinks towards the tail, as in the browser.
+        // Leave puffs along the trail, using fewer samples on phones.
         let owner = view.actors.get(p.owner).map_or(0, |a| a.driver);
         let name = match (p.vulcan, p.kind.as_str()) {
             (true, _) => format!("trail:vulcan:{owner}"),
             (false, "missile") => "trail:missile".into(),
             _ => "trail:hedgehog".into(),
         };
-        for (index, sample) in p.trail.iter().enumerate().step_by(3).take(16) {
+        for (index, sample) in p.trail.iter().enumerate().step_by(trail_stride).take(16) {
             let size = match p.vulcan {
                 true => 1.0,
                 false => (0.12 + (1.0 - index as f32 / p.trail.len() as f32) * 0.5) / 0.62,
             };
             let play = stage.clip(&name);
-            let key = p.id as usize * 16 + index / 3;
+            let key = p.id as usize * 16 + index / trail_stride;
             let puff = at(sample.wx, sample.height, sample.wz, 0.0).with_scale(Vec3::splat(size));
             if seeing {
                 let ghost = Play {
@@ -1004,7 +1007,9 @@ pub fn sync(
             stage.show(Role::Trail, key, play, puff);
         }
     }
-    for (index, skid) in view.skids.iter().enumerate() {
+    let skid_limit = mobile.detail(usize::MAX, [32, 24, 12, 6]);
+    let recent_skids = view.skids.len().saturating_sub(skid_limit);
+    for (index, skid) in view.skids.iter().enumerate().skip(recent_skids) {
         let (dx, dz) = (skid.bx - skid.ax, skid.bz - skid.az);
         let length = dx.hypot(dz);
         if length < 0.01 {
@@ -1030,7 +1035,8 @@ pub fn sync(
             at(supply.wx, 0.0, supply.wz, 0.0),
         );
     }
-    effects(&mut stage, &view, seeing, time.elapsed_secs());
+    let drift_limit = mobile.detail(usize::MAX, [24, 16, 8, 4]);
+    effects(&mut stage, &view, seeing, time.elapsed_secs(), drift_limit);
     stage.retire();
     // The browser's chase camera, including its wider view while boosting or drifting.
     let p = view.player;

@@ -671,6 +671,7 @@ pub struct Pools<'w, 's> {
 pub fn animate(
     mut commands: Commands,
     time: Res<Time>,
+    mobile: Res<crate::MobileGraphics>,
     mut graphics: ResMut<Graphics>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut players: Query<(Entity, &mut Ported)>,
@@ -683,6 +684,7 @@ pub fn animate(
         mut particles,
     } = pools;
     let still = STILL.load(Ordering::Relaxed);
+    let lookahead_frames = mobile.detail(LOOKAHEAD, [2, 2, 2, 2]);
     let graphics = &mut *graphics;
     graphics.collect(time.elapsed_secs(), &mut meshes);
     for (entity, mut player) in &mut players {
@@ -706,8 +708,8 @@ pub fn animate(
                 false => index % frames,
             };
             // Build the next few frames' meshes now, so they are ready when shown.
-            let lookahead = (LOOKAHEAD as f32 * graphics.clips[clip].fps / 24.0).ceil() as usize;
-            for ahead in 1..=lookahead.max(LOOKAHEAD) {
+            let lookahead = (lookahead_frames as f32 * graphics.clips[clip].fps / 24.0).ceil() as usize;
+            for ahead in 1..=lookahead.max(lookahead_frames) {
                 let parts = graphics.clips[clip].frames[at(index + ahead)].parts.len();
                 for slot in 0..parts {
                     let part = &graphics.clips[clip].frames[at(index + ahead)].parts[slot];

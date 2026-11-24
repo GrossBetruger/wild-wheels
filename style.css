@@ -255,7 +255,11 @@ h1 em {
 }
 
 .bevy-surface canvas { display: block; width: 100%; height: 100%; }
-.bevy-surface-mobile { width: 80%; height: 80%; transform: scale(1.25); }
+.bevy-surface-mobile {
+  width: var(--bevy-render-size, 20%);
+  height: var(--bevy-render-size, 20%);
+  transform: scale(var(--bevy-render-upscale, 5));
+}
 .bevy-active .bevy-surface { opacity: 1; }
 .bevy-active #game { opacity: 0; }
 

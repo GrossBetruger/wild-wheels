@@ -6,6 +6,7 @@
 //! - Blender sculpted 3D bent metal debris (.glb) + hot bouncing shrapnel & ricocheting sparks
 //! - Distance-attenuated camera shake trauma
 use crate::app::GameSession;
+use crate::MobileGraphics;
 use bevy::gltf::GltfAssetLabel;
 use bevy::math::Affine2;
 use bevy::prelude::*;
@@ -17,7 +18,7 @@ impl Plugin for ExplosionsPlugin {
         app.init_resource::<SeenBlasts>()
             .init_resource::<CameraShake>()
             .add_systems(Startup, setup_assets)
-            .add_systems(Update, (detect_explosions, tick_explosions).chain());
+            .add_systems(Update, (detect_explosions, tick_explosions).chain().run_if(crate::mobile_rendering));
     }
 }
 
@@ -333,7 +334,7 @@ fn detect_explosions(
                 &mut seen.seed,
                 origin,
                 scale,
-                mobile.0,
+                &mobile,
             );
         }
     }
@@ -347,9 +348,10 @@ fn spawn_blast(
     seed: &mut u64,
     origin: Vec3,
     scale: f32,
-    mobile: bool,
+    graphics: &MobileGraphics,
 ) {
-    let particle_scale = if mobile { 0.25 } else { 1.0 } * scale.sqrt();
+    let mobile = graphics.mobile;
+    let particle_scale = graphics.detail(1.0, [0.25, 0.16, 0.1, 0.05]) * scale.sqrt();
     // 1. Dynamic warm orange-gold blast PointLight (illuminates floor, karts, and smoke undersides!)
     if !mobile {
         commands.spawn((
@@ -420,7 +422,7 @@ fn spawn_blast(
     ));
 
     // 3c. Blender Mantaflow 6x6 volumetric fire+smoke flipbook billboards (4 staggered plumes)
-    let flipbooks = if mobile { 1 } else { 4 };
+    let flipbooks = graphics.detail(4, [1, 1, 0, 0]);
     for k in 0..flipbooks {
         let is_hero = k == 0;
         let a = (k as f32) * 2.09 + next_rand(seed) * 0.9;
@@ -498,7 +500,7 @@ fn spawn_blast(
     // 5. Turbulent cauliflower-displaced smoke column + ground dust skirt with real internal
     //    fiery glow cooling into dark soot and dissolving smoothly via alpha-blend!
     let smoke_count = (28.0 * particle_scale) as usize;
-    let skirt_count = if mobile { 2 } else { 8 };
+    let skirt_count = graphics.detail(8, [2, 1, 0, 0]);
     for i in 0..smoke_count {
         let a = (i as f32 / smoke_count as f32) * std::f32::consts::TAU + next_rand(seed) * 0.45;
         let is_skirt = i < skirt_count;

@@ -349,12 +349,12 @@ function announceFinish() {
   finishDetail.textContent = finishText(); finishFlash.classList.remove('hidden');
 }
 function finishText() { return (battleTieNotice(race) ? battleTieNotice(race) + ' · ' : '') + `${mode === 'combat' ? `${race.kills} KILLS` : timeLabel(race.finishTime)} · ${mode === 'combat' ? 'BATTLE' : 'RACE'} ENDING IN ${Math.ceil(race.finishCountdown)}…`; }
-function draw() {
-  characterPreview.frame(performance.now(), selected, race.color ?? drivers[selected].color, race.phase, race.specialAbilities !== false);
+function draw(refreshUi) {
+  if (refreshUi) characterPreview.frame(performance.now(), selected, race.color ?? drivers[selected].color, race.phase, race.specialAbilities !== false);
   const drawnByBevy = bevy?.draw(race, network.active ? network.client : null);
   if (!drawnByBevy) renderer.draw(race, race.elapsed);
   if (beta) qualitySelect.disabled = Boolean(drawnByBevy);
-  drawMap();
+  if (refreshUi) drawMap();
   const visible = new Set();
   for (const plate of drawnByBevy ? [] : renderer.nameplates ?? []) {
     visible.add(plate.id); let label = nameplateNodes.get(plate.id);
@@ -610,7 +610,7 @@ const unlockAudio = () => {
 for (const event of ['pointerdown', 'keydown']) window.addEventListener(event, unlockAudio);
 document.querySelectorAll('[data-key]').forEach(b => { b.addEventListener('pointerdown', e => { e.preventDefault(); b.setPointerCapture(e.pointerId); keys.add(b.dataset.key); if (b.dataset.key === ' ') useWeapon(); if (network.active) network.input(); }); for (const name of ['pointerup', 'pointercancel', 'lostpointercapture']) b.addEventListener(name, () => { keys.delete(b.dataset.key); if (network.active) network.input(); }); });
 selectDriver(0); updateMapLabels();
-let nextVisualFrame = 0;
+let nextVisualFrame = 0, nextMobileUiFrame = 0;
 function frame(t) {
   if (t + 1 < nextVisualFrame) { requestAnimationFrame(frame); return; }
   nextVisualFrame = Math.max(nextVisualFrame + 1000 / 60, t + 1);
@@ -619,8 +619,9 @@ function frame(t) {
   renderer.recordFrame(t);
   frameHealth.frame(t, network.active && race.phase === 'racing' && !document.hidden, network.lastPacket, network.rtt, { match: race.soundEpoch, seconds: race.elapsed });
   const graphics = bevy ? bevy.status : `${renderer.pixelRatio().toFixed(2)}×`;
-  const frameRateLabel = bevy?.active && touch ? 'UI FPS' : 'FPS';
-  const performanceText = `${renderer.fps || '…'} ${frameRateLabel} · ${graphics}${network.active ? ` · ${network.rtt ? Math.round(network.rtt * 1000) : '…'} ms ping` : ''}`;
+  const mobileBevy = bevy?.active && touch;
+  const fps = mobileBevy ? bevy.fps : renderer.fps;
+  const performanceText = `${fps || '…'} FPS · ${graphics}${network.active ? ` · ${network.rtt ? Math.round(network.rtt * 1000) : '…'} ms ping` : ''}`;
   if (fpsMeter.textContent !== performanceText) fpsMeter.textContent = performanceText;
   if (network.active) race = network.render(dt) ?? race;
   if (!network.active && mode === 'combat') tickBattle(race, keys, dt);
@@ -635,9 +636,11 @@ function frame(t) {
   for (const call of race.voices) audio.voice(call);
   race.voices.length = 0;
   audio.update(race);
-  draw();
+  const refreshUi = !beta || !touch || t + 1 >= nextMobileUiFrame;
+  if (beta && touch && refreshUi) nextMobileUiFrame = Math.max(nextMobileUiFrame + 1000 / 30, t + 1);
+  draw(refreshUi);
   if (photography.requested) photography.afterDraw();
-  hud();
+  if (refreshUi) hud();
   if (dedicated && network.active && !document.body.classList.contains('arena-connected')) document.body.classList.add('arena-connected');
   requestAnimationFrame(frame);
 }
