@@ -123,13 +123,18 @@ def export_glb(filename, name):
     bpy.context.view_layer.objects.active = bpy.context.selected_objects[0]
     bpy.ops.object.convert(target="MESH")
     bpy.ops.object.join()
-    bpy.context.active_object.name = name
+    obj = bpy.context.active_object
+    obj.name = name
+    # Ensure silky-smooth interpolated normals after joining in Blender 5.x
+    obj.data.polygons.foreach_set("use_smooth", [True] * len(obj.data.polygons))
+    obj.data.update()
     path = os.path.join(out_dir, filename)
     bpy.ops.export_scene.gltf(
         filepath=path,
         export_format="GLB",
         export_yup=True,
         export_apply=True,
+        export_normals=True,
         export_materials="EXPORT",
     )
     print(f"Exported {name} -> {path} ({os.path.getsize(path) // 1024} KiB)")
@@ -371,46 +376,60 @@ def build_yuda():
 
 
 # =============================================================================
-# 5. KNOWITOWL (#14 — Snowy Professor Owl with Gold Spectacles)
+# 5. KNOWITOWL (#14 — Ultra-Smooth Sculpted Snowy Professor Owl)
 # =============================================================================
 def build_owl():
     reset_scene()
-    add_racing_kart("#dfe8f0", "#2f3d66", "#f2c95c")
-    m_snow = mat("owl_snow", "#f5f8fc", roughness=0.78)
-    m_wing = mat("owl_wing", "#cfd8e3", roughness=0.76)
-    m_belly = mat("owl_belly", "#ffffff", roughness=0.80)
-    m_gold = mat("gold", "#f5cb56", roughness=0.18, metallic=0.92)
-    m_beak = mat("beak", "#e89c38", roughness=0.38)
-    m_indigo = mat("indigo", "#222d4f", roughness=0.58)
-    m_dark = mat("dark", "#141822", roughness=0.10)
-    m_amber = mat("owl_eye", "#ffb833", roughness=0.12, emission=0.6, emission_color="#ffaa22")
-    m_eye_w = mat("eye_w", "#ffffff", roughness=0.10)
+    add_racing_kart("#e6eef5", "#27355c", "#f5cd58")
+    m_snow = mat("owl_snow", "#f8fbff", roughness=0.68)
+    m_wing = mat("owl_wing", "#d4deea", roughness=0.64)
+    m_wing_tip = mat("owl_wing_tip", "#a8b8cc", roughness=0.62)
+    m_belly = mat("owl_belly", "#ffffff", roughness=0.72)
+    m_gold = mat("gold", "#f7ce56", roughness=0.14, metallic=0.95)
+    m_lens = mat("lens", "#c8eeff", roughness=0.05, metallic=0.20)
+    m_beak = mat("beak", "#eb9e34", roughness=0.30)
+    m_indigo = mat("indigo", "#1f2a4a", roughness=0.48)
+    m_dark = mat("dark", "#10141c", roughness=0.08)
+    m_amber = mat("owl_eye", "#ffb82e", roughness=0.10, emission=0.85, emission_color="#ffaa1a")
+    m_eye_w = mat("eye_w", "#ffffff", roughness=0.08)
 
-    # Plump snowy owl body + folded feathered wings
-    sphere(0, 1.98, -0.02, 0.84, 0.96, 0.74, m_snow, segs=28, rings=18)
-    sphere(0, 1.94, 0.36, 0.58, 0.72, 0.40, m_belly, segs=22, rings=14)
+    # Silky high-res plump snowy owl body + layered sculpted feathers
+    sphere(0, 1.98, -0.02, 0.86, 0.98, 0.76, m_snow, segs=40, rings=26)
+    sphere(0, 1.92, 0.36, 0.62, 0.74, 0.42, m_belly, segs=32, rings=20)
+    # Soft scalloped chest feathers
+    for row in range(3):
+        for col in range(-1, 2):
+            sphere(col * 0.24, 1.62 + row * 0.24, 0.70 - row * 0.03, 0.14, 0.10, 0.06, m_wing, segs=16, rings=10)
+    # Layered sculpted folded wings (3 feather tiers per side)
     for side in (-1.0, 1.0):
-        sphere(side * 0.76, 2.02, -0.08, 0.34, 0.76, 0.62, m_wing, segs=20, rings=14, rot=(0.15, 0, side * 0.18))
-    # Big scholarly owl head + feathery ear tufts
-    hy = 3.22
-    sphere(0, hy, 0.08, 0.96, 0.88, 0.88, m_snow, segs=30, rings=20)
+        sphere(side * 0.78, 2.08, -0.04, 0.36, 0.78, 0.64, m_wing, segs=32, rings=20, rot=(0.14, 0, side * 0.16))
+        sphere(side * 0.86, 1.78, -0.22, 0.28, 0.56, 0.56, m_wing_tip, segs=24, rings=16, rot=(0.24, 0, side * 0.22))
+        sphere(side * 0.76, 1.48, -0.44, 0.22, 0.38, 0.46, m_snow, segs=22, rings=14, rot=(0.35, 0, side * 0.15))
+
+    # Ultra-smooth high-res owl head + plush facial heart-disc + curved ear tufts
+    hy = 3.24
+    sphere(0, hy, 0.08, 0.98, 0.90, 0.90, m_snow, segs=44, rings=28)
     for side in (-1.0, 1.0):
-        cone(side * 0.64, hy + 0.78, 0.04, 0.28, 0.04, 0.54, m_wing, verts=16, rot=(0, 0, -side * 0.35))
-        # Facial disc + glowing golden owl eyes + metallic gold spectacles!
-        sphere(side * 0.38, hy + 0.06, 0.78, 0.36, 0.36, 0.14, m_belly, segs=20, rings=12)
-        sphere(side * 0.38, hy + 0.06, 0.88, 0.24, 0.24, 0.09, m_amber, segs=18, rings=12)
-        sphere(side * 0.38, hy + 0.06, 0.95, 0.13, 0.14, 0.05, m_dark, segs=16, rings=10)
-        sphere(side * 0.33, hy + 0.13, 0.99, 0.05, 0.05, 0.02, m_eye_w, segs=10, rings=6)
-        torus(side * 0.38, hy + 0.06, 0.96, 0.29, 0.038, m_gold, rot=(math.pi / 2, 0, 0))
-    box(0, hy + 0.08, 0.96, 0.22, 0.05, 0.05, m_gold, bevel=0.01)
-    # Sculpted curved beak
-    cone(0, hy - 0.16, 0.96, 0.18, 0.03, 0.38, m_beak, verts=16, rot=(math.pi / 2 + 0.35, 0, 0))
-    # Scholar's mortarboard graduation cap + golden tassel!
-    cyl(0, hy + 0.84, 0.04, 0.54, 0.28, m_indigo, verts=22, bevel=0.02)
-    box(0, hy + 1.02, 0.04, 1.48, 0.09, 1.48, m_indigo, bevel=0.02, rot=(0.06, 0.78, 0))
-    sphere(0, hy + 1.09, 0.04, 0.09, 0.06, 0.09, m_gold, segs=12, rings=8)
-    cyl(0.68, hy + 0.78, 0.04, 0.04, 0.56, m_gold, verts=10, rot=(0, 0, 0.25), bevel=0.01)
-    sphere(0.76, hy + 0.48, 0.04, 0.10, 0.14, 0.10, m_gold, segs=12, rings=8)
+        # Plush curved feather ear tufts (2 layered plumes)
+        sphere(side * 0.62, hy + 0.76, 0.04, 0.24, 0.46, 0.18, m_wing, segs=24, rings=16, rot=(0, 0, -side * 0.42))
+        sphere(side * 0.72, hy + 0.94, 0.00, 0.15, 0.30, 0.13, m_wing_tip, segs=20, rings=12, rot=(0, 0, -side * 0.55))
+        # Facial disc + glowing golden owl eyes + glossy gold spectacles with lens tint
+        sphere(side * 0.38, hy + 0.06, 0.78, 0.38, 0.38, 0.15, m_belly, segs=28, rings=18)
+        sphere(side * 0.38, hy + 0.06, 0.88, 0.25, 0.25, 0.10, m_amber, segs=26, rings=16)
+        sphere(side * 0.38, hy + 0.06, 0.955, 0.13, 0.14, 0.05, m_dark, segs=22, rings=14)
+        sphere(side * 0.33, hy + 0.13, 0.995, 0.05, 0.05, 0.02, m_eye_w, segs=14, rings=10)
+        torus(side * 0.38, hy + 0.06, 0.98, 0.30, 0.036, m_gold, rot=(math.pi / 2, 0, 0))
+        cyl(side * 0.38, hy + 0.06, 0.975, 0.27, 0.012, m_lens, verts=28, rot=(math.pi / 2, 0, 0), bevel=0.0)
+    box(0, hy + 0.08, 0.98, 0.22, 0.045, 0.045, m_gold, bevel=0.01)
+    # Smooth curved sculpted beak
+    sphere(0, hy - 0.14, 0.94, 0.17, 0.16, 0.22, m_beak, segs=24, rings=16)
+    cone(0, hy - 0.22, 1.06, 0.13, 0.025, 0.26, m_beak, verts=24, rot=(math.pi / 2 + 0.48, 0, 0))
+    # Scholar's mortarboard graduation cap + smooth hanging golden tassel
+    cyl(0, hy + 0.86, 0.04, 0.56, 0.28, m_indigo, verts=32, bevel=0.03)
+    box(0, hy + 1.04, 0.04, 1.50, 0.09, 1.50, m_indigo, bevel=0.025, rot=(0.06, 0.78, 0))
+    sphere(0, hy + 1.11, 0.04, 0.10, 0.06, 0.10, m_gold, segs=18, rings=12)
+    cyl(0.68, hy + 0.78, 0.04, 0.035, 0.56, m_gold, verts=16, rot=(0, 0, 0.22), bevel=0.01)
+    cone(0.75, hy + 0.46, 0.04, 0.12, 0.04, 0.22, m_gold, verts=20)
     export_glb("owl.glb", "KnowItOwl")
 
 

@@ -359,7 +359,10 @@ bpy.ops.object.select_all(action="SELECT")
 bpy.context.view_layer.objects.active = bpy.context.selected_objects[0]
 bpy.ops.object.convert(target="MESH")
 bpy.ops.object.join()
-bpy.context.active_object.name = "TaiCoon"
+obj = bpy.context.active_object
+obj.name = "TaiCoon"
+obj.data.polygons.foreach_set("use_smooth", [True] * len(obj.data.polygons))
+obj.data.update()
 
 # Export single clean binary glTF 2.0 (.glb) with Y-up and PBR materials
 bpy.ops.export_scene.gltf(
