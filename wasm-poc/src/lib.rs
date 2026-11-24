@@ -69,19 +69,48 @@ pub(crate) fn sound_pack_bytes() -> &'static [u8] {
     SOUND_BYTES.get().copied().unwrap_or(&[])
 }
 
-const BLENDER_MODELS: &[(usize, &str)] = &[(7, "houston.glb"), (15, "taicoon.glb")];
+const BLENDER_MODELS: &[(usize, &str)] = &[(15, "taicoon.glb")];
+
+const RAPTOR_ENGINES: [(f32, f32, f32); 6] = [
+    (0.0, 0.64, 0.28),
+    (-0.55, -0.32, 0.28),
+    (0.55, -0.32, 0.28),
+    (0.0, -0.27, 0.16),
+    (-0.23, 0.14, 0.16),
+    (0.23, 0.14, 0.16),
+];
 
 pub(crate) fn has_blender_model(driver: usize) -> bool {
-    BLENDER_MODELS.iter().any(|&(d, _)| d == driver)
+    driver == 7 || BLENDER_MODELS.iter().any(|&(d, _)| d == driver)
 }
 
 #[derive(Resource)]
-struct BlenderModels(std::collections::HashMap<usize, Handle<WorldAsset>>);
+struct BlenderModels {
+    static_models: std::collections::HashMap<usize, Handle<WorldAsset>>,
+    houston_ship: Handle<WorldAsset>,
+    houston_pilot: Handle<WorldAsset>,
+    houston_arm_l: Handle<WorldAsset>,
+    houston_arm_r: Handle<WorldAsset>,
+    flame_mesh: Handle<Mesh>,
+    flame_outer_mat: Handle<StandardMaterial>,
+    flame_inner_mat: Handle<StandardMaterial>,
+    rcs_mat: Handle<StandardMaterial>,
+}
 
 #[derive(Component)]
 struct BlenderRacer {
     id: usize,
     driver: usize,
+}
+
+#[derive(Component)]
+struct HoustonRig {
+    id: usize,
+    pilot: Entity,
+    arm_l: Entity,
+    arm_r: Entity,
+    flames: Vec<(Entity, Entity, f32, f32, f32)>, // (outer, inner, ex, ey, er)
+    rcs: [Entity; 2],
 }
 
 #[wasm_bindgen]
@@ -142,12 +171,52 @@ pub fn start_game(pack: Vec<u8>, sound_pack: Vec<u8>, driver: usize, arena: usiz
     bevy_app.run();
 }
 
-fn load_blender_models(mut commands: Commands, assets: Res<AssetServer>) {
-    let mut map = std::collections::HashMap::new();
+fn load_blender_models(
+    mut commands: Commands,
+    assets: Res<AssetServer>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    let mut static_models = std::collections::HashMap::new();
     for &(driver, file) in BLENDER_MODELS {
-        map.insert(driver, assets.load(GltfAssetLabel::Scene(0).from_asset(file)));
+        static_models.insert(driver, assets.load(GltfAssetLabel::Scene(0).from_asset(file)));
     }
-    commands.insert_resource(BlenderModels(map));
+    let flame_mesh = meshes.add(Cone::new(1.0, 1.0));
+    let flame_outer_mat = materials.add(StandardMaterial {
+        base_color: Color::srgba(0.32, 0.18, 0.95, 0.72),
+        emissive: LinearRgba::rgb(1.6, 0.9, 5.2),
+        unlit: true,
+        alpha_mode: AlphaMode::Add,
+        cull_mode: None,
+        ..default()
+    });
+    let flame_inner_mat = materials.add(StandardMaterial {
+        base_color: Color::srgba(0.60, 0.95, 1.0, 0.95),
+        emissive: LinearRgba::rgb(1.8, 4.6, 6.8),
+        unlit: true,
+        alpha_mode: AlphaMode::Add,
+        cull_mode: None,
+        ..default()
+    });
+    let rcs_mat = materials.add(StandardMaterial {
+        base_color: Color::srgba(0.88, 0.95, 1.0, 0.7),
+        emissive: LinearRgba::rgb(1.4, 1.7, 2.0),
+        unlit: true,
+        alpha_mode: AlphaMode::Add,
+        cull_mode: None,
+        ..default()
+    });
+    commands.insert_resource(BlenderModels {
+        static_models,
+        houston_ship: assets.load(GltfAssetLabel::Scene(0).from_asset("houston_ship.glb")),
+        houston_pilot: assets.load(GltfAssetLabel::Scene(0).from_asset("houston_pilot.glb")),
+        houston_arm_l: assets.load(GltfAssetLabel::Scene(0).from_asset("houston_arm_l.glb")),
+        houston_arm_r: assets.load(GltfAssetLabel::Scene(0).from_asset("houston_arm_r.glb")),
+        flame_mesh,
+        flame_outer_mat,
+        flame_inner_mat,
+        rcs_mat,
+    });
 }
 
 fn sync_blender_models(
@@ -155,51 +224,224 @@ fn sync_blender_models(
     time: Res<Time>,
     session: Res<app::GameSession>,
     models: Option<Res<BlenderModels>>,
-    mut existing: Query<(Entity, &BlenderRacer, &mut Transform, &mut Visibility)>,
+    mut existing: Query<(Entity, &BlenderRacer, &mut Transform, &mut Visibility), Without<HoustonRig>>,
+    mut rigs: Query<(Entity, &HoustonRig, &mut Transform, &mut Visibility), Without<BlenderRacer>>,
+    mut parts: Query<
+        (&mut Transform, &mut Visibility),
+        (Without<BlenderRacer>, Without<HoustonRig>),
+    >,
 ) {
     let Some(models) = models else { return };
     let Some(client) = session.client.as_ref() else { return };
     let view = client.view();
     let t = time.elapsed_secs();
-    let mut alive_ids = std::collections::HashSet::new();
+    let mut alive_static = std::collections::HashSet::new();
+    let mut alive_houston = std::collections::HashSet::new();
+
     for a in view.actors {
-        let Some(handle) = models.0.get(&a.driver) else {
-            continue;
-        };
         if a.inactive || a.afk || a.bomber || a.destroyed > 0.0 {
             continue;
         }
-        alive_ids.insert(a.id);
-        let bounce = if a.celebrate > 0.0 {
-            (t * 14.0).sin().abs() * 0.65
-        } else {
-            (t * 6.0 + a.id as f32).sin() * 0.04
-        };
         let pitch = if a.somersault > 0.0 {
             let p = (1.0 - a.somersault as f32 / 0.55).clamp(0.0, 1.0);
             p * std::f32::consts::TAU
         } else {
             0.0
         };
-        let height = if a.somersault > 0.0 {
+        let somersault_h = if a.somersault > 0.0 {
             let p = (1.0 - a.somersault as f32 / 0.55).clamp(0.0, 1.0);
             (p * std::f32::consts::PI).sin() * 3.2
         } else {
-            bounce
-        };
-        let roll = if a.driver == 10 && a.was_drifting && a.somersault <= 0.0 {
-            let slip = (a.heading - a.motion_heading)
-                .sin()
-                .atan2((a.heading - a.motion_heading).cos());
-            -(slip.signum() as f32) * 0.65
-        } else {
             0.0
         };
+
+        // Animated multi-part Blender Houston: Starship + rotating/waving sloth + 6 Raptor afterburners + RCS jets!
+        if a.driver == 7 {
+            alive_houston.insert(a.id);
+            let hover = if a.somersault > 0.0 {
+                somersault_h
+            } else {
+                (t * 5.0 + a.id as f32).sin() * 0.04
+            };
+            let tf = ported::placement(
+                Vec3::new(a.wx as f32, hover, a.wz as f32),
+                a.heading as f32,
+                pitch,
+                0.0,
+            );
+
+            // Faithful celebration turn & bounce (from client/renderer.js line 281-282)
+            let progress = (1.6 - a.celebrate as f32).max(0.0);
+            let envelope = if a.celebrate > 0.0 {
+                (progress / 0.25).min(a.celebrate as f32 / 0.4).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+            let turn = envelope * envelope * (3.0 - 2.0 * envelope);
+            let cel_bounce = turn * (progress * 15.0).sin() * 0.14;
+
+            let firing = a.boost > 0.0 || a.somersault > 0.0;
+            let nightmare = a.nightmare_active > 0.0;
+
+            if let Some((_, rig, mut ship_tf, mut ship_vis)) =
+                rigs.iter_mut().find(|(_, r, _, _)| r.id == a.id)
+            {
+                *ship_tf = tf;
+                *ship_vis = Visibility::Visible;
+                if let Ok((mut p_tf, _)) = parts.get_mut(rig.pilot) {
+                    p_tf.translation = Vec3::new(0.0, cel_bounce, 0.0);
+                    p_tf.rotation = Quat::from_rotation_y(turn * std::f32::consts::PI);
+                }
+                for &(arm_ent, side) in &[(rig.arm_l, -1.0f32), (rig.arm_r, 1.0f32)] {
+                    if let Ok((mut a_tf, _)) = parts.get_mut(arm_ent) {
+                        let wave = turn * (progress * 18.0 + side).sin() * 0.35;
+                        a_tf.translation = Vec3::new(side * 0.85, 2.25, 0.28);
+                        a_tf.rotation = Quat::from_euler(
+                            EulerRot::XYZ,
+                            -turn * 1.55 + wave,
+                            0.0,
+                            side * turn * 0.52,
+                        );
+                    }
+                }
+                for (idx, &(outer, inner, ex, ey, er)) in rig.flames.iter().enumerate() {
+                    let flicker = 1.0 + (t * 47.0 + idx as f32 * 1.7).sin() * 0.14;
+                    let (len_o, rad_o, len_i, rad_i) = if nightmare {
+                        (7.4 * flicker, er * 1.65, 5.2 * flicker, er * 1.05)
+                    } else if firing {
+                        (5.8 * flicker, er * 1.35, 3.9 * flicker, er * 0.82)
+                    } else {
+                        (0.95 * flicker, er * 0.72, 0.58 * flicker, er * 0.45)
+                    };
+                    if let Ok((mut otf, mut ovis)) = parts.get_mut(outer) {
+                        *ovis = Visibility::Visible;
+                        otf.translation = Vec3::new(ex, 1.45 + ey, -3.48 - len_o * 0.5);
+                        otf.scale = Vec3::new(rad_o, len_o, rad_o);
+                    }
+                    if let Ok((mut itf, mut ivis)) = parts.get_mut(inner) {
+                        *ivis = Visibility::Visible;
+                        itf.translation = Vec3::new(ex, 1.45 + ey, -3.48 - len_i * 0.5);
+                        itf.scale = Vec3::new(rad_i, len_i, rad_i);
+                    }
+                }
+                let rcs_z = if a.somersault > 0.275 { 2.05 } else { -2.35 };
+                for (i, &rcs_ent) in rig.rcs.iter().enumerate() {
+                    let side = if i == 0 { -1.0f32 } else { 1.0f32 };
+                    if let Ok((mut rtf, mut rvis)) = parts.get_mut(rcs_ent) {
+                        if a.somersault > 0.0 {
+                            let fl = 1.0 + (t * 40.0 + side).sin() * 0.2;
+                            *rvis = Visibility::Visible;
+                            rtf.translation = Vec3::new(side * (1.02 + 0.85 * fl), 1.62, rcs_z);
+                            rtf.scale = Vec3::new(0.24, 1.7 * fl, 0.24);
+                        } else {
+                            *rvis = Visibility::Hidden;
+                        }
+                    }
+                }
+            } else {
+                // Spawn full animated Houston rig!
+                let mut pilot_ent = Entity::PLACEHOLDER;
+                let mut arm_l_ent = Entity::PLACEHOLDER;
+                let mut arm_r_ent = Entity::PLACEHOLDER;
+                let mut flames = Vec::with_capacity(6);
+                let mut rcs_ents = [Entity::PLACEHOLDER; 2];
+
+                let ship_ent = commands
+                    .spawn((WorldAssetRoot(models.houston_ship.clone()), tf))
+                    .with_children(|ship| {
+                        pilot_ent = ship
+                            .spawn((
+                                WorldAssetRoot(models.houston_pilot.clone()),
+                                Transform::IDENTITY,
+                            ))
+                            .with_children(|pilot| {
+                                arm_l_ent = pilot
+                                    .spawn((
+                                        WorldAssetRoot(models.houston_arm_l.clone()),
+                                        Transform::from_xyz(-0.85, 2.25, 0.28),
+                                    ))
+                                    .id();
+                                arm_r_ent = pilot
+                                    .spawn((
+                                        WorldAssetRoot(models.houston_arm_r.clone()),
+                                        Transform::from_xyz(0.85, 2.25, 0.28),
+                                    ))
+                                    .id();
+                            })
+                            .id();
+
+                        let back_rot = Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2);
+                        for (ex, ey, er) in RAPTOR_ENGINES {
+                            let outer = ship
+                                .spawn((
+                                    Mesh3d(models.flame_mesh.clone()),
+                                    MeshMaterial3d(models.flame_outer_mat.clone()),
+                                    Transform {
+                                        translation: Vec3::new(ex, 1.45 + ey, -3.95),
+                                        rotation: back_rot,
+                                        scale: Vec3::new(er, 1.0, er),
+                                    },
+                                ))
+                                .id();
+                            let inner = ship
+                                .spawn((
+                                    Mesh3d(models.flame_mesh.clone()),
+                                    MeshMaterial3d(models.flame_inner_mat.clone()),
+                                    Transform {
+                                        translation: Vec3::new(ex, 1.45 + ey, -3.75),
+                                        rotation: back_rot,
+                                        scale: Vec3::new(er * 0.6, 0.6, er * 0.6),
+                                    },
+                                ))
+                                .id();
+                            flames.push((outer, inner, ex, ey, er));
+                        }
+                        for (i, side) in [-1.0f32, 1.0f32].into_iter().enumerate() {
+                            rcs_ents[i] = ship
+                                .spawn((
+                                    Mesh3d(models.flame_mesh.clone()),
+                                    MeshMaterial3d(models.rcs_mat.clone()),
+                                    Transform {
+                                        translation: Vec3::new(side * 1.5, 1.62, 2.05),
+                                        rotation: Quat::from_rotation_z(
+                                            -side * std::f32::consts::FRAC_PI_2,
+                                        ),
+                                        scale: Vec3::new(0.22, 1.5, 0.22),
+                                    },
+                                    Visibility::Hidden,
+                                ))
+                                .id();
+                        }
+                    })
+                    .id();
+
+                commands.entity(ship_ent).insert(HoustonRig {
+                    id: a.id,
+                    pilot: pilot_ent,
+                    arm_l: arm_l_ent,
+                    arm_r: arm_r_ent,
+                    flames,
+                    rcs: rcs_ents,
+                });
+            }
+            continue;
+        }
+
+        let Some(handle) = models.static_models.get(&a.driver) else {
+            continue;
+        };
+        alive_static.insert(a.id);
+        let bounce = if a.celebrate > 0.0 {
+            (t * 14.0).sin().abs() * 0.65
+        } else {
+            (t * 6.0 + a.id as f32).sin() * 0.04
+        };
+        let height = if a.somersault > 0.0 { somersault_h } else { bounce };
         let tf = ported::placement(
             Vec3::new(a.wx as f32, height, a.wz as f32),
             a.heading as f32,
             pitch,
-            roll,
+            0.0,
         );
         if let Some((_, _, mut cur_tf, mut vis)) =
             existing.iter_mut().find(|(_, r, _, _)| r.id == a.id && r.driver == a.driver)
@@ -215,7 +457,12 @@ fn sync_blender_models(
         }
     }
     for (_, r, _, mut vis) in &mut existing {
-        if !alive_ids.contains(&r.id) {
+        if !alive_static.contains(&r.id) {
+            *vis = Visibility::Hidden;
+        }
+    }
+    for (_, rig, _, mut vis) in &mut rigs {
+        if !alive_houston.contains(&rig.id) {
             *vis = Visibility::Hidden;
         }
     }
