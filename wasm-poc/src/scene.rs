@@ -562,7 +562,7 @@ fn racers(stage: &mut Stage, view: &ClientView, bats: &Bats, dt: f32, now: f32, 
             };
             stage.show(Role::Ghost, a.id, ghost, body);
         }
-        if a.driver != 15 || wrecked {
+        if !crate::has_blender_model(a.driver) || wrecked {
             stage.show(Role::Racer, a.id, play, body);
         }
         if wrecked {
