@@ -1,11 +1,13 @@
 //! Cinematic, physically-simulated 3D explosions for the Bevy WASM PoC:
 //! - Blinding core flash + dynamic orange-gold PointLight illuminating the arena & smoke
-//! - Expanding ground shockwave ring
-//! - Rolling buoyant multi-temperature fireball lobes
-//! - PBR-lit dark charcoal smoke column under-lit fiery orange by the blast PointLight
-//! - 28 spinning, ballistic, ground-bouncing 3D metal/charred splinters & hot shrapnel
-//! - 34 velocity-aligned ricocheting spark streaks
+//! - Expanding ground shockwave ring + baked Blender scorched blast-crater floor decal
+//! - Blender Mantaflow 6x6 volumetric fire+smoke flipbook billboards
+//! - Rolling buoyant multi-temperature fireball lobes + turbulent cauliflower smoke column
+//! - Blender sculpted 3D bent metal debris (.glb) + hot bouncing shrapnel & ricocheting sparks
+//! - Distance-attenuated camera shake trauma
 use crate::app::GameSession;
+use bevy::gltf::GltfAssetLabel;
+use bevy::math::Affine2;
 use bevy::prelude::*;
 use std::collections::HashSet;
 
@@ -13,20 +15,35 @@ pub struct ExplosionsPlugin;
 impl Plugin for ExplosionsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<SeenBlasts>()
+            .init_resource::<CameraShake>()
             .add_systems(Startup, setup_assets)
             .add_systems(Update, (detect_explosions, tick_explosions).chain());
     }
+}
+
+/// Shared trauma-based camera shake driven by nearby explosions.
+#[derive(Resource, Default)]
+pub struct CameraShake {
+    pub trauma: f32,
+    pub time: f32,
 }
 
 #[derive(Resource)]
 struct ExplosionAssets {
     sphere: Handle<Mesh>,
     cloud_mesh: Handle<Mesh>,
+    quad_mesh: Handle<Mesh>,
+    decal_mesh: Handle<Mesh>,
     splinter_long: Handle<Mesh>,
     splinter_shard: Handle<Mesh>,
     splinter_chunk: Handle<Mesh>,
     spark_mesh: Handle<Mesh>,
     ring_mesh: Handle<Mesh>,
+    flipbook_tex: Handle<Image>,
+    scorch_tex: Handle<Image>,
+    debris_plate: Handle<WorldAsset>,
+    debris_girder: Handle<WorldAsset>,
+    debris_shard: Handle<WorldAsset>,
     flash_mat: Handle<StandardMaterial>,
     fire_hot_mat: Handle<StandardMaterial>,
     fire_mid_mat: Handle<StandardMaterial>,
@@ -115,6 +132,25 @@ struct SparkStreak {
     base_len: f32,
 }
 
+#[derive(Component)]
+struct FlipbookBurst {
+    age: f32,
+    delay: f32,
+    life: f32,
+    start_scale: f32,
+    end_scale: f32,
+    rise_speed: f32,
+    mat: Handle<StandardMaterial>,
+}
+
+#[derive(Component)]
+struct ScorchDecal {
+    age: f32,
+    hold: f32,
+    fade: f32,
+    mat: Handle<StandardMaterial>,
+}
+
 fn next_rand(seed: &mut u64) -> f32 {
     *seed = seed
         .wrapping_mul(6364136223846793005)
@@ -143,16 +179,24 @@ fn build_cloud_mesh() -> Mesh {
 
 fn setup_assets(
     mut commands: Commands,
+    asset_server: Res<AssetServer>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     let sphere = meshes.add(Sphere::new(1.0).mesh().uv(12, 8));
     let cloud_mesh = meshes.add(build_cloud_mesh());
+    let quad_mesh = meshes.add(Rectangle::new(1.0, 1.0));
+    let decal_mesh = meshes.add(Plane3d::default().mesh().size(1.0, 1.0));
     let splinter_long = meshes.add(Cuboid::new(0.14, 0.08, 1.0));
     let splinter_shard = meshes.add(Cuboid::new(0.42, 0.07, 0.68));
     let splinter_chunk = meshes.add(Cuboid::new(0.32, 0.24, 0.44));
     let spark_mesh = meshes.add(Cuboid::new(0.065, 0.065, 1.0));
     let ring_mesh = meshes.add(Torus::new(0.88, 1.0));
+    let flipbook_tex = asset_server.load("textures/explosion_flipbook.png");
+    let scorch_tex = asset_server.load("textures/scorch_decal.png");
+    let debris_plate = asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/debris_plate.glb"));
+    let debris_girder = asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/debris_girder.glb"));
+    let debris_shard = asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/debris_shard.glb"));
 
     let flash_mat = materials.add(StandardMaterial {
         base_color: Color::srgba(1.0, 0.96, 0.78, 0.95),
@@ -228,11 +272,18 @@ fn setup_assets(
     commands.insert_resource(ExplosionAssets {
         sphere,
         cloud_mesh,
+        quad_mesh,
+        decal_mesh,
         splinter_long,
         splinter_shard,
         splinter_chunk,
         spark_mesh,
         ring_mesh,
+        flipbook_tex,
+        scorch_tex,
+        debris_plate,
+        debris_girder,
+        debris_shard,
         flash_mat,
         fire_hot_mat,
         fire_mid_mat,
@@ -252,6 +303,7 @@ fn detect_explosions(
     assets: Option<Res<ExplosionAssets>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut seen: ResMut<SeenBlasts>,
+    mut shake: ResMut<CameraShake>,
 ) {
     let Some(assets) = assets else { return };
     let Some(client) = session.client.as_ref() else {
@@ -259,6 +311,7 @@ fn detect_explosions(
         return;
     };
     let view = client.view();
+    let player_pos = Vec3::new(view.player.wx as f32, 0.0, view.player.wz as f32);
     let mut current = HashSet::new();
     for fx in view.effects {
         if fx.kind != "explosion" && fx.kind != "abomb" {
@@ -268,12 +321,16 @@ fn detect_explosions(
         current.insert(key);
         if fx.age < 0.25 && !seen.active.contains(&key) {
             let scale = if fx.kind == "abomb" { 1.85 } else { 1.0 };
+            let origin = Vec3::new(fx.wx as f32, 0.9, fx.wz as f32);
+            let dist = origin.distance(player_pos);
+            let prox = (1.0 - dist / 75.0).clamp(0.0, 1.0);
+            shake.trauma = (shake.trauma + prox * 0.68 * scale).min(1.0);
             spawn_blast(
                 &mut commands,
                 &assets,
                 &mut materials,
                 &mut seen.seed,
-                Vec3::new(fx.wx as f32, 0.9, fx.wz as f32),
+                origin,
                 scale,
             );
         }
@@ -330,6 +387,70 @@ fn spawn_blast(
             max_radius: 13.5 * scale,
         },
     ));
+
+    // 3b. Blender-baked scorched blast-crater decal on the arena floor
+    let decal_mat = materials.add(StandardMaterial {
+        base_color: Color::srgba(1.0, 1.0, 1.0, 0.90),
+        base_color_texture: Some(assets.scorch_tex.clone()),
+        perceptual_roughness: 0.98,
+        metallic: 0.0,
+        alpha_mode: AlphaMode::Blend,
+        ..default()
+    });
+    let decal_size = (8.8 + next_rand(seed) * 2.4) * scale;
+    let y_jitter = 0.04 + next_rand(seed) * 0.025;
+    commands.spawn((
+        Mesh3d(assets.decal_mesh.clone()),
+        MeshMaterial3d(decal_mat.clone()),
+        Transform::from_translation(Vec3::new(origin.x, y_jitter, origin.z))
+            .with_rotation(Quat::from_rotation_y(next_rand(seed) * std::f32::consts::TAU))
+            .with_scale(Vec3::new(decal_size, 1.0, decal_size)),
+        ScorchDecal {
+            age: 0.0,
+            hold: 7.5 * scale.sqrt(),
+            fade: 4.0,
+            mat: decal_mat,
+        },
+    ));
+
+    // 3c. Blender Mantaflow 6x6 volumetric fire+smoke flipbook billboards (4 staggered plumes)
+    for k in 0..4 {
+        let is_hero = k == 0;
+        let a = (k as f32) * 2.09 + next_rand(seed) * 0.9;
+        let rad = if is_hero { 0.0 } else { (1.2 + next_rand(seed) * 1.4) * scale };
+        let start_s = (if is_hero { 6.2 } else { 4.2 + next_rand(seed) * 1.4 }) * scale;
+        let end_s = (if is_hero { 14.5 } else { 10.0 + next_rand(seed) * 2.8 }) * scale;
+        let fb_mat = materials.add(StandardMaterial {
+            base_color: Color::srgba(1.0, 1.0, 1.0, if is_hero { 0.96 } else { 0.80 }),
+            base_color_texture: Some(assets.flipbook_tex.clone()),
+            unlit: true,
+            alpha_mode: AlphaMode::Blend,
+            cull_mode: None,
+            uv_transform: Affine2::from_scale_angle_translation(
+                Vec2::splat(1.0 / 6.0),
+                0.0,
+                Vec2::ZERO,
+            ),
+            ..default()
+        });
+        commands.spawn((
+            Mesh3d(assets.quad_mesh.clone()),
+            MeshMaterial3d(fb_mat.clone()),
+            Transform::from_translation(
+                origin + Vec3::new(a.cos() * rad, if is_hero { 2.2 } else { 1.4 } * scale, a.sin() * rad),
+            )
+            .with_scale(Vec3::splat(0.01)),
+            FlipbookBurst {
+                age: 0.0,
+                delay: if is_hero { 0.0 } else { 0.06 + next_rand(seed) * 0.16 },
+                life: (1.55 + next_rand(seed) * 0.55) * scale.sqrt(),
+                start_scale: start_s,
+                end_scale: end_s,
+                rise_speed: (1.8 + next_rand(seed) * 1.4) * scale,
+                mat: fb_mat,
+            },
+        ));
+    }
 
     // 4. Rolling, buoyant multi-temperature fireball lobes (18 lobes)
     let fire_count = (18.0 * scale.sqrt()) as usize;
@@ -459,8 +580,51 @@ fn spawn_blast(
         ));
     }
 
-    // 6. 28 Physics-simulated spinning, bouncing 3D splinters & red-hot shrapnel chunks!
-    let splinter_count = (28.0 * scale.sqrt()) as usize;
+    // 6a. 10 Blender-sculpted 3D bent metal wreckage chunks (.glb) with real bounce physics!
+    let glb_debris_count = (10.0 * scale.sqrt()) as usize;
+    for i in 0..glb_debris_count {
+        let a = next_rand(seed) * std::f32::consts::TAU;
+        let spd_h = (8.0 + next_rand(seed) * 20.0) * scale;
+        let spd_y = (10.0 + next_rand(seed) * 17.0) * scale;
+        let vel = Vec3::new(a.cos() * spd_h, spd_y, a.sin() * spd_h);
+        let scene = match i % 3 {
+            0 => assets.debris_plate.clone(),
+            1 => assets.debris_girder.clone(),
+            _ => assets.debris_shard.clone(),
+        };
+        let s = (0.75 + next_rand(seed) * 0.75) * scale.sqrt();
+        let base_scale = Vec3::splat(s);
+        commands.spawn((
+            WorldAssetRoot(scene),
+            Transform {
+                translation: origin + Vec3::new(a.cos() * 0.7, 0.5 + next_rand(seed) * 0.9, a.sin() * 0.7),
+                rotation: Quat::from_euler(
+                    EulerRot::XYZ,
+                    next_rand(seed) * 6.28,
+                    next_rand(seed) * 6.28,
+                    next_rand(seed) * 6.28,
+                ),
+                scale: base_scale,
+            },
+            Splinter {
+                vel,
+                rot_vel: Vec3::new(
+                    (next_rand(seed) - 0.5) * 18.0,
+                    (next_rand(seed) - 0.5) * 18.0,
+                    (next_rand(seed) - 0.5) * 18.0,
+                ),
+                age: 0.0,
+                life: 2.2 + next_rand(seed) * 1.4,
+                base_scale,
+                bounces: 0,
+                hot: i % 3 == 2,
+                trail_timer: 0.0,
+            },
+        ));
+    }
+
+    // 6b. 18 Physics-simulated spinning, bouncing 3D splinters & red-hot shrapnel chunks!
+    let splinter_count = (18.0 * scale.sqrt()) as usize;
     for i in 0..splinter_count {
         let a = next_rand(seed) * std::f32::consts::TAU;
         let spd_h = (9.0 + next_rand(seed) * 24.0) * scale;
@@ -548,34 +712,111 @@ fn tick_explosions(
     time: Res<Time>,
     assets: Option<Res<ExplosionAssets>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut shake: ResMut<CameraShake>,
+    cameras: Query<&GlobalTransform, With<Camera3d>>,
     mut lights: Query<(Entity, &mut PointLight, &mut BlastLight)>,
     mut flashes: Query<
         (Entity, &mut Transform, &mut BlastFlash),
-        (Without<BlastRing>, Without<FireLobe>, Without<SmokePuff>, Without<Splinter>, Without<SparkStreak>),
+        (
+            Without<BlastRing>,
+            Without<FireLobe>,
+            Without<SmokePuff>,
+            Without<Splinter>,
+            Without<SparkStreak>,
+            Without<FlipbookBurst>,
+            Without<ScorchDecal>,
+        ),
     >,
     mut rings: Query<
         (Entity, &mut Transform, &mut BlastRing),
-        (Without<BlastFlash>, Without<FireLobe>, Without<SmokePuff>, Without<Splinter>, Without<SparkStreak>),
+        (
+            Without<BlastFlash>,
+            Without<FireLobe>,
+            Without<SmokePuff>,
+            Without<Splinter>,
+            Without<SparkStreak>,
+            Without<FlipbookBurst>,
+            Without<ScorchDecal>,
+        ),
     >,
     mut fires: Query<
         (Entity, &mut Transform, &mut FireLobe),
-        (Without<BlastFlash>, Without<BlastRing>, Without<SmokePuff>, Without<Splinter>, Without<SparkStreak>),
+        (
+            Without<BlastFlash>,
+            Without<BlastRing>,
+            Without<SmokePuff>,
+            Without<Splinter>,
+            Without<SparkStreak>,
+            Without<FlipbookBurst>,
+            Without<ScorchDecal>,
+        ),
     >,
     mut smokes: Query<
         (Entity, &mut Transform, &mut SmokePuff),
-        (Without<BlastFlash>, Without<BlastRing>, Without<FireLobe>, Without<Splinter>, Without<SparkStreak>),
+        (
+            Without<BlastFlash>,
+            Without<BlastRing>,
+            Without<FireLobe>,
+            Without<Splinter>,
+            Without<SparkStreak>,
+            Without<FlipbookBurst>,
+            Without<ScorchDecal>,
+        ),
     >,
     mut splinters: Query<
         (Entity, &mut Transform, &mut Splinter),
-        (Without<BlastFlash>, Without<BlastRing>, Without<FireLobe>, Without<SmokePuff>, Without<SparkStreak>),
+        (
+            Without<BlastFlash>,
+            Without<BlastRing>,
+            Without<FireLobe>,
+            Without<SmokePuff>,
+            Without<SparkStreak>,
+            Without<FlipbookBurst>,
+            Without<ScorchDecal>,
+        ),
     >,
     mut sparks: Query<
         (Entity, &mut Transform, &mut SparkStreak),
-        (Without<BlastFlash>, Without<BlastRing>, Without<FireLobe>, Without<SmokePuff>, Without<Splinter>),
+        (
+            Without<BlastFlash>,
+            Without<BlastRing>,
+            Without<FireLobe>,
+            Without<SmokePuff>,
+            Without<Splinter>,
+            Without<FlipbookBurst>,
+            Without<ScorchDecal>,
+        ),
+    >,
+    mut flipbooks: Query<
+        (Entity, &mut Transform, &mut FlipbookBurst),
+        (
+            Without<BlastFlash>,
+            Without<BlastRing>,
+            Without<FireLobe>,
+            Without<SmokePuff>,
+            Without<Splinter>,
+            Without<SparkStreak>,
+            Without<ScorchDecal>,
+        ),
+    >,
+    mut decals: Query<
+        (Entity, &mut ScorchDecal),
+        (
+            Without<BlastFlash>,
+            Without<BlastRing>,
+            Without<FireLobe>,
+            Without<SmokePuff>,
+            Without<Splinter>,
+            Without<SparkStreak>,
+            Without<FlipbookBurst>,
+        ),
     >,
 ) {
     let dt = time.delta_secs().min(0.05);
     let t = time.elapsed_secs();
+    shake.time = t;
+    shake.trauma = (shake.trauma - dt * 1.9).max(0.0);
+    let cam_pos = cameras.iter().next().map_or(Vec3::new(0.0, 15.0, 20.0), |g| g.translation());
 
     for (ent, mut light, mut b) in &mut lights {
         b.age += dt;
@@ -781,5 +1022,59 @@ fn tick_explosions(
         let fade = (1.0 - u).powf(1.3);
         let len = (sk.base_len * (0.4 + sk.vel.length() * 0.03) * fade).max(0.02);
         tf.scale = Vec3::new((fade).max(0.02), (fade).max(0.02), len);
+    }
+
+    // Blender Mantaflow 6x6 volumetric flipbook billboard playback
+    for (ent, mut tf, mut fb) in &mut flipbooks {
+        if fb.delay > 0.0 {
+            fb.delay -= dt;
+            continue;
+        }
+        fb.age += dt;
+        if fb.age >= fb.life {
+            materials.remove(&fb.mat);
+            commands.entity(ent).despawn();
+            continue;
+        }
+        let u = (fb.age / fb.life).clamp(0.0, 1.0);
+        tf.translation.y += fb.rise_speed * (1.0 - u * 0.65) * dt;
+        // Billboard cleanly toward the main 3D camera
+        tf.look_at(cam_pos, Vec3::Y);
+        let s = fb.start_scale + (fb.end_scale - fb.start_scale) * u.powf(0.55);
+        tf.scale = Vec3::splat(s);
+        let frame = (u * 35.99).clamp(0.0, 35.0) as u32;
+        let col = (frame % 6) as f32;
+        let row = (frame / 6) as f32;
+        if let Some(mut m) = materials.get_mut(&fb.mat) {
+            m.uv_transform = Affine2::from_scale_angle_translation(
+                Vec2::splat(1.0 / 6.0),
+                0.0,
+                Vec2::new(col / 6.0, row / 6.0),
+            );
+            let alpha = if u < 0.06 {
+                u / 0.06
+            } else if u > 0.78 {
+                (1.0 - u) / 0.22
+            } else {
+                1.0
+            };
+            m.base_color = Color::srgba(1.0, 1.0, 1.0, alpha.clamp(0.0, 1.0) * 0.92);
+        }
+    }
+
+    // Scorched ground crater decals: hold dark, then slowly fade away
+    for (ent, mut d) in &mut decals {
+        d.age += dt;
+        if d.age >= d.hold + d.fade {
+            materials.remove(&d.mat);
+            commands.entity(ent).despawn();
+            continue;
+        }
+        if d.age > d.hold
+            && let Some(mut m) = materials.get_mut(&d.mat)
+        {
+            let a = (1.0 - (d.age - d.hold) / d.fade).clamp(0.0, 1.0) * 0.90;
+            m.base_color = Color::srgba(1.0, 1.0, 1.0, a);
+        }
     }
 }

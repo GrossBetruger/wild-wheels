@@ -837,6 +837,7 @@ pub fn sync(
     session: Res<GameSession>,
     assets: SceneAssets,
     mut cache: ResMut<SceneCache>,
+    shake: Option<Res<crate::explosions::CameraShake>>,
     mut players: Query<&mut Ported>,
     mut cameras: Query<(&mut Transform, &mut Projection), With<FollowCamera>>,
     mut darkness: Darkness,
@@ -1062,9 +1063,27 @@ pub fn sync(
             true => 15.0,
             false => 10.0,
         };
+    let shake_offset = if let Some(ref s) = shake
+        && s.trauma > 0.001
+    {
+        let amp = s.trauma * s.trauma * 1.15;
+        let t = s.time;
+        Vec3::new(
+            (t * 47.0).sin() * amp,
+            (t * 53.0 + 1.3).cos() * amp * 0.75,
+            (t * 41.0 + 2.7).sin() * amp,
+        )
+    } else {
+        Vec3::ZERO
+    };
     for (mut camera, mut projection) in &mut cameras {
-        *camera = Transform::from_translation(center - facing * distance + Vec3::Y * height)
-            .looking_at(center + facing * ahead + Vec3::Y * 1.5, Vec3::Y);
+        *camera = Transform::from_translation(
+            center - facing * distance + Vec3::Y * height + shake_offset,
+        )
+        .looking_at(
+            center + facing * ahead + Vec3::Y * 1.5 + shake_offset * 0.45,
+            Vec3::Y,
+        );
         if let Projection::Perspective(perspective) = &mut *projection {
             perspective.fov = match (p.boost > 0.0, p.was_drifting) {
                 (true, _) => 1.2,
