@@ -1,12 +1,14 @@
 """
-Build faithful, smooth-shaded PBR glTF (.glb) parts for Houston the RTPL (#7):
-  - houston_ship.glb   : SpaceX Starship hull, heat tiles, swept flaps, 6 Raptor bells
-  - houston_pilot.glb  : Houston the Sloth Astronaut (torso, twin O2 tanks, helmet, face)
+Build a realistic, smooth-shaded PBR SpaceX Starship (Block 2) + Houston the RTPL (#7):
+  - houston_ship.glb   : Mirror-polished 304L stainless-steel Starship hull, welded ring seams,
+                         leeward avionics raceway, Mechazilla catch pins, TPS heat-shield belly,
+                         swept forward & aft flaps with aero hinge fairings, port/starboard nav
+                         beacons, recessed aft thrust bay, and 3 RVac + 3 SL Raptor engine bells
+                         with regenerative cooling manifolds.
+  - houston_pilot.glb  : Houston the Sloth Astronaut (torso, twin O2 tanks, glossy helmet, face)
   - houston_arm_l.glb  : Left spacesuit arm + 3-clawed glove (origin at shoulder)
   - houston_arm_r.glb  : Right spacesuit arm + 3-clawed glove (origin at shoulder)
 
-Split into parts so Bevy animates celebration turn/bounce, waving arms, and
-roaring 6-bell Raptor boost afterburners faithfully!
     blender --background --python build_houston.py -- wasm-poc/assets
 """
 import math
@@ -107,7 +109,7 @@ def cone(x, y, z, r1, r2, depth, m, verts=24, rot=(0, 0, 0)):
 
 def torus(x, y, z, major_r, minor_r, m, rot=(0, 0, 0)):
     bpy.ops.mesh.primitive_torus_add(
-        major_segments=32, minor_segments=14,
+        major_segments=36, minor_segments=14,
         major_radius=major_r, minor_radius=minor_r,
         location=loc(x, y, z),
     )
@@ -163,33 +165,38 @@ def add_flap(top_pts, thickness, m_top, m_bot, m_edge):
 
 
 # =============================================================================
-# PART 1: SPACEX STARSHIP HULL (houston_ship.glb)
+# PART 1: REALISTIC BLOCK 2 SPACEX STARSHIP (houston_ship.glb)
 # =============================================================================
 def build_ship():
     reset_scene()
-    m_steel = mat("steel", "#dde6ea", roughness=0.14, metallic=0.94)
-    m_steel_b = mat("steel_panel", "#c3d0d6", roughness=0.18, metallic=0.90)
-    m_seam = mat("steel_seam", "#8395a0", roughness=0.28, metallic=0.84)
-    m_tile_a = mat("heat_tile_a", "#262f39", roughness=0.78, metallic=0.08)
-    m_tile_b = mat("heat_tile_b", "#313c47", roughness=0.75, metallic=0.08)
-    m_accent = mat("houston_blue", "#69a9c7", roughness=0.22, metallic=0.30)
-    m_rim = mat("cockpit_rim", "#566d7b", roughness=0.32, metallic=0.65)
-    m_dark = mat("dark_interior", "#1f2a36", roughness=0.65)
-    m_nozzle = mat("raptor_nozzle", "#6c7e8a", roughness=0.26, metallic=0.88)
-    m_glow = mat("raptor_glow", "#5ce1ff", roughness=0.10, emission=3.5, emission_color="#48d2ff")
-    m_xmark = mat("spacex_x", "#223242", roughness=0.35, metallic=0.45)
+    m_steel = mat("steel_304l", "#e4edf2", roughness=0.09, metallic=0.97)
+    m_steel_b = mat("steel_panel", "#c8d5dc", roughness=0.14, metallic=0.94)
+    m_frost = mat("cryo_frost", "#eef7fc", roughness=0.38, metallic=0.25)
+    m_seam = mat("weld_seam", "#7d909c", roughness=0.26, metallic=0.88)
+    m_tile_a = mat("tps_tile_a", "#1e242c", roughness=0.76, metallic=0.10)
+    m_tile_b = mat("tps_tile_b", "#29323d", roughness=0.72, metallic=0.10)
+    m_accent = mat("houston_blue", "#69a9c7", roughness=0.20, metallic=0.35)
+    m_rim = mat("cockpit_rim", "#526978", roughness=0.28, metallic=0.72)
+    m_dark = mat("thrust_bay", "#151c24", roughness=0.68, metallic=0.25)
+    m_nozzle = mat("raptor_bell", "#5e707d", roughness=0.22, metallic=0.92)
+    m_manifold = mat("raptor_manifold", "#9aaab5", roughness=0.18, metallic=0.95)
+    m_glow = mat("raptor_core", "#70e8ff", roughness=0.08, emission=4.5, emission_color="#5ce0ff")
+    m_xmark = mat("spacex_x", "#1d2a38", roughness=0.30, metallic=0.55)
+    m_nav_red = mat("nav_port", "#ff3b30", roughness=0.15, emission=3.2, emission_color="#ff3b30")
+    m_nav_grn = mat("nav_stbd", "#34e87a", roughness=0.15, emission=3.2, emission_color="#34e87a")
 
+    # Authentic tangent-ogive SpaceX Starship silhouette
     rings = [
-        (-3.05, 1.02), (-2.50, 1.02), (-1.90, 1.02), (-1.30, 1.02),
-        (-0.70, 1.02), (-0.10, 1.02), (0.50, 1.02),  (1.10, 1.02),
-        (1.60, 0.98),  (2.10, 0.85),  (2.60, 0.66),  (3.10, 0.40),
-        (3.60, 0.04),
+        (-3.15, 1.03), (-2.65, 1.03), (-2.10, 1.03), (-1.55, 1.03),
+        (-1.00, 1.03), (-0.45, 1.03), (0.10, 1.03),  (0.65, 1.03),
+        (1.18, 1.02),  (1.65, 0.97),  (2.12, 0.86),  (2.58, 0.69),
+        (3.02, 0.47),  (3.42, 0.23),  (3.72, 0.05),
     ]
-    sides = 36
+    sides = 44
     hull_mesh = bpy.data.meshes.new("StarshipHull")
     hull_obj = bpy.data.objects.new("StarshipHull", hull_mesh)
     bpy.context.collection.objects.link(hull_obj)
-    for m in (m_steel, m_steel_b, m_tile_a, m_tile_b, m_dark):
+    for m in (m_steel, m_steel_b, m_tile_a, m_tile_b, m_dark, m_frost):
         hull_obj.data.materials.append(m)
 
     bm = bmesh.new()
@@ -206,51 +213,94 @@ def build_ship():
             sn = (s + 1) % sides
             a_mid = (s + 0.5) * 2.0 * math.pi / sides
             f = bm.faces.new([ring_verts[ri][s], ring_verts[ri + 1][s], ring_verts[ri + 1][sn], ring_verts[ri][sn]])
-            if math.sin(a_mid) < -0.15:
+            if math.sin(a_mid) < -0.10:
+                # Hex-checker TPS ceramic heat-shield belly
                 f.material_index = 2 if (ri + s) % 2 == 0 else 3
+            elif ri in (2, 3) and math.sin(a_mid) > 0.25:
+                # Subtle cryogenic LOX tank frost band on the leeward barrel
+                f.material_index = 5
             else:
-                f.material_index = 0 if s % 3 != 1 else 1
+                f.material_index = 0 if (ri + s) % 4 != 1 else 1
 
-    aft_center = bm.verts.new(loc(0, 1.45, -3.06))
-    nose_center = bm.verts.new(loc(0, 1.45, 3.62))
+    # Recessed dark aft thrust dome (realistic hollow Starship skirt!)
+    aft_ring_in = [
+        bm.verts.new(loc(math.cos(s * 2.0 * math.pi / sides) * 0.94, 1.45 + math.sin(s * 2.0 * math.pi / sides) * 0.94, -3.15))
+        for s in range(sides)
+    ]
+    aft_ring_deep = [
+        bm.verts.new(loc(math.cos(s * 2.0 * math.pi / sides) * 0.92, 1.45 + math.sin(s * 2.0 * math.pi / sides) * 0.92, -2.85))
+        for s in range(sides)
+    ]
+    aft_center = bm.verts.new(loc(0, 1.45, -2.82))
+    nose_center = bm.verts.new(loc(0, 1.45, 3.76))
     for s in range(sides):
         sn = (s + 1) % sides
-        fa = bm.faces.new([aft_center, ring_verts[0][sn], ring_verts[0][s]])
-        fa.material_index = 4
-        fn = bm.faces.new([nose_center, ring_verts[-1][s], ring_verts[-1][sn]])
-        fn.material_index = 0
+        f_lip = bm.faces.new([ring_verts[0][s], ring_verts[0][sn], aft_ring_in[sn], aft_ring_in[s]])
+        f_lip.material_index = 1
+        f_wall = bm.faces.new([aft_ring_in[s], aft_ring_in[sn], aft_ring_deep[sn], aft_ring_deep[s]])
+        f_wall.material_index = 4
+        f_cap = bm.faces.new([aft_center, aft_ring_deep[sn], aft_ring_deep[s]])
+        f_cap.material_index = 4
+        f_nose = bm.faces.new([nose_center, ring_verts[-1][s], ring_verts[-1][sn]])
+        f_nose.material_index = 0
 
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
     bm.to_mesh(hull_mesh)
     bm.free()
     smooth(hull_obj)
 
-    for z, r in rings[1:8]:
-        torus(0, 1.45, z, r + 0.006, 0.015, m_seam, rot=(math.pi / 2, 0, 0))
+    # Crisp welded stainless-steel ring seams along the barrel
+    for z, r in rings[1:9]:
+        torus(0, 1.45, z, r + 0.005, 0.013, m_seam, rot=(math.pi / 2, 0, 0))
 
+    # Leeward avionics/propellant raceway spine running along the upper hull
+    box(0, 2.46, -1.78, 0.22, 0.09, 2.45, m_steel_b, bevel=0.025)
+    # Mechazilla catch pins (forward lifting lugs on both sides of the Starship!)
     for side in (-1.0, 1.0):
-        fwd = [(side * 0.89, 1.42, 1.80), (side * 1.85, 1.47, 1.15), (side * 1.65, 1.52, 2.30), (side * 0.77, 1.52, 2.65)]
-        aft = [(side * 0.91, 1.42, -2.90), (side * 2.50, 1.14, -3.15), (side * 2.35, 1.28, -1.72), (side * 0.98, 1.52, -1.05)]
-        add_flap(fwd, 0.12, m_steel_b, m_tile_a, m_accent)
+        cyl(side * 1.12, 1.72, 1.08, 0.075, 0.28, m_manifold, verts=16, rot=(0, math.pi / 2, 0), bevel=0.015)
+        sphere(side * 1.26, 1.72, 1.08, 0.085, 0.095, 0.095, m_steel, segs=14, rings=10)
+
+    # Sleek Block 2 forward & aft Starship flaps with aero hinge fairings + nav strobes!
+    for side in (-1.0, 1.0):
+        fwd = [(side * 0.87, 1.46, 1.82), (side * 1.78, 1.52, 1.24), (side * 1.58, 1.56, 2.34), (side * 0.72, 1.55, 2.74)]
+        aft = [(side * 0.92, 1.42, -3.02), (side * 2.58, 1.12, -3.22), (side * 2.38, 1.28, -1.74), (side * 0.99, 1.54, -1.04)]
+        add_flap(fwd, 0.11, m_steel_b, m_tile_a, m_accent)
         add_flap(aft, 0.13, m_steel_b, m_tile_a, m_accent)
+        # Cylindrical aerodynamic hinge covers along flap roots
+        cyl(side * 0.94, 1.50, 2.20, 0.10, 0.96, m_steel, verts=18, rot=(math.pi / 2 - 0.12, 0, 0), bevel=0.02)
+        cyl(side * 1.01, 1.46, -2.02, 0.14, 1.98, m_steel, verts=20, rot=(math.pi / 2, 0, 0), bevel=0.03)
+        # Port (red) / Starboard (green) navigation strobes on aft flap tips!
+        nav_m = m_nav_red if side < 0 else m_nav_grn
+        sphere(side * 2.48, 1.22, -2.48, 0.075, 0.075, 0.12, nav_m, segs=12, rings=8)
+        # RCS cold-gas thruster pods
         for rz in (-2.35, 2.05):
-            sphere(side * 0.96, 1.62, rz, 0.09, 0.12, 0.16, m_dark, segs=14, rings=10)
+            sphere(side * 0.98, 1.64, rz, 0.09, 0.12, 0.18, m_dark, segs=14, rings=10)
 
-    torus(0, 2.40, -0.12, 0.80, 0.09, m_rim)
-    cyl(0, 2.36, -0.12, 0.72, 0.12, m_dark, verts=28, bevel=0.02)
-    box(0, 2.49, 0.63, 0.86, 0.09, 0.09, m_accent, bevel=0.02)
-    box(0, 2.47, 1.35, 0.11, 0.04, 0.78, m_xmark, bevel=0.01, rot=(0.06, 0, 0.54))
-    box(0, 2.47, 1.35, 0.11, 0.04, 0.78, m_xmark, bevel=0.01, rot=(0.06, 0, -0.54))
+    # Open cockpit collar + SpaceX X deck emblem
+    torus(0, 2.42, -0.12, 0.80, 0.09, m_rim)
+    cyl(0, 2.37, -0.12, 0.72, 0.12, m_dark, verts=32, bevel=0.02)
+    box(0, 2.50, 0.63, 0.86, 0.09, 0.09, m_accent, bevel=0.02)
+    box(0, 2.48, 1.38, 0.11, 0.04, 0.82, m_xmark, bevel=0.01, rot=(0.06, 0, 0.54))
+    box(0, 2.48, 1.38, 0.11, 0.04, 0.82, m_xmark, bevel=0.01, rot=(0.06, 0, -0.54))
 
-    for ex, ey, er in [(0.0, 0.64, 0.28), (-0.55, -0.32, 0.28), (0.55, -0.32, 0.28), (0.0, -0.27, 0.16), (-0.23, 0.14, 0.16), (0.23, 0.14, 0.16)]:
-        cone(ex, 1.45 + ey, -3.30, er, er * 0.56, 0.48, m_nozzle, verts=24, rot=(-math.pi / 2, 0, 0))
-        sphere(ex, 1.45 + ey, -3.50, er * 0.76, er * 0.76, 0.12, m_glow, segs=16, rings=10)
+    # 3 RVac (outer large) + 3 Sea-Level Raptor 3 (inner) engine bells with cooling manifolds!
+    for ex, ey, er in [
+        (0.0, 0.64, 0.28), (-0.55, -0.32, 0.28), (0.55, -0.32, 0.28),
+        (0.0, -0.27, 0.16), (-0.23, 0.14, 0.16), (0.23, 0.14, 0.16),
+    ]:
+        # Regenerative-cooled nozzle bell flaring backward (-Z -> rot=-pi/2)
+        cone(ex, 1.45 + ey, -3.26, er, er * 0.50, 0.58, m_nozzle, verts=28, rot=(-math.pi / 2, 0, 0))
+        # Metallic manifold stiffening bands around each Raptor bell
+        torus(ex, 1.45 + ey, -3.14, er * 0.76, 0.024, m_manifold, rot=(math.pi / 2, 0, 0))
+        torus(ex, 1.45 + ey, -3.38, er * 0.94, 0.022, m_manifold, rot=(math.pi / 2, 0, 0))
+        # Glowing cyan-white combustion throat inside each bell
+        sphere(ex, 1.45 + ey, -3.48, er * 0.78, er * 0.78, 0.12, m_glow, segs=16, rings=10)
 
     export_part("houston_ship.glb", "HoustonShip")
 
 
 # =============================================================================
-# PART 2: HOUSTON THE SLOTH ASTRONAUT (houston_pilot.glb — turns on celebrate!)
+# PART 2: HOUSTON THE SLOTH ASTRONAUT (houston_pilot.glb)
 # =============================================================================
 def build_pilot():
     reset_scene()
@@ -260,8 +310,8 @@ def build_pilot():
     m_pack = mat("backpack", "#ced9dc", roughness=0.28, metallic=0.35)
     m_helmet = mat("helmet_shell", "#f5f6ee", roughness=0.14, metallic=0.08)
     m_visor = mat("visor_blue", "#69a9c7", roughness=0.08, metallic=0.65)
-    m_orange = mat("antenna_orange", "#eb9c4c", roughness=0.25, emission=0.8, emission_color="#ffaa52")
-    m_led = mat("status_led", "#d7ef8d", roughness=0.15, emission=2.2, emission_color="#d7ef8d")
+    m_orange = mat("antenna_orange", "#eb9c4c", roughness=0.25, emission=0.9, emission_color="#ffaa52")
+    m_led = mat("status_led", "#d7ef8d", roughness=0.15, emission=2.4, emission_color="#d7ef8d")
     m_sloth = mat("sloth_fur", "#a99074", roughness=0.82)
     m_face = mat("sloth_face", "#e6d4b6", roughness=0.78)
     m_mask = mat("sloth_mask", "#5c493c", roughness=0.78)
@@ -303,7 +353,7 @@ def build_pilot():
 
 
 # =============================================================================
-# PART 3: SPACESUIT ARM + 3-CLAWED GLOVE (pivoted at shoulder origin!)
+# PART 3: SPACESUIT ARM + 3-CLAWED GLOVE
 # =============================================================================
 def build_arm(side, filename, name):
     reset_scene()
@@ -312,7 +362,6 @@ def build_arm(side, filename, name):
     m_claw = mat("claw", "#a99b82", roughness=0.38)
     m_accent = mat("houston_blue", "#69a9c7", roughness=0.22, metallic=0.30)
 
-    # Local origin = shoulder joint; arm extends forward (+Z)
     sphere(0, 0, 0.32, 0.24, 0.26, 0.44, m_suit, segs=18, rings=12)
     torus(0, 0, 0.56, 0.22, 0.045, m_accent, rot=(math.pi / 2, 0, 0))
     sphere(0, 0, 0.72, 0.29, 0.29, 0.29, m_glove, segs=20, rings=14)

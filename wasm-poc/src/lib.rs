@@ -92,8 +92,10 @@ struct BlenderModels {
     houston_arm_l: Handle<WorldAsset>,
     houston_arm_r: Handle<WorldAsset>,
     flame_mesh: Handle<Mesh>,
+    diamond_mesh: Handle<Mesh>,
     flame_outer_mat: Handle<StandardMaterial>,
     flame_inner_mat: Handle<StandardMaterial>,
+    diamond_mat: Handle<StandardMaterial>,
     rcs_mat: Handle<StandardMaterial>,
 }
 
@@ -109,8 +111,10 @@ struct HoustonRig {
     pilot: Entity,
     arm_l: Entity,
     arm_r: Entity,
-    flames: Vec<(Entity, Entity, f32, f32, f32)>, // (outer, inner, ex, ey, er)
+    flames: Vec<(Entity, Entity, f32, f32, f32)>,
+    diamonds: Vec<(Entity, f32, f32, f32, usize)>, // (entity, ex, ey, er, diamond_idx)
     rcs: [Entity; 2],
+    plume_light: Entity,
 }
 
 #[wasm_bindgen]
@@ -182,17 +186,26 @@ fn load_blender_models(
         static_models.insert(driver, assets.load(GltfAssetLabel::Scene(0).from_asset(file)));
     }
     let flame_mesh = meshes.add(Cone::new(1.0, 1.0));
+    let diamond_mesh = meshes.add(Sphere::new(1.0).mesh().uv(12, 8));
     let flame_outer_mat = materials.add(StandardMaterial {
-        base_color: Color::srgba(0.32, 0.18, 0.95, 0.72),
-        emissive: LinearRgba::rgb(1.6, 0.9, 5.2),
+        base_color: Color::srgba(0.45, 0.14, 0.98, 0.72),
+        emissive: LinearRgba::rgb(2.6, 0.55, 6.2),
         unlit: true,
         alpha_mode: AlphaMode::Add,
         cull_mode: None,
         ..default()
     });
     let flame_inner_mat = materials.add(StandardMaterial {
-        base_color: Color::srgba(0.60, 0.95, 1.0, 0.95),
-        emissive: LinearRgba::rgb(1.8, 4.6, 6.8),
+        base_color: Color::srgba(0.48, 0.92, 1.0, 0.95),
+        emissive: LinearRgba::rgb(1.0, 4.4, 7.8),
+        unlit: true,
+        alpha_mode: AlphaMode::Add,
+        cull_mode: None,
+        ..default()
+    });
+    let diamond_mat = materials.add(StandardMaterial {
+        base_color: Color::srgba(0.88, 0.98, 1.0, 1.0),
+        emissive: LinearRgba::rgb(6.5, 9.0, 11.0),
         unlit: true,
         alpha_mode: AlphaMode::Add,
         cull_mode: None,
@@ -213,8 +226,10 @@ fn load_blender_models(
         houston_arm_l: assets.load(GltfAssetLabel::Scene(0).from_asset("houston_arm_l.glb")),
         houston_arm_r: assets.load(GltfAssetLabel::Scene(0).from_asset("houston_arm_r.glb")),
         flame_mesh,
+        diamond_mesh,
         flame_outer_mat,
         flame_inner_mat,
+        diamond_mat,
         rcs_mat,
     });
 }
@@ -228,8 +243,9 @@ fn sync_blender_models(
     mut rigs: Query<(Entity, &HoustonRig, &mut Transform, &mut Visibility), Without<BlenderRacer>>,
     mut parts: Query<
         (&mut Transform, &mut Visibility),
-        (Without<BlenderRacer>, Without<HoustonRig>),
+        (Without<BlenderRacer>, Without<HoustonRig>, Without<PointLight>),
     >,
+    mut lights: Query<&mut PointLight>,
 ) {
     let Some(models) = models else { return };
     let Some(client) = session.client.as_ref() else { return };
@@ -263,10 +279,11 @@ fn sync_blender_models(
             } else {
                 (t * 5.0 + a.id as f32).sin() * 0.04
             };
+            let boost_tilt = if a.boost > 0.0 && a.somersault <= 0.0 { -0.075 } else { 0.0 };
             let tf = ported::placement(
                 Vec3::new(a.wx as f32, hover, a.wz as f32),
                 a.heading as f32,
-                pitch,
+                pitch + boost_tilt,
                 0.0,
             );
 
@@ -305,24 +322,49 @@ fn sync_blender_models(
                     }
                 }
                 for (idx, &(outer, inner, ex, ey, er)) in rig.flames.iter().enumerate() {
-                    let flicker = 1.0 + (t * 47.0 + idx as f32 * 1.7).sin() * 0.14;
+                    let flicker = 1.0 + (t * 52.0 + idx as f32 * 1.7).sin() * 0.16;
                     let (len_o, rad_o, len_i, rad_i) = if nightmare {
-                        (7.4 * flicker, er * 1.65, 5.2 * flicker, er * 1.05)
+                        (8.2 * flicker, er * 1.75, 5.8 * flicker, er * 1.10)
                     } else if firing {
-                        (5.8 * flicker, er * 1.35, 3.9 * flicker, er * 0.82)
+                        (6.4 * flicker, er * 1.45, 4.4 * flicker, er * 0.88)
                     } else {
-                        (0.95 * flicker, er * 0.72, 0.58 * flicker, er * 0.45)
+                        (1.05 * flicker, er * 0.72, 0.62 * flicker, er * 0.45)
                     };
                     if let Ok((mut otf, mut ovis)) = parts.get_mut(outer) {
-                        *ovis = Visibility::Visible;
-                        otf.translation = Vec3::new(ex, 1.45 + ey, -3.48 - len_o * 0.5);
+                        *ovis = Visibility::Inherited;
+                        otf.translation = Vec3::new(ex, 1.45 + ey, -3.50 - len_o * 0.5);
                         otf.scale = Vec3::new(rad_o, len_o, rad_o);
                     }
                     if let Ok((mut itf, mut ivis)) = parts.get_mut(inner) {
-                        *ivis = Visibility::Visible;
-                        itf.translation = Vec3::new(ex, 1.45 + ey, -3.48 - len_i * 0.5);
+                        *ivis = Visibility::Inherited;
+                        itf.translation = Vec3::new(ex, 1.45 + ey, -3.50 - len_i * 0.5);
                         itf.scale = Vec3::new(rad_i, len_i, rad_i);
                     }
+                }
+                // Glowing supersonic Mach shock diamonds pulsing down the 3 main Raptor plumes!
+                for &(d_ent, ex, ey, er, di) in &rig.diamonds {
+                    if let Ok((mut dtf, mut dvis)) = parts.get_mut(d_ent) {
+                        if firing || nightmare {
+                            *dvis = Visibility::Inherited;
+                            let spacing = if nightmare { 1.45 } else { 1.15 };
+                            let pulse = 1.0 + (t * 60.0 + di as f32 * 1.9).sin() * 0.18;
+                            let z = -3.85 - di as f32 * spacing;
+                            let taper = (1.0 - di as f32 * 0.18).max(0.35);
+                            dtf.translation = Vec3::new(ex, 1.45 + ey, z);
+                            dtf.scale = Vec3::new(er * 0.58 * taper * pulse, er * 0.58 * taper * pulse, er * 1.35 * taper * pulse);
+                        } else {
+                            *dvis = Visibility::Hidden;
+                        }
+                    }
+                }
+                if let Ok(mut light) = lights.get_mut(rig.plume_light) {
+                    light.intensity = if nightmare {
+                        420_000.0
+                    } else if firing {
+                        220_000.0
+                    } else {
+                        18_000.0
+                    };
                 }
                 let rcs_z = if a.somersault > 0.275 { 2.05 } else { -2.35 };
                 for (i, &rcs_ent) in rig.rcs.iter().enumerate() {
@@ -330,7 +372,7 @@ fn sync_blender_models(
                     if let Ok((mut rtf, mut rvis)) = parts.get_mut(rcs_ent) {
                         if a.somersault > 0.0 {
                             let fl = 1.0 + (t * 40.0 + side).sin() * 0.2;
-                            *rvis = Visibility::Visible;
+                            *rvis = Visibility::Inherited;
                             rtf.translation = Vec3::new(side * (1.02 + 0.85 * fl), 1.62, rcs_z);
                             rtf.scale = Vec3::new(0.24, 1.7 * fl, 0.24);
                         } else {
@@ -344,7 +386,9 @@ fn sync_blender_models(
                 let mut arm_l_ent = Entity::PLACEHOLDER;
                 let mut arm_r_ent = Entity::PLACEHOLDER;
                 let mut flames = Vec::with_capacity(6);
+                let mut diamonds = Vec::with_capacity(12);
                 let mut rcs_ents = [Entity::PLACEHOLDER; 2];
+                let mut plume_light = Entity::PLACEHOLDER;
 
                 let ship_ent = commands
                     .spawn((WorldAssetRoot(models.houston_ship.clone()), tf))
@@ -371,7 +415,7 @@ fn sync_blender_models(
                             .id();
 
                         let back_rot = Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2);
-                        for (ex, ey, er) in RAPTOR_ENGINES {
+                        for (idx, (ex, ey, er)) in RAPTOR_ENGINES.into_iter().enumerate() {
                             let outer = ship
                                 .spawn((
                                     Mesh3d(models.flame_mesh.clone()),
@@ -395,7 +439,33 @@ fn sync_blender_models(
                                 ))
                                 .id();
                             flames.push((outer, inner, ex, ey, er));
+                            // 4 Mach shock diamonds behind each of the 3 main RVac bells
+                            if idx < 3 {
+                                for di in 0..4 {
+                                    let d = ship
+                                        .spawn((
+                                            Mesh3d(models.diamond_mesh.clone()),
+                                            MeshMaterial3d(models.diamond_mat.clone()),
+                                            Transform::from_xyz(ex, 1.45 + ey, -4.0 - di as f32),
+                                            Visibility::Hidden,
+                                        ))
+                                        .id();
+                                    diamonds.push((d, ex, ey, er, di));
+                                }
+                            }
                         }
+                        plume_light = ship
+                            .spawn((
+                                PointLight {
+                                    color: Color::srgb(0.45, 0.72, 1.0),
+                                    intensity: 18_000.0,
+                                    range: 22.0,
+                                    shadow_maps_enabled: false,
+                                    ..default()
+                                },
+                                Transform::from_xyz(0.0, 1.45, -5.2),
+                            ))
+                            .id();
                         for (i, side) in [-1.0f32, 1.0f32].into_iter().enumerate() {
                             rcs_ents[i] = ship
                                 .spawn((
@@ -421,7 +491,9 @@ fn sync_blender_models(
                     arm_l: arm_l_ent,
                     arm_r: arm_r_ent,
                     flames,
+                    diamonds,
                     rcs: rcs_ents,
+                    plume_light,
                 });
             }
             continue;
@@ -464,6 +536,27 @@ fn sync_blender_models(
     for (_, rig, _, mut vis) in &mut rigs {
         if !alive_houston.contains(&rig.id) {
             *vis = Visibility::Hidden;
+            for &(outer, inner, _, _, _) in &rig.flames {
+                if let Ok((_, mut ovis)) = parts.get_mut(outer) {
+                    *ovis = Visibility::Hidden;
+                }
+                if let Ok((_, mut ivis)) = parts.get_mut(inner) {
+                    *ivis = Visibility::Hidden;
+                }
+            }
+            for &(d_ent, _, _, _, _) in &rig.diamonds {
+                if let Ok((_, mut dvis)) = parts.get_mut(d_ent) {
+                    *dvis = Visibility::Hidden;
+                }
+            }
+            for &rcs_ent in &rig.rcs {
+                if let Ok((_, mut rvis)) = parts.get_mut(rcs_ent) {
+                    *rvis = Visibility::Hidden;
+                }
+            }
+            if let Ok(mut light) = lights.get_mut(rig.plume_light) {
+                light.intensity = 0.0;
+            }
         }
     }
 }
