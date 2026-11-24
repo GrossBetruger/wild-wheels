@@ -1,5 +1,6 @@
 mod arena_mesh;
 mod bench;
+mod explosions;
 mod plumage;
 mod ported;
 mod scene;
@@ -173,6 +174,7 @@ pub fn start_game(pack: Vec<u8>, sound_pack: Vec<u8>, driver: usize, arena: usiz
             ported::PortedGraphicsPlugin,
             scene::ArenaPresentationPlugin,
             sound::GameAudioPlugin,
+            explosions::ExplosionsPlugin,
         ))
         .add_systems(Startup, (start_local_match, load_blender_models))
         .add_systems(

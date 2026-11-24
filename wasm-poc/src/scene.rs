@@ -683,7 +683,7 @@ fn effects(stage: &mut Stage, view: &ClientView, xray: bool, elapsed: f32) {
         let mut transform = at(fx.wx, 0.0, fx.wz, 0.0);
         let play = match fx.kind.as_str() {
             // The browser draws Master-Yuda's exhaust from his own position instead.
-            "yudaSmoke" => continue,
+            "yudaSmoke" | "explosion" => continue,
             "ash" => {
                 let body = view
                     .actors
