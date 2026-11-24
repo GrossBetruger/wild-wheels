@@ -274,50 +274,82 @@ def build_tammy():
 # =============================================================================
 def build_houston():
     reset_scene()
-    m_steel = mat("steel", "#d4dde2", roughness=0.16, metallic=0.92)
-    m_steel2 = mat("steel_dark", "#9fb0ba", roughness=0.22, metallic=0.88)
-    m_tiles = mat("heat_tiles", "#242c36", roughness=0.78, metallic=0.10)
-    m_accent = mat("houston_blue", "#5ca8cc", roughness=0.24, metallic=0.35)
-    m_glow = mat("raptor_glow", "#5cd4ff", roughness=0.15, emission=3.0, emission_color="#48c4ff")
-    m_suit = mat("suit_white", "#f2f6fa", roughness=0.34, metallic=0.06)
+    m_steel = mat("steel", "#dde6ec", roughness=0.14, metallic=0.92)
+    m_steel2 = mat("steel_dark", "#a6b6c2", roughness=0.22, metallic=0.88)
+    m_seam = mat("steel_seam", "#7d8f9c", roughness=0.30, metallic=0.82)
+    m_tiles = mat("heat_tiles", "#202730", roughness=0.78, metallic=0.08)
+    m_accent = mat("houston_blue", "#5ca8cc", roughness=0.22, metallic=0.35)
+    m_glow = mat("raptor_glow", "#5ce1ff", roughness=0.12, emission=3.6, emission_color="#48d4ff")
+    m_nozzle = mat("nozzle", "#4c5a66", roughness=0.32, metallic=0.85)
+    m_suit = mat("suit_white", "#f4f8fc", roughness=0.30, metallic=0.05)
     m_visor = mat("visor_gold", "#f5be4f", roughness=0.08, metallic=0.94)
-    m_sloth = mat("sloth_fur", "#9c856b", roughness=0.82)
-    m_face = mat("sloth_face", "#ede1cc", roughness=0.80)
-    m_mask = mat("sloth_mask", "#524135", roughness=0.78)
-    m_dark = mat("dark", "#1c1c22", roughness=0.15)
-    m_eye_w = mat("eye_w", "#ffffff", roughness=0.10)
+    m_sloth = mat("sloth_fur", "#9c856b", roughness=0.80)
+    m_face = mat("sloth_face", "#efe4d0", roughness=0.78)
+    m_mask = mat("sloth_mask", "#524135", roughness=0.76)
+    m_dark = mat("dark", "#1a1a22", roughness=0.12)
+    m_eye_w = mat("eye_w", "#ffffff", roughness=0.08)
 
-    # Polished stainless-steel SpaceX Starship fuselage + conical nose
-    cyl(0, 1.38, -0.45, 1.02, 4.4, m_steel, verts=32, rot=(math.pi / 2, 0, 0), bevel=0.05)
-    cone(0, 1.38, 2.55, 1.02, 0.06, 1.75, m_steel, verts=32, rot=(-math.pi / 2, 0, 0))
-    # Black ceramic heat-shield belly strip
-    box(0, 0.62, -0.25, 1.48, 0.42, 4.4, m_tiles, bevel=0.12)
-    # Four Starship aero flaps (forward + aft)
-    for side in (-1.0, 1.0):
-        box(side * 1.48, 1.38, 1.75, 1.15, 0.14, 0.95, m_steel2, bevel=0.04, rot=(0, 0, side * 0.22))
-        box(side * 1.72, 1.24, -2.05, 1.65, 0.16, 1.55, m_steel2, bevel=0.04, rot=(0, 0, -side * 0.15))
-        box(side * 1.05, 1.38, 1.75, 0.16, 0.20, 0.98, m_accent, bevel=0.03)
-    # 6 Raptor engine bells with glowing cyan-blue plasma cores
-    for ex, ey, er in [(0, 0.56, 0.26), (-0.50, -0.28, 0.26), (0.50, -0.28, 0.26), (0, -0.22, 0.16), (-0.24, 0.16, 0.16), (0.24, 0.16, 0.16)]:
-        cone(ex, 1.38 + ey, -2.92, er, er * 0.58, 0.54, m_steel2, verts=16, rot=(math.pi / 2, 0, 0))
-        sphere(ex, 1.38 + ey, -3.14, er * 0.65, er * 0.65, 0.14, m_glow, segs=12, rings=8)
+    # Polished stainless-steel SpaceX Starship main fuselage
+    cyl(0, 1.42, -0.65, 1.02, 4.30, m_steel, verts=36, rot=(math.pi / 2, 0, 0), bevel=0.04)
+    # Subtle stainless weld rings along the hull
+    for rz in (-2.2, -1.2, -0.2, 0.8, 1.4):
+        torus(0, 1.42, rz, 1.025, 0.022, m_seam, rot=(math.pi / 2, 0, 0))
+    # Smooth curved Starship ogive nose cone pointing FORWARD (+Z -> rot=+pi/2)
+    cone(0, 1.42, 1.88, 1.02, 0.84, 0.78, m_steel, verts=36, rot=(math.pi / 2, 0, 0))
+    cone(0, 1.42, 2.58, 0.84, 0.50, 0.68, m_steel, verts=36, rot=(math.pi / 2, 0, 0))
+    cone(0, 1.42, 3.16, 0.50, 0.06, 0.54, m_steel, verts=36, rot=(math.pi / 2, 0, 0))
+    sphere(0, 1.42, 3.42, 0.08, 0.08, 0.10, m_steel, segs=16, rings=10)
 
-    # Open cockpit ring + cute astronaut Sloth (Houston!)
-    torus(0, 2.38, -0.10, 0.80, 0.12, m_accent)
-    sphere(0, 2.48, -0.10, 0.68, 0.56, 0.62, m_suit, segs=22, rings=14)
-    # Sloth head + adorable dark eye patches + space helmet rim
-    hy = 3.32
-    sphere(0, hy, -0.05, 0.78, 0.72, 0.72, m_sloth, segs=26, rings=18)
-    sphere(0, hy - 0.04, 0.28, 0.64, 0.54, 0.48, m_face, segs=22, rings=14)
+    # Black ceramic heat-shield belly under the hull
+    cyl(0, 1.05, -0.45, 0.96, 4.45, m_tiles, verts=28, rot=(math.pi / 2, 0, 0), bevel=0.04)
+    # Dark aft engine skirt bulkhead
+    cyl(0, 1.42, -2.82, 0.98, 0.12, m_tiles, verts=32, rot=(math.pi / 2, 0, 0), bevel=0.02)
+
+    # Slept-back Starship forward & aft aero flaps (silver top, dark heat-shield belly, accent hinge)
     for side in (-1.0, 1.0):
-        sphere(side * 0.30, hy + 0.04, 0.66, 0.24, 0.18, 0.12, m_mask, segs=16, rings=10, rot=(0, 0, -side * 0.3))
-        sphere(side * 0.28, hy + 0.05, 0.75, 0.11, 0.12, 0.06, m_dark, segs=14, rings=10)
-        sphere(side * 0.25, hy + 0.09, 0.79, 0.035, 0.04, 0.02, m_eye_w, segs=8, rings=6)
-    sphere(0, hy - 0.12, 0.78, 0.11, 0.08, 0.07, m_dark, segs=12, rings=8)
-    # Raised golden astronaut visor dome & helmet collar
-    torus(0, hy - 0.62, -0.04, 0.66, 0.12, m_accent)
-    sphere(0, hy + 0.34, -0.18, 0.90, 0.66, 0.88, m_suit, segs=26, rings=16)
-    sphere(0, hy + 0.44, 0.28, 0.74, 0.36, 0.62, m_visor, segs=22, rings=14)
+        # Forward flap
+        box(side * 1.28, 1.42, 1.92, 0.92, 0.11, 0.98, m_steel2, bevel=0.03, rot=(0, 0, side * 0.45))
+        box(side * 1.28, 1.35, 1.92, 0.90, 0.06, 0.94, m_tiles, bevel=0.02, rot=(0, 0, side * 0.45))
+        cyl(side * 0.92, 1.44, 1.92, 0.10, 1.05, m_accent, verts=14, rot=(math.pi / 2, 0, 0), bevel=0.02)
+        # Large aft delta flap
+        box(side * 1.62, 1.30, -2.02, 1.55, 0.13, 1.45, m_steel2, bevel=0.03, rot=(0, 0, -side * 0.25))
+        box(side * 1.62, 1.22, -2.02, 1.52, 0.06, 1.40, m_tiles, bevel=0.02, rot=(0, 0, -side * 0.25))
+        cyl(side * 0.96, 1.38, -2.02, 0.12, 1.50, m_accent, verts=14, rot=(math.pi / 2, 0, 0), bevel=0.02)
+
+    # 6 Raptor engine bells flaring BACKWARD (-Z -> rot=-pi/2) with glowing cyan plasma cores!
+    for ex, ey, er in [
+        (0.0, 0.54, 0.27), (-0.48, -0.28, 0.27), (0.48, -0.28, 0.27),
+        (0.0, -0.22, 0.16), (-0.22, 0.15, 0.16), (0.22, 0.15, 0.16),
+    ]:
+        cone(ex, 1.42 + ey, -3.12, er, er * 0.52, 0.56, m_nozzle, verts=20, rot=(-math.pi / 2, 0, 0))
+        sphere(ex, 1.42 + ey, -3.36, er * 0.72, er * 0.72, 0.16, m_glow, segs=14, rings=10)
+
+    # Open cockpit collar + spacesuit shoulders + adorable Houston the Sloth!
+    torus(0, 2.38, -0.18, 0.82, 0.11, m_accent)
+    cyl(0, 2.34, -0.18, 0.76, 0.16, m_tiles, verts=28, bevel=0.02)
+    sphere(0, 2.52, -0.18, 0.68, 0.58, 0.60, m_suit, segs=26, rings=16)
+    # Cute spacesuit backpack (life support pack) visible from behind!
+    box(0, 2.74, -0.82, 0.88, 0.82, 0.36, m_suit, bevel=0.08)
+    box(0, 2.76, -1.00, 0.56, 0.42, 0.08, m_accent, bevel=0.03)
+    sphere(-0.22, 3.04, -1.02, 0.06, 0.06, 0.04, m_glow, segs=10, rings=6)
+    sphere(0.22, 3.04, -1.02, 0.06, 0.06, 0.04, m_visor, segs=10, rings=6)
+
+    # Adorable Sloth head + helmet ring (open front so face is clearly visible!)
+    hy = 3.36
+    torus(0, hy - 0.58, -0.16, 0.64, 0.11, m_accent)
+    sphere(0, hy, -0.12, 0.78, 0.72, 0.74, m_sloth, segs=32, rings=22)
+    sphere(0, hy - 0.04, 0.22, 0.64, 0.54, 0.50, m_face, segs=26, rings=16)
+    for side in (-1.0, 1.0):
+        sphere(side * 0.30, hy + 0.04, 0.60, 0.24, 0.18, 0.12, m_mask, segs=18, rings=12, rot=(0, 0, -side * 0.3))
+        sphere(side * 0.28, hy + 0.05, 0.69, 0.11, 0.12, 0.06, m_dark, segs=16, rings=10)
+        sphere(side * 0.25, hy + 0.09, 0.73, 0.04, 0.045, 0.02, m_eye_w, segs=10, rings=6)
+        # Cute helmet ear pods on the sides
+        cyl(side * 0.84, hy + 0.06, -0.14, 0.22, 0.16, m_accent, verts=20, rot=(0, math.pi / 2, 0), bevel=0.03)
+        sphere(side * 0.93, hy + 0.06, -0.14, 0.06, 0.12, 0.12, m_visor, segs=14, rings=8)
+    sphere(0, hy - 0.12, 0.72, 0.12, 0.08, 0.07, m_dark, segs=14, rings=8)
+    # Sleek golden sun-visor brow perched on top of her head (doesn't cover her face!)
+    sphere(0, hy + 0.58, 0.06, 0.76, 0.32, 0.66, m_visor, segs=26, rings=14)
+    torus(0, hy + 0.42, -0.12, 0.78, 0.07, m_suit)
     export_glb("houston.glb", "HoustonTheRTPL")
 
 
