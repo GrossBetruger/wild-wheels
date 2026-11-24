@@ -1,7 +1,10 @@
 """Headless Blender 5.3 PBR generator for R-Yeah (#11):
-- Rigid Bell 206 JetRanger helicopter, main rotor, tail rotor, 6-barrel Vulcan cluster
-- Skinned hanging lion pilot (`ryeah_lion.glb`) on an 11-bone skeleton (`rigging.py`)
-  with 4 animation clips (`hang`, `boost`, `roar`, `fire`) and eyelid blink shape keys!
+- Skinned hanging lion pilot (`ryeah_lion.glb`) rooted at the Bell 206 left skid grip
+  `(0.31, 4.77, 0.45)` so his gripping paw stays 100% locked to the skid bar!
+- Offline coupled multi-pendulum physics simulation (gravity + forward airspeed drag +
+  helicopter rotor downwash turbulence + knee-bend limits + secondary tail whip)
+  baked cleanly into 4 seamlessly looping animation clips (`hang`, `boost`, `roar`, `fire`),
+  plus eyelid blink shape keys (`MorphWeights`).
 
 Run: /opt/homebrew/bin/blender --background --python wasm-poc/blender/build_ryeah.py
 """
@@ -49,7 +52,7 @@ def loc(x, y, z):
 
 
 def hanging_model(x, y, z):
-    """hangingLion transform in model space (x, y, z), anchored naturally under the
+    """hangingLion rest pose in model space (x, y, z), anchored naturally under the
     Bell 206 left skid while keeping the kippah clear of the Vulcan pod."""
     c, s = math.cos(0.27), math.sin(0.27)
     cp, sp = math.cos(0.18), math.sin(0.18)
@@ -111,119 +114,244 @@ def make_piece(name, bm, mat, bucket):
     return obj
 
 
-# --- Skinned Lion Skeleton & Animation Clips ---
-HINGE_TORSO = hanging_model(0.0, 2.58, 0.20)
+# --- Skeleton Hinges (Rooted at the Bell 206 Left Skid Grip!) ---
+HINGE_GRIP_L = (0.31, 4.77, 0.45)
+HINGE_SHOULDER_L = hanging_model(-0.58, 2.95, 0.28)
 HINGE_HEAD = hanging_model(0.0, 3.65, 0.52)
 HINGE_JAW = hanging_model(0.0, 3.72, 1.02)
 HINGE_EAR_L = hanging_model(-0.60, 4.68, 0.48)
 HINGE_EAR_R = hanging_model(0.60, 4.68, 0.48)
-HINGE_ARM_L = hanging_model(-0.58, 2.85, 0.30)
-HINGE_ARM_R_UP = hanging_model(0.58, 2.85, 0.30)
-HINGE_ARM_R_LO = hanging_model(0.80, 3.10, 0.68)
-HINGE_LEG_L = hanging_model(-0.38, 2.15, 0.18)
-HINGE_LEG_R = hanging_model(0.38, 2.15, 0.18)
+HINGE_ARM_R_UP = hanging_model(0.58, 2.95, 0.28)
+HINGE_ARM_R_LO = hanging_model(0.80, 3.16, 0.68)
+HINGE_HIP_L = hanging_model(-0.36, 2.08, 0.16)
+HINGE_KNEE_L = hanging_model(-0.42, 1.54, 0.36)
+HINGE_HIP_R = hanging_model(0.36, 2.08, 0.16)
+HINGE_KNEE_R = hanging_model(0.42, 1.54, 0.48)
 HINGE_TAIL_0 = hanging_model(0.0, 2.10, -0.32)
 HINGE_TAIL_1 = hanging_model(-0.18, 1.80, -0.95)
 
 
 def lion_bones():
+    """Rooted at `arm_l` (the gripping paw on the Bell 206 skid) so the paw
+    never drifts off the steel skid bar while the entire lion hangs & swings!"""
     return [
-        ("torso", None, HINGE_TORSO),
+        ("arm_l", None, HINGE_GRIP_L),
+        ("torso", "arm_l", HINGE_SHOULDER_L),
         ("head", "torso", HINGE_HEAD),
         ("jaw", "head", HINGE_JAW),
         ("ear_l", "head", HINGE_EAR_L),
         ("ear_r", "head", HINGE_EAR_R),
-        ("arm_l", "torso", HINGE_ARM_L),
         ("arm_r_upper", "torso", HINGE_ARM_R_UP),
         ("arm_r_lower", "arm_r_upper", HINGE_ARM_R_LO),
-        ("leg_l", "torso", HINGE_LEG_L),
-        ("leg_r", "torso", HINGE_LEG_R),
+        ("leg_l_upper", "torso", HINGE_HIP_L),
+        ("leg_l_lower", "leg_l_upper", HINGE_KNEE_L),
+        ("leg_r_upper", "torso", HINGE_HIP_R),
+        ("leg_r_lower", "leg_r_upper", HINGE_KNEE_R),
         ("tail_base", "torso", HINGE_TAIL_0),
         ("tail_tip", "tail_base", HINGE_TAIL_1),
     ]
 
 
-def pose_hang(t):
-    s = wave(t, 1)
-    s2 = wave(t, 2, 0.4)
-    return {
-        "torso": RZ(s * 0.05) @ RX(s2 * 0.03),
-        "head": RY(wave(t, 1, 0.5) * 0.10) @ RX(-0.04 + s2 * 0.04),
-        "jaw": RX(0.03 + max(0.0, s) * 0.04),
-        "ear_l": RZ(wave(t, 1, 0.7) * 0.10),
-        "ear_r": RZ(-wave(t, 1, 0.9) * 0.10),
-        "arm_r_upper": RX(-0.10 + s * 0.12) @ RZ(0.08 + s * 0.08),
-        "arm_r_lower": RX(-0.18 + wave(t, 1, 0.5) * 0.16),
-        "leg_l": RX(-0.12 + wave(t, 1, 0.2) * 0.22),
-        "leg_r": RX(-0.12 - wave(t, 1, 0.2) * 0.22),
-        "tail_base": RY(wave(t, 1, 0.4) * 0.22) @ RX(-0.10 + s2 * 0.08),
-        "tail_tip": RY(wave(t, 1, 1.1) * 0.34),
-    }
+# ---------------------------------------------------------------------------
+# Offline Coupled Multi-Pendulum Physics Simulation
+# ---------------------------------------------------------------------------
+def _step_pendulum(angle, vel, target, stiffness, damping, torque, dt, lo=-1.4, hi=1.4):
+    acc = (target - angle) * stiffness - vel * damping + torque
+    vel += acc * dt
+    angle += vel * dt
+    if angle < lo:
+        angle = lo
+        vel = max(0.0, vel * -0.25)
+    elif angle > hi:
+        angle = hi
+        vel = min(0.0, vel * -0.25)
+    return angle, vel, acc
 
 
-def pose_boost(t):
-    f = wave(t, 2)
-    return {
-        "torso": RX(0.24 + f * 0.04),
-        "head": RX(-0.16 + f * 0.04) @ RY(wave(t, 1) * 0.05),
-        "jaw": RX(0.14),
-        "ear_l": RX(-0.32) @ RZ(0.18),
-        "ear_r": RX(-0.32) @ RZ(-0.18),
-        "arm_r_upper": RX(0.45) @ RZ(-0.42),
-        "arm_r_lower": RX(0.28),
-        "leg_l": RX(0.55 + wave(t, 2, 0.2) * 0.14),
-        "leg_r": RX(0.55 - wave(t, 2, 0.2) * 0.14),
-        "tail_base": RX(0.42) @ RY(wave(t, 2, 0.3) * 0.18),
-        "tail_tip": RX(0.22) @ RY(wave(t, 2, 1.0) * 0.30),
-    }
+def simulate_hang_clip(frames, airspeed_drag, gust_amp, boost=False, roar=False, fire=False):
+    """Run a 240 Hz coupled multi-pendulum simulation of R-Yeah hanging from
+    his left paw on the Bell 206 skid under gravity, forward airspeed drag,
+    and periodic rotor downwash gusts. Warms up 3.5s to reach the limit cycle,
+    then records `frames + 1` samples with seamless periodic wrap!"""
+    fps = 30.0
+    duration = frames / fps
+    substeps = 8
+    dt = 1.0 / (fps * substeps)
+    warmup_steps = int(round(3.5 * fps * substeps))
+    total_steps = warmup_steps + frames * substeps
 
+    # Generalized coordinates: (angle, vel)
+    arm_p, arm_vp = 0.0, 0.0        # Left arm pitch (backward trail under drag)
+    arm_r, arm_vr = 0.0, 0.0        # Left arm roll (sideways sway in downwash)
+    tor_p, tor_vp = 0.0, 0.0        # Torso pitch hanging from shoulder
+    tor_r, tor_vr = 0.0, 0.0        # Torso roll
+    leg_lp, leg_lvp = 0.0, 0.0      # Left thigh pitch
+    leg_rp, leg_rvp = 0.0, 0.0      # Right thigh pitch
+    knee_l, knee_lv = 0.12, 0.0     # Left knee bend (positive = bends backward)
+    knee_r, knee_rv = 0.18, 0.0     # Right knee bend
+    tail0_y, tail0_vy = 0.0, 0.0    # Tail base yaw
+    tail0_p, tail0_vp = 0.0, 0.0    # Tail base pitch
+    tail1_y, tail1_vy = 0.0, 0.0    # Tail tip yaw (secondary lag!)
 
-def pose_roar(t):
-    w = wave(t, 2)
-    cheer = 0.5 + 0.5 * wave(t, 1, -1.2)
-    return {
-        "torso": RX(-0.10) @ RZ(wave(t, 1) * 0.06),
-        "head": RX(-0.24 * cheer - 0.08) @ RY(wave(t, 1) * 0.12),
-        "jaw": RX(0.42 * cheer + 0.18),
-        "ear_l": RZ(-0.22 * cheer),
-        "ear_r": RZ(0.22 * cheer),
-        "arm_r_upper": RX(-0.85 - w * 0.22) @ RZ(0.32 + w * 0.14),
-        "arm_r_lower": RX(-0.35 + w * 0.25),
-        "leg_l": RX(-0.22 + w * 0.18),
-        "leg_r": RX(-0.22 - w * 0.18),
-        "tail_base": RY(wave(t, 2, 0.3) * 0.28) @ RX(-0.15),
-        "tail_tip": RY(wave(t, 2, 1.0) * 0.42),
-    }
+    recorded = []
+    omega = math.tau / duration
 
+    for step in range(total_steps + 1):
+        t = step * dt
+        # Periodic rotor downwash & flight turbulence (integer harmonics of clip cycle!)
+        g1 = math.sin(omega * t)
+        g2 = math.sin(2.0 * omega * t + 0.7)
+        g3 = math.cos(3.0 * omega * t - 0.4)
 
-def pose_fire(t):
-    rec = wave(t, 3)
-    return {
-        "torso": RX(0.06 + rec * 0.025),
-        "head": RX(-0.06) @ RY(0.06),
-        "jaw": RX(0.20 + abs(rec) * 0.08),
-        "ear_l": RX(-0.16),
-        "ear_r": RX(-0.16),
-        "arm_r_upper": RX(-0.25 + rec * 0.06) @ RZ(0.18),
-        "arm_r_lower": RX(-0.32),
-        "leg_l": RX(0.18 + rec * 0.06),
-        "leg_r": RX(0.18 - rec * 0.06),
-        "tail_base": RY(wave(t, 1) * 0.16),
-        "tail_tip": RY(wave(t, 1, 0.8) * 0.26),
-    }
+        # 1. Left arm hanging from fixed Bell 206 skid grip
+        # Gravity restores toward 0, forward airspeed drag tilts backward (+pitch)
+        arm_target_p = airspeed_drag * 0.42
+        arm_torque_p = gust_amp * (0.55 * g1 + 0.35 * g2)
+        arm_torque_r = gust_amp * (0.75 * math.cos(omega * t + 0.3) + 0.30 * g3)
+        arm_p, arm_vp, arm_ap = _step_pendulum(arm_p, arm_vp, arm_target_p, 16.0, 3.8, arm_torque_p, dt, -0.35, 0.65)
+        arm_r, arm_vr, arm_ar = _step_pendulum(arm_r, arm_vr, 0.0, 14.0, 3.4, arm_torque_r, dt, -0.35, 0.35)
+
+        # 2. Torso hanging from left shoulder (coupled with inertial reaction -arm_acc!)
+        tor_target_p = airspeed_drag * 0.46 + (-0.12 if roar else 0.0)
+        tor_p, tor_vp, tor_ap = _step_pendulum(
+            tor_p, tor_vp, tor_target_p, 20.0, 4.4,
+            -0.55 * arm_ap + gust_amp * 0.45 * g2, dt, -0.45, 0.75,
+        )
+        tor_r, tor_vr, tor_ar = _step_pendulum(
+            tor_r, tor_vr, 0.0, 18.0, 4.0,
+            -0.50 * arm_ar + gust_amp * 0.40 * g1, dt, -0.35, 0.35,
+        )
+
+        # 3. Double-pendulum dangling legs (left & right slightly out of phase for organic feel)
+        body_ap = arm_ap + tor_ap
+        leg_target = airspeed_drag * 0.62
+        leg_lp, leg_lvp, leg_lap = _step_pendulum(
+            leg_lp, leg_lvp, leg_target, 14.0, 3.0,
+            -0.65 * body_ap + gust_amp * (1.2 * g1 + 0.55 * g2), dt, -0.35, 0.95,
+        )
+        leg_rp, leg_rvp, leg_rap = _step_pendulum(
+            leg_rp, leg_rvp, leg_target, 14.0, 3.0,
+            -0.65 * body_ap + gust_amp * (-1.1 * g1 + 0.60 * g3), dt, -0.35, 0.95,
+        )
+        # Knees bend backward naturally (clamped >= 0.04 so knees never hyper-extend forward!)
+        knee_target = 0.18 + airspeed_drag * 0.35
+        knee_l, knee_lv, _ = _step_pendulum(
+            knee_l, knee_lv, knee_target, 18.0, 3.6,
+            -0.75 * leg_lap + gust_amp * 0.85 * g2, dt, 0.04, 1.15,
+        )
+        knee_r, knee_rv, _ = _step_pendulum(
+            knee_r, knee_rv, knee_target, 18.0, 3.6,
+            -0.75 * leg_rap - gust_amp * 0.85 * g2, dt, 0.04, 1.15,
+        )
+
+        # 4. Light double-pendulum lion tail (high drag & whip lag!)
+        tail0_p, tail0_vp, _ = _step_pendulum(
+            tail0_p, tail0_vp, airspeed_drag * 0.55, 16.0, 3.2,
+            -0.55 * body_ap + gust_amp * 1.1 * g2, dt, -0.35, 1.05,
+        )
+        tail0_y, tail0_vy, tail0_ay = _step_pendulum(
+            tail0_y, tail0_vy, 0.0, 12.0, 2.6,
+            -0.65 * (arm_ar + tor_ar) + gust_amp * 1.8 * g1, dt, -0.65, 0.65,
+        )
+        tail1_y, tail1_vy, _ = _step_pendulum(
+            tail1_y, tail1_vy, 0.0, 10.0, 2.2,
+            -0.85 * tail0_ay + gust_amp * 1.6 * g3, dt, -0.85, 0.85,
+        )
+
+        if step >= warmup_steps and (step - warmup_steps) % substeps == 0:
+            recorded.append((
+                arm_p, arm_r, tor_p, tor_r,
+                leg_lp, leg_rp, knee_l, knee_r,
+                tail0_p, tail0_y, tail1_y,
+            ))
+
+    # Cross-blend the last 6 frames into frame 0 for a mathematically seamless loop
+    n = len(recorded) - 1
+    blend_len = min(6, n // 4)
+    start_state = recorded[0]
+    end_state = recorded[n]
+    for i in range(blend_len + 1):
+        u = i / blend_len
+        idx = n - blend_len + i
+        s = recorded[idx]
+        recorded[idx] = tuple(s[k] + (start_state[k] - end_state[k]) * (u * u * (3 - 2 * u)) for k in range(len(s)))
+
+    def pose_at(cycle):
+        f = cycle * n
+        i0 = int(f) % n
+        i1 = (i0 + 1) % (n + 1)
+        frac = f - math.floor(f)
+        s0, s1 = recorded[i0], recorded[i1]
+        (arm_p, arm_r, tor_p, tor_r,
+         leg_lp, leg_rp, knee_l, knee_r,
+         tail0_p, tail0_y, tail1_y) = [s0[k] + (s1[k] - s0[k]) * frac for k in range(len(s0))]
+
+        # Head horizon stabilization (counter-rotates ~60% of body hang pitch so R-Yeah looks forward!)
+        head_stab_p = -(arm_p + tor_p) * 0.62
+        head_stab_r = -(arm_r + tor_r) * 0.55
+
+        if roar:
+            cheer = 0.5 + 0.5 * wave(cycle, 1, -1.2)
+            w2 = wave(cycle, 2)
+            head_q = RX(head_stab_p - 0.24 * cheer - 0.08) @ RY(wave(cycle, 1) * 0.12) @ RZ(head_stab_r)
+            jaw_q = RX(0.42 * cheer + 0.18)
+            ear_l_q = RZ(-0.22 * cheer)
+            ear_r_q = RZ(0.22 * cheer)
+            arm_ru = RX(-0.82 - w2 * 0.20) @ RZ(0.28 + w2 * 0.12)
+            arm_rl = RX(-0.34 + w2 * 0.22)
+        elif boost:
+            head_q = RX(head_stab_p - 0.12) @ RY(wave(cycle, 1) * 0.04) @ RZ(head_stab_r)
+            jaw_q = RX(0.14)
+            ear_l_q = RX(-0.34) @ RZ(0.18)
+            ear_r_q = RX(-0.34) @ RZ(-0.18)
+            arm_ru = RX(0.42 + tor_p * 0.35) @ RZ(-0.38)
+            arm_rl = RX(0.26)
+        elif fire:
+            rec = wave(cycle, 3)
+            head_q = RX(head_stab_p - 0.05) @ RY(0.06) @ RZ(head_stab_r)
+            jaw_q = RX(0.20 + abs(rec) * 0.08)
+            ear_l_q = RX(-0.18)
+            ear_r_q = RX(-0.18)
+            arm_ru = RX(-0.22 + rec * 0.06) @ RZ(0.16)
+            arm_rl = RX(-0.30)
+        else:
+            # Natural relaxed hanging right arm swinging with body inertia
+            head_q = RX(head_stab_p) @ RY(wave(cycle, 1, 0.5) * 0.09) @ RZ(head_stab_r)
+            jaw_q = RX(0.03 + max(0.0, wave(cycle, 1)) * 0.04)
+            ear_l_q = RZ(arm_r * 0.5 + wave(cycle, 1, 0.6) * 0.07)
+            ear_r_q = RZ(arm_r * 0.5 - wave(cycle, 1, 0.8) * 0.07)
+            arm_ru = RX(0.14 + tor_p * 0.5 + wave(cycle, 1, 0.4) * 0.10) @ RZ(0.06 + tor_r * 0.6)
+            arm_rl = RX(-0.16 + wave(cycle, 1, 0.8) * 0.14)
+
+        return {
+            "arm_l": RX(arm_p) @ RZ(arm_r),
+            "torso": RX(tor_p) @ RZ(tor_r),
+            "head": head_q,
+            "jaw": jaw_q,
+            "ear_l": ear_l_q,
+            "ear_r": ear_r_q,
+            "arm_r_upper": arm_ru,
+            "arm_r_lower": arm_rl,
+            "leg_l_upper": RX(leg_lp),
+            "leg_l_lower": RX(knee_l),
+            "leg_r_upper": RX(leg_rp),
+            "leg_r_lower": RX(knee_r),
+            "tail_base": RX(tail0_p) @ RY(tail0_y),
+            "tail_tip": RY(tail1_y) @ RX(tail0_p * 0.35),
+        }
+
+    return pose_at
 
 
 LION_CLIPS = [
-    ("hang", 48, pose_hang),
-    ("boost", 30, pose_boost),
-    ("roar", 48, pose_roar),
-    ("fire", 24, pose_fire),
+    ("hang", 48, simulate_hang_clip(48, airspeed_drag=0.22, gust_amp=1.35)),
+    ("boost", 30, simulate_hang_clip(30, airspeed_drag=0.92, gust_amp=2.20, boost=True)),
+    ("roar", 48, simulate_hang_clip(48, airspeed_drag=0.18, gust_amp=1.55, roar=True)),
+    ("fire", 24, simulate_hang_clip(24, airspeed_drag=0.35, gust_amp=1.40, fire=True)),
 ]
 
 
 def add_blink_shape_key(lids_obj):
-    """Eyelids are built closed over the eyes; rest pose folds them open into the upper brow,
-    and the `blink` shape key restores the closed lids!"""
     shut = [v.co.copy() for v in lids_obj.data.vertices]
     brow_z = max(v.co.z for v in lids_obj.data.vertices)
     for v in lids_obj.data.vertices:
@@ -251,19 +379,9 @@ def build_lion_rig():
 
     body_parts = []
 
-    # 1. Sculpted athletic torso (broad chest, tapered waist, natural hips)
-    rigging.carry(torso=1.0)
-    bm = bmesh.new()
-    add_sphere(bm, hanging_pt(0, 2.74, 0.22), 0.74, 0.64, 0.60, segs=18, rings=10)
-    add_sphere(bm, hanging_pt(0, 2.26, 0.16), 0.56, 0.54, 0.50, segs=16, rings=8)
-    make_piece("Torso", bm, mat_gold, body_parts)
-    bm = bmesh.new()
-    add_sphere(bm, hanging_pt(0, 2.64, 0.60), 0.44, 0.52, 0.24, segs=12, rings=8)
-    make_piece("Chest", bm, mat_cream, body_parts)
-
-    # 2. Left gripping arm (pulling naturally up onto the Bell 206 left skid)
+    # 1. Left gripping arm (ROOT bone locked onto the Bell 206 left skid!)
     rigging.carry(arm_l=1.0)
-    left_grip_w = loc(0.31, 4.77, 0.45)
+    left_grip_w = loc(*HINGE_GRIP_L)
     bm = bmesh.new()
     add_capsule(bm, hanging_pt(-0.58, 2.95, 0.28), left_grip_w, 0.21, segs=10)
     add_sphere(bm, left_grip_w, 0.27, 0.25, 0.25, segs=12, rings=8)
@@ -272,6 +390,22 @@ def build_lion_rig():
     for finger in range(3):
         add_sphere(bm, loc(0.31 + (finger - 1) * 0.10, 4.88, 0.52), 0.065, 0.10, 0.09, segs=8, rings=5)
     make_piece("ArmLFingers", bm, mat_cream, body_parts)
+
+    # Smooth shared shoulder joint ball (50/50 arm_l + torso)
+    rigging.carry(arm_l=0.5, torso=0.5)
+    bm = bmesh.new()
+    add_sphere(bm, hanging_pt(-0.58, 2.95, 0.28), 0.23, 0.23, 0.23, segs=10, rings=6)
+    make_piece("ShoulderLJoint", bm, mat_gold, body_parts)
+
+    # 2. Sculpted athletic torso (broad chest, tapered waist, natural hips)
+    rigging.carry(torso=1.0)
+    bm = bmesh.new()
+    add_sphere(bm, hanging_pt(0, 2.74, 0.22), 0.74, 0.64, 0.60, segs=18, rings=10)
+    add_sphere(bm, hanging_pt(0, 2.26, 0.16), 0.56, 0.54, 0.50, segs=16, rings=8)
+    make_piece("Torso", bm, mat_gold, body_parts)
+    bm = bmesh.new()
+    add_sphere(bm, hanging_pt(0, 2.64, 0.60), 0.44, 0.52, 0.24, segs=12, rings=8)
+    make_piece("Chest", bm, mat_cream, body_parts)
 
     # 3. Right two-bone articulated arm
     rigging.carry(arm_r_upper=1.0)
@@ -288,18 +422,28 @@ def build_lion_rig():
     add_sphere(bm, hanging_pt(0.96, 3.48, 0.98), 0.26, 0.25, 0.24, segs=12, rings=8)
     make_piece("ArmRLower", bm, mat_gold, body_parts)
 
-    # 4. Naturally bent hanging legs (thigh -> knee -> calf -> paw)
-    for side, bone in ((-1, "leg_l"), (1, "leg_r")):
-        rigging.carry(**{bone: 1.0})
-        hip = hanging_pt(side * 0.36, 2.08, 0.16)
-        knee = hanging_pt(side * 0.42, 1.54, 0.42 + side * 0.06)
-        ankle = hanging_pt(side * 0.44, 1.04, 0.18 + side * 0.08)
-        paw = hanging_pt(side * 0.45, 0.94, 0.40 + side * 0.08)
+    # 4. Two-bone physics-driven legs (thigh + knee joint + calf + paw!)
+    for side, up_b, lo_b, hip_m, knee_m in (
+        (-1, "leg_l_upper", "leg_l_lower", HINGE_HIP_L, HINGE_KNEE_L),
+        (1, "leg_r_upper", "leg_r_lower", HINGE_HIP_R, HINGE_KNEE_R),
+    ):
+        hip = loc(*hip_m)
+        knee = loc(*knee_m)
+        ankle = hanging_pt(side * 0.44, 1.02, 0.16 + side * 0.06)
+        paw = hanging_pt(side * 0.45, 0.92, 0.38 + side * 0.06)
+        rigging.carry(**{up_b: 1.0})
         bm = bmesh.new()
         add_capsule(bm, hip, knee, 0.22, segs=10)
+        make_piece(f"Thigh_{up_b}", bm, mat_gold, body_parts)
+        rigging.carry(**{up_b: 0.5, lo_b: 0.5})
+        bm = bmesh.new()
+        add_sphere(bm, knee, 0.20, 0.20, 0.20, segs=10, rings=6)
+        make_piece(f"Knee_{up_b}", bm, mat_gold, body_parts)
+        rigging.carry(**{lo_b: 1.0})
+        bm = bmesh.new()
         add_capsule(bm, knee, ankle, 0.18, segs=10)
         add_sphere(bm, paw, 0.27, 0.21, 0.36, segs=12, rings=8)
-        make_piece(f"Leg_{bone}", bm, mat_gold, body_parts)
+        make_piece(f"Calf_{lo_b}", bm, mat_gold, body_parts)
 
     # 5. Two-bone tufted lion tail
     t0, t1, t2 = hanging_pt(0.0, 2.10, -0.32), hanging_pt(-0.18, 1.80, -0.95), hanging_pt(-0.30, 1.68, -1.55)
@@ -347,7 +491,7 @@ def build_lion_rig():
     add_sphere(bm, hanging_pt(0, 5.04, 0.58), 0.055, 0.025, 0.055, segs=8, rings=4)
     make_piece("HeadKippahBtn", bm, mat_kippah_btn, body_parts)
 
-    # 7. Articulated ears (secondary ear flick!)
+    # 7. Articulated ears
     for side, bone in ((-1, "ear_l"), (1, "ear_r")):
         rigging.carry(**{bone: 1.0})
         bm = bmesh.new()
@@ -357,7 +501,7 @@ def build_lion_rig():
         add_sphere(bm, hanging_pt(side * 0.66, 4.74, 0.62), 0.15, 0.16, 0.06, segs=10, rings=6)
         make_piece(f"EarIn_{bone}", bm, mat_ear, body_parts)
 
-    # 8. Articulated lower jaw & fangs (opens wide during roar!)
+    # 8. Articulated lower jaw & fangs
     rigging.carry(jaw=1.0)
     bm = bmesh.new()
     add_sphere(bm, hanging_pt(0, 3.60, 1.15), 0.32, 0.14, 0.20, segs=12, rings=6)
@@ -368,7 +512,7 @@ def build_lion_rig():
         add_tube(bm, hanging_pt(side * 0.14, 3.66, 1.24), hanging_pt(side * 0.14, 3.55, 1.26), 0.038, 0.008, segs=6)
     make_piece("JawChinFangs", bm, mat_cream, body_parts)
 
-    # 9. Separate eyelids mesh with `blink` shape key (carried by `head`)
+    # 9. Separate eyelids mesh with `blink` shape key
     rigging.carry(head=1.0)
     lids_parts = []
     bm = bmesh.new()
