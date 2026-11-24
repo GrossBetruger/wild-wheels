@@ -2,8 +2,9 @@
 name: graphics-uplift
 description: >-
   Uplift Wild Wheels 3D visuals in the Bevy WASM PoC (wasm-poc/) using headless
-  Blender 5.3 PBR .glb modeling, procedural Bevy meshes/VFX, dynamic lighting,
-  and physics-driven particles. Use when upgrading racers, vehicles, props,
+  Blender 5.3 PBR .glb modeling, skeletal rigs with animation clips and shape
+  keys, procedural Bevy meshes/VFX, dynamic lighting, and physics-driven
+  particles. Use when upgrading or animating racers, vehicles, props,
   afterburners, explosions, smoke, fire, arena lighting, or visual polish in
   wasm-poc/.
 ---
@@ -18,7 +19,8 @@ and reactive Bevy VFX in `wasm-poc/`. Keep all PoC work strictly isolated to
 
 | Target | Method | Reference |
 | :----- | :----- | :-------- |
-| Racers, vehicles, articulated parts (tails, arms, turrets), arena props | **Blender 5.3 headless Python → `.glb` PBR** | `wasm-poc/blender/build_taicoon.py`, `wasm-poc/blender/build_houston.py` |
+| Living characters and anything that bends: limbs, wings, ears, clothing, gestures, faces | **Blender skeleton + animation clips + shape keys → one skinned `.glb`** (section 3) | `wasm-poc/blender/rigging.py`, `build_yuda.py`, `build_knowitowl.py`, `wasm-poc/src/yuda.rs`, `knowitowl.rs` |
+| Vehicles, wheels, turrets, rigid props | **Blender 5.3 headless Python → rigid `.glb` parts** | `wasm-poc/blender/build_taicoon.py`, `wasm-poc/blender/build_houston.py` |
 | Explosions, smoke plumes, fire, shockwaves, splinters, sparks, afterburner plumes, dynamic lights | **Procedural Rust/Bevy meshes + physics + dynamic materials** | `wasm-poc/src/explosions.rs`, `wasm-poc/src/scene.rs` |
 | Live HUD, menus, telemetry | **HTML/CSS overlay** | `wasm-poc/index.html` |
 
@@ -29,20 +31,54 @@ and reactive Bevy VFX in `wasm-poc/`. Keep all PoC work strictly isolated to
 2. Preserve every iconic silhouette cue, color accent, posture, and personality trait—upgrade the craft and realism, never replace the character's identity.
 3. **Avoid sterile plastic looks**: add panel seams, bevels, rivets/weld rings, scorch/soot gradients, weathered metallic/roughness contrast, heat-blued exhaust hardware, and believable proportions.
 
-### Articulated Parts for Procedural Animation
+### Rigid Parts for Procedural Animation
+Use this for things that turn or slide without bending (wheels, cranks, propellers, turrets). For a character's body use a skeleton instead (section 3).
 - Export moving appendages as **separate `.glb` files** authored with their **hinge/root at `(0, 0, 0)`** (e.g. `taicoon_tail.glb`, `houston_arm_l.glb`, `houston_arm_r.glb`).
-- Attach them in Bevy as child entities at their socket offset so Bevy drives smooth runtime motion (tail wiggle, waving arms, drift lean, recoil) without needing heavy skeletal rigs.
+- Attach them in Bevy as child entities at their socket offset so Bevy drives smooth runtime motion (wheel spin, drift lean, recoil).
 
 ### Authoring & Exporting in Blender 5.3
 - Write a self-contained generator script at `wasm-poc/blender/build_<name>.py` that clears the scene, builds geometry + Principled BSDF materials, applies smooth shading, and exports with `bpy.ops.export_scene.gltf(..., export_format='GLB', export_yup=True)`.
-- Run headlessly:
+- Run headlessly (install with `brew install --cask blender` if it is missing):
   ```sh
   /opt/homebrew/bin/blender --background --python wasm-poc/blender/build_<name>.py
   ```
 - Export assets to `wasm-poc/assets/models/<name>.glb`.
 - Keep triangle counts WASM-friendly (~2k–15k tris per racer) so load times and WebGL2 draw costs stay low.
+- `bpy.ops.object.join()` invalidates references to the objects it merges: split a list into groups *before* joining any of them, and `transform_apply` the result so its origin is the hinge.
+- Re-exporting rewrites every `.glb` with slightly different bytes. `git checkout` the ones whose geometry you did not change, so unrelated assets do not churn.
 
-## 3. Procedural Bevy VFX & Lighting Craft
+## 3. Skeletons, Animation Clips & Shape Keys
+
+Skinning, clip blending and shape keys all work on the WebGL2 build. `Cargo.toml` already enables the `gltf_animation` and `morph` features. Master-Yuda (`build_yuda.py` + `yuda.rs`) is the reference to copy; KnowItOwl shows layered clips and eyelids.
+
+### Authoring in Blender (`wasm-poc/blender/rigging.py`)
+- **Bind as you build.** Call `rigging.carry(bone=1.0, ...)` before creating pieces and `rigging.bind(obj)` on every mesh; weights survive `rigging.join`. Give a joint a ball shared 0.5/0.5 by the two bones either side so it bends without a gap, or weight a tube ring by ring.
+- **Skeleton.** `rigging.build_armature(name, [(bone, parent, hinge), ...])` with hinges in model space (x across, y up, z forward). Bones lie along Blender's +Y with no roll, so a turn about a bone's x is a turn about the racer's x.
+- **Poses are functions of a 0..1 cycle** returning `{bone: turn}`, where a turn is a quaternion (`RX`, `RY`, `RZ`) about the bone's hinge relative to its parent, or `(turn, shift)` / `(turn, shift, scale)`. Use `wave(cycle, whole_turns)` so loops close; one-shot clips reach their last pose at cycle 1.
+- **Limbs.** `rigging.reach(shoulder, elbow, hand, target, pole, parent_turn, parent_hinge)` solves a two-bone limb to a target, so write hand and foot positions, not joint angles.
+- **Secondary motion is cheap and reads well**: ears, tufts, tails, chains and hems on their own bones, lagging the main move by a phase.
+- **Hide by scale.** To make a worn part vanish within a clip (a thrown jacket), key its bone's scale to `0.001`.
+- **Shape keys** for faces. Build the feature in its extreme pose (eyelids shut) as its own mesh, then move its rest shape to neutral and add one key per feature (see `open_lids` in `build_knowitowl.py`). Set each key's value to 0 before export.
+- **Export** with `rigging.export_rig(path, clips)`: one `.glb` holding meshes, skeleton, shape keys and one animation per clip (each clip is an action on its own NLA track).
+
+### Playing in Bevy
+- **Load twice**: `assets.load("models/x.glb")` as `Handle<Gltf>` for `named_animations`, and `GltfAssetLabel::Scene(0)` to spawn.
+- **Bind when the model arrives.** A spawned scene appears a frame or more later. Each frame, for unbound rigs, search `Children::iter_descendants` for the entity with `AnimationPlayer`; build one shared `AnimationGraph` from the named clips; insert `AnimationGraphHandle` on the player; `play(node).repeat()` every clip at weight 0.
+- **Blend by weights.** Each frame set every clip's weight (`player.animation_mut(node).set_weight`). Bevy normalises per bone over clips with non-zero weight, so keep each layer's weights summing to 1 and ease them for crossfades.
+- **Layers need masks.** The exporter samples *every* bone into *every* clip, so a legs-only clip still overwrites the arms. Put bones in mask groups (`graph.add_target_to_mask_group`) and add clips with `add_clip_with_mask` (see `knowitowl.rs`: legs and upper body).
+- **Clips not driven by the clock**: `pause()` them and `seek_to` each frame. Use it for one-shots on a rider's own timer (Yuda's strip and dress) and for motion tied to distance (the owl's pedalling follows the crank angle).
+- **Shape keys** are `MorphWeights` on the mesh node; set `weights_mut()` from Rust (blink timers, winks).
+- **Attaching to a joint.** In the game a joint's axes are a quarter turn about x from model space. Parent attachments through a child with `Quat::from_rotation_x(FRAC_PI_2)`; under it, positions are in model axes relative to the hinge.
+- **Hand-offs to the world.** For a piece that leaves the body, pre-spawn one hidden loose copy per racer with its own small rig and clip, and at the release moment place it at the bone's pose and show it. Keep the release frame and pose as named constants in both the Blender script and the Rust.
+- **System parameter limit**: a Bevy system takes at most 16 parameters; put binding in its own system ahead of the per-frame one.
+
+### Showing the result
+- Write `wasm-poc/blender/preview_<name>.py` (copy `preview_yuda.py`): it imports the builder, poses the rig clip by clip and renders one labelled film. Build into the preview's own folder, set `sys.dont_write_bytecode = True`, and set `rig.animation_data.use_nla = False` or the stacked tracks override hand-set poses.
+- Give the user the one-line command as soon as a first version renders, and copy it with `pbcopy`. Rendering takes about a third of a second per frame; pass frame numbers to render stills while tuning.
+- Frame it from behind, as the chase camera sees the racer. Then check in the running game too: the film shows clips as authored, not their blending.
+- A racer with many sampled clips is larger on disk (the owl: 9 clips on 18 bones, about 1 MB).
+
+## 4. Procedural Bevy VFX & Lighting Craft
 
 ### Explosions (`wasm-poc/src/explosions.rs`)
 Layer multiple physical systems so blasts feel weighty and alive:
@@ -65,7 +101,7 @@ Layer multiple physical systems so blasts feel weighty and alive:
   - A dynamic downward/rearward `PointLight` illuminating the arena floor.
 - Differentiate **cruise/non-boost** (longer, smokier, warmer/reddish, clearly alive) from **boost/Nightmare Fuel** (intense, roaring, crisp Mach diamonds, stronger flicker).
 
-## 4. Bevy 0.20 WASM Gotchas
+## 5. Bevy 0.20 WASM Gotchas
 
 - **Loading `.glb` scenes**: `asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/<name>.glb"))` spawned via `WorldAssetRoot`.
 - **Child visibility on death/hide**: Setting `Visibility::Visible` on a child overrides a parent's `Visibility::Hidden`! Use `Visibility::Inherited` on attached parts/VFX (and hide/scale down when `!racer.alive`) so afterburners and accessories vanish when a racer explodes.
@@ -75,7 +111,7 @@ Layer multiple physical systems so blasts feel weighty and alive:
   - `Assets::get_mut(&handle)` returns `Option<AssetMut<'_, T>>` — bind with `if let Some(mut m) = materials.get_mut(&handle)`.
 - **Prevent material leaks**: Whenever an entity owns a per-instance dynamic `Handle<StandardMaterial>` (like fading smoke puffs), call `materials.remove(&handle)` right before `commands.entity(ent).despawn()`.
 
-## 5. Build, Serve & Verify Loop
+## 6. Build, Serve & Verify Loop
 
 1. **Rebuild WASM + JS bindings**:
    ```sh
