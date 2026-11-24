@@ -312,7 +312,7 @@ export function buildGraphicsPack({only=[...drivers.keys()]}={}){
   // World effects play once, frame by frame of their age.
   const effect=(type,life,extra={})=>(r,t)=>{r.effects=[{type,owner:r.id,wx:0,wz:0,age:Math.max(0,t),life,...extra}];};
   for(const [type,life] of [['reverseShockwave',2.2],['explosion',2.5],['abomb',3],['radiation',RADIATION_DURATION],['fashionSnap',1.2],['heartbeat',.7],['taxAudit',2.5],['karmaRaccoon',2.8],['teleportOut',1.35],['teleportIn',1.35],['locustSpawn',1.2],['locustBurst',.7]])once(`effect:${type}`,life,null,effect(type,life,{heading:0}));
-  record('effect:eulerGhost',{frames:Math.round(2*FPS),each:(r,t)=>{r.effects=[{type:'eulerGhost',owner:r.id,wx:0,wz:0,age:1+t,life:15,heading:0}];}});
+  record('effect:eulerGhost',{frames:Math.round(2*FPS),setup:hidden,each:(r,t)=>{r.effects=[{type:'eulerGhost',owner:r.id,wx:0,wz:0,age:1+t,life:15,heading:0}];}});
   once('effect:default',.65,null,effect('pickup',.65));
   // The native client stretches a ring to its radius, which its skull riders must not follow:
   // the ring and one rider are recorded apart, and scene.rs places the riders round it.

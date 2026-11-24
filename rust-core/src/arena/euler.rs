@@ -85,10 +85,10 @@ fn on_bridge(b: &[f64; 5], wx: f64, wz: f64) -> bool {
 
 pub const EULER_CONFIDENT_NOTICE: &str = "6/7 bridges, Euler remains confident of his result...";
 pub const EULER_ACHIEVED_NOTICE: &str = "EULERIAN PATH ACHIEVED!";
-const GHOST_DURATION: f64 = 15.0;
-const GHOST_SPEED: f64 = 22.0;
-const GHOST_KILL_RADIUS: f64 = 5.0;
-const GHOST_RISE_GRACE: f64 = 1.2;
+const GHOST_DURATION: f64 = 1e6;
+const GHOST_SPEED: f64 = 56.0;
+const GHOST_KILL_RADIUS: f64 = 7.0;
+const GHOST_RISE_GRACE: f64 = 1.0;
 
 impl Game {
     pub(super) fn euler_tick(&mut self, dt: f64) {
@@ -98,6 +98,7 @@ impl Game {
                 a.euler_on_bridge = None;
                 a.euler_hinted = false;
             }
+            self.global.effects.retain(|fx| fx.kind != "eulerGhost");
             return;
         }
         let Some(def) = arena_def(self.global.arena) else {
@@ -107,8 +108,17 @@ impl Game {
             return;
         }
         let bridges = def.bridges;
+        let ghost_active = self.global.effects.iter().any(|fx| fx.kind == "eulerGhost");
         let mut sounds_to_play: Vec<(&'static str, usize, f64, f64)> = Vec::new();
         let mut spawn_ghosts: Vec<(usize, f64, f64, f64)> = Vec::new();
+        if ghost_active {
+            // Once Euler's Ghost is haunting the match, the Easter egg cannot be triggered a second time.
+            for a in &mut self.actors {
+                a.euler_bridges = 0;
+                a.euler_on_bridge = None;
+                a.euler_hinted = false;
+            }
+        } else {
         for a in &mut self.actors {
             if a.destroyed > 0.0 || a.inactive || a.afk || a.bomber {
                 a.euler_bridges = 0;
@@ -165,13 +175,15 @@ impl Game {
                                     a.celebrate = 1.6;
                                     a.euler_bridges = 0;
                                     a.euler_hinted = false;
-                                    // Summon Leonhard Euler's ghost 22 units behind the theorem-breaker!
-                                    let gx = (a.wx - a.heading.sin() * 22.0).clamp(-86.0, 86.0);
-                                    let gz = (a.wz - a.heading.cos() * 22.0).clamp(-86.0, 86.0);
-                                    let gh = (a.wx - gx).atan2(a.wz - gz);
-                                    spawn_ghosts.push((a.id, gx, gz, gh));
-                                    sounds_to_play.push(("karmaRaccoon", a.id, a.wx, a.wz));
-                                    sounds_to_play.push(("dizzy", a.id, gx, gz));
+                                    // Summon Leonhard Euler's ghost 26 units behind the theorem-breaker!
+                                    if spawn_ghosts.is_empty() {
+                                        let gx = (a.wx - a.heading.sin() * 26.0).clamp(-86.0, 86.0);
+                                        let gz = (a.wz - a.heading.cos() * 26.0).clamp(-86.0, 86.0);
+                                        let gh = (a.wx - gx).atan2(a.wz - gz);
+                                        spawn_ghosts.push((a.id, gx, gz, gh));
+                                        sounds_to_play.push(("karmaRaccoon", a.id, a.wx, a.wz));
+                                        sounds_to_play.push(("dizzy", a.id, gx, gz));
+                                    }
                                 }
                             }
                         }
@@ -179,6 +191,7 @@ impl Game {
                 }
                 _ => {}
             }
+        }
         }
         for (kind, id, wx, wz) in sounds_to_play {
             sound(&mut self.global, kind, id, wx, wz, None);
@@ -328,6 +341,27 @@ mod tests {
             game.actors[0].destroyed > 0.0,
             "Euler's Ghost must chase down and kill the theorem-breaker"
         );
+        // Ghost persists for the entire match and cannot be triggered a second time.
+        game.actors[0].destroyed = 0.0;
+        game.actors[0].notice.clear();
+        for fx in &mut game.global.effects {
+            fx.age += 300.0;
+        }
+        game.global.effects.retain(|fx| fx.age < fx.life);
+        assert_eq!(
+            game.global.effects.iter().filter(|fx| fx.kind == "eulerGhost").count(),
+            1,
+            "Euler's Ghost must remain until the end of the match"
+        );
+        for idx in 0..7 {
+            cross(&mut game, idx);
+        }
+        assert_eq!(
+            game.global.effects.iter().filter(|fx| fx.kind == "eulerGhost").count(),
+            1,
+            "Euler's Ghost must not be triggered twice"
+        );
+        assert_ne!(game.actors[0].notice, EULER_ACHIEVED_NOTICE);
         set_arena_defs(default_arenas()).unwrap();
     }
 
