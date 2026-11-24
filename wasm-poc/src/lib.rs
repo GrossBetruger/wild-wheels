@@ -5,6 +5,7 @@ mod explosions;
 mod knowitowl;
 mod plumage;
 mod ported;
+mod ryeah;
 mod scene;
 mod sound;
 mod sprite;
@@ -211,6 +212,7 @@ pub(crate) fn has_blender_model(driver: usize) -> bool {
     driver == 7
         || driver == 8
         || driver == knowitowl::DRIVER
+        || driver == ryeah::DRIVER
         || driver == yuda::DRIVER
         || BLENDER_MODELS.iter().any(|&(d, _)| d == driver)
 }
@@ -482,6 +484,7 @@ fn presentation_app(pack: Vec<u8>, canvas: &str, interactive: bool, mobile: bool
             scene::ArenaPresentationPlugin,
             explosions::ExplosionsPlugin,
             knowitowl::KnowItOwlPlugin,
+            ryeah::RYeahPlugin,
             yuda::YudaPlugin,
         ))
         .add_systems(Startup, (load_blender_models, spawn_shader_warmup))

@@ -214,7 +214,7 @@ const hidden=r=>{r.afk=true;r.wx=0;r.wz=0;};
 
 // Drivers rendered with Blender PBR .glb models in Bevy WASM only need a
 // 1-frame idle silhouette in the web pack (for KnowItOwl's Dark Humor X-ray).
-const WEB_BLENDER_DRIVERS=new Set([7,8,10,14,15]);
+const WEB_BLENDER_DRIVERS=new Set([7,8,10,11,14,15]);
 
 export function buildGraphicsPack({only=[...drivers.keys()],web=false}={}){
   const fps=web?12:FPS,slowFps=web?6:SLOW_FPS,smoothFps=web?24:SMOOTH_FPS;

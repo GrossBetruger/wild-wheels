@@ -614,6 +614,10 @@ fn racers(stage: &mut Stage, view: &ClientView, bats: &Bats, dt: f32, now: f32, 
         let firing = a.vulcan > 0.0;
         let fired = stage.cache.since(a.id, 1, firing, now);
         for (index, name) in OVERLAYS.iter().enumerate() {
+            // R-Yeah's Blender Bell 206 already has an always-mounted rotary Vulcan cannon!
+            if *name == "vulcan" && a.driver == crate::ryeah::DRIVER {
+                continue;
+            }
             let value = active[index];
             let clip = |part: &str| format!("overlay:{}:{name}{part}", a.driver);
             let start = SPECIAL_STARTS
@@ -954,6 +958,24 @@ pub fn sync(
         view.effects.len() as u64,
         std::sync::atomic::Ordering::Relaxed,
     );
+    // Align R-Yeah's hedgehogs so they stream straight out of the Bell 206's rotary Vulcan
+    // muzzle `(1.3, 4.56 + hover, 3.05)` and smoothly strafe down to combat height!
+    let ryeah_hover = crate::ryeah::hover_height(time.elapsed_secs());
+    let ryeah_shot_offset = |heading: f64, age: f64| -> Vec3 {
+        let u = (age as f32 / 0.24).clamp(0.0, 1.0);
+        let smooth = u * u * (3.0 - 2.0 * u);
+        let remain = 1.0 - smooth;
+        if remain <= 0.001 {
+            return Vec3::ZERO;
+        }
+        // Difference between Bell 206 Vulcan muzzle and default projectile spawn `(0, 1.3, 3.5)`
+        let local_delta = Vec3::new(
+            crate::ryeah::VULCAN_MUZZLE_LOCAL.x,
+            crate::ryeah::VULCAN_MUZZLE_LOCAL.y + ryeah_hover - 1.3,
+            crate::ryeah::VULCAN_MUZZLE_LOCAL.z - 3.5,
+        );
+        Quat::from_rotation_y(heading as f32) * local_delta * remain
+    };
     for p in view.projectiles {
         let owner = view.actors.get(p.owner).map_or(0, |a| a.driver);
         let play = match (p.kind.as_str(), p.vulcan) {
@@ -961,6 +983,10 @@ pub fn sync(
             (_, true) => stage.clip(&format!("shot:vulcan:{owner}")),
             _ => stage.clip("shot:hedgehog"),
         };
+        let mut shot_tf = at(p.wx, p.height, p.wz, p.heading);
+        if owner == crate::ryeah::DRIVER && p.kind == "hedgehog" {
+            shot_tf.translation += ryeah_shot_offset(p.heading, p.age);
+        }
         if seeing {
             // The browser marks the viewer's own shots green and the rest pink.
             let ghost = Play {
@@ -971,19 +997,9 @@ pub fn sync(
                 },
                 ..play
             };
-            stage.show(
-                Role::GhostShot,
-                p.id as usize,
-                ghost,
-                at(p.wx, p.height, p.wz, p.heading),
-            );
+            stage.show(Role::GhostShot, p.id as usize, ghost, shot_tf);
         }
-        stage.show(
-            Role::Shot,
-            p.id as usize,
-            play,
-            at(p.wx, p.height, p.wz, p.heading),
-        );
+        stage.show(Role::Shot, p.id as usize, play, shot_tf);
     }
     let trail_stride = mobile.detail(3, [4, 5, 7, 9]);
     for p in view.projectiles {
@@ -994,6 +1010,7 @@ pub fn sync(
             (false, "missile") => "trail:missile".into(),
             _ => "trail:hedgehog".into(),
         };
+        let trail_len = p.trail.len().max(1) as f64;
         for (index, sample) in p.trail.iter().enumerate().step_by(trail_stride).take(16) {
             let size = match p.vulcan {
                 true => 1.0,
@@ -1001,7 +1018,11 @@ pub fn sync(
             };
             let play = stage.clip(&name);
             let key = p.id as usize * 16 + index / trail_stride;
-            let puff = at(sample.wx, sample.height, sample.wz, 0.0).with_scale(Vec3::splat(size));
+            let mut puff = at(sample.wx, sample.height, sample.wz, 0.0).with_scale(Vec3::splat(size));
+            if owner == crate::ryeah::DRIVER && p.kind == "hedgehog" {
+                let sample_age = p.age * (1.0 - (index as f64 / trail_len)).max(0.0);
+                puff.translation += ryeah_shot_offset(p.heading, sample_age);
+            }
             if seeing {
                 let ghost = Play {
                     ghost: true,
