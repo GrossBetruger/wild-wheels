@@ -95,9 +95,11 @@ struct BlenderModels {
     flame_mesh: Handle<Mesh>,
     diamond_mesh: Handle<Mesh>,
     flame_outer_mat: Handle<StandardMaterial>,
+    idle_outer_mat: Handle<StandardMaterial>,
     flame_inner_mat: Handle<StandardMaterial>,
     diamond_mat: Handle<StandardMaterial>,
     smoke_mat: Handle<StandardMaterial>,
+    idle_smoke_mat: Handle<StandardMaterial>,
     spark_mat: Handle<StandardMaterial>,
     rcs_mat: Handle<StandardMaterial>,
 }
@@ -209,6 +211,14 @@ fn load_blender_models(
         cull_mode: None,
         ..default()
     });
+    let idle_outer_mat = materials.add(StandardMaterial {
+        base_color: Color::srgba(0.96, 0.24, 0.14, 0.76),
+        emissive: LinearRgba::rgb(4.8, 1.05, 0.55),
+        unlit: true,
+        alpha_mode: AlphaMode::Add,
+        cull_mode: None,
+        ..default()
+    });
     let flame_inner_mat = materials.add(StandardMaterial {
         base_color: Color::srgba(0.48, 0.92, 1.0, 0.95),
         emissive: LinearRgba::rgb(1.0, 4.4, 7.8),
@@ -228,6 +238,14 @@ fn load_blender_models(
     let smoke_mat = materials.add(StandardMaterial {
         base_color: Color::srgba(0.26, 0.40, 0.78, 0.22),
         emissive: LinearRgba::rgb(0.28, 0.45, 1.15),
+        unlit: true,
+        alpha_mode: AlphaMode::Add,
+        cull_mode: None,
+        ..default()
+    });
+    let idle_smoke_mat = materials.add(StandardMaterial {
+        base_color: Color::srgba(0.72, 0.28, 0.22, 0.26),
+        emissive: LinearRgba::rgb(1.15, 0.34, 0.22),
         unlit: true,
         alpha_mode: AlphaMode::Add,
         cull_mode: None,
@@ -259,9 +277,11 @@ fn load_blender_models(
         flame_mesh,
         diamond_mesh,
         flame_outer_mat,
+        idle_outer_mat,
         flame_inner_mat,
         diamond_mat,
         smoke_mat,
+        idle_smoke_mat,
         spark_mat,
         rcs_mat,
     });
@@ -275,7 +295,7 @@ fn sync_blender_models(
     mut existing: Query<(Entity, &BlenderRacer, &mut Transform, &mut Visibility), Without<HoustonRig>>,
     mut rigs: Query<(Entity, &HoustonRig, &mut Transform, &mut Visibility), Without<BlenderRacer>>,
     mut parts: Query<
-        (&mut Transform, &mut Visibility),
+        (&mut Transform, &mut Visibility, Option<&mut MeshMaterial3d<StandardMaterial>>),
         (Without<BlenderRacer>, Without<HoustonRig>, Without<PointLight>),
     >,
     mut lights: Query<&mut PointLight>,
@@ -338,12 +358,12 @@ fn sync_blender_models(
             {
                 *ship_tf = tf;
                 *ship_vis = Visibility::Visible;
-                if let Ok((mut p_tf, _)) = parts.get_mut(rig.pilot) {
+                if let Ok((mut p_tf, _, _)) = parts.get_mut(rig.pilot) {
                     p_tf.translation = Vec3::new(0.0, cel_bounce, 0.0);
                     p_tf.rotation = Quat::from_rotation_y(turn * std::f32::consts::PI);
                 }
                 for &(arm_ent, side) in &[(rig.arm_l, -1.0f32), (rig.arm_r, 1.0f32)] {
-                    if let Ok((mut a_tf, _)) = parts.get_mut(arm_ent) {
+                    if let Ok((mut a_tf, _, _)) = parts.get_mut(arm_ent) {
                         let wave = turn * (progress * 18.0 + side).sin() * 0.35;
                         a_tf.translation = Vec3::new(side * 0.85, 2.25, 0.28);
                         a_tf.rotation = Quat::from_euler(
@@ -354,53 +374,58 @@ fn sync_blender_models(
                         );
                     }
                 }
+                let cruise_scale = (a.speed.abs() as f32 / 520.0).clamp(0.35, 1.0);
                 for (idx, &(outer, inner, ex, ey, er)) in rig.flames.iter().enumerate() {
                     let f1 = (t * 58.0 + idx as f32 * 2.3).sin();
                     let f2 = (t * 97.0 + idx as f32 * 4.1).cos();
                     let flicker = 1.0 + f1 * 0.22 + f2 * 0.12;
-                    let wobble_x = (t * 43.0 + idx as f32 * 1.9).sin() * if firing || nightmare { 0.08 } else { 0.03 };
-                    let wobble_y = (t * 37.0 + idx as f32 * 3.1).cos() * if firing || nightmare { 0.07 } else { 0.025 };
+                    let wobble_x = (t * 43.0 + idx as f32 * 1.9).sin() * if firing || nightmare { 0.08 } else { 0.05 };
+                    let wobble_y = (t * 37.0 + idx as f32 * 3.1).cos() * if firing || nightmare { 0.07 } else { 0.04 };
                     let (len_o, rad_o, len_i, rad_i) = if nightmare {
                         (8.4 * flicker, er * 1.85, 5.9 * flicker, er * 1.12)
                     } else if firing {
                         (6.5 * flicker, er * 1.50, 4.5 * flicker, er * 0.90)
                     } else {
-                        (1.10 * flicker, er * 0.74, 0.66 * flicker, er * 0.48)
+                        let c = 1.65 + cruise_scale * 1.85;
+                        (c * flicker, er * 1.05, c * 0.58 * flicker, er * 0.60)
                     };
-                    if let Ok((mut otf, mut ovis)) = parts.get_mut(outer) {
+                    if let Ok((mut otf, mut ovis, omat)) = parts.get_mut(outer) {
                         *ovis = Visibility::Inherited;
+                        if let Some(mut mat_h) = omat {
+                            mat_h.0 = if firing || nightmare {
+                                models.flame_outer_mat.clone()
+                            } else {
+                                models.idle_outer_mat.clone()
+                            };
+                        }
                         otf.translation = Vec3::new(ex + wobble_x, 1.45 + ey + wobble_y, -3.50 - len_o * 0.5);
                         otf.rotation = Quat::from_euler(EulerRot::XYZ, -std::f32::consts::FRAC_PI_2 + wobble_y * 0.6, wobble_x * 0.6, 0.0);
                         otf.scale = Vec3::new(rad_o * (1.0 + f2 * 0.12), len_o, rad_o * (1.0 - f2 * 0.12));
                     }
-                    if let Ok((mut itf, mut ivis)) = parts.get_mut(inner) {
+                    if let Ok((mut itf, mut ivis, _)) = parts.get_mut(inner) {
                         *ivis = Visibility::Inherited;
                         itf.translation = Vec3::new(ex + wobble_x * 0.5, 1.45 + ey + wobble_y * 0.5, -3.50 - len_i * 0.5);
                         itf.scale = Vec3::new(rad_i, len_i, rad_i);
                     }
                 }
-                // Spawn sleek elongated methalox plasma streaks & sparks seamlessly from the flame body!
+                // Spawn sleek elongated vapor/smoke streaks & sparks seamlessly from the flame body!
                 let back_dir = tf.rotation * Vec3::NEG_Z;
                 let right_dir = tf.rotation * Vec3::X;
                 let up_dir = tf.rotation * Vec3::Y;
-                if firing || nightmare {
-                    let emit_count = if nightmare { 3 } else { 2 };
-                    let seed = (t * 60.0) as usize;
-                    for k in 0..emit_count {
-                        let eng = RAPTOR_ENGINES[(seed + k * 2 + a.id) % 3];
-                        let jitter = ((seed * 37 + k * 17) % 100) as f32 / 100.0 - 0.5;
-                        let jitter2 = ((seed * 53 + k * 29) % 100) as f32 / 100.0 - 0.5;
-                        // Spawn right inside the Raptor flame tail so streaks connect seamlessly!
+                let seed = (t * 60.0) as usize;
+                let emit_count = if nightmare { 3 } else if firing { 2 } else { 2 };
+                for k in 0..emit_count {
+                    let eng = RAPTOR_ENGINES[(seed + k * 2 + a.id) % 3];
+                    let jitter = ((seed * 37 + k * 17) % 100) as f32 / 100.0 - 0.5;
+                    let jitter2 = ((seed * 53 + k * 29) % 100) as f32 / 100.0 - 0.5;
+                    if firing || nightmare {
                         let spawn_z = if nightmare { -7.6 } else { -6.0 };
                         let streak_pos = tf.transform_point(Vec3::new(
                             eng.0 + jitter * 0.22,
                             1.45 + eng.1 + jitter2 * 0.18,
                             spawn_z,
                         ));
-                        // Elongated translucent violet-blue plasma/vapor streak
-                        let vel = back_dir * 26.0
-                            + right_dir * (jitter * 3.8)
-                            + up_dir * (jitter2 * 2.4);
+                        let vel = back_dir * 26.0 + right_dir * (jitter * 3.8) + up_dir * (jitter2 * 2.4);
                         commands.spawn((
                             Mesh3d(models.diamond_mesh.clone()),
                             MeshMaterial3d(models.smoke_mat.clone()),
@@ -417,7 +442,6 @@ fn sync_blender_models(
                                 end_scale: Vec3::new(0.55, 0.55, 2.40),
                             },
                         ));
-                        // Crisp glowing orange-gold / cyan supersonic sparks streaking from the bells
                         let spark_pos = tf.transform_point(Vec3::new(eng.0, 1.45 + eng.1, -3.75));
                         let spark_vel = back_dir * (34.0 + jitter.abs() * 14.0)
                             + right_dir * (jitter * 7.5)
@@ -438,11 +462,58 @@ fn sync_blender_models(
                                 end_scale: Vec3::new(0.01, 0.01, 0.15),
                             },
                         ));
+                    } else {
+                        // Warm reddish-amber smoky cruise streaks flowing smoothly out of the non-boost flame!
+                        let spawn_z = -4.2 - cruise_scale * 1.4;
+                        let streak_pos = tf.transform_point(Vec3::new(
+                            eng.0 + jitter * 0.26,
+                            1.45 + eng.1 + jitter2 * 0.20,
+                            spawn_z,
+                        ));
+                        let vel = back_dir * (12.0 + cruise_scale * 8.0)
+                            + right_dir * (jitter * 3.4)
+                            + up_dir * (0.4 + jitter2 * 2.0);
+                        commands.spawn((
+                            Mesh3d(models.diamond_mesh.clone()),
+                            MeshMaterial3d(models.idle_smoke_mat.clone()),
+                            Transform {
+                                translation: streak_pos,
+                                rotation: tf.rotation,
+                                scale: Vec3::new(0.22, 0.22, 1.15),
+                            },
+                            ExhaustParticle {
+                                vel,
+                                age: 0.0,
+                                life: 0.34,
+                                start_scale: Vec3::new(0.24, 0.24, 1.20),
+                                end_scale: Vec3::new(0.62, 0.62, 2.35),
+                            },
+                        ));
+                        if k == 0 && seed % 2 == 0 {
+                            let spark_pos = tf.transform_point(Vec3::new(eng.0, 1.45 + eng.1, -3.75));
+                            let spark_vel = back_dir * 20.0 + right_dir * (jitter * 4.5) + up_dir * (jitter2 * 3.0);
+                            commands.spawn((
+                                Mesh3d(models.diamond_mesh.clone()),
+                                MeshMaterial3d(models.spark_mat.clone()),
+                                Transform {
+                                    translation: spark_pos,
+                                    rotation: tf.rotation,
+                                    scale: Vec3::new(0.05, 0.05, 0.45),
+                                },
+                                ExhaustParticle {
+                                    vel: spark_vel,
+                                    age: 0.0,
+                                    life: 0.20,
+                                    start_scale: Vec3::new(0.05, 0.05, 0.50),
+                                    end_scale: Vec3::new(0.01, 0.01, 0.10),
+                                },
+                            ));
+                        }
                     }
                 }
                 // Glowing supersonic Mach shock diamonds pulsing down the 3 main Raptor plumes!
                 for &(d_ent, ex, ey, er, di) in &rig.diamonds {
-                    if let Ok((mut dtf, mut dvis)) = parts.get_mut(d_ent) {
+                    if let Ok((mut dtf, mut dvis, _)) = parts.get_mut(d_ent) {
                         if firing || nightmare {
                             *dvis = Visibility::Inherited;
                             let spacing = if nightmare { 1.45 } else { 1.15 };
@@ -457,18 +528,21 @@ fn sync_blender_models(
                     }
                 }
                 if let Ok(mut light) = lights.get_mut(rig.plume_light) {
-                    light.intensity = if nightmare {
-                        420_000.0
+                    if nightmare {
+                        light.color = Color::srgb(0.55, 0.45, 1.0);
+                        light.intensity = 420_000.0;
                     } else if firing {
-                        220_000.0
+                        light.color = Color::srgb(0.45, 0.72, 1.0);
+                        light.intensity = 220_000.0;
                     } else {
-                        18_000.0
-                    };
+                        light.color = Color::srgb(1.0, 0.38, 0.22);
+                        light.intensity = 55_000.0 + cruise_scale * 40_000.0;
+                    }
                 }
                 let rcs_z = if a.somersault > 0.275 { 2.05 } else { -2.35 };
                 for (i, &rcs_ent) in rig.rcs.iter().enumerate() {
                     let side = if i == 0 { -1.0f32 } else { 1.0f32 };
-                    if let Ok((mut rtf, mut rvis)) = parts.get_mut(rcs_ent) {
+                    if let Ok((mut rtf, mut rvis, _)) = parts.get_mut(rcs_ent) {
                         if a.somersault > 0.0 {
                             let fl = 1.0 + (t * 40.0 + side).sin() * 0.2;
                             *rvis = Visibility::Inherited;
@@ -620,10 +694,10 @@ fn sync_blender_models(
             *cur_tf = tf;
             *vis = Visibility::Visible;
             if let Some(tail_ent) = br.tail
-                && let Ok((mut ttf, mut tvis)) = parts.get_mut(tail_ent)
+                && let Ok((mut ttf, mut tvis, _)) = parts.get_mut(tail_ent)
             {
                 *tvis = Visibility::Inherited;
-                let freq = if a.celebrate > 0.0 || a.boost > 0.0 { 11.0 } else { 6.0 };
+                let freq = if a.celebrate > 0.0 || a.boost > 0.0 { 5.5 } else { 3.0 };
                 let amp = if a.celebrate > 0.0 { 0.55 } else { 0.36 };
                 let yaw = (t * freq + a.id as f32).sin() * amp;
                 let bob = (t * freq * 2.0 + a.id as f32).cos() * 0.10;
@@ -662,20 +736,20 @@ fn sync_blender_models(
         if !alive_houston.contains(&rig.id) {
             *vis = Visibility::Hidden;
             for &(outer, inner, _, _, _) in &rig.flames {
-                if let Ok((_, mut ovis)) = parts.get_mut(outer) {
+                if let Ok((_, mut ovis, _)) = parts.get_mut(outer) {
                     *ovis = Visibility::Hidden;
                 }
-                if let Ok((_, mut ivis)) = parts.get_mut(inner) {
+                if let Ok((_, mut ivis, _)) = parts.get_mut(inner) {
                     *ivis = Visibility::Hidden;
                 }
             }
             for &(d_ent, _, _, _, _) in &rig.diamonds {
-                if let Ok((_, mut dvis)) = parts.get_mut(d_ent) {
+                if let Ok((_, mut dvis, _)) = parts.get_mut(d_ent) {
                     *dvis = Visibility::Hidden;
                 }
             }
             for &rcs_ent in &rig.rcs {
-                if let Ok((_, mut rvis)) = parts.get_mut(rcs_ent) {
+                if let Ok((_, mut rvis, _)) = parts.get_mut(rcs_ent) {
                     *rvis = Visibility::Hidden;
                 }
             }
