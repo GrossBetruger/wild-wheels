@@ -5,6 +5,17 @@ use crate::app::GameSession;
 use bevy::audio::{AudioSinkPlayback, Volume};
 use bevy::prelude::*;
 use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicBool, Ordering};
+
+static MUTED: AtomicBool = AtomicBool::new(false);
+
+pub fn set_muted(muted: bool) {
+    MUTED.store(muted, Ordering::Relaxed);
+}
+
+pub fn is_muted() -> bool {
+    MUTED.load(Ordering::Relaxed)
+}
 
 fn sound_pack_bytes() -> &'static [u8] {
     crate::sound_pack_bytes()
@@ -347,6 +358,11 @@ pub fn play(
             // The engine was recorded idling at 28 Hz; the browser raises it with speed.
             pitch = ((28.0 + p.speed.abs() * 0.045) / 28.0) as f32;
         }
+    }
+    let muted = is_muted();
+    if muted {
+        levels = [0.0; 5];
+        cues.clear();
     }
     let blend = (time.delta_secs() * 30.0).min(1.0);
     for (mut sink, layer) in &mut layers {

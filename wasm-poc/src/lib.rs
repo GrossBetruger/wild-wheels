@@ -1,3 +1,4 @@
+#![recursion_limit = "256"]
 mod arena_mesh;
 mod bench;
 mod explosions;
@@ -13,6 +14,7 @@ use bevy::gltf::GltfAssetLabel;
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
 use serde_json::json;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Mutex, OnceLock};
 use wasm_bindgen::prelude::*;
 use wild_wheels_core::{Action, Frame, Input, NativeArena, NativeClient};
@@ -46,20 +48,86 @@ struct LocalMatch {
     last_x_tap: f64,
 }
 
-#[derive(Resource, Clone, Copy)]
+#[derive(Resource, Clone)]
 struct LaunchConfig {
     driver: usize,
     arena: usize,
     bots: usize,
+    player_name: String,
+    target_score: u32,
+    match_minutes: u32,
+    special_abilities: bool,
 }
 
 static PACK_BYTES: OnceLock<&'static [u8]> = OnceLock::new();
 static SOUND_BYTES: OnceLock<&'static [u8]> = OnceLock::new();
 static HUD_JSON: Mutex<String> = Mutex::new(String::new());
+static METADATA_JSON: Mutex<String> = Mutex::new(String::new());
+static PENDING_RESTART: Mutex<Option<LaunchConfig>> = Mutex::new(None);
+static QUEUED_ACTIONS: Mutex<Vec<(String, String)>> = Mutex::new(Vec::new());
+static PAUSED: AtomicBool = AtomicBool::new(false);
+static VIRTUAL_KEYS: AtomicU32 = AtomicU32::new(0);
 
 #[wasm_bindgen]
 pub fn hud_state() -> String {
     HUD_JSON.lock().map(|g| g.clone()).unwrap_or_default()
+}
+
+#[wasm_bindgen]
+pub fn get_metadata() -> String {
+    METADATA_JSON.lock().map(|g| g.clone()).unwrap_or_default()
+}
+
+#[wasm_bindgen]
+pub fn set_paused(paused: bool) {
+    PAUSED.store(paused, Ordering::Relaxed);
+}
+
+#[wasm_bindgen]
+pub fn set_muted(muted: bool) {
+    sound::set_muted(muted);
+}
+
+#[wasm_bindgen]
+pub fn set_virtual_keys(bits: u32) {
+    VIRTUAL_KEYS.store(bits, Ordering::Relaxed);
+}
+
+#[wasm_bindgen]
+pub fn trigger_action(kind: String, item: String) {
+    if let Ok(mut q) = QUEUED_ACTIONS.lock() {
+        q.push((kind, item));
+    }
+}
+
+#[wasm_bindgen]
+pub fn restart_local_match(
+    driver: usize,
+    arena: usize,
+    bots: usize,
+    player_name: String,
+    target_score: u32,
+    match_minutes: u32,
+    special_abilities: bool,
+) {
+    let arena_count = wild_wheels_core::arena_defs().len().max(1);
+    let cfg = LaunchConfig {
+        driver: driver.min(15),
+        arena: arena.min(arena_count - 1),
+        bots: bots.min(7),
+        player_name: if player_name.trim().is_empty() {
+            "WASM Pilot".into()
+        } else {
+            player_name.trim().chars().take(18).collect()
+        },
+        target_score: target_score.clamp(5, 50),
+        match_minutes: match_minutes.clamp(1, 15),
+        special_abilities,
+    };
+    PAUSED.store(false, Ordering::Relaxed);
+    if let Ok(mut pending) = PENDING_RESTART.lock() {
+        *pending = Some(cfg);
+    }
 }
 
 pub(crate) fn pack_bytes() -> &'static [u8] {
@@ -134,18 +202,38 @@ struct HoustonRig {
 }
 
 #[wasm_bindgen]
-pub fn start_game(pack: Vec<u8>, sound_pack: Vec<u8>, driver: usize, arena: usize, bots: usize) {
+pub fn start_game(
+    pack: Vec<u8>,
+    sound_pack: Vec<u8>,
+    driver: usize,
+    arena: usize,
+    bots: usize,
+    player_name: String,
+    target_score: u32,
+    match_minutes: u32,
+    special_abilities: bool,
+) {
     console_error_panic_hook::set_once();
     let leaked: &'static [u8] = Box::leak(pack.into_boxed_slice());
     let _ = PACK_BYTES.set(leaked);
     let leaked_sound: &'static [u8] = Box::leak(sound_pack.into_boxed_slice());
     let _ = SOUND_BYTES.set(leaked_sound);
 
+    let arena_count = wild_wheels_core::arena_defs().len().max(1);
     let cfg = LaunchConfig {
         driver: driver.min(15),
-        arena: arena.min(2),
+        arena: arena.min(arena_count - 1),
         bots: bots.min(7),
+        player_name: if player_name.trim().is_empty() {
+            "WASM Pilot".into()
+        } else {
+            player_name.trim().chars().take(18).collect()
+        },
+        target_score: target_score.clamp(5, 50),
+        match_minutes: match_minutes.clamp(1, 15),
+        special_abilities,
     };
+    PAUSED.store(false, Ordering::Relaxed);
 
     let mut bevy_app = App::new();
     bevy_app
@@ -157,7 +245,7 @@ pub fn start_game(pack: Vec<u8>, sound_pack: Vec<u8>, driver: usize, arena: usiz
                 })
                 .set(WindowPlugin {
                     primary_window: Some(Window {
-                        title: "Wild Wheels — Bevy WASM PoC".into(),
+                        title: "Wild Wheels — Bevy WASM".into(),
                         canvas: Some("#bevy-canvas".into()),
                         fit_canvas_to_parent: true,
                         prevent_default_event_handling: true,
@@ -176,7 +264,7 @@ pub fn start_game(pack: Vec<u8>, sound_pack: Vec<u8>, driver: usize, arena: usiz
             sound::GameAudioPlugin,
             explosions::ExplosionsPlugin,
         ))
-        .add_systems(Startup, (start_local_match, load_blender_models))
+        .add_systems(Startup, (start_local_match, load_blender_models, publish_metadata))
         .add_systems(
             Update,
             (
@@ -783,12 +871,48 @@ fn tick_exhaust_particles(
     }
 }
 
-fn start_local_match(
-    mut commands: Commands,
-    cfg: Res<LaunchConfig>,
-    mut session: ResMut<app::GameSession>,
-) {
-    let bots = if cfg.arena == 2 { cfg.bots.min(3) } else { cfg.bots.min(7) };
+fn publish_metadata(graphics: Res<ported::Graphics>) {
+    let drivers: Vec<_> = graphics
+        .racers()
+        .iter()
+        .enumerate()
+        .map(|(idx, r)| {
+            let [cr, cg, cb] = r.color;
+            let hex = format!("#{cr:02x}{cg:02x}{cb:02x}");
+            json!({
+                "id": idx,
+                "name": r.name,
+                "description": r.description,
+                "ability": r.ability,
+                "intelligence": r.intelligence,
+                "color": hex,
+                "blender": has_blender_model(idx),
+            })
+        })
+        .collect();
+    let arenas: Vec<_> = graphics
+        .arenas()
+        .iter()
+        .enumerate()
+        .map(|(idx, a)| {
+            json!({
+                "id": idx,
+                "name": a.name,
+                "description": a.description,
+            })
+        })
+        .collect();
+    if let Ok(mut guard) = METADATA_JSON.lock() {
+        *guard = json!({ "drivers": drivers, "arenas": arenas }).to_string();
+    }
+}
+
+fn build_local_arena(cfg: &LaunchConfig, seed: u64) -> NativeArena {
+    let bots = if cfg.arena == 2 {
+        cfg.bots.min(3)
+    } else {
+        cfg.bots.min(7)
+    };
     let config = json!({
         "code": "00",
         "maxPlayers": 8,
@@ -796,15 +920,24 @@ fn start_local_match(
         "bots": bots,
         "dedicated": true,
         "host": null,
-        "epoch": 1,
-        "seed": 42,
-        "players": [{"id": 0, "name": "WASM Pilot", "driver": cfg.driver, "role": "driver"}],
-        "specialAbilities": true,
-        "targetScore": 15,
-        "matchMinutes": 5
+        "epoch": seed,
+        "seed": seed,
+        "players": [{"id": 0, "name": cfg.player_name, "driver": cfg.driver, "role": "driver"}],
+        "specialAbilities": cfg.special_abilities,
+        "targetScore": cfg.target_score,
+        "matchMinutes": cfg.match_minutes
     });
     let mut arena = NativeArena::new(config).expect("valid local arena");
     arena.start();
+    arena
+}
+
+fn start_local_match(
+    mut commands: Commands,
+    cfg: Res<LaunchConfig>,
+    mut session: ResMut<app::GameSession>,
+) {
+    let arena = build_local_arena(&cfg, 42);
     let pkt = arena.packet(0);
     session.client = NativeClient::from_packet(&pkt, 0.0).ok();
     commands.insert_resource(LocalMatch {
@@ -821,10 +954,29 @@ fn tick_local_match(
     mut local: ResMut<LocalMatch>,
     mut session: ResMut<app::GameSession>,
 ) {
+    // Handle instant match restart / driver or arena change without reloading WASM
+    if let Ok(mut pending) = PENDING_RESTART.lock()
+        && let Some(new_cfg) = pending.take()
+    {
+        let seed = ((time.elapsed_secs_f64() * 1000.0) as u64).wrapping_add(1337);
+        local.arena = build_local_arena(&new_cfg, seed);
+        local.elapsed = 0.0;
+        local.next_action = 1;
+        local.last_x_tap = -10.0;
+        let pkt = local.arena.packet(0);
+        session.client = NativeClient::from_packet(&pkt, 0.0).ok();
+        session.sounds.clear();
+        session.voices.clear();
+    }
+
+    if PAUSED.load(Ordering::Relaxed) {
+        return;
+    }
+
     let dt = f64::from(time.delta_secs()).clamp(1.0 / 240.0, 0.05);
     local.elapsed += dt;
 
-    let mut bits = 0u32;
+    let mut bits = VIRTUAL_KEYS.load(Ordering::Relaxed);
     if keys.pressed(KeyCode::KeyW) || keys.pressed(KeyCode::ArrowUp) {
         bits |= 1;
     }
@@ -845,7 +997,7 @@ fn tick_local_match(
     }
 
     let mut actions = Vec::new();
-    let mut push = |kind: &str, item: &str, id: &mut u32| {
+    let mut push = |kind: &str, item: &str, bomb_kind: Option<String>, id: &mut u32| {
         actions.push(Action {
             id: Some(*id),
             kind: kind.into(),
@@ -853,36 +1005,54 @@ fn tick_local_match(
             wx: 0.0,
             wz: 0.0,
             item: item.into(),
-            bomb_kind: None,
+            bomb_kind,
         });
         *id += 1;
     };
+    if let Ok(mut q) = QUEUED_ACTIONS.lock() {
+        for (kind, item) in q.drain(..) {
+            if kind == "turbo" {
+                if local.elapsed - local.last_x_tap <= 0.38 {
+                    push("nightmare", "", None, &mut local.next_action);
+                    local.last_x_tap = -10.0;
+                } else {
+                    push("turbo", "", None, &mut local.next_action);
+                    local.last_x_tap = local.elapsed;
+                }
+            } else {
+                push(&kind, &item, None, &mut local.next_action);
+            }
+        }
+    }
     if keys.just_pressed(KeyCode::KeyX) || keys.just_pressed(KeyCode::KeyE) {
         if local.elapsed - local.last_x_tap <= 0.38 {
-            push("nightmare", "", &mut local.next_action);
+            push("nightmare", "", None, &mut local.next_action);
             local.last_x_tap = -10.0;
         } else {
-            push("turbo", "", &mut local.next_action);
+            push("turbo", "", None, &mut local.next_action);
             local.last_x_tap = local.elapsed;
         }
     }
     if keys.just_pressed(KeyCode::KeyF) {
-        push("special", "", &mut local.next_action);
+        push("special", "", None, &mut local.next_action);
     }
     if keys.just_pressed(KeyCode::KeyZ) {
-        push("somersault", "", &mut local.next_action);
+        push("somersault", "", None, &mut local.next_action);
     }
     if keys.just_pressed(KeyCode::KeyC) {
-        push("chaff", "", &mut local.next_action);
+        push("chaff", "", None, &mut local.next_action);
     }
     if keys.just_pressed(KeyCode::Tab) || keys.just_pressed(KeyCode::KeyQ) {
-        push("cycle", "", &mut local.next_action);
+        push("cycle", "", None, &mut local.next_action);
     }
     if keys.just_pressed(KeyCode::Digit1) {
-        push("select", "hedgehog", &mut local.next_action);
+        push("select", "hedgehog", None, &mut local.next_action);
     }
     if keys.just_pressed(KeyCode::Digit2) {
-        push("select", "missile", &mut local.next_action);
+        push("select", "missile", None, &mut local.next_action);
+    }
+    if keys.just_pressed(KeyCode::Digit3) || keys.just_pressed(KeyCode::KeyB) {
+        push("bomb", "", Some("bomb".into()), &mut local.next_action);
     }
 
     let frame = Frame {
@@ -917,6 +1087,7 @@ fn tick_local_match(
                     a.kills,
                     a.deaths,
                     a.id,
+                    a.driver,
                     a.name.as_deref().unwrap_or("Bot"),
                     a.color.as_str(),
                 )
@@ -925,15 +1096,84 @@ fn tick_local_match(
         standings.sort_by(|a, b| b.0.total_cmp(&a.0).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2)));
         let rows: Vec<_> = standings
             .into_iter()
-            .map(|(kills, deaths, id, name, color)| {
-                json!({ "name": name, "color": color, "kills": kills, "deaths": deaths, "me": id == view.you })
+            .map(|(kills, deaths, id, driver, name, color)| {
+                json!({
+                    "id": id,
+                    "driver": driver,
+                    "name": name,
+                    "color": color,
+                    "kills": kills,
+                    "deaths": deaths,
+                    "me": id == view.you
+                })
             })
             .collect();
+        let kill_feed: Vec<_> = view
+            .kill_feed
+            .iter()
+            .rev()
+            .take(5)
+            .map(|k| {
+                json!({
+                    "id": k.id,
+                    "attacker": k.attacker_name,
+                    "victim": k.victim_name,
+                    "victimColor": k.victim_color,
+                    "kind": k.kind,
+                    "text": k.text,
+                    "time": k.time,
+                })
+            })
+            .collect();
+        let radar_actors: Vec<_> = view
+            .actors
+            .iter()
+            .filter(|a| !a.inactive)
+            .map(|a| {
+                json!({
+                    "wx": a.wx,
+                    "wz": a.wz,
+                    "heading": a.heading,
+                    "color": a.color,
+                    "me": a.id == view.you,
+                    "dead": a.destroyed > 0.0,
+                })
+            })
+            .collect();
+        let radar_supplies: Vec<_> = view
+            .supplies
+            .iter()
+            .filter(|s| s.cooldown <= 0.0)
+            .map(|s| json!({ "wx": s.wx, "wz": s.wz, "kind": s.kind }))
+            .collect();
+        let radar_missiles: Vec<_> = view
+            .projectiles
+            .iter()
+            .filter(|s| s.kind == "missile")
+            .map(|s| json!({ "wx": s.wx, "wz": s.wz }))
+            .collect();
+        let radar_ghosts: Vec<_> = view
+            .effects
+            .iter()
+            .filter(|e| e.kind == "eulerGhost")
+            .map(|e| json!({ "wx": e.wx, "wz": e.wz }))
+            .collect();
+        let bridge_count = view.arena_def.bridges.len();
+        let bridges_crossed = p.euler_bridges.count_ones();
+        let winner_name = view
+            .winner
+            .and_then(|wid| view.actors.get(wid))
+            .map(|a| a.name.as_deref().unwrap_or("Bot").to_string());
         let snap = json!({
             "phase": view.phase,
             "elapsed": view.elapsed,
             "duration": view.duration,
             "countdown": view.countdown,
+            "finishCountdown": view.finish_countdown,
+            "targetScore": view.target_score,
+            "winner": winner_name,
+            "you": view.you,
+            "driver": p.driver,
             "health": p.health,
             "destroyed": p.destroyed,
             "speed": p.speed,
@@ -941,11 +1181,38 @@ fn tick_local_match(
             "missiles": p.missiles,
             "turbos": p.turbos,
             "chaff": p.chaff,
+            "bombAmmo": p.bomb_ammo,
+            "stinkAmmo": p.stink_ammo,
             "item": p.item,
+            "shield": p.shield,
+            "hedgeShield": p.hedge_shield,
+            "tehilim": p.tehilim,
+            "vulcan": p.vulcan,
+            "boost": p.boost,
+            "drift": p.drift,
+            "wasDrifting": p.was_drifting,
             "specialCooldown": p.special_cooldown,
+            "specialActive": p.special_active,
+            "nightmareActive": p.nightmare_active,
+            "nightmareCooldown": p.nightmare_cooldown,
+            "somersaultCooldown": p.somersault_cooldown,
+            "bridgeCount": bridge_count,
+            "bridgesCrossed": bridges_crossed,
             "notice": p.notice,
             "noticeTime": p.notice_time,
             "standings": rows,
+            "killFeed": kill_feed,
+            "radar": {
+                "size": view.arena_def.size,
+                "shape": view.arena_def.shape,
+                "blocks": view.blocks,
+                "water": view.arena_def.water,
+                "bridges": view.arena_def.bridges,
+                "actors": radar_actors,
+                "supplies": radar_supplies,
+                "missiles": radar_missiles,
+                "ghosts": radar_ghosts,
+            }
         })
         .to_string();
         if let Ok(mut guard) = HUD_JSON.lock() {
