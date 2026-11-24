@@ -5,6 +5,9 @@
   helicopter rotor downwash turbulence + knee-bend limits + secondary tail whip)
   baked cleanly into 4 seamlessly looping animation clips (`hang`, `boost`, `roar`, `fire`),
   plus eyelid blink shape keys (`MorphWeights`).
+- His mane as locks simulated offline (`strands.py`): wind, gusts, gravity, a spring
+  toward the groomed shape and collisions with head and shoulders, baked as shape
+  keys the game fades through (`idleNN`, `boostNN`, and `left` / `right` for turns).
 
 Run: /opt/homebrew/bin/blender --background --python wasm-poc/blender/build_ryeah.py
 """
@@ -20,6 +23,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
 import rigging  # noqa: E402
+import strands  # noqa: E402
 from rigging import RX, RY, RZ, wave  # noqa: E402
 
 ROOT = os.path.dirname(HERE)
@@ -364,6 +368,75 @@ def add_blink_shape_key(lids_obj):
     key.value = 0.0
 
 
+# The mane's baked passes: (shape-key prefix, frames, frames a second). The
+# game reads the same numbers in `ryeah.rs`.
+MANE_IDLE, MANE_BOOST = ("idle", 12, 6), ("boost", 10, 10)
+
+
+def mane_locks():
+    """A full mane as the original lays it out: rows of locks over the back of
+    the head and a ring framing the face, groomed to flare outward and back."""
+    centre = Vector((0.0, 4.02, 0.0))
+
+    def lock(x, y, z, flare, length, girth, look):
+        root = Vector((x, y, z))
+        out = Vector((x, y - centre.y, 0.0))
+        aim = out.normalized() * flare + Vector((0, 0, -1)) if out.length > 1e-4 else Vector((0, 0, -1))
+        place = Vector(hanging_model(*root))
+        toward = Vector(hanging_model(*(root + aim))) - place
+        return strands.Lock(place, toward, length, girth, points=7, look=look)
+
+    locks = []
+    for row, (reach, count) in enumerate(((0.2, 6), (0.48, 10), (0.74, 13))):
+        for i in range(count):
+            angle = i * math.tau / count + row * 0.35
+            locks.append(lock(math.sin(angle) * reach, centre.y + math.cos(angle) * reach,
+                              0.12 - math.sqrt(1 - reach * reach) * 0.54,
+                              0.3 + 0.28 * row, 1.9 - 0.12 * row, 0.26, i + row))
+    for i in range(18):
+        angle = i * math.tau / 18
+        locks.append(lock(math.sin(angle) * 0.95, centre.y + math.cos(angle) * 0.98, 0.5, 1.5, 1.25, 0.22, i))
+    return locks
+
+
+def build_mane():
+    """Simulate the mane in the air the lion hangs in and bake every pass."""
+    locks = mane_locks()
+    tones = [(0.26, 0.06, 0.015), (0.40, 0.105, 0.022), (0.50, 0.17, 0.034), (0.66, 0.29, 0.06)]
+    materials = [make_mat(f"LionMane{i}", tone, metallic=0.02, roughness=0.66) for i, tone in enumerate(tones)]
+    materials.append(make_mat("LionManeSheen", (0.74, 0.33, 0.08), metallic=0.04, roughness=0.5))
+    mane = strands.skin_locks("Lion_Mane", locks, materials, sides=5)
+    rigging.carry(head=1.0)
+    rigging.bind(mane)
+    # What the locks may not pass through: the head and its collar, and the shoulders.
+    balls = [(hanging_model(0, 4.02, 0.55), 0.85), (hanging_model(0, 2.74, 0.22), 0.7)]
+    # Hovering, the rotor's downwash presses the mane down; boosting, the air streams it back.
+    winds = {"idle": ((0, -2.4, -1.6), 1.1), "boost": ((0, -1.0, -11.0), 2.2)}
+    poses = {"idle": LION_CLIPS[0][2], "boost": LION_CLIPS[1][2]}
+
+    def as_the_head_sees(direction, prefix):
+        """A direction in the air, in the frame of his head as that clip holds
+        it: the mane is baked on the head and turns with it."""
+        seen = Vector()
+        for step in range(8):
+            head = rigging.placements(lion_bones(), poses[prefix](step / 8))["head"].to_3x3()
+            seen += head.inverted() @ Vector(direction)
+        return seen / 8
+
+    for prefix, frames, rate in (MANE_IDLE, MANE_BOOST):
+        flow, gust = winds[prefix]
+        wind = strands.Simulation(locks, as_the_head_sees(flow, prefix), gust, frames / rate, balls=balls,
+                                  down=as_the_head_sees((0, -1, 0), prefix))
+        strands.bake(mane, locks, wind.loop(frames, rate), prefix, sides=5)
+    # Turning hard throws it to one side.
+    for name, shove in (("left", -9.0), ("right", 9.0)):
+        turn = strands.Simulation(locks, as_the_head_sees(winds["idle"][0], "idle"), 0.0, 1.0, balls=balls,
+                                  push=(shove, 0, 0), down=as_the_head_sees((0, -1, 0), "idle"))
+        strands.bake(mane, locks, [turn.settle()], name, sides=5)
+        mane.data.shape_keys.key_blocks[-1].name = name
+    return mane
+
+
 def build_lion_rig():
     clear_scene()
     mat_gold = make_mat("LionFurGold", (0.76, 0.42, 0.08), metallic=0.02, roughness=0.68)
@@ -524,11 +597,12 @@ def build_lion_rig():
     add_blink_shape_key(lids)
 
     body = rigging.join(body_parts, "Lion_Body")
+    mane = build_mane()
     bones = lion_bones()
     rig = rigging.build_armature("LionRig", bones)
-    rigging.skin(rig, body, lids)
+    rigging.skin(rig, body, lids, mane)
     rigging.author_clips(rig, bones, LION_CLIPS)
-    rigging.export_rig(os.path.join(OUT_DIR, "ryeah_lion.glb"), LION_CLIPS)
+    rigging.export_rig(os.path.join(OUT_DIR, "ryeah_lion.glb"), LION_CLIPS, morph_normals=True)
     return rig
 
 

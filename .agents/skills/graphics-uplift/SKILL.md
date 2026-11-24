@@ -21,6 +21,7 @@ and reactive Bevy VFX in `wasm-poc/`. Keep all PoC work strictly isolated to
 | :----- | :----- | :-------- |
 | Living characters and anything that bends: limbs, wings, ears, clothing, gestures, faces | **Blender skeleton + animation clips + shape keys → one skinned `.glb`** (section 3) | `wasm-poc/blender/rigging.py`, `build_yuda.py`, `build_knowitowl.py`, `wasm-poc/src/yuda.rs`, `knowitowl.rs` |
 | Vehicles, wheels, turrets, rigid props | **Blender 5.3 headless Python → rigid `.glb` parts** | `wasm-poc/blender/build_taicoon.py`, `wasm-poc/blender/build_houston.py` |
+| Manes, hair, tufts, ribbons that should flow | **Offline strand physics baked to shape keys** (section 3) | `wasm-poc/blender/strands.py`, `build_ryeah.py`, `wasm-poc/src/ryeah.rs` |
 | Explosions, smoke plumes, fire, shockwaves, splinters, sparks, afterburner plumes, dynamic lights | **Procedural Rust/Bevy meshes + physics + dynamic materials** | `wasm-poc/src/explosions.rs`, `wasm-poc/src/scene.rs` |
 | Live HUD, menus, telemetry | **HTML/CSS overlay** | `wasm-poc/index.html` |
 
@@ -60,6 +61,17 @@ Skinning, clip blending and shape keys all work on the WebGL2 build. `Cargo.toml
 - **Hide by scale.** To make a worn part vanish within a clip (a thrown jacket), key its bone's scale to `0.001`.
 - **Shape keys** for faces. Build the feature in its extreme pose (eyelids shut) as its own mesh, then move its rest shape to neutral and add one key per feature (see `open_lids` in `build_knowitowl.py`). Set each key's value to 0 before export.
 - **Export** with `rigging.export_rig(path, clips)`: one `.glb` holding meshes, skeleton, shape keys and one animation per clip (each clip is an action on its own NLA track).
+
+### Offline physics for manes, hair and tufts (`wasm-poc/blender/strands.py`)
+For anything that should flow rather than swing as a stick, simulate it offline and bake the result; nothing is simulated at run time. R-yeah's mane (`build_mane` in `build_ryeah.py`, played in `ryeah.rs`) is the reference.
+- **Locks** are chains of points with pinned roots: `strands.Lock(root, direction, length, girth)`. Groom the rest shape you want at standstill; the simulation springs back toward it.
+- **`strands.Simulation`** steps them under gravity, a steady air flow with travelling gusts, and collisions with spheres standing in for head and shoulders. Keep roots *outside* the collision spheres, or every lock is flattened onto the surface.
+- **`loop(frames, rate)`** records one pass of gusts that repeat exactly over the clip, after warming up, so it loops seamlessly. **`settle()`** records a resting pose under a steady push (thrown sideways in a turn).
+- **Simulate in the frame the mesh is bound to.** A mane baked on the head turns with the head, so give the wind and `down` as the head sees them in that body clip (`as_the_head_sees`).
+- **Bake** with `skin_locks` + `bake`: one shape key per recorded pose. Make locks long enough to droop at rest and stream out in fast air; that reads as the mane lengthening, as the original draws it.
+- **Play** by fading each key into the next: two weights per pass (`at as usize % frames` and the next), each pass on its own clock, shares summing to 1 across passes. Keep frame counts and rates as named constants on both sides.
+- **Export with `morph_normals=True`** for shapes that move this far, or they are lit as if still at rest. Budget for it: positions and normals for every vertex in every key (R-yeah: 24 keys, about 1 MB). Fewer points per lock, fewer sides and fewer frames at a lower rate all cut it.
+- Find the mesh in Bevy by its node `Name` when a model has more than one mesh with shape keys (eyelids and a mane).
 
 ### Playing in Bevy
 - **Load twice**: `assets.load("models/x.glb")` as `Handle<Gltf>` for `named_animations`, and `GltfAssetLabel::Scene(0)` to spawn.

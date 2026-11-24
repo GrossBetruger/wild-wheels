@@ -12,7 +12,7 @@ use bevy::gltf::{Gltf, GltfAssetLabel};
 use bevy::mesh::morph::MorphWeights;
 use bevy::prelude::*;
 use std::collections::HashSet;
-use std::f32::consts::{FRAC_PI_2, PI, TAU};
+use std::f32::consts::{PI, TAU};
 
 pub const DRIVER: usize = 11;
 
@@ -21,6 +21,9 @@ const HANG: usize = 0;
 const BOOST: usize = 1;
 const ROAR: usize = 2;
 const FIRE: usize = 3;
+/// The mane's baked passes, in shape-key order: (frames, frames a second) for
+/// hovering then streaming, as `MANE_IDLE` and `MANE_BOOST` in the Blender script.
+const MANE_PASSES: [(usize, f32); 2] = [(12, 6.0), (10, 10.0)];
 
 /// Exact local-space position of the Bell 206 Vulcan cannon muzzle crown.
 /// Used by `scene.rs` to align R-Yeah's hedgehogs so they stream straight out of the barrel!
@@ -30,17 +33,6 @@ pub const VULCAN_MUZZLE_LOCAL: Vec3 = Vec3::new(1.3, 4.56, 3.05);
 const MAIN_ROTOR_OFFSET: Vec3 = Vec3::new(1.3, 4.5 + 6.15 * 0.6, -0.4 - 0.2 * 0.6);
 const TAIL_ROTOR_OFFSET: Vec3 = Vec3::new(1.3 + 0.26 * 0.6, 4.5 + 3.8 * 0.6, -0.4 - 6.1 * 0.6);
 const VULCAN_SOCKET: Vec3 = Vec3::new(1.3, 4.56, 1.50);
-
-/// Local-space helper matching `hanging_model` in `build_ryeah.py`.
-fn hanging_lion_local(x: f32, y: f32, z: f32) -> Vec3 {
-    let (c, s) = (0.27_f32.cos(), 0.27_f32.sin());
-    let (cp, sp) = (0.18_f32.cos(), 0.18_f32.sin());
-    let x = x + 0.85;
-    let y = y - 5.15;
-    let xx = x * c - y * s;
-    let yy = x * s + y * c;
-    Vec3::new(0.22 + xx, 4.64 + yy * cp - z * sp, 0.08 + yy * sp + z * cp)
-}
 
 /// Hover bob height matching `lionChopper` in `client/renderer.js`.
 pub fn hover_height(time_secs: f32) -> f32 {
@@ -76,8 +68,6 @@ struct RYeahAssets {
     lion_gltf: Handle<Gltf>,
     lion: Handle<WorldAsset>,
     moves: Option<LionMoves>,
-    mane_lock_mesh: Handle<Mesh>,
-    mane_mats: [Handle<StandardMaterial>; 4],
     rotor_blur_mesh: Handle<Mesh>,
     rotor_blur_mat: Handle<StandardMaterial>,
     muzzle_flash_mesh: Handle<Mesh>,
@@ -88,18 +78,11 @@ struct RYeahAssets {
     wash_gold_mat: Handle<StandardMaterial>,
 }
 
-struct ManeLockSlot {
-    entity: Entity,
-    base_pos: Vec3,
-    ring: u8,
-    angle: f32,
-    phase: f32,
-    base_scale: f32,
-}
-
 struct LionSkeleton {
     player: Entity,
     lids: Option<Entity>,
+    /// The mane's mesh: its shape keys are passes of an offline wind simulation.
+    mane: Option<Entity>,
 }
 
 #[derive(Component)]
@@ -114,7 +97,8 @@ struct RYeahRig {
     muzzle_outer: Entity,
     muzzle_core: Entity,
     muzzle_light: Option<Entity>,
-    mane_locks: Vec<ManeLockSlot>,
+    /// How far the mane has gone from its hovering passes to its streaming ones.
+    mane_stream: f32,
     rotor_angle: f32,
     rotor_tilt: f32,
     vulcan_angle: f32,
@@ -135,60 +119,6 @@ struct RotorWashPuff {
     end_scale: f32,
 }
 
-/// Refined silky S-curved mane lock rooted at `(0,0,0)` extending along `-Z`:
-/// preserves the sculpted diamond-ridge fur profile of the original design,
-/// gently trimmed (~25% shorter & slimmer) for a clean, regal lion's mane!
-fn build_mane_lock_mesh() -> Mesh {
-    let steps: [(f32, f32, f32, f32); 7] = [
-        (0.00, 0.00, 0.165, 0.148),
-        (-0.20, 0.052, 0.185, 0.162),
-        (-0.42, 0.030, 0.162, 0.138),
-        (-0.66, -0.036, 0.122, 0.102),
-        (-0.88, -0.056, 0.078, 0.064),
-        (-1.08, -0.015, 0.040, 0.032),
-        (-1.21, 0.014, 0.014, 0.012),
-    ];
-    let segs = 8usize;
-    let mut positions: Vec<[f32; 3]> = Vec::new();
-    let mut indices: Vec<u32> = Vec::new();
-
-    for &(gz, gy, rx, ry) in &steps {
-        for k in 0..segs {
-            let a = (k as f32) * TAU / (segs as f32);
-            let pinch = if k % 2 == 0 { 1.08 } else { 0.92 };
-            positions.push([a.cos() * rx * pinch, gy + a.sin() * ry * pinch, gz]);
-        }
-    }
-    let tip_idx = positions.len() as u32;
-    positions.push([0.0, 0.02, -1.27]);
-
-    for r in 0..(steps.len() - 1) {
-        let base0 = (r * segs) as u32;
-        let base1 = ((r + 1) * segs) as u32;
-        for k in 0..segs {
-            let kn = ((k + 1) % segs) as u32;
-            let k = k as u32;
-            indices.extend_from_slice(&[base0 + k, base1 + k, base1 + kn]);
-            indices.extend_from_slice(&[base0 + k, base1 + kn, base0 + kn]);
-        }
-    }
-    let last_base = ((steps.len() - 1) * segs) as u32;
-    for k in 0..segs {
-        let kn = ((k + 1) % segs) as u32;
-        let k = k as u32;
-        indices.extend_from_slice(&[last_base + k, tip_idx, last_base + kn]);
-    }
-
-    let mut mesh = Mesh::new(
-        bevy::mesh::PrimitiveTopology::TriangleList,
-        bevy::asset::RenderAssetUsages::RENDER_WORLD,
-    );
-    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
-    mesh.insert_indices(bevy::mesh::Indices::U32(indices));
-    mesh.compute_smooth_normals();
-    mesh
-}
-
 fn load(
     mut commands: Commands,
     assets: Res<AssetServer>,
@@ -199,35 +129,6 @@ fn load(
         assets.load(GltfAssetLabel::Scene(0).from_asset(format!("models/ryeah_{name}.glb")))
     };
 
-    // 4 rich warm golden-chestnut-honey PBR mane tiers with subtle sunlit sheen!
-    let mane_mats = [
-        materials.add(StandardMaterial {
-            base_color: Color::srgb(0.55, 0.27, 0.12),
-            perceptual_roughness: 0.56,
-            metallic: 0.04,
-            ..default()
-        }),
-        materials.add(StandardMaterial {
-            base_color: Color::srgb(0.70, 0.37, 0.15),
-            perceptual_roughness: 0.52,
-            metallic: 0.05,
-            ..default()
-        }),
-        materials.add(StandardMaterial {
-            base_color: Color::srgb(0.84, 0.50, 0.19),
-            emissive: LinearRgba::rgb(0.06, 0.025, 0.005),
-            perceptual_roughness: 0.46,
-            metallic: 0.08,
-            ..default()
-        }),
-        materials.add(StandardMaterial {
-            base_color: Color::srgb(0.95, 0.68, 0.27),
-            emissive: LinearRgba::rgb(0.14, 0.075, 0.015),
-            perceptual_roughness: 0.40,
-            metallic: 0.12,
-            ..default()
-        }),
-    ];
 
     commands.insert_resource(RYeahAssets {
         chopper: part("chopper"),
@@ -237,8 +138,6 @@ fn load(
         lion_gltf: assets.load("models/ryeah_lion.glb"),
         lion: part("lion"),
         moves: None,
-        mane_lock_mesh: meshes.add(build_mane_lock_mesh()),
-        mane_mats,
         rotor_blur_mesh: meshes.add(Cylinder::new(4.7 * 0.6, 0.03)),
         rotor_blur_mat: materials.add(StandardMaterial {
             base_color: Color::srgba(0.18, 0.28, 0.42, 0.18),
@@ -288,7 +187,6 @@ fn load(
 #[allow(clippy::too_many_arguments)]
 fn rig_ryeah(
     mut commands: Commands,
-    mobile: Res<MobileGraphics>,
     assets: Option<ResMut<RYeahAssets>>,
     models: Res<Assets<Gltf>>,
     mut graphs: ResMut<Assets<AnimationGraph>>,
@@ -303,21 +201,19 @@ fn rig_ryeah(
         if rig.skeleton.is_some() {
             continue;
         }
-        let (mut player, mut lids, mut head) = (None, None, None);
+        let (mut player, mut lids, mut mane) = (None, None, None);
         for part in family.iter_descendants(rig.lion_root) {
             if players.contains(part) {
                 player = Some(part);
             }
             if morphs.contains(part) {
-                lids = Some(part);
-            }
-            if names.get(part).is_ok_and(|n| n.as_str() == "head") {
-                head = Some(part);
+                match names.get(part).is_ok_and(|name| name.as_str().contains("Mane")) {
+                    true => mane = Some(part),
+                    false => lids = Some(part),
+                }
             }
         }
-        let (Some(player), Some(head)) = (player, head) else {
-            continue;
-        };
+        let Some(player) = player else { continue };
         if assets.moves.is_none() {
             let Some(model) = models.get(&assets.lion_gltf) else {
                 continue;
@@ -349,62 +245,7 @@ fn rig_ryeah(
         }
         commands.entity(player).insert(AnimationGraphHandle(moves.graph));
 
-        // Attach the 64 cohesive lion mane tufts to the `head` bone via the +90 deg X socket
-        // so the entire mane tilts, turns, and roars with R-Yeah's head!
-        let head_hinge = hanging_lion_local(0.0, 3.65, 0.52);
-        let head_center_rel = hanging_lion_local(0.0, 4.02, 0.30) - head_hinge;
-        let ring_specs: &[(u8, usize, f32, f32, f32)] = if mobile.mobile {
-            &[
-                (0, 7, 0.38, -0.35, 1.00),
-                (1, 10, 0.86, 0.14, 1.05),
-            ]
-        } else {
-            &[
-                (0, 6, 0.24, -0.48, 0.96),
-                (1, 10, 0.52, -0.34, 1.02),
-                (2, 12, 0.76, -0.12, 1.06),
-                (3, 16, 0.94, 0.16, 1.02),
-            ]
-        };
-        let mut mane_locks = Vec::new();
-        commands.entity(head).with_children(|head_ent| {
-            head_ent
-                .spawn((
-                    Transform::from_rotation(Quat::from_rotation_x(FRAC_PI_2)),
-                    Visibility::Inherited,
-                ))
-                .with_children(|socket| {
-                    for &(ring, count, rad, z_off, base_scale) in ring_specs {
-                        for i in 0..count {
-                            let angle = (i as f32) * TAU / (count as f32) + (ring as f32) * 0.28;
-                            let base_pos = head_center_rel
-                                + Vec3::new(angle.sin() * rad, angle.cos() * rad, z_off);
-                            let mat_idx = ((ring as usize) + (i % 2)).min(3);
-                            let mat = assets.mane_mats[mat_idx].clone();
-                            let ent = socket
-                                .spawn((
-                                    Mesh3d(assets.mane_lock_mesh.clone()),
-                                    MeshMaterial3d(mat),
-                                    Transform::from_translation(base_pos),
-                                    Visibility::Inherited,
-                                ))
-                                .id();
-                            let phase =
-                                (ring as f32) * 0.75 + angle.sin() * 1.35 + angle.cos() * 0.55;
-                            mane_locks.push(ManeLockSlot {
-                                entity: ent,
-                                base_pos,
-                                ring,
-                                angle,
-                                phase,
-                                base_scale,
-                            });
-                        }
-                    }
-                });
-        });
-        rig.mane_locks = mane_locks;
-        rig.skeleton = Some(LionSkeleton { player, lids });
+        rig.skeleton = Some(LionSkeleton { player, lids, mane });
     }
 }
 
@@ -575,37 +416,34 @@ fn fly_ryeah(
                 };
             }
 
-            // 3. REFINED FLOWING LION MANE!
-            // Restores the outward-flaring S-curved silhouette of the original design,
-            // with smooth spatially coherent wind waves and controlled length/width!
-            let wind_freq = if boost { 15.0 } else { 7.5 + speed_norm * 4.0 };
-            let wave_amp = if boost { 0.22 } else { 0.11 + speed_norm * 0.06 };
-            let length_stretch = if boost {
-                1.32
-            } else {
-                0.96 + speed_norm * 0.18
-            };
-            let downwash_pitch = if boost { 0.08 } else { -0.05 };
-            for slot in &rig.mane_locks {
-                if let Ok((mut mtf, _)) = parts.get_mut(slot.entity) {
-                    let ring_f = slot.ring as f32;
-                    let w1 = (t * wind_freq - slot.phase).sin();
-                    let w2 = (t * (wind_freq * 1.52) - slot.phase * 1.4 + ring_f * 0.6).cos();
-                    let flare = (0.16 + ring_f * 0.12) * if boost { 0.68 } else { 1.0 };
-
-                    let yaw_out = slot.angle.sin() * flare + w1 * wave_amp + rig.turn_swing * 0.85;
-                    let pitch_out =
-                        slot.angle.cos() * flare + downwash_pitch + w2 * (wave_amp * 0.68);
-                    let roll_twist = w1 * 0.16;
-
-                    mtf.translation = slot.base_pos;
-                    mtf.rotation = Quat::from_euler(EulerRot::YXZ, yaw_out, pitch_out, roll_twist);
-                    let pulse = 1.0 + w2 * 0.055;
-                    mtf.scale = Vec3::new(
-                        slot.base_scale,
-                        slot.base_scale,
-                        slot.base_scale * length_stretch * pulse,
-                    );
+            // 3. The mane: fade through the passes of its offline wind simulation.
+            // Hovering passes and streaming passes each loop on their own clock;
+            // speed and boost move him from one to the other, and a hard turn
+            // throws the mane to the outside.
+            let streaming = if boost { 1.0 } else { (speed_norm * 0.45).min(0.5) };
+            rig.mane_stream += (streaming - rig.mane_stream) * (1.0 - (-dt * 5.0).exp());
+            if let Some(mut keys) = rig
+                .skeleton
+                .as_ref()
+                .and_then(|skeleton| skeleton.mane)
+                .and_then(|mane| morphs.get_mut(mane).ok())
+            {
+                let keys = keys.weights_mut();
+                keys.fill(0.0);
+                let thrown = (rig.turn_swing.abs() / 0.65).min(1.0) * 0.7;
+                let mut cursor = 0;
+                for ((frames, rate), share) in MANE_PASSES.into_iter().zip([1.0 - rig.mane_stream, rig.mane_stream]) {
+                    let at = (t + a.id as f32 * 0.37) * rate;
+                    let (first, fade) = (at as usize % frames, at.fract());
+                    if let Some(pass) = keys.get_mut(cursor..cursor + frames) {
+                        pass[first] += share * (1.0 - thrown) * (1.0 - fade);
+                        pass[(first + 1) % frames] += share * (1.0 - thrown) * fade;
+                    }
+                    cursor += frames;
+                }
+                // `left` then `right` follow the passes: the side the mane is thrown to.
+                if let Some(side) = keys.get_mut(cursor + usize::from(rig.turn_swing < 0.0)) {
+                    *side = thrown;
                 }
             }
 
@@ -732,7 +570,7 @@ fn fly_ryeah(
                 muzzle_outer,
                 muzzle_core,
                 muzzle_light,
-                mane_locks: Vec::new(),
+                mane_stream: 0.0,
                 rotor_angle: 0.0,
                 rotor_tilt: 0.0,
                 vulcan_angle: 0.0,

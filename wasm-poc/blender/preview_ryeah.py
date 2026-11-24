@@ -57,6 +57,15 @@ for label, clip, repeats, hold in SHOTS:
 def stage(scene, *_):
     label, clip, cycle = timeline[min(scene.frame_current, len(timeline) - 1)]
     rigging.set_pose(rig, bones, clips[clip][1](cycle))
+    # The mane fades through its baked passes as it does in the game.
+    keys = bpy.data.objects["Lion_Mane"].data.shape_keys.key_blocks
+    prefix, frames, rate = ryeah.MANE_BOOST if clip == "boost" else ryeah.MANE_IDLE
+    at = scene.frame_current / 30 * rate
+    first, fade = int(at) % frames, at - int(at)
+    for key in keys[1:]:
+        key.value = 0.0
+    keys[f"{prefix}{first:02d}"].value = 1 - fade
+    keys[f"{prefix}{(first + 1) % frames:02d}"].value = fade
     scene.render.stamp_note_text = label
 
 

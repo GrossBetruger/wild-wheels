@@ -187,9 +187,11 @@ def reach(shoulder, elbow, hand, target, pole, parent=Quaternion(), parent_hinge
     return parent.inverted() @ upper_turn, upper_turn.inverted() @ lower_turn
 
 
-def export_rig(path, clips):
+def export_rig(path, clips, morph_normals=False):
     """Export everything in the scene as one .glb with skin, shape keys and
-    one animation per clip."""
+    one animation per clip. Shape keys that reshape a surface a long way (a
+    simulated mane) need `morph_normals` to stay correctly lit; small ones
+    (eyelids) do not, and are smaller without."""
     bpy.ops.object.select_all(action="SELECT")
     bpy.ops.export_scene.gltf(
         filepath=path,
@@ -199,7 +201,7 @@ def export_rig(path, clips):
         export_materials="EXPORT",
         export_skins=True,
         export_morph=True,
-        export_morph_normal=False,
+        export_morph_normal=morph_normals,
         export_animations=True,
         export_animation_mode="NLA_TRACKS",
         export_force_sampling=True,
