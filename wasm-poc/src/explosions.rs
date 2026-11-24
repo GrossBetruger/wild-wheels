@@ -21,6 +21,7 @@ impl Plugin for ExplosionsPlugin {
 #[derive(Resource)]
 struct ExplosionAssets {
     sphere: Handle<Mesh>,
+    cloud_mesh: Handle<Mesh>,
     splinter_long: Handle<Mesh>,
     splinter_shard: Handle<Mesh>,
     splinter_chunk: Handle<Mesh>,
@@ -30,8 +31,6 @@ struct ExplosionAssets {
     fire_hot_mat: Handle<StandardMaterial>,
     fire_mid_mat: Handle<StandardMaterial>,
     fire_deep_mat: Handle<StandardMaterial>,
-    smoke_dark_mat: Handle<StandardMaterial>,
-    smoke_ash_mat: Handle<StandardMaterial>,
     ring_mat: Handle<StandardMaterial>,
     shrapnel_metal: Handle<StandardMaterial>,
     shrapnel_wood: Handle<StandardMaterial>,
@@ -90,6 +89,10 @@ struct SmokePuff {
     start_scale: f32,
     end_scale: f32,
     spin: Vec3,
+    mat: Handle<StandardMaterial>,
+    base_rgb: [f32; 3],
+    max_alpha: f32,
+    hot_glow: f32,
 }
 
 #[derive(Component)]
@@ -119,12 +122,32 @@ fn next_rand(seed: &mut u64) -> f32 {
     (((*seed >> 33) as u32) as f32) / (u32::MAX as f32)
 }
 
+fn build_cloud_mesh() -> Mesh {
+    let mut mesh = Sphere::new(1.0).mesh().uv(18, 12);
+    if let Some(bevy::mesh::VertexAttributeValues::Float32x3(positions)) =
+        mesh.attribute_mut(Mesh::ATTRIBUTE_POSITION)
+    {
+        for p in positions.iter_mut() {
+            let v = Vec3::from_array(*p);
+            // Multi-octave turbulent cauliflower cloud displacement!
+            let n1 = (v.x * 3.2 + 0.5).sin() * (v.y * 3.4 - 0.3).cos() * (v.z * 3.1).sin();
+            let n2 = (v.x * 5.7 - v.z * 4.3).sin() * (v.y * 5.1 + 1.2).cos();
+            let n3 = (v.z * 7.2 + v.y * 6.4).cos();
+            let disp = 1.0 + n1 * 0.28 + n2 * 0.14 + n3 * 0.06;
+            *p = (v * disp).to_array();
+        }
+    }
+    mesh.compute_smooth_normals();
+    mesh
+}
+
 fn setup_assets(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     let sphere = meshes.add(Sphere::new(1.0).mesh().uv(12, 8));
+    let cloud_mesh = meshes.add(build_cloud_mesh());
     let splinter_long = meshes.add(Cuboid::new(0.14, 0.08, 1.0));
     let splinter_shard = meshes.add(Cuboid::new(0.42, 0.07, 0.68));
     let splinter_chunk = meshes.add(Cuboid::new(0.32, 0.24, 0.44));
@@ -158,19 +181,6 @@ fn setup_assets(
         emissive: LinearRgba::rgb(4.2, 0.55, 0.08),
         unlit: true,
         alpha_mode: AlphaMode::Add,
-        ..default()
-    });
-    // PBR-lit dark smoke: undersides glow fiery orange from the dynamic blast PointLight!
-    let smoke_dark_mat = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.15, 0.14, 0.17),
-        perceptual_roughness: 0.96,
-        metallic: 0.0,
-        ..default()
-    });
-    let smoke_ash_mat = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.28, 0.25, 0.29),
-        perceptual_roughness: 0.94,
-        metallic: 0.0,
         ..default()
     });
     let ring_mat = materials.add(StandardMaterial {
@@ -217,6 +227,7 @@ fn setup_assets(
 
     commands.insert_resource(ExplosionAssets {
         sphere,
+        cloud_mesh,
         splinter_long,
         splinter_shard,
         splinter_chunk,
@@ -226,8 +237,6 @@ fn setup_assets(
         fire_hot_mat,
         fire_mid_mat,
         fire_deep_mat,
-        smoke_dark_mat,
-        smoke_ash_mat,
         ring_mat,
         shrapnel_metal,
         shrapnel_wood,
@@ -241,6 +250,7 @@ fn detect_explosions(
     mut commands: Commands,
     session: Res<GameSession>,
     assets: Option<Res<ExplosionAssets>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
     mut seen: ResMut<SeenBlasts>,
 ) {
     let Some(assets) = assets else { return };
@@ -261,6 +271,7 @@ fn detect_explosions(
             spawn_blast(
                 &mut commands,
                 &assets,
+                &mut materials,
                 &mut seen.seed,
                 Vec3::new(fx.wx as f32, 0.9, fx.wz as f32),
                 scale,
@@ -273,6 +284,7 @@ fn detect_explosions(
 fn spawn_blast(
     commands: &mut Commands,
     assets: &ExplosionAssets,
+    materials: &mut Assets<StandardMaterial>,
     seed: &mut u64,
     origin: Vec3,
     scale: f32,
@@ -355,38 +367,94 @@ fn spawn_blast(
         ));
     }
 
-    // 5. Awesome PBR-lit billowing dark charcoal & ash smoke column (22 puffs, under-lit by PointLight!)
-    let smoke_count = (22.0 * scale.sqrt()) as usize;
+    // 5. Turbulent cauliflower-displaced smoke column + ground dust skirt with real internal
+    //    fiery glow cooling into dark soot and dissolving smoothly via alpha-blend!
+    let smoke_count = (28.0 * scale.sqrt()) as usize;
     for i in 0..smoke_count {
         let a = (i as f32 / smoke_count as f32) * std::f32::consts::TAU + next_rand(seed) * 0.45;
-        let ring = i % 2 == 0;
-        let spd_h = if ring { 4.5 + next_rand(seed) * 6.5 } else { 1.0 + next_rand(seed) * 3.0 };
-        let spd_y = if ring { 2.5 + next_rand(seed) * 4.5 } else { 6.5 + next_rand(seed) * 7.5 };
-        let vel = Vec3::new(a.cos() * spd_h, spd_y, a.sin() * spd_h) * scale;
-        let mat = if i % 3 == 0 {
-            assets.smoke_ash_mat.clone()
+        let is_skirt = i < 8;
+        let is_core = i >= 8 && i % 2 == 0;
+        let (spd_h, spd_y, buoy, start_s, end_s, base_rgb, max_alpha, hot_glow, y0) = if is_skirt {
+            // Fast low rolling ground-skirt dust/soot wave behind the shockwave!
+            (
+                8.5 + next_rand(seed) * 6.5,
+                0.6 + next_rand(seed) * 1.4,
+                0.7,
+                0.55,
+                2.5 + next_rand(seed) * 1.1,
+                [0.34, 0.30, 0.28],
+                0.52,
+                0.6,
+                0.35,
+            )
+        } else if is_core {
+            // Rising fiery-lit soot mushroom column
+            (
+                1.4 + next_rand(seed) * 3.4,
+                7.2 + next_rand(seed) * 7.0,
+                3.4 + next_rand(seed) * 2.2,
+                0.65,
+                3.0 + next_rand(seed) * 1.7,
+                [0.14, 0.13, 0.16],
+                0.82,
+                3.4,
+                0.8 + next_rand(seed) * 0.9,
+            )
         } else {
-            assets.smoke_dark_mat.clone()
+            // Billowing outer soot vortex clouds
+            (
+                4.2 + next_rand(seed) * 5.8,
+                3.5 + next_rand(seed) * 4.2,
+                2.2 + next_rand(seed) * 1.8,
+                0.60,
+                2.8 + next_rand(seed) * 1.5,
+                [0.24, 0.22, 0.26],
+                0.72,
+                2.0,
+                0.5 + next_rand(seed) * 0.8,
+            )
         };
-        let life = (1.55 + next_rand(seed) * 1.25) * scale.sqrt();
-        let offset = Vec3::new(a.cos() * 0.9, 0.3 + next_rand(seed) * 1.1, a.sin() * 0.9) * scale;
+        let vel = Vec3::new(a.cos() * spd_h, spd_y, a.sin() * spd_h) * scale;
+        let mat = materials.add(StandardMaterial {
+            base_color: Color::srgba(base_rgb[0], base_rgb[1], base_rgb[2], max_alpha),
+            emissive: LinearRgba::rgb(hot_glow, hot_glow * 0.28, hot_glow * 0.04),
+            perceptual_roughness: 0.97,
+            metallic: 0.0,
+            alpha_mode: AlphaMode::Blend,
+            ..default()
+        });
+        let life = (1.65 + next_rand(seed) * 1.45) * scale.sqrt();
+        let offset = Vec3::new(a.cos() * 0.85, y0, a.sin() * 0.85) * scale;
         commands.spawn((
-            Mesh3d(assets.sphere.clone()),
-            MeshMaterial3d(mat),
-            Transform::from_translation(origin + offset).with_scale(Vec3::splat(0.35 * scale)),
+            Mesh3d(assets.cloud_mesh.clone()),
+            MeshMaterial3d(mat.clone()),
+            Transform {
+                translation: origin + offset,
+                rotation: Quat::from_euler(
+                    EulerRot::XYZ,
+                    next_rand(seed) * 6.28,
+                    next_rand(seed) * 6.28,
+                    next_rand(seed) * 6.28,
+                ),
+                scale: Vec3::splat(start_s * scale),
+            },
             SmokePuff {
                 vel,
-                buoyancy: 2.8 + next_rand(seed) * 2.2,
-                drag: 1.65 + next_rand(seed) * 0.85,
+                buoyancy: buoy,
+                drag: 1.55 + next_rand(seed) * 0.75,
                 age: 0.0,
                 life,
-                start_scale: (0.45 + next_rand(seed) * 0.45) * scale,
-                end_scale: (2.1 + next_rand(seed) * 1.6) * scale,
+                start_scale: start_s * scale,
+                end_scale: end_s * scale,
                 spin: Vec3::new(
-                    next_rand(seed) * 2.0 - 1.0,
-                    next_rand(seed) * 2.0 - 1.0,
-                    next_rand(seed) * 2.0 - 1.0,
+                    next_rand(seed) * 2.4 - 1.2,
+                    next_rand(seed) * 2.4 - 1.2,
+                    next_rand(seed) * 2.4 - 1.2,
                 ),
+                mat,
+                base_rgb,
+                max_alpha,
+                hot_glow,
             },
         ));
     }
@@ -479,6 +547,7 @@ fn tick_explosions(
     mut commands: Commands,
     time: Res<Time>,
     assets: Option<Res<ExplosionAssets>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
     mut lights: Query<(Entity, &mut PointLight, &mut BlastLight)>,
     mut flashes: Query<
         (Entity, &mut Transform, &mut BlastFlash),
@@ -571,24 +640,38 @@ fn tick_explosions(
     for (ent, mut tf, mut s) in &mut smokes {
         s.age += dt;
         if s.age >= s.life {
+            materials.remove(&s.mat);
             commands.entity(ent).despawn();
             continue;
         }
         let u = s.age / s.life;
         let buoy = s.buoyancy;
         let damp = (1.0 - s.drag * dt).max(0.15);
-        s.vel.y += buoy * dt * (1.0 - u * 0.6);
+        s.vel.y += buoy * dt * (1.0 - u * 0.55);
         s.vel *= damp;
         tf.translation += s.vel * dt;
-        tf.translation.y = tf.translation.y.max(0.45);
+        tf.translation.y = tf.translation.y.max(0.35);
         tf.rotation *= Quat::from_euler(EulerRot::XYZ, s.spin.x * dt, s.spin.y * dt, s.spin.z * dt);
-        let grow = s.start_scale + (s.end_scale - s.start_scale) * u.powf(0.55);
-        let fade = if u > 0.62 {
-            (1.0 - (u - 0.62) / 0.38).powf(1.4)
-        } else {
-            1.0
-        };
-        tf.scale = Vec3::splat((grow * fade).max(0.01));
+        // Keep expanding while dissolving into thin air (never shrinks like a rubber ball!)
+        let grow = s.start_scale + (s.end_scale - s.start_scale) * u.powf(0.48);
+        tf.scale = Vec3::new(grow * 1.08, grow * 0.92, grow * 1.08);
+        if let Some(mut m) = materials.get_mut(&s.mat) {
+            let alpha = if u < 0.12 {
+                s.max_alpha * (u / 0.12)
+            } else {
+                s.max_alpha * (1.0 - (u - 0.12) / 0.88).powf(1.5)
+            };
+            let lighten = u * 0.14;
+            m.base_color = Color::srgba(
+                (s.base_rgb[0] + lighten).min(0.6),
+                (s.base_rgb[1] + lighten).min(0.6),
+                (s.base_rgb[2] + lighten).min(0.65),
+                alpha.max(0.0),
+            );
+            // Hot internal fireball glow cools rapidly into brooding dark soot!
+            let glow = s.hot_glow * (1.0 - (u * 2.6).min(1.0)).powi(2);
+            m.emissive = LinearRgba::rgb(glow, glow * 0.26, glow * 0.04);
+        }
     }
 
     for (ent, mut tf, mut sp) in &mut splinters {
