@@ -1,0 +1,478 @@
+//! Plays the sound pack that `build.rs` ports from the browser audio engine.
+//! Nothing here is synthesized: cues, voices and engine layers all come from
+//! the JavaScript client. See docs/native-sound-port.md.
+use crate::app::GameSession;
+use bevy::audio::{AudioSinkPlayback, Volume};
+use bevy::prelude::*;
+use std::collections::{HashMap, HashSet};
+
+fn sound_pack_bytes() -> &'static [u8] {
+    crate::sound_pack_bytes()
+}
+const VERSION: u32 = 1;
+/// Continuous layers the browser keeps running and fades with the racer's state.
+const LAYERS: [&str; 5] = [
+    "loop:engine",
+    "loop:skid",
+    "loop:jet",
+    "loop:vulcan",
+    "loop:vulcan:firing",
+];
+
+pub struct GameAudioPlugin;
+impl Plugin for GameAudioPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<Heard>().add_systems(Startup, setup);
+    }
+}
+#[derive(Resource)]
+pub struct Sounds(HashMap<String, Handle<AudioSource>>);
+#[derive(Component)]
+pub struct Layer(usize);
+/// Music that is cut short when the state behind it ends: time stop and Dark Humor.
+#[derive(Component, Clone, Copy, PartialEq, Eq)]
+pub enum Score {
+    Warp,
+    Laughter,
+}
+/// What has already been announced, so each state change sounds once.
+#[derive(Resource, Default)]
+pub struct Heard {
+    phase: String,
+    countdown: i64,
+    beat: Option<i64>,
+    hearts: HashSet<usize>,
+    fashion: HashMap<usize, f64>,
+    warp: f64,
+    laughter: f64,
+    vulcan: f64,
+    warning: i64,
+    voice_until: f32,
+    players: Option<HashSet<usize>>,
+    bridge_pos: Option<[f64; 2]>,
+    bridge_dist: f64,
+    bridge_step: usize,
+}
+
+const BRIDGE_PLANKS: [&str; 3] = [
+    "event:bridgePlankA",
+    "event:bridgePlankB",
+    "event:bridgePlankC",
+];
+
+fn on_bridge(bridges: &[[f64; 5]], wx: f64, wz: f64) -> bool {
+    bridges.iter().any(|&[bx, bz, bw, bd, axis]| {
+        if axis == 1.0 {
+            (wx - bx).abs() <= bw / 2.0 + 0.8 && (wz - bz).abs() <= bd / 2.0
+        } else {
+            (wx - bx).abs() <= bw / 2.0 && (wz - bz).abs() <= bd / 2.0 + 0.8
+        }
+    })
+}
+
+fn step_bridge_wood(
+    pos: &mut Option<[f64; 2]>,
+    dist: &mut f64,
+    step: &mut usize,
+    driving_on_bridge: bool,
+    wx: f64,
+    wz: f64,
+) -> Option<&'static str> {
+    if !driving_on_bridge {
+        *pos = None;
+        *dist = 0.0;
+        return None;
+    }
+    let mut cue = None;
+    if let Some([px, pz]) = *pos {
+        let delta = (wx - px).hypot(wz - pz);
+        if delta < 12.0 {
+            *dist += delta;
+        }
+        if *dist >= 2.2 {
+            *dist %= 2.2;
+            cue = Some(BRIDGE_PLANKS[*step % BRIDGE_PLANKS.len()]);
+            *step += 1;
+        }
+    } else {
+        *dist = 1.8;
+    }
+    *pos = Some([wx, wz]);
+    cue
+}
+
+/// Returns whether a new active human peer joined (or returned from AFK) since the last snapshot,
+/// updating `known` with the current set of active human peers.
+pub(crate) fn joined_room(known: &mut Option<HashSet<usize>>, current: HashSet<usize>) -> bool {
+    let joined = known
+        .as_ref()
+        .is_some_and(|previous| current.difference(previous).next().is_some());
+    *known = Some(current);
+    joined
+}
+
+fn u32_at(bytes: &[u8], at: usize) -> Option<usize> {
+    Some(u32::from_le_bytes(bytes.get(at..at + 4)?.try_into().ok()?) as usize)
+}
+/// Name and 16-bit mono samples of one sound.
+type Sound<'a> = (&'a str, &'a [u8]);
+/// Every sound in the pack, with its sample rate.
+fn parse(bytes: &[u8]) -> Option<(u32, Vec<Sound<'_>>)> {
+    if bytes.get(..4)? != b"WWSP" || u32_at(bytes, 4)? != VERSION as usize {
+        return None;
+    }
+    let rate = u32_at(bytes, 8)? as u32;
+    let mut at = 16;
+    let mut sounds = Vec::new();
+    for _ in 0..u32_at(bytes, 12)? {
+        let size = usize::from(u16::from_le_bytes(bytes.get(at..at + 2)?.try_into().ok()?));
+        let name = std::str::from_utf8(bytes.get(at + 2..at + 2 + size)?).ok()?;
+        at += 2 + size;
+        let length = u32_at(bytes, at)?.checked_mul(2)?;
+        sounds.push((name, bytes.get(at + 4..at + 4 + length)?));
+        at += 4 + length;
+    }
+    (at == bytes.len()).then_some((rate, sounds))
+}
+fn wav(rate: u32, samples: &[u8]) -> Vec<u8> {
+    let size = samples.len() as u32;
+    let mut bytes = Vec::with_capacity(44 + samples.len());
+    bytes.extend_from_slice(b"RIFF");
+    bytes.extend_from_slice(&(36 + size).to_le_bytes());
+    bytes.extend_from_slice(b"WAVEfmt ");
+    bytes.extend_from_slice(&16u32.to_le_bytes());
+    bytes.extend_from_slice(&1u16.to_le_bytes());
+    bytes.extend_from_slice(&1u16.to_le_bytes());
+    bytes.extend_from_slice(&rate.to_le_bytes());
+    bytes.extend_from_slice(&(rate * 2).to_le_bytes());
+    bytes.extend_from_slice(&2u16.to_le_bytes());
+    bytes.extend_from_slice(&16u16.to_le_bytes());
+    bytes.extend_from_slice(b"data");
+    bytes.extend_from_slice(&size.to_le_bytes());
+    bytes.extend_from_slice(samples);
+    bytes
+}
+fn setup(mut commands: Commands, mut assets: ResMut<Assets<AudioSource>>) {
+    let (rate, pack) = parse(sound_pack_bytes()).expect("the ported sound pack is valid");
+    let sounds: HashMap<_, _> = pack
+        .into_iter()
+        .map(|(name, samples)| {
+            let source = AudioSource {
+                bytes: wav(rate, samples).into(),
+            };
+            (name.to_owned(), assets.add(source))
+        })
+        .collect();
+    for (index, name) in LAYERS.iter().enumerate() {
+        if let Some(source) = sounds.get(*name) {
+            commands.spawn((
+                AudioPlayer::new(source.clone()),
+                PlaybackSettings::LOOP.with_volume(Volume::Linear(0.0)),
+                Layer(index),
+            ));
+        }
+    }
+    commands.insert_resource(Sounds(sounds));
+}
+
+pub fn play(
+    mut commands: Commands,
+    mut session: ResMut<GameSession>,
+    sounds: Res<Sounds>,
+    time: Res<Time>,
+    mut heard: ResMut<Heard>,
+    mut layers: Query<(&mut AudioSink, &Layer)>,
+    scores: Query<(Entity, &Score)>,
+) {
+    let mut cues: Vec<(String, f32)> = session
+        .sounds
+        .drain(..)
+        .map(|event| (format!("event:{event}"), 1.0))
+        .collect();
+    let now = time.elapsed_secs();
+    // A racer's short calls give way to each other; laps and wins always sound.
+    for (driver, cue, volume) in std::mem::take(&mut session.voices) {
+        let important = matches!(cue.as_str(), "win" | "lap");
+        if !important && heard.voice_until - now > 0.35 {
+            continue;
+        }
+        heard.voice_until = match important {
+            true => now + 0.55,
+            false => heard.voice_until.max(now) + 0.14,
+        };
+        cues.push((format!("voice:{driver}:{cue}"), volume as f32));
+    }
+    let mut levels = [0.0; LAYERS.len()];
+    let mut pitch = 1.0;
+    let mut stopped = Vec::new();
+    match session.client.as_ref() {
+        None => {
+            let players = session.joined().then(|| heard.players.take()).flatten();
+            *heard = Heard {
+                players,
+                ..Heard::default()
+            };
+        }
+        Some(client) => {
+            let view = client.view();
+            let p = view.player;
+            let active = view.phase == "racing";
+            let racers = || view.actors.iter().filter(|a| !a.inactive);
+            let players: HashSet<usize> = racers()
+                .filter(|a| a.human && !a.afk && a.id != view.you)
+                .map(|a| a.id)
+                .collect();
+            if joined_room(&mut heard.players, players) {
+                cues.push(("event:playerJoin".into(), 1.0));
+            }
+            if view.phase == "countdown" {
+                let count = view.countdown.ceil() as i64;
+                if count != heard.countdown {
+                    cues.push((format!("cue:countdown:{count}"), 1.0));
+                    heard.countdown = count;
+                }
+            } else {
+                heard.countdown = 0;
+            }
+            if active && heard.phase == "countdown" {
+                cues.push(("cue:go".into(), 1.0));
+            }
+            heard.phase = view.phase.into();
+            // Fourmidable's xylophone plays an eight-note round while his special lasts.
+            let xylophone = active
+                && view.special_abilities
+                && racers().any(|a| a.driver == 13 && a.special_active > 0.0);
+            let beat = xylophone.then(|| (view.elapsed * 8.0).floor() as i64);
+            if let Some(beat) = beat.filter(|beat| heard.beat != Some(*beat)) {
+                cues.push((format!("cue:xylophone:{}", beat.rem_euclid(8)), 1.0));
+            }
+            heard.beat = beat;
+            let hearts: HashSet<usize> = view
+                .effects
+                .iter()
+                .filter(|fx| fx.kind == "heartbeat")
+                .filter_map(|fx| fx.owner)
+                .collect();
+            for _ in hearts.difference(&heard.hearts) {
+                cues.push(("cue:heartbeat".into(), 1.0));
+            }
+            heard.hearts = hearts;
+            let fashion: HashMap<usize, f64> = racers()
+                .filter(|a| a.driver == 9 && a.special_active > 0.0 && view.special_abilities)
+                .map(|a| (a.id, a.special_active))
+                .collect();
+            for (id, remaining) in &fashion {
+                if heard.fashion.get(id).copied().unwrap_or(0.0) < *remaining {
+                    cues.push(("cue:fashion".into(), 1.0));
+                }
+            }
+            heard.fashion = fashion;
+            let warp = match active {
+                true => view.time_stop,
+                false => 0.0,
+            };
+            if warp > 0.0 && (heard.warp <= 0.0 || warp > heard.warp + 0.3) {
+                stopped.push(Score::Warp);
+                cues.push(("cue:timeWarp".into(), 1.0));
+            }
+            if warp <= 0.0 && heard.warp > 0.0 {
+                stopped.push(Score::Warp);
+                if active {
+                    cues.push(("cue:timeWarpEnd".into(), 1.0));
+                }
+            }
+            heard.warp = warp;
+            // Dark Humor's crowd laughs for as long as any KnowItOwl keeps the arena dark.
+            let dark = racers()
+                .filter(|a| {
+                    active
+                        && view.special_abilities
+                        && a.driver == 14
+                        && a.destroyed <= 0.0
+                        && !a.afk
+                        && !a.bomber
+                })
+                .map(|a| a.special_active)
+                .fold(0.0, f64::max);
+            if dark > heard.laughter + 0.4 {
+                stopped.push(Score::Laughter);
+                cues.push(("cue:darkLaughter".into(), 1.0));
+            }
+            if dark <= 0.0 && heard.laughter > 0.0 {
+                stopped.push(Score::Laughter);
+            }
+            heard.laughter = dark;
+            let powered =
+                active && p.vulcan > 0.0 && p.destroyed <= 0.0 && view.finish_countdown.is_none();
+            let warning = p.vulcan.ceil() as i64;
+            if powered && warning <= 3 && warning != heard.warning {
+                cues.push(("event:vulcanWarning".into(), 1.0));
+                heard.warning = warning;
+            }
+            if p.vulcan > 3.0 || p.vulcan <= 0.0 {
+                heard.warning = 0;
+            }
+            if active && heard.vulcan > 0.0 && p.vulcan <= 0.0 {
+                cues.push(("event:vulcanEnd".into(), 1.0));
+            }
+            heard.vulcan = p.vulcan;
+            let on_wood = active
+                && !p.bomber
+                && p.destroyed <= 0.0
+                && p.somersault <= 0.0
+                && p.speed.abs() > 6.0
+                && on_bridge(&view.arena_def.bridges, p.wx, p.wz);
+            let h = &mut *heard;
+            if let Some(plank) = step_bridge_wood(
+                &mut h.bridge_pos,
+                &mut h.bridge_dist,
+                &mut h.bridge_step,
+                on_wood,
+                p.wx,
+                p.wz,
+            ) {
+                cues.push((plank.into(), 1.0));
+            }
+            // The recorded layers already carry the browser's gains; here they only switch.
+            let firing = powered && p.item == "hedgehog" && p.fire_cooldown > 0.0;
+            let rotor = powered && p.driver != 14;
+            levels = [
+                active && !p.bomber,
+                active && p.was_drifting,
+                active && (p.boost > 0.0 || p.somersault > 0.0),
+                rotor && !firing,
+                rotor && firing,
+            ]
+            .map(|on| f32::from(u8::from(on)));
+            // The engine was recorded idling at 28 Hz; the browser raises it with speed.
+            pitch = ((28.0 + p.speed.abs() * 0.045) / 28.0) as f32;
+        }
+    }
+    let blend = (time.delta_secs() * 30.0).min(1.0);
+    for (mut sink, layer) in &mut layers {
+        let current = match sink.volume() {
+            Volume::Linear(level) => level,
+            other => other.to_linear(),
+        };
+        sink.set_volume(Volume::Linear(
+            current + (levels[layer.0] - current) * blend,
+        ));
+        if layer.0 == 0 {
+            sink.set_speed(pitch.clamp(0.5, 4.0));
+        }
+    }
+    for (entity, score) in &scores {
+        if stopped.contains(score) {
+            commands.entity(entity).despawn();
+        }
+    }
+    for (name, volume) in cues {
+        let Some(source) = sounds.0.get(&name) else {
+            continue;
+        };
+        let mut player = commands.spawn((
+            AudioPlayer::new(source.clone()),
+            PlaybackSettings::DESPAWN.with_volume(Volume::Linear(volume)),
+        ));
+        match name.as_str() {
+            "cue:timeWarp" => player.insert(Score::Warp),
+            "cue:darkLaughter" => player.insert(Score::Laughter),
+            _ => &mut player,
+        };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn embedded_pack_ports_every_cue_voice_and_layer() {
+        let (rate, sounds) = parse(PACK).expect("valid pack");
+        let sounds: HashMap<_, _> = sounds.into_iter().collect();
+        for name in [
+            "event:fire",
+            "event:explosion",
+            "event:victory",
+            "event:playerJoin",
+            "event:bridgePlankA",
+            "event:bridgePlankB",
+            "event:bridgePlankC",
+            "cue:go",
+        ] {
+            assert!(sounds.contains_key(name), "{name}");
+        }
+        for driver in 0..16 {
+            for cue in ["pass", "hurt", "cheer", "lap", "win"] {
+                assert!(sounds.contains_key(format!("voice:{driver}:{cue}").as_str()));
+            }
+        }
+        // Layers loop seamlessly: two seconds is a whole number of engine periods.
+        for layer in LAYERS {
+            assert_eq!(sounds[layer].len(), rate as usize * 2 * 2, "{layer}");
+        }
+        let audible = |name: &str| {
+            sounds[name]
+                .chunks_exact(2)
+                .any(|s| i16::from_le_bytes([s[0], s[1]]).unsigned_abs() > 300)
+        };
+        assert!(
+            audible("event:fire")
+                && audible("loop:engine")
+                && audible("voice:14:win")
+                && audible("event:bridgePlankA")
+                && audible("event:bridgePlankB")
+                && audible("event:bridgePlankC")
+        );
+    }
+
+    #[test]
+    fn bridge_wood_steps_trigger_only_while_driving_across_a_bridge() {
+        let bridges = [[0.0, 0.0, 16.0, 10.0, 0.0]];
+        assert!(on_bridge(&bridges, 0.0, 0.0));
+        assert!(!on_bridge(&bridges, 20.0, 0.0));
+        let (mut pos, mut dist, mut step) = (None, 0.0, 0);
+        // Entering the bridge primes the first plank knock right after rolling forward.
+        assert_eq!(step_bridge_wood(&mut pos, &mut dist, &mut step, true, 0.0, -5.0), None);
+        assert_eq!(
+            step_bridge_wood(&mut pos, &mut dist, &mut step, true, 0.0, -4.4),
+            Some("event:bridgePlankA")
+        );
+        assert_eq!(
+            step_bridge_wood(&mut pos, &mut dist, &mut step, true, 0.0, -2.0),
+            Some("event:bridgePlankB")
+        );
+        assert_eq!(
+            step_bridge_wood(&mut pos, &mut dist, &mut step, true, 0.0, 0.4),
+            Some("event:bridgePlankC")
+        );
+        // Leaving the bridge resets cadence cleanly.
+        assert_eq!(step_bridge_wood(&mut pos, &mut dist, &mut step, false, 0.0, 12.0), None);
+        assert!(pos.is_none());
+    }
+
+    #[test]
+    fn sounds_are_wrapped_as_mono_sixteen_bit_wav() {
+        let bytes = wav(32000, &[0, 0, 255, 127]);
+        assert_eq!(&bytes[..4], b"RIFF");
+        assert_eq!(u32_at(&bytes, 24), Some(32000));
+        assert_eq!(u32_at(&bytes, 40), Some(4));
+        assert_eq!(bytes.len(), 48);
+        assert!(parse(b"WWSP").is_none());
+    }
+
+    #[test]
+    fn room_join_sound_plays_only_when_new_human_peer_arrives_or_returns_from_afk() {
+        let mut known = None;
+        // Initial room snapshot with player 1 already present: no sound.
+        assert!(!joined_room(&mut known, HashSet::from([1])));
+        // Same roster on next frame: no sound.
+        assert!(!joined_room(&mut known, HashSet::from([1])));
+        // Player 2 joins: sound plays!
+        assert!(joined_room(&mut known, HashSet::from([1, 2])));
+        // Player 2 goes AFK / leaves: no sound.
+        assert!(!joined_room(&mut known, HashSet::from([1])));
+        // Player 2 returns from AFK: sound plays!
+        assert!(joined_room(&mut known, HashSet::from([1, 2])));
+    }
+}

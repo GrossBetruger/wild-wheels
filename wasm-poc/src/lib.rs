@@ -3,13 +3,14 @@ mod bench;
 mod plumage;
 mod ported;
 mod scene;
+mod sound;
 mod sprite;
 mod xray;
 
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
 use serde_json::json;
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 use wasm_bindgen::prelude::*;
 use wild_wheels_core::{Action, Frame, Input, NativeArena, NativeClient};
 
@@ -24,6 +25,13 @@ pub mod app {
     #[derive(Resource, Default)]
     pub struct GameSession {
         pub client: Option<NativeClient>,
+        pub sounds: Vec<String>,
+        pub voices: Vec<(usize, String, f64)>,
+    }
+    impl GameSession {
+        pub fn joined(&self) -> bool {
+            self.client.is_some()
+        }
     }
 }
 
@@ -42,16 +50,29 @@ struct LaunchConfig {
 }
 
 static PACK_BYTES: OnceLock<&'static [u8]> = OnceLock::new();
+static SOUND_BYTES: OnceLock<&'static [u8]> = OnceLock::new();
+static HUD_JSON: Mutex<String> = Mutex::new(String::new());
+
+#[wasm_bindgen]
+pub fn hud_state() -> String {
+    HUD_JSON.lock().map(|g| g.clone()).unwrap_or_default()
+}
 
 pub(crate) fn pack_bytes() -> &'static [u8] {
     PACK_BYTES.get().copied().unwrap_or(&[])
 }
 
+pub(crate) fn sound_pack_bytes() -> &'static [u8] {
+    SOUND_BYTES.get().copied().unwrap_or(&[])
+}
+
 #[wasm_bindgen]
-pub fn start_game(pack: Vec<u8>, driver: usize, arena: usize, bots: usize) {
+pub fn start_game(pack: Vec<u8>, sound_pack: Vec<u8>, driver: usize, arena: usize, bots: usize) {
     console_error_panic_hook::set_once();
     let leaked: &'static [u8] = Box::leak(pack.into_boxed_slice());
     let _ = PACK_BYTES.set(leaked);
+    let leaked_sound: &'static [u8] = Box::leak(sound_pack.into_boxed_slice());
+    let _ = SOUND_BYTES.set(leaked_sound);
 
     let cfg = LaunchConfig {
         driver: driver.min(15),
@@ -75,9 +96,16 @@ pub fn start_game(pack: Vec<u8>, driver: usize, arena: usize, bots: usize) {
         .insert_resource(cfg)
         .insert_resource(app::GameSession::default())
         .insert_resource(scene::Capture(None))
-        .add_plugins((ported::PortedGraphicsPlugin, scene::ArenaPresentationPlugin))
+        .add_plugins((
+            ported::PortedGraphicsPlugin,
+            scene::ArenaPresentationPlugin,
+            sound::GameAudioPlugin,
+        ))
         .add_systems(Startup, start_local_match)
-        .add_systems(Update, (tick_local_match, scene::sync, ported::animate).chain());
+        .add_systems(
+            Update,
+            (tick_local_match, scene::sync, ported::animate, sound::play).chain(),
+        );
 
     bevy_app.run();
 }
@@ -184,10 +212,62 @@ fn tick_local_match(
         }],
     };
     let _ = local.arena.step(frame);
-    let pkt = local.arena.packet(0);
+    let (events, voices) = local.arena.cues(0);
+    let pkt = local.arena.packet_with_cues(0, events, voices);
+    local.arena.drain();
+    let (mut drained_sounds, mut drained_voices) = (Vec::new(), Vec::new());
     if let Some(client) = session.client.as_mut() {
         let _ = client.accept(&pkt, local.elapsed);
+        drained_sounds = client.drain_audio();
+        drained_voices = client.drain_voices();
+        let view = client.view();
+        let p = view.player;
+        let mut standings: Vec<_> = view
+            .actors
+            .iter()
+            .filter(|a| !a.inactive)
+            .map(|a| {
+                (
+                    a.kills,
+                    a.deaths,
+                    a.id,
+                    a.name.as_deref().unwrap_or("Bot"),
+                    a.color.as_str(),
+                )
+            })
+            .collect();
+        standings.sort_by(|a, b| b.0.total_cmp(&a.0).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2)));
+        let rows: Vec<_> = standings
+            .into_iter()
+            .map(|(kills, deaths, id, name, color)| {
+                json!({ "name": name, "color": color, "kills": kills, "deaths": deaths, "me": id == view.you })
+            })
+            .collect();
+        let snap = json!({
+            "phase": view.phase,
+            "elapsed": view.elapsed,
+            "duration": view.duration,
+            "countdown": view.countdown,
+            "health": p.health,
+            "destroyed": p.destroyed,
+            "speed": p.speed,
+            "ammo": p.ammo,
+            "missiles": p.missiles,
+            "turbos": p.turbos,
+            "chaff": p.chaff,
+            "item": p.item,
+            "specialCooldown": p.special_cooldown,
+            "notice": p.notice,
+            "noticeTime": p.notice_time,
+            "standings": rows,
+        })
+        .to_string();
+        if let Ok(mut guard) = HUD_JSON.lock() {
+            *guard = snap;
+        }
     } else {
         session.client = NativeClient::from_packet(&pkt, local.elapsed).ok();
     }
+    session.sounds.append(&mut drained_sounds);
+    session.voices.append(&mut drained_voices);
 }

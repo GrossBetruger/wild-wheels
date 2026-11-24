@@ -5,11 +5,11 @@
   <title>Wild Wheels — Bevy WASM PoC</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { width: 100%; height: 100%; overflow: hidden; background: #141720; color: #f4f6fb; font-family: system-ui, -apple-system, sans-serif; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #141720; color: #f4f6fb; font-family: system-ui, -apple-system, sans-serif; user-select: none; }
     #bevy-canvas { width: 100%; height: 100%; display: block; outline: none; }
     #menu {
       position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
-      background: radial-gradient(circle at 50% 30%, #242b3d, #11141c 75%); z-index: 10;
+      background: radial-gradient(circle at 50% 30%, #242b3d, #11141c 75%); z-index: 20;
     }
     .card {
       width: 440px; padding: 28px; border-radius: 16px; background: rgba(24, 29, 42, 0.94);
@@ -29,20 +29,80 @@
     }
     button:disabled { opacity: 0.55; cursor: wait; }
     #status { margin-top: 12px; font-size: 12px; color: #b7c5e3; min-height: 18px; }
-    #hud {
-      position: fixed; top: 12px; left: 12px; padding: 8px 12px; border-radius: 8px;
-      background: rgba(12, 16, 24, 0.72); border: 1px solid rgba(255,255,255,0.12);
-      font: 12px/1.5 ui-monospace, SFMono-Regular, monospace; color: #d8e5ff; z-index: 5; display: none;
+
+    /* Live HTML HUD layered directly over the Bevy WebGL2 canvas */
+    #hud-layer { position: fixed; inset: 0; pointer-events: none; z-index: 10; display: none; }
+    .pill {
+      background: rgba(14, 18, 28, 0.72); backdrop-filter: blur(6px);
+      border: 1px solid rgba(255,255,255,0.14); border-radius: 10px;
     }
+    #perf {
+      position: fixed; top: 12px; left: 12px; padding: 6px 11px;
+      font: 12px/1.4 ui-monospace, SFMono-Regular, monospace; color: #b9d4ff;
+    }
+    #board {
+      position: fixed; top: 50px; left: 12px; padding: 8px 12px; min-width: 185px;
+      font-size: 12px; line-height: 1.55;
+    }
+    .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .row.me { color: #ffe27a; font-weight: 700; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+    #top-center {
+      position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+    }
+    #clock { padding: 6px 16px; font: 700 18px/1.2 ui-monospace, SFMono-Regular, monospace; letter-spacing: 1px; }
+    #notice {
+      padding: 7px 16px; font-size: 14px; font-weight: 700; letter-spacing: 0.5px;
+      color: #fff3b0; border-color: rgba(255, 224, 112, 0.45); display: none;
+    }
+    #center-banner {
+      position: fixed; top: 38%; left: 50%; transform: translate(-50%, -50%);
+      font-size: 64px; font-weight: 900; text-shadow: 0 6px 24px rgba(0,0,0,0.8);
+      color: #ffe47a; display: none;
+    }
+    #bottom-left {
+      position: fixed; bottom: 16px; left: 16px; padding: 12px 16px;
+      display: flex; flex-direction: column; gap: 8px; min-width: 240px;
+    }
+    #hearts { font-size: 22px; letter-spacing: 3px; color: #ff667d; text-shadow: 0 2px 8px rgba(0,0,0,0.5); }
+    #loadout { display: flex; gap: 10px; font-size: 12px; font-weight: 600; color: #d5e2ff; }
+    .slot { padding: 4px 8px; border-radius: 6px; background: rgba(255,255,255,0.08); }
+    .slot.active { background: rgba(255, 162, 66, 0.32); border: 1px solid rgba(255, 186, 94, 0.7); color: #fff; }
+    #bottom-right {
+      position: fixed; bottom: 16px; right: 16px; padding: 12px 18px; text-align: right; min-width: 170px;
+    }
+    #speed { font: 800 34px/1 ui-monospace, SFMono-Regular, monospace; color: #fff; }
+    #speed small { font-size: 13px; font-weight: 600; color: #9db0d4; margin-left: 4px; }
+    #meter { margin-top: 8px; height: 6px; width: 100%; border-radius: 99px; background: rgba(255,255,255,0.12); overflow: hidden; }
+    #meter-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #4ad4ff, #ffd85c, #ff5e5e); transition: width 40ms linear; }
+    #hint { margin-top: 6px; font-size: 11px; color: #92a2c4; }
   </style>
 </head>
 <body>
   <canvas id="bevy-canvas"></canvas>
-  <div id="hud"></div>
+  <div id="hud-layer">
+    <div id="perf" class="pill"></div>
+    <div id="board" class="pill"></div>
+    <div id="top-center">
+      <div id="clock" class="pill">00:00</div>
+      <div id="notice" class="pill"></div>
+    </div>
+    <div id="center-banner"></div>
+    <div id="bottom-left" class="pill">
+      <div id="hearts"></div>
+      <div id="loadout"></div>
+    </div>
+    <div id="bottom-right" class="pill">
+      <div id="speed">0<small>km/h</small></div>
+      <div id="meter"><div id="meter-fill"></div></div>
+      <div id="hint">WASD · Shift Drift · Space Fire · E Boost · Q Special · F Flip</div>
+    </div>
+  </div>
   <div id="menu">
     <div class="card">
       <h1>Wild Wheels · Bevy WASM PoC</h1>
-      <div class="sub">HTML Menu + Native Rust Bevy Renderer compiled to WebAssembly (WebGL2)</div>
+      <div class="sub">HTML Menu & HUD + Native Rust Bevy Renderer & Sound compiled to WebAssembly</div>
       <label for="driver">Driver</label>
       <select id="driver">
         <option value="0">0 · Pip the Panda</option>
@@ -70,13 +130,27 @@
     </div>
   </div>
   <script type="module">
-    import init, { start_game } from './pkg/wild_wheels_wasm_poc.js';
+    import init, { start_game, hud_state } from './pkg/wild_wheels_wasm_poc.js';
     const botsEl = document.getElementById('bots');
     const botsVal = document.getElementById('bots-val');
     botsEl.oninput = () => botsVal.textContent = botsEl.value;
     const status = document.getElementById('status');
     const btn = document.getElementById('play');
-    const hud = document.getElementById('hud');
+    const hudLayer = document.getElementById('hud-layer');
+    const perfEl = document.getElementById('perf');
+    const boardEl = document.getElementById('board');
+    const clockEl = document.getElementById('clock');
+    const noticeEl = document.getElementById('notice');
+    const bannerEl = document.getElementById('center-banner');
+    const heartsEl = document.getElementById('hearts');
+    const loadoutEl = document.getElementById('loadout');
+    const speedEl = document.getElementById('speed');
+    const meterFill = document.getElementById('meter-fill');
+
+    const fmtClock = s => {
+      const n = Math.max(0, Math.floor(s));
+      return `${String(Math.floor(n/60)).padStart(2,'0')}:${String(n%60).padStart(2,'0')}`;
+    };
 
     btn.onclick = async () => {
       btn.disabled = true;
@@ -85,30 +159,128 @@
         status.textContent = '1/2 Loading Bevy WASM module...';
         await init();
         const tWasm = performance.now() - t0;
-        status.textContent = `2/2 Fetching graphics.wwgp... (WASM ready in ${(tWasm/1000).toFixed(2)}s)`;
-        const resp = await fetch('./graphics.wwgp');
-        if (!resp.ok) throw new Error(`graphics.wwgp HTTP ${resp.status}`);
-        const buf = new Uint8Array(await resp.arrayBuffer());
+        status.textContent = `2/2 Fetching graphics.wwgp + sounds.wwsp... (WASM ready in ${(tWasm/1000).toFixed(2)}s)`;
+        const [respG, respS] = await Promise.all([fetch('./graphics.wwgp'), fetch('./sounds.wwsp')]);
+        if (!respG.ok) throw new Error(`graphics.wwgp HTTP ${respG.status}`);
+        if (!respS.ok) throw new Error(`sounds.wwsp HTTP ${respS.status}`);
+        const [buf, soundBuf] = await Promise.all([
+          respG.arrayBuffer().then(b => new Uint8Array(b)),
+          respS.arrayBuffer().then(b => new Uint8Array(b)),
+        ]);
         const tTotal = performance.now() - t0;
         document.getElementById('menu').style.display = 'none';
-        hud.style.display = 'block';
+        hudLayer.style.display = 'block';
 
-        // Live FPS / worst-frame meter on top of Bevy canvas
-        let frames = 0, last = performance.now(), worst = 0, prev = last;
-        function tickFps(now) {
+        const matchMeta = {
+          driver: +document.getElementById('driver').value,
+          arena: +document.getElementById('arena').value,
+          bots: +botsEl.value,
+          bootMs: Math.round(tTotal),
+          packBytes: buf.byteLength + soundBuf.byteLength,
+        };
+        const sendLog = payload => {
+          const body = JSON.stringify({ ...matchMeta, ...payload });
+          if (navigator.sendBeacon) navigator.sendBeacon('/perf-log', body);
+          else fetch('/perf-log', { method: 'POST', body, keepalive: true }).catch(() => {});
+        };
+        let minSamples = [], minStart = performance.now(), minSpikes = [];
+        let matchFrames = 0, matchOver50 = 0, matchWorst = 0, matchSlowMinutes = 0, matchLogged = false;
+        const flushMinute = (final = false) => {
+          if (minSamples.length < 30) return;
+          const sorted = [...minSamples].sort((a, b) => a - b);
+          const med = sorted[Math.floor(sorted.length * 0.5)];
+          const p95 = sorted[Math.floor(sorted.length * 0.95)];
+          const longest = sorted[sorted.length - 1];
+          const over50 = sorted.filter(x => x >= 50).length;
+          if (p95 >= 25 || over50 >= 10) matchSlowMinutes++;
+          sendLog({
+            event: 'minute-frames',
+            frames: sorted.length,
+            medianMs: +med.toFixed(1),
+            p95Ms: +p95.toFixed(1),
+            over50Ms: over50,
+            longestMs: +longest.toFixed(1),
+            slowest: minSpikes.sort((a, b) => b[1] - a[1]).slice(0, 8),
+            final,
+          });
+          minSamples = []; minSpikes = []; minStart = performance.now();
+        };
+        const flushMatch = () => {
+          if (matchLogged || matchFrames < 30) return;
+          matchLogged = true;
+          flushMinute(true);
+          sendLog({
+            event: 'match-frames',
+            frames: matchFrames,
+            over50Ms: matchOver50,
+            longestMs: +matchWorst.toFixed(1),
+            slowMinutes: matchSlowMinutes,
+          });
+        };
+        window.addEventListener('pagehide', flushMatch);
+
+        let frames = 0, last = performance.now(), worst = 0, prev = last, sessionStart = last;
+        function tickHud(now) {
           const dt = now - prev; prev = now;
+          if (dt > 0 && dt < 2000) {
+            minSamples.push(dt);
+            matchFrames++;
+            if (dt >= 50) { matchOver50++; minSpikes.push([+((now - sessionStart)/1000).toFixed(1), Math.round(dt)]); }
+            if (dt > matchWorst) matchWorst = dt;
+          }
+          if (now - minStart >= 60000) flushMinute(false);
           if (dt > worst) worst = dt;
           frames++;
           if (now - last >= 500) {
             const fps = (frames * 1000 / (now - last)).toFixed(0);
-            hud.textContent = `Bevy WASM | ${fps} FPS | worst ${worst.toFixed(1)}ms | pack ${(buf.byteLength/1048576).toFixed(1)}MB | boot ${(tTotal/1000).toFixed(2)}s`;
+            perfEl.textContent = `Bevy WASM | ${fps} FPS | worst ${worst.toFixed(1)}ms | packs ${((buf.byteLength+soundBuf.byteLength)/1048576).toFixed(1)}MB | boot ${(tTotal/1000).toFixed(2)}s`;
             frames = 0; worst = 0; last = now;
           }
-          requestAnimationFrame(tickFps);
+          try {
+            const raw = hud_state();
+            if (raw) {
+              const s = JSON.parse(raw);
+              clockEl.textContent = fmtClock(Math.max(0, s.duration - s.elapsed));
+              if (s.phase === 'countdown') {
+                bannerEl.style.display = 'block';
+                bannerEl.textContent = Math.max(1, Math.ceil(s.countdown));
+              } else if (s.phase === 'finished') {
+                bannerEl.style.display = 'block';
+                bannerEl.textContent = 'FINISH!';
+                flushMatch();
+              } else if (s.destroyed > 0) {
+                bannerEl.style.display = 'block';
+                bannerEl.textContent = `RESPAWN ${s.destroyed.toFixed(1)}s`;
+              } else {
+                bannerEl.style.display = 'none';
+              }
+              if (s.notice && s.noticeTime > 0) {
+                noticeEl.style.display = 'block';
+                noticeEl.textContent = s.notice;
+              } else {
+                noticeEl.style.display = 'none';
+              }
+              const hp = Math.max(0, Math.round(s.health));
+              heartsEl.textContent = '♥'.repeat(hp) + '♡'.repeat(Math.max(0, 3 - hp));
+              loadoutEl.innerHTML =
+                `<span class="slot ${s.item==='hedgehog'?'active':''}">🦔 ${s.ammo}</span>` +
+                `<span class="slot ${s.item==='missile'?'active':''}">🚀 ${s.missiles}</span>` +
+                `<span class="slot">⚡ ${s.turbos}</span>` +
+                `<span class="slot">✨ ${s.chaff}</span>` +
+                `<span class="slot">${s.specialCooldown > 0 ? `Q ${s.specialCooldown.toFixed(0)}s` : 'Q READY'}</span>`;
+              const kmh = Math.round(Math.abs(s.speed) * 0.24);
+              speedEl.innerHTML = `${kmh}<small>km/h</small>`;
+              meterFill.style.width = `${Math.min(100, Math.round(kmh / 2.04))}%`;
+              boardEl.innerHTML = s.standings.map((r, i) =>
+                `<div class="row ${r.me?'me':''}"><span><i class="dot" style="background:${r.color}"></i>${i+1}. ${r.name}</span><span>${r.kills}/${r.deaths}</span></div>`
+              ).join('');
+            }
+          } catch {}
+          requestAnimationFrame(tickHud);
         }
-        requestAnimationFrame(tickFps);
+        requestAnimationFrame(tickHud);
 
-        start_game(buf, +document.getElementById('driver').value, +document.getElementById('arena').value, +botsEl.value);
+        start_game(buf, soundBuf, +document.getElementById('driver').value, +document.getElementById('arena').value, +botsEl.value);
       } catch (err) {
         status.textContent = 'Error: ' + err;
         btn.disabled = false;
