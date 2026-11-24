@@ -1,20 +1,28 @@
 """
 Build Master-Yuda (#10), the aviator-shaded biker elder on his chrome V-twin cruiser
-motorcycle, as articulated Blender 5.3 PBR glTF (.glb) parts following drawMotorcycle,
-drawYuda, and drawYudaJacket in characters/master-yuda/master-yuda.js:
-  - wasm-poc/assets/models/yuda_bike.glb       : chrome V-twin cruiser frame, tank, pipes, lamp, mirrors
-  - wasm-poc/assets/models/yuda_wheel.glb      : one wheel about its axle (used front & rear)
-  - wasm-poc/assets/models/yuda_rider.glb      : Master-Yuda in his studded leather jacket w/ winged back patch
-  - wasm-poc/assets/models/yuda_rider_bare.glb : bare-chested Master-Yuda (while boosting / Vulcan!)
-  - wasm-poc/assets/models/yuda_jacket.glb     : flying leather biker jacket thrown behind him on boost
+motorcycle, as Blender 5.3 PBR glTF (.glb) following drawMotorcycle, drawYuda, and
+drawYudaJacket in characters/master-yuda/master-yuda.js:
+  - wasm-poc/assets/models/yuda_bike.glb   : chrome V-twin cruiser frame, tank, pipes, lamp, mirrors
+  - wasm-poc/assets/models/yuda_wheel.glb  : one wheel about its axle (used front & rear)
+  - wasm-poc/assets/models/yuda_rider.glb  : Master-Yuda and his studded leather jacket, skinned
+                                             to one skeleton, with the clips ride, strip, bare, dress
+  - wasm-poc/assets/models/yuda_jacket.glb : the jacket alone on its own bones, tumbling through
+                                             the air after he throws it
 
 Run:
   /opt/homebrew/bin/blender --background --python wasm-poc/blender/build_yuda.py
 """
 import math
 import os
+import sys
+import bmesh
 import bpy
-from mathutils import Euler, Vector
+from mathutils import Euler, Quaternion, Vector
+
+sys.dont_write_bytecode = True
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import rigging
+from rigging import RX, RY, RZ, ease, wave
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 OUT_DIR = os.path.join(ROOT, "assets", "models")
@@ -25,8 +33,12 @@ def clear_scene():
     bpy.ops.wm.read_factory_settings(use_empty=True)
 
 
+# Subtracted from every point built, to author a part about its own hinge.
+ORIGIN = [0.0, 0.0, 0.0]
+
+
 def loc(x, y, z):
-    return (x, -z, y)
+    return (x - ORIGIN[0], -(z - ORIGIN[2]), y - ORIGIN[1])
 
 
 def hex_to_linear(h):
@@ -65,7 +77,7 @@ def add_sphere(x, y, z, rx, ry, rz, mat, segs=18, rings=10, rot=(0, 0, 0)):
     bpy.ops.object.transform_apply(scale=True)
     obj.data.materials.append(mat)
     smooth(obj)
-    return obj
+    return rigging.bind(obj)
 
 
 def add_box(x, y, z, sx, sy, sz, mat, bevel=0.02, rot=(0, 0, 0)):
@@ -82,7 +94,7 @@ def add_box(x, y, z, sx, sy, sz, mat, bevel=0.02, rot=(0, 0, 0)):
         bpy.ops.object.modifier_apply(modifier="Bevel")
     obj.data.materials.append(mat)
     smooth(obj)
-    return obj
+    return rigging.bind(obj)
 
 
 def add_tube(p1, p2, r1, r2, mat, segs=12):
@@ -96,7 +108,7 @@ def add_tube(p1, p2, r1, r2, mat, segs=12):
     obj.rotation_quaternion = diff.to_track_quat("Z", "Y")
     obj.data.materials.append(mat)
     smooth(obj)
-    return obj
+    return rigging.bind(obj)
 
 
 def add_torus(x, y, z, major_r, minor_r, mat, rot=(0, 0, 0), major=32, minor=10, scale=(1, 1, 1)):
@@ -111,7 +123,7 @@ def add_torus(x, y, z, major_r, minor_r, mat, rot=(0, 0, 0), major=32, minor=10,
     bpy.ops.object.transform_apply(scale=True)
     obj.data.materials.append(mat)
     smooth(obj)
-    return obj
+    return rigging.bind(obj)
 
 
 def export_glb(filename):
@@ -206,8 +218,93 @@ def build_wheel():
 # ---------------------------------------------------------------------------
 # 3. Master-Yuda Rider (clothed & bare variants)
 # ---------------------------------------------------------------------------
-def build_rider(clothed, filename):
-    clear_scene()
+# 3. Master-Yuda and his jacket on one skeleton (yuda_rider.glb)
+# ---------------------------------------------------------------------------
+SIDES = {-1: "_l", 1: "_r"}
+HIPS, CHEST, NECK, JACKET = (0, 1.9, -0.55), (0, 2.0, -0.5), (0, 2.95, -0.38), (0, 2.3, -0.52)
+
+
+def shoulder(side):
+    return (side * 0.52, 2.65, -0.25)
+
+
+def elbow(side):
+    return (side * 0.835, 2.4, 0.5)
+
+
+def grip(side):
+    return (side * 0.91, 2.38, 1.28)
+
+
+def rider_bones():
+    bones = [("hips", None, HIPS), ("chest", "hips", CHEST), ("head", "chest", NECK), ("jacket", "chest", JACKET)]
+    for side, tag in SIDES.items():
+        bones += [
+            ("ear" + tag, "head", (side * 0.62, 3.45, -0.22)),
+            ("arm_upper" + tag, "chest", shoulder(side)),
+            ("arm_fore" + tag, "arm_upper" + tag, elbow(side)),
+            ("sleeve_upper" + tag, "jacket", shoulder(side)),
+            ("sleeve_fore" + tag, "sleeve_upper" + tag, elbow(side)),
+        ]
+    return bones
+
+
+def jacket_bones():
+    """The thrown jacket's own skeleton, about the jacket's hinge."""
+    def about(point):
+        return tuple(p - j for p, j in zip(point, JACKET))
+    bones = [("jacket", None, (0, 0, 0))]
+    for side, tag in SIDES.items():
+        bones += [("sleeve_upper" + tag, "jacket", about(shoulder(side))),
+                  ("sleeve_fore" + tag, "sleeve_upper" + tag, about(elbow(side)))]
+    return bones
+
+
+def limb(side, upper, fore, wide, narrow, mat, cuff=0.0):
+    """An arm or a sleeve from shoulder to grip: two tapered tubes on their own
+    bones and a ball that both share, so the elbow bends without a gap."""
+    stop = Vector(grip(side)) + (Vector(elbow(side)) - Vector(grip(side))).normalized() * cuff
+    middle = (wide + narrow) / 2
+    rigging.carry(**{upper: 1.0})
+    add_tube(shoulder(side), elbow(side), wide, middle, mat)
+    add_sphere(*shoulder(side), wide, wide, wide, mat, segs=12, rings=8)
+    rigging.carry(**{upper: 0.5, fore: 0.5})
+    add_sphere(*elbow(side), middle, middle, middle, mat, segs=12, rings=8)
+    rigging.carry(**{fore: 1.0})
+    add_tube(elbow(side), tuple(stop), middle, narrow, mat)
+
+
+def add_jacket():
+    """The studded leather jacket: an open-bottomed shell, two sleeves that
+    bend at the elbow, chrome lapels and the winged patch on the back."""
+    m_leather = make_mat("YudaJacket", "#222631", roughness=0.48, metallic=0.08)
+    m_lining = make_mat("YudaJacketLining", "#3a2f33", roughness=0.7)
+    m_chrome = make_mat("YudaChrome", "#ccdce2", roughness=0.14, metallic=0.95)
+    m_cyan = make_mat("AviatorCyan", "#6af3ed", roughness=0.10, emission=2.6, emission_color="#6af3ed")
+    rigging.carry(jacket=1.0)
+    for radius, mat in ((1.0, m_leather), (0.985, m_lining)):
+        shell = add_sphere(0, 2.32, -0.52, 0.67 * radius, 0.74 * radius, 0.51 * radius, mat, segs=22, rings=14)
+        # Open at the waist, so that thrown it reads as a jacket and not a ball.
+        cut = bmesh.new()
+        cut.from_mesh(shell.data)
+        waist = 1.84 - ORIGIN[1] - shell.location.z
+        bmesh.ops.delete(cut, geom=[f for f in cut.faces if f.calc_center_median().z < waist], context="FACES")
+        cut.to_mesh(shell.data)
+        cut.free()
+    for side, tag in SIDES.items():
+        limb(side, "sleeve_upper" + tag, "sleeve_fore" + tag, 0.225, 0.19, m_leather, cuff=0.24)
+        rigging.carry(jacket=1.0)
+        # Gleaming chrome jacket lapels + 3 chrome studs per side
+        add_box(side * 0.24, 2.68, -0.07, 0.22, 0.42, 0.06, m_chrome, bevel=0.015, rot=(0.15, 0, side * -0.35))
+        for i in range(3):
+            add_sphere(side * 0.50, 2.73 - i * 0.12, -0.02, 0.042, 0.042, 0.036, m_chrome, segs=8, rings=5)
+        # Iconic chrome & glowing cyan winged biker patch on the back of the jacket!
+        for i in range(4):
+            add_box(side * (0.14 + i * 0.10), 2.48 + i * 0.05, -1.01, 0.15, 0.065, 0.035, m_chrome, bevel=0.008)
+    add_sphere(0, 2.50, -1.02, 0.13, 0.17, 0.03, m_cyan, segs=12, rings=6)
+
+
+def add_rider():
     m_brown = make_mat("YudaBrown", "#95643f", roughness=0.72)
     m_light = make_mat("YudaLightBrown", "#bc8a59", roughness=0.74)
     m_mouth = make_mat("YudaMouth", "#493428", roughness=0.65)
@@ -217,36 +314,37 @@ def build_rider(clothed, filename):
     m_shade = make_mat("AviatorLens", "#0d1622", roughness=0.06, metallic=0.35)
     m_cyan = make_mat("AviatorCyan", "#6af3ed", roughness=0.10, emission=2.6, emission_color="#6af3ed")
     m_hoop = make_mat("EarHoop", "#f2d6a5", roughness=0.20, metallic=0.92)
-    m_body = m_leather if clothed else m_brown
 
-    # Torso
-    add_sphere(0, 2.32, -0.52, 0.62, 0.70, 0.46, m_body, segs=22, rings=14)
-    if not clothed:
-        add_sphere(0, 2.08, -0.12, 0.38, 0.32, 0.12, m_light, segs=16, rings=8)
+    # Bare torso; the jacket goes over it.
+    rigging.carry(chest=1.0)
+    add_sphere(0, 2.32, -0.52, 0.62, 0.70, 0.46, m_brown, segs=22, rings=14)
+    add_sphere(0, 2.08, -0.12, 0.38, 0.32, 0.12, m_light, segs=16, rings=8)
 
-    for side in (-1, 1):
-        # Bent biker legs + chunky boots on footpegs
+    for side, tag in SIDES.items():
+        # Bent biker legs in leather trousers + chunky boots on footpegs
+        rigging.carry(hips=1.0)
         knee = (side * 0.76, 1.43, 0.05)
         ankle = (side * 0.69, 1.03, -0.28)
-        add_tube((side * 0.40, 1.90, -0.55), knee, 0.23, 0.20, m_body)
-        add_tube(knee, ankle, 0.20, 0.18, m_body)
-        add_sphere(ankle[0], ankle[1] - 0.07, ankle[2] + 0.23, 0.26, 0.20, 0.48, m_boot if clothed else m_brown, segs=14, rings=8)
-        # Arms gripping the wide handlebars
-        hand = (side * 0.91, 2.38, 1.28)
-        add_tube((side * 0.52, 2.65, -0.25), hand, 0.20, 0.17, m_body)
-        add_sphere(*hand, 0.22, 0.19, 0.21, m_brown, segs=14, rings=8)
-        if clothed:
-            # Gleaming chrome jacket lapels + 3 chrome studs per side
-            add_box(side * 0.24, 2.68, -0.10, 0.22, 0.42, 0.06, m_chrome, bevel=0.015, rot=(0.15, 0, side * -0.35))
-            for i in range(3):
-                add_sphere(side * 0.50, 2.73 - i * 0.12, -0.05, 0.042, 0.042, 0.036, m_chrome, segs=8, rings=5)
+        add_tube((side * 0.40, 1.90, -0.55), knee, 0.23, 0.20, m_leather)
+        add_tube(knee, ankle, 0.20, 0.18, m_leather)
+        add_sphere(*knee, 0.2, 0.2, 0.2, m_leather, segs=12, rings=8)
+        add_sphere(ankle[0], ankle[1] - 0.07, ankle[2] + 0.23, 0.26, 0.20, 0.48, m_boot, segs=14, rings=8)
+        # Bare arms gripping the wide handlebars
+        limb(side, "arm_upper" + tag, "arm_fore" + tag, 0.185, 0.15, m_brown)
+        add_sphere(*grip(side), 0.22, 0.19, 0.21, m_brown, segs=14, rings=8)
 
     # Iconic brown elder head + huge horizontal pointed ears + gold earring + aviator shades
+    rigging.carry(head=1.0)
     add_sphere(0, 3.38, -0.32, 0.81, 0.72, 0.68, m_brown, segs=26, rings=16)
-    for side in (-1, 1):
-        # Expressive long horizontal pointed elder ears
+    for side, tag in SIDES.items():
+        # Expressive long horizontal pointed elder ears, each on its own bone
+        rigging.carry(**{"ear" + tag: 1.0})
         add_tube((side * 0.62, 3.45, -0.22), (side * 2.08, 3.74, -0.38), 0.30, 0.04, m_brown, segs=10)
         add_tube((side * 0.74, 3.44, -0.12), (side * 1.82, 3.68, -0.30), 0.16, 0.02, m_light, segs=8)
+        if side < 0:
+            # Gold hoop earring on left ear
+            add_torus(-1.06, 3.32, -0.10, 0.11, 0.028, m_hoop, rot=(0, 0, 0), major=18, minor=6)
+        rigging.carry(head=1.0)
         # Unmistakable chrome-rimmed dark aviator sunglasses with glowing cyan reflection bar!
         add_sphere(side * 0.36, 3.52, 0.29, 0.37, 0.27, 0.10, m_chrome, segs=18, rings=10)
         add_sphere(side * 0.36, 3.52, 0.37, 0.32, 0.22, 0.055, m_shade, segs=16, rings=8)
@@ -258,44 +356,148 @@ def build_rider(clothed, filename):
     add_sphere(0, 3.27, 0.38, 0.19, 0.16, 0.24, m_light, segs=14, rings=8)
     add_sphere(0, 3.02, 0.19, 0.35, 0.13, 0.23, m_light, segs=14, rings=8)
     add_box(0.08, 3.10, 0.40, 0.30, 0.03, 0.03, m_mouth, bevel=0.008)
-    # Gold hoop earring on left ear
-    add_torus(-1.06, 3.32, -0.10, 0.11, 0.028, m_hoop, rot=(0, 0, 0), major=18, minor=6)
 
-    # Iconic chrome & glowing cyan winged biker patch on the back of the jacket!
-    if clothed:
-        for side in (-1, 1):
-            for i in range(4):
-                add_box(side * (0.14 + i * 0.10), 2.48 + i * 0.05, -0.97, 0.15, 0.065, 0.035, m_chrome, bevel=0.008)
-        add_sphere(0, 2.50, -0.98, 0.13, 0.17, 0.03, m_cyan, segs=12, rings=6)
 
-    export_glb(filename)
+# How far along the strip the jacket leaves him, and where it is then: the
+# game throws the loose jacket (yuda_jacket.glb) from there.
+STRIP_FRAMES, RELEASE_FRAME, DRESS_FRAMES = 12, 8, 26
+RELEASE_TURN, RELEASE_SHIFT = RX(-0.6), (0, 0.2, -0.9)
+GONE = 0.001
+
+
+def mix(a, b, amount):
+    return tuple(p + (q - p) * amount for p, q in zip(a, b))
+
+
+def arms(pose, chest, hands, worn=True):
+    """Put each hand where `hands` says, elbows out and down; worn sleeves follow."""
+    for side, tag in SIDES.items():
+        upper, fore = rigging.reach(shoulder(side), elbow(side), grip(side), hands(side),
+                                    (side * 0.6, -0.8, -0.1), chest, CHEST)
+        pose["arm_upper" + tag], pose["arm_fore" + tag] = upper, fore
+        if worn:
+            pose["sleeve_upper" + tag], pose["sleeve_fore" + tag] = upper, fore
+
+
+def ears(pose, cycle, swept):
+    """Ears bob at a cruise and stream back, fluttering, at full throttle."""
+    for side, tag in SIDES.items():
+        calm = RZ(side * 0.05 * wave(cycle, 2, side)) @ RY(side * 0.06 * wave(cycle, 4))
+        back = RY(side * (0.42 + 0.1 * wave(cycle, 6, side))) @ RZ(side * 0.06 * wave(cycle, 8))
+        pose["ear" + tag] = calm.slerp(back, swept)
+
+
+def clip_ride(cycle):
+    """Cruising in the jacket: hands on the bars, the engine thrumming through him."""
+    chest = RX(0.02 * wave(cycle, 2))
+    pose = {"chest": (chest, (0, 0.006 * wave(cycle, 12), 0)),
+            "head": RY(0.05 * wave(cycle)) @ RX(-0.02 * wave(cycle, 2))}
+    arms(pose, chest, grip)
+    ears(pose, cycle, 0.0)
+    return pose
+
+
+def clip_bare(cycle):
+    """Bare-chested at full throttle: tucked forward, ears streaming."""
+    chest = RX(0.14 + 0.02 * wave(cycle, 4))
+    pose = {"chest": (chest, (0, 0.01 * wave(cycle, 12), 0)), "head": RX(-0.12) @ RY(0.03 * wave(cycle, 2)),
+            "jacket": (Quaternion(), (0, 0, 0), GONE)}
+    arms(pose, chest, grip)
+    ears(pose, cycle, 1.0)
+    return pose
+
+
+def clip_strip(cycle):
+    """Once through: hands leave the bars, the arms sweep back and the jacket
+    slides off them; from RELEASE_FRAME he is bare and reaching for the bars."""
+    release = RELEASE_FRAME / STRIP_FRAMES
+    tuck, back, home = ease(cycle / 0.3), ease((cycle - 0.3) / (release - 0.3)), ease((cycle - release) / (1 - release))
+    chest = RX(-0.14 * back * (1 - home) + 0.14 * home)
+
+    def hands(side):
+        swept = mix(mix(grip(side), (side * 0.8, 2.75, 0.2), tuck), (side * 0.95, 2.25, -1.2), back)
+        return mix(swept, grip(side), home)
+
+    pose = {"chest": chest, "head": RX(0.1 * back * (1 - home) - 0.12 * home)}
+    arms(pose, chest, hands)
+    ears(pose, cycle, home)
+    shift = tuple(s * back for s in RELEASE_SHIFT)
+    pose["jacket"] = (Quaternion().slerp(RELEASE_TURN, back), shift, 1.0 if cycle < release else GONE)
+    return pose
+
+
+def clip_dress(cycle):
+    """Once through: he reaches up and back, swings the jacket over his
+    shoulders from behind the saddle, and his arms drop into the sleeves."""
+    lift, settle, into = math.sin(math.pi * cycle), ease(cycle / 0.75), ease((cycle - 0.45) / 0.4)
+    chest = RX(0.14 * (1 - ease(cycle / 0.6)) - 0.08 * lift)
+
+    def hands(side):
+        return mix(grip(side), (side * 1.1, 3.6, -0.25), lift)
+
+    pose = {"chest": chest, "head": RX(-0.12 * (1 - settle) + 0.08 * lift)}
+    arms(pose, chest, hands, worn=False)
+    ears(pose, cycle, 1 - settle)
+    rise = (0, -0.55 * (1 - settle) + 0.35 * math.sin(math.pi * settle), -0.9 * (1 - settle))
+    pose["jacket"] = (RX(0.9 * (1 - settle)), rise, max(GONE, ease(cycle / 0.12)))
+    for side, tag in SIDES.items():
+        # The sleeves hang open and wide until the arms come down into them.
+        pose["sleeve_upper" + tag] = (RY(side * 1.2) @ RX(-0.6)).slerp(pose["arm_upper" + tag], into)
+        pose["sleeve_fore" + tag] = RX(0.5).slerp(pose["arm_fore" + tag], into)
+    return pose
+
+
+def clip_tumble(cycle):
+    """The thrown jacket: the shell rocks and the empty sleeves flail."""
+    pose = {"jacket": RX(0.25 * wave(cycle)) @ RZ(0.15 * wave(cycle, 2))}
+    for side, tag in SIDES.items():
+        pose["sleeve_upper" + tag] = RY(side * (1.0 + 0.4 * wave(cycle, 2, side))) @ RX(-0.3 + 0.5 * wave(cycle, 2))
+        pose["sleeve_fore" + tag] = RX(0.6 * wave(cycle, 2, 1.0)) @ RY(side * 0.3 * wave(cycle, 3))
+    return pose
+
+
+RIDER_CLIPS = [("ride", 60, clip_ride), ("strip", STRIP_FRAMES, clip_strip),
+               ("bare", 60, clip_bare), ("dress", DRESS_FRAMES, clip_dress)]
+JACKET_CLIPS = [("tumble", 24, clip_tumble)]
+
+
+def meshes():
+    return [obj for obj in bpy.context.scene.objects if obj.type == "MESH"]
+
+
+def build_rider():
+    clear_scene()
+    ORIGIN[:] = (0, 0, 0)
+    add_rider()
+    body = rigging.join(meshes(), "Yuda")
+    add_jacket()
+    jacket = rigging.join([obj for obj in meshes() if obj != body], "YudaJacket")
+    rig = rigging.build_armature("YudaRig", rider_bones())
+    rigging.skin(rig, body, jacket)
+    rigging.author_clips(rig, rider_bones(), RIDER_CLIPS)
+    rigging.export_rig(os.path.join(OUT_DIR, "yuda_rider.glb"), RIDER_CLIPS)
+    return rig
 
 
 # ---------------------------------------------------------------------------
-# 4. Flying Leather Biker Jacket (yuda_jacket.glb)
+# 4. The jacket in flight (yuda_jacket.glb)
 # ---------------------------------------------------------------------------
 def build_jacket():
     clear_scene()
-    m_leather = make_mat("FlyLeather", "#222631", roughness=0.50, metallic=0.08)
-    m_chrome = make_mat("FlyChrome", "#ccdce2", roughness=0.14, metallic=0.95)
-    m_cyan = make_mat("FlyCyan", "#6af3ed", roughness=0.10, emission=2.4, emission_color="#6af3ed")
-
-    add_box(0, 0.0, -0.20, 1.18, 1.15, 0.18, m_leather, bevel=0.05)
-    for side in (-1, 1):
-        add_box(side * 0.46, 0.0, 0.14, 0.32, 1.14, 0.32, m_leather, bevel=0.04)
-        add_tube((side * 0.55, 0.40, 0.0), (side * 1.15, -0.15, 0.28), 0.22, 0.18, m_leather)
-        add_box(side * 0.26, 0.35, 0.32, 0.20, 0.38, 0.05, m_chrome, bevel=0.01)
-        for i in range(4):
-            add_box(side * (0.14 + i * 0.10), 0.12 + i * 0.05, -0.30, 0.15, 0.065, 0.035, m_chrome, bevel=0.008)
-    add_sphere(0, 0.14, -0.31, 0.13, 0.17, 0.03, m_cyan, segs=12, rings=6)
-
-    export_glb("yuda_jacket.glb")
+    ORIGIN[:] = JACKET
+    add_jacket()
+    jacket = rigging.join(meshes(), "YudaJacket")
+    ORIGIN[:] = (0, 0, 0)
+    rig = rigging.build_armature("YudaJacketRig", jacket_bones())
+    rigging.skin(rig, jacket)
+    rigging.author_clips(rig, jacket_bones(), JACKET_CLIPS)
+    rigging.export_rig(os.path.join(OUT_DIR, "yuda_jacket.glb"), JACKET_CLIPS)
+    return rig
 
 
 if __name__ == "__main__":
     build_bike()
     build_wheel()
-    build_rider(True, "yuda_rider.glb")
-    build_rider(False, "yuda_rider_bare.glb")
+    build_rider()
     build_jacket()
     print("[yuda] ALL DONE!")

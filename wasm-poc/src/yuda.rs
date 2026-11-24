@@ -1,9 +1,12 @@
 //! Master-Yuda (#10) as an articulated Blender PBR cruiser motorcycle & biker elder:
 //! - Spinning front & rear motorcycle wheels
 //! - Akira-style deep drift lean + inside exhaust scraping floor sparks
-//! - Rear-axle wheelie on boost + flying leather jacket throw on boost/Vulcan!
+//! - Rear-axle wheelie on boost
+//! - A skinned rider whose jacket comes off, is thrown, and goes back on, as
+//!   animation clips authored in `blender/build_yuda.py`
 use crate::{MobileGraphics, Presentation, app::GameSession, ported, scene};
-use bevy::gltf::GltfAssetLabel;
+use bevy::animation::graph::AnimationNodeIndex;
+use bevy::gltf::{Gltf, GltfAssetLabel};
 use bevy::prelude::*;
 use std::collections::HashSet;
 use std::f32::consts::TAU;
@@ -12,6 +15,18 @@ pub const DRIVER: usize = 10;
 
 const WHEEL_RADIUS: f32 = 0.92;
 const AXLES: [Vec3; 2] = [Vec3::new(0.0, 0.92, -1.65), Vec3::new(0.0, 0.92, 1.80)];
+
+/// The rider's clips in `yuda_rider.glb`, by name.
+const CLIPS: [&str; 4] = ["ride", "strip", "bare", "dress"];
+const RIDE: usize = 0;
+const STRIP: usize = 1;
+const BARE: usize = 2;
+const DRESS: usize = 3;
+/// How far into the strip the jacket leaves him, and where it is then, as in
+/// `RELEASE_FRAME`, `RELEASE_TURN` and `RELEASE_SHIFT` of the Blender script.
+const RELEASE: f32 = 8.0 / 30.0;
+const RELEASE_AT: Vec3 = Vec3::new(0.0, 2.5, -1.42);
+const RELEASE_PITCH: f32 = -0.6;
 const EXHAUST_TIPS: [Vec3; 2] = [Vec3::new(-0.65, 0.67, -2.38), Vec3::new(0.65, 0.67, -2.38)];
 
 pub struct YudaPlugin;
@@ -20,7 +35,7 @@ impl Plugin for YudaPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, load).add_systems(
             Update,
-            (ride_yuda, tick_yuda_fx)
+            (rig_up_yuda, ride_yuda, tick_yuda_fx)
                 .chain()
                 .after(scene::sync)
                 .in_set(Presentation),
@@ -32,9 +47,12 @@ impl Plugin for YudaPlugin {
 struct YudaAssets {
     bike: Handle<WorldAsset>,
     wheel: Handle<WorldAsset>,
-    rider_clothed: Handle<WorldAsset>,
-    rider_bare: Handle<WorldAsset>,
-    jacket: Handle<WorldAsset>,
+    rider: Handle<Gltf>,
+    rider_skin: Handle<WorldAsset>,
+    jacket: Handle<Gltf>,
+    jacket_skin: Handle<WorldAsset>,
+    /// Built once both models have loaded and the first rider has been spawned.
+    moves: Option<Moves>,
     spark_mesh: Handle<Mesh>,
     spark_gold: Handle<StandardMaterial>,
     spark_cyan: Handle<StandardMaterial>,
@@ -43,19 +61,46 @@ struct YudaAssets {
     flame_mat: Handle<StandardMaterial>,
 }
 
+/// The rider's clips as one blend graph, and the thrown jacket's as another.
+#[derive(Clone)]
+struct Moves {
+    graph: Handle<AnimationGraph>,
+    clips: [AnimationNodeIndex; CLIPS.len()],
+    lengths: [f32; CLIPS.len()],
+    toss_graph: Handle<AnimationGraph>,
+    tumble: AnimationNodeIndex,
+}
+
+/// Where the jacket is.
+#[derive(Clone, Copy, PartialEq)]
+enum Wear {
+    On,
+    Stripping,
+    Off,
+    Dressing,
+}
+
 #[derive(Component)]
 struct YudaRig {
     id: usize,
     wheels: [Entity; 2],
     flames: [Entity; 2],
-    rider_clothed: Entity,
-    rider_bare: Entity,
+    rider: Entity,
+    /// The loose jacket he throws: one per rider, hidden between throws.
+    toss: Entity,
+    /// The animation players of the rider and of the loose jacket, once their models have arrived.
+    players: Option<[Entity; 2]>,
+    wear: Wear,
+    /// Seconds into the strip or the dressing.
+    clock: f32,
+    thrown: bool,
+    /// How much of each clip is showing.
+    mix: [f32; CLIPS.len()],
     lamp: Option<Entity>,
     spin: f32,
     roll: f32,
     side: f32,
     wheelie: f32,
-    was_bare: bool,
     spark_timer: f32,
     smoke_timer: f32,
     smoke_pipe: usize,
@@ -144,9 +189,11 @@ fn load(
     commands.insert_resource(YudaAssets {
         bike: part("bike"),
         wheel: part("wheel"),
-        rider_clothed: part("rider"),
-        rider_bare: part("rider_bare"),
-        jacket: part("jacket"),
+        rider: assets.load("models/yuda_rider.glb"),
+        rider_skin: part("rider"),
+        jacket: assets.load("models/yuda_jacket.glb"),
+        jacket_skin: part("jacket"),
+        moves: None,
         spark_mesh,
         spark_gold,
         spark_cyan,
@@ -154,6 +201,65 @@ fn load(
         flame_mesh,
         flame_mat,
     });
+}
+
+/// Once a rider's models have been spawned: start his clips and his loose
+/// jacket's, every one silent until `ride_yuda` turns it up.
+fn rig_up_yuda(
+    mut commands: Commands,
+    assets: Option<ResMut<YudaAssets>>,
+    models: Res<Assets<Gltf>>,
+    clips: Res<Assets<AnimationClip>>,
+    mut graphs: ResMut<Assets<AnimationGraph>>,
+    mut rigs: Query<&mut YudaRig>,
+    family: Query<&Children>,
+    mut players: Query<&mut AnimationPlayer>,
+) {
+    let Some(mut assets) = assets else { return };
+    for mut rig in &mut rigs {
+        if rig.players.is_some() {
+            continue;
+        }
+        let player_in = |root: Entity| family.iter_descendants(root).find(|part| players.contains(*part));
+        let (Some(rider), Some(loose)) = (player_in(rig.rider), player_in(rig.toss)) else { continue };
+        if assets.moves.is_none() {
+            let (Some(model), Some(jacket)) = (models.get(&assets.rider), models.get(&assets.jacket)) else {
+                continue;
+            };
+            let Some(tumble) = jacket.named_animations.get("tumble") else { continue };
+            let mut graph = AnimationGraph::new();
+            let root = graph.root;
+            let (mut nodes, mut lengths) = ([root; CLIPS.len()], [1.0; CLIPS.len()]);
+            for (index, name) in CLIPS.into_iter().enumerate() {
+                let Some(clip) = model.named_animations.get(name) else { continue };
+                lengths[index] = clips.get(clip).map_or(1.0, |clip| clip.duration());
+                nodes[index] = graph.add_clip(clip.clone(), 1.0, root);
+            }
+            let (toss_graph, tumble) = AnimationGraph::from_clip(tumble.clone());
+            assets.moves = Some(Moves {
+                graph: graphs.add(graph),
+                clips: nodes,
+                lengths,
+                toss_graph: graphs.add(toss_graph),
+                tumble,
+            });
+        }
+        let Some(moves) = assets.moves.clone() else { continue };
+        if let Ok(mut playing) = players.get_mut(rider) {
+            for (index, clip) in moves.clips.into_iter().enumerate() {
+                let clip = playing.play(clip).repeat().set_weight(f32::from(index == RIDE));
+                if index == STRIP || index == DRESS {
+                    clip.pause();
+                }
+            }
+        }
+        if let Ok(mut playing) = players.get_mut(loose) {
+            playing.play(moves.tumble).repeat();
+        }
+        commands.entity(rider).insert(AnimationGraphHandle(moves.graph));
+        commands.entity(loose).insert(AnimationGraphHandle(moves.toss_graph));
+        rig.players = Some([rider, loose]);
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -167,6 +273,7 @@ fn ride_yuda(
     mut rigs: Query<(&mut YudaRig, &mut Transform, &mut Visibility)>,
     mut parts: Query<(&mut Transform, &mut Visibility), Without<YudaRig>>,
     mut lights: Query<&mut PointLight>,
+    mut players: Query<&mut AnimationPlayer>,
 ) {
     let Some(assets) = assets else { return };
     let Some(client) = session.client.as_ref() else { return };
@@ -219,27 +326,57 @@ fn ride_yuda(
                 }
             }
 
-            // Toggle clothed vs bare-chested rider & throw the flying leather jacket on strip!
-            if bare && !rig.was_bare {
+            // The jacket comes off for a boost or rapid fire and goes back on
+            // after; starting again mid-dressing throws it again, as in the browser.
+            match (bare, rig.wear) {
+                (true, Wear::On | Wear::Dressing) => (rig.wear, rig.clock, rig.thrown) = (Wear::Stripping, 0.0, false),
+                (false, Wear::Off | Wear::Stripping) => (rig.wear, rig.clock) = (Wear::Dressing, 0.0),
+                _ => rig.clock += dt,
+            }
+            let lengths = assets.moves.as_ref().map_or([1.0; CLIPS.len()], |moves| moves.lengths);
+            // He lets go of it part-way through the strip, or at once if the strip is cut short.
+            let letting_go = rig.wear == Wear::Stripping && rig.clock >= RELEASE || rig.wear == Wear::Dressing;
+            if letting_go && !rig.thrown {
+                rig.thrown = true;
                 let back = place.rotation * Vec3::NEG_Z;
-                commands.spawn((
-                    WorldAssetRoot(assets.jacket.clone()),
-                    Transform::from_translation(place.transform_point(Vec3::new(0.0, 2.6, -0.6)))
-                        .with_rotation(place.rotation),
-                    FlyingJacket {
-                        vel: back * 14.0 + Vec3::Y * 7.5,
-                        rot_vel: Vec3::new(5.5, 4.2, -3.8),
-                        age: 0.0,
-                        life: 1.15,
-                    },
-                ));
+                if let Ok((mut loose, mut seen)) = parts.get_mut(rig.toss) {
+                    *loose = place
+                        * Transform::from_translation(RELEASE_AT).with_rotation(Quat::from_rotation_x(RELEASE_PITCH));
+                    *seen = Visibility::Visible;
+                }
+                commands.entity(rig.toss).insert(FlyingJacket {
+                    vel: back * 14.0 + Vec3::Y * 7.5,
+                    rot_vel: Vec3::new(5.5, 4.2, -3.8),
+                    age: 0.0,
+                    life: 1.15,
+                });
             }
-            rig.was_bare = bare;
-            if let Ok((_, mut cvis)) = parts.get_mut(rig.rider_clothed) {
-                *cvis = if bare { Visibility::Hidden } else { Visibility::Inherited };
+            if rig.wear == Wear::Stripping && rig.clock >= lengths[STRIP] {
+                rig.wear = Wear::Off;
             }
-            if let Ok((_, mut bvis)) = parts.get_mut(rig.rider_bare) {
-                *bvis = if bare { Visibility::Inherited } else { Visibility::Hidden };
+            if rig.wear == Wear::Dressing && rig.clock >= lengths[DRESS] {
+                rig.wear = Wear::On;
+            }
+            let showing = match rig.wear {
+                Wear::On => RIDE,
+                Wear::Stripping => STRIP,
+                Wear::Off => BARE,
+                Wear::Dressing => DRESS,
+            };
+            for (clip, share) in rig.mix.iter_mut().enumerate() {
+                *share += (f32::from(clip == showing) - *share) * (1.0 - (-dt * 30.0).exp());
+            }
+            if let (Some([rider, _]), Some(moves)) = (rig.players, &assets.moves)
+                && let Ok(mut player) = players.get_mut(rider)
+            {
+                for (clip, node) in moves.clips.into_iter().enumerate() {
+                    let Some(playing) = player.animation_mut(node) else { continue };
+                    playing.set_weight(rig.mix[clip]);
+                    // The strip and the dressing run once, on this rider's own clock.
+                    if clip == showing && (clip == STRIP || clip == DRESS) {
+                        playing.seek_to(rig.clock.min(lengths[clip] - 0.001));
+                    }
+                }
             }
             if let Some(lamp) = rig.lamp
                 && let Ok(mut light) = lights.get_mut(lamp)
@@ -359,8 +496,10 @@ fn ride_yuda(
                 0.0,
             );
             let none = Entity::PLACEHOLDER;
-            let (mut wheels, mut flames, mut rider_clothed, mut rider_bare, mut lamp) =
-                ([none; 2], [none; 2], none, none, None);
+            let (mut wheels, mut flames, mut rider, mut lamp) = ([none; 2], [none; 2], none, None);
+            let toss = commands
+                .spawn((WorldAssetRoot(assets.jacket_skin.clone()), Transform::IDENTITY, Visibility::Hidden))
+                .id();
             let root = commands
                 .spawn((WorldAssetRoot(assets.bike.clone()), place, Visibility::Visible))
                 .with_children(|bike| {
@@ -384,15 +523,8 @@ fn ride_yuda(
                             ))
                             .id();
                     }
-                    rider_clothed = bike
-                        .spawn((WorldAssetRoot(assets.rider_clothed.clone()), Transform::IDENTITY))
-                        .id();
-                    rider_bare = bike
-                        .spawn((
-                            WorldAssetRoot(assets.rider_bare.clone()),
-                            Transform::IDENTITY,
-                            Visibility::Hidden,
-                        ))
+                    rider = bike
+                        .spawn((WorldAssetRoot(assets.rider_skin.clone()), Transform::IDENTITY))
                         .id();
                     if !mobile.mobile {
                         lamp = Some(
@@ -415,14 +547,18 @@ fn ride_yuda(
                 id: a.id,
                 wheels,
                 flames,
-                rider_clothed,
-                rider_bare,
+                rider,
+                toss,
+                players: None,
+                wear: Wear::On,
+                clock: 0.0,
+                thrown: false,
+                mix: [1.0, 0.0, 0.0, 0.0],
                 lamp,
                 spin: 0.0,
                 roll: 0.0,
                 side: 1.0,
                 wheelie: 0.0,
-                was_bare: false,
                 spark_timer: 0.0,
                 smoke_timer: 0.0,
                 smoke_pipe: 0,
@@ -446,7 +582,10 @@ fn tick_yuda_fx(
     mut commands: Commands,
     time: Res<Time>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut jackets: Query<(Entity, &mut Transform, &mut FlyingJacket), (Without<ScrapeSpark>, Without<ExhaustPuff>)>,
+    mut jackets: Query<
+        (Entity, &mut Transform, &mut Visibility, &mut FlyingJacket),
+        (Without<ScrapeSpark>, Without<ExhaustPuff>),
+    >,
     mut sparks: Query<(Entity, &mut Transform, &mut ScrapeSpark), (Without<FlyingJacket>, Without<ExhaustPuff>)>,
     mut puffs: Query<(Entity, &mut Transform, &mut ExhaustPuff), (Without<FlyingJacket>, Without<ScrapeSpark>)>,
 ) {
@@ -473,10 +612,12 @@ fn tick_yuda_fx(
             mat.emissive = LinearRgba::rgb(glow, glow * 0.35, glow * 0.06);
         }
     }
-    for (ent, mut tf, mut j) in &mut jackets {
+    for (ent, mut tf, mut seen, mut j) in &mut jackets {
         j.age += dt;
         if j.age >= j.life {
-            commands.entity(ent).despawn();
+            // The loose jacket is kept for the next throw.
+            *seen = Visibility::Hidden;
+            commands.entity(ent).remove::<FlyingJacket>();
             continue;
         }
         j.vel.y -= 14.0 * dt;
