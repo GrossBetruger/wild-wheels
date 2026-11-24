@@ -40,6 +40,7 @@ struct LocalMatch {
     arena: NativeArena,
     elapsed: f64,
     next_action: u32,
+    last_x_tap: f64,
 }
 
 #[derive(Resource, Clone, Copy)]
@@ -138,6 +139,7 @@ fn start_local_match(
         arena,
         elapsed: 0.0,
         next_action: 1,
+        last_x_tap: -10.0,
     });
 }
 
@@ -184,7 +186,13 @@ fn tick_local_match(
         *id += 1;
     };
     if keys.just_pressed(KeyCode::KeyX) || keys.just_pressed(KeyCode::KeyE) {
-        push("turbo", "", &mut local.next_action);
+        if local.elapsed - local.last_x_tap <= 0.38 {
+            push("nightmare", "", &mut local.next_action);
+            local.last_x_tap = -10.0;
+        } else {
+            push("turbo", "", &mut local.next_action);
+            local.last_x_tap = local.elapsed;
+        }
     }
     if keys.just_pressed(KeyCode::KeyF) {
         push("special", "", &mut local.next_action);
