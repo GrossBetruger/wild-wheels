@@ -484,10 +484,11 @@ fn presentation_app(pack: Vec<u8>, canvas: &str, interactive: bool, mobile: bool
             knowitowl::KnowItOwlPlugin,
             yuda::YudaPlugin,
         ))
-        .add_systems(Startup, load_blender_models)
+        .add_systems(Startup, (load_blender_models, spawn_shader_warmup))
         .add_systems(
             Update,
             (
+                retire_shader_warmup,
                 scene::sync,
                 sync_blender_models,
                 tick_exhaust_particles,
@@ -615,6 +616,132 @@ fn load_blender_models(
         spark_mat,
         rcs_mat,
     });
+}
+
+/// Tiny sub-pixel quads placed inside the initial camera frustum for 4 frames so
+/// WebGL2 compiles all PBR/additive/alpha-blend shader pipelines during lobby
+/// startup rather than stalling on the first seconds of a match.
+#[derive(Component)]
+struct ShaderWarmup {
+    frames_left: u8,
+}
+
+fn spawn_shader_warmup(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut images: ResMut<Assets<Image>>,
+) {
+    let quad = meshes.add(Rectangle::new(0.01, 0.01));
+    // Vertex-colored mesh permutation (used by ported::Look::Solid).
+    let mut vcol_mesh = Mesh::from(Rectangle::new(0.01, 0.01));
+    vcol_mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, vec![[1.0_f32, 1.0, 1.0, 1.0]; 4]);
+    let vcol_quad = meshes.add(vcol_mesh);
+    // 1x1 white RGBA8 texture to trigger textured PBR/unlit pipeline permutations.
+    let tex = images.add(Image::new_fill(
+        bevy::render::render_resource::Extent3d {
+            width: 1,
+            height: 1,
+            depth_or_array_layers: 1,
+        },
+        bevy::render::render_resource::TextureDimension::D2,
+        &[255, 255, 255, 255],
+        bevy::render::render_resource::TextureFormat::Rgba8UnormSrgb,
+        bevy::asset::RenderAssetUsages::RENDER_WORLD,
+    ));
+
+    let mats: [(Handle<Mesh>, StandardMaterial); 6] = [
+        // 1. Opaque PBR metallic/roughness (Blender .glb racers)
+        (
+            quad.clone(),
+            StandardMaterial {
+                base_color: Color::srgb(0.5, 0.5, 0.5),
+                metallic: 0.5,
+                perceptual_roughness: 0.4,
+                ..default()
+            },
+        ),
+        // 2. Opaque PBR + vertex colors (ported arena & non-Blender racers)
+        (
+            vcol_quad,
+            StandardMaterial {
+                base_color: Color::WHITE,
+                metallic: 0.0,
+                perceptual_roughness: 0.9,
+                ..default()
+            },
+        ),
+        // 3. Unlit additive (flames, sparks, contrails, shock diamonds)
+        (
+            quad.clone(),
+            StandardMaterial {
+                base_color: Color::srgba(1.0, 0.8, 0.4, 0.05),
+                emissive: LinearRgba::rgb(1.0, 0.5, 0.2),
+                unlit: true,
+                alpha_mode: AlphaMode::Add,
+                cull_mode: None,
+                ..default()
+            },
+        ),
+        // 4. Lit alpha-blend (smoke puffs, translucent glass)
+        (
+            quad.clone(),
+            StandardMaterial {
+                base_color: Color::srgba(0.2, 0.2, 0.2, 0.02),
+                perceptual_roughness: 0.95,
+                alpha_mode: AlphaMode::Blend,
+                ..default()
+            },
+        ),
+        // 5. Lit alpha-blend + texture (scorch decals)
+        (
+            quad.clone(),
+            StandardMaterial {
+                base_color: Color::srgba(1.0, 1.0, 1.0, 0.02),
+                base_color_texture: Some(tex.clone()),
+                perceptual_roughness: 0.95,
+                alpha_mode: AlphaMode::Blend,
+                ..default()
+            },
+        ),
+        // 6. Unlit alpha-blend + texture (explosion flipbook)
+        (
+            quad,
+            StandardMaterial {
+                base_color: Color::srgba(1.0, 1.0, 1.0, 0.02),
+                base_color_texture: Some(tex),
+                unlit: true,
+                alpha_mode: AlphaMode::Blend,
+                cull_mode: None,
+                ..default()
+            },
+        ),
+    ];
+
+    // Initial FollowCamera is at (0, 65, -75) looking at (0, 0, 0).
+    // Placing sub-pixel quads along that view ray guarantees they are rendered and compiled.
+    for (i, (mesh, mat)) in mats.into_iter().enumerate() {
+        let mat_handle = materials.add(mat);
+        commands.spawn((
+            Mesh3d(mesh),
+            MeshMaterial3d(mat_handle),
+            Transform::from_xyz((i as f32 - 2.5) * 0.05, 58.0, -67.0).with_scale(Vec3::splat(0.05)),
+            ShaderWarmup { frames_left: 4 },
+        ));
+    }
+}
+
+fn retire_shader_warmup(
+    mut commands: Commands,
+    mut warmups: Query<(Entity, &mut ShaderWarmup)>,
+) {
+    for (entity, mut warmup) in &mut warmups {
+        if warmup.frames_left == 0 {
+            commands.entity(entity).despawn();
+        } else {
+            warmup.frames_left -= 1;
+        }
+    }
 }
 
 fn sync_blender_models(
@@ -934,7 +1061,8 @@ fn sync_blender_models(
                             .id();
 
                         let back_rot = Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2);
-                        for (idx, (ex, ey, er)) in RAPTOR_ENGINES.into_iter().enumerate() {
+                        let engine_count = if mobile.mobile { 3 } else { RAPTOR_ENGINES.len() };
+                        for (idx, (ex, ey, er)) in RAPTOR_ENGINES.into_iter().take(engine_count).enumerate() {
                             let outer = ship
                                 .spawn((
                                     Mesh3d(models.flame_mesh.clone()),
@@ -946,8 +1074,10 @@ fn sync_blender_models(
                                     },
                                 ))
                                 .id();
-                            let inner = ship
-                                .spawn((
+                            let inner = if mobile.mobile {
+                                Entity::PLACEHOLDER
+                            } else {
+                                ship.spawn((
                                     Mesh3d(models.flame_mesh.clone()),
                                     MeshMaterial3d(models.flame_inner_mat.clone()),
                                     Transform {
@@ -956,11 +1086,12 @@ fn sync_blender_models(
                                         scale: Vec3::new(er * 0.6, 0.6, er * 0.6),
                                     },
                                 ))
-                                .id();
+                                .id()
+                            };
                             flames.push((outer, inner, ex, ey, er));
-                            // 4 Mach shock diamonds behind each of the 3 main RVac bells
-                            if idx < 3 {
-                                for di in 0..mobile.detail(4, [2, 2, 2, 2]) {
+                            // 4 Mach shock diamonds behind each of the 3 main RVac bells (desktop only)
+                            if !mobile.mobile && idx < 3 {
+                                for di in 0..4 {
                                     let d = ship
                                         .spawn((
                                             Mesh3d(models.diamond_mesh.clone()),

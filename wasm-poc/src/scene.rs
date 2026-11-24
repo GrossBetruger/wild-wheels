@@ -499,6 +499,9 @@ fn racers(stage: &mut Stage, view: &ClientView, bats: &Bats, dt: f32, now: f32, 
             }
             (false, false, false) => stage.clip(&racer("idle")),
         };
+        if play.clip.is_none() && !wrecked {
+            play = stage.clip(&racer("idle"));
+        }
         // For the problem log: a racer who is in the match yet cannot be drawn.
         let placed = a.wx.is_finite() && a.wz.is_finite() && a.heading.is_finite();
         if play.clip.is_none() || !placed {

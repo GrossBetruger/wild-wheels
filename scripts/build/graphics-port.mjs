@@ -108,6 +108,7 @@ function added(base,extended,stride){
 }
 
 class Pack {
+  constructor(deflateLevel=6){this.deflateLevel=deflateLevel;}
   palette=[[0,0,0]];colors=new Map();meshes=[];meshIds=new Map();raw=new Map();clips=[];clipIds=new Map();names=new Map();arenas=[];
   color(r,g,b){
     const key=byte(r)<<16|byte(g)<<8|byte(b);let id=this.colors.get(key);
@@ -132,7 +133,7 @@ class Pack {
     const raw=Buffer.alloc(triangles.length*2);
     for(let i=0;i<triangles.length;i++)i%10===9?raw.writeUInt16LE(triangles[i],i*2):raw.writeInt16LE(triangles[i],i*2);
     // Each mesh is compressed on its own, so the native client inflates only what it shows.
-    const packed=deflateSync(raw,{level:6}),body=Buffer.alloc(12+packed.length);
+    const packed=deflateSync(raw,{level:this.deflateLevel}),body=Buffer.alloc(12+packed.length);
     body.writeFloatLE(scale,0);body.writeUInt32LE(triangles.length/10,4);body.writeUInt32LE(packed.length,8);packed.copy(body,12);
     const id=this.intern(this.meshes,this.meshIds,body);this.raw.set(rawKey,id);
     return id;
@@ -182,7 +183,7 @@ class Pack {
       Buffer.from('WWGP'),u32(PACK_VERSION),
       u32(this.palette.length),Buffer.from(this.palette.flat()),
       u32(this.meshes.length),...this.meshes,
-      ...(()=>{const raw=Buffer.concat([u32(this.clips.length),...this.clips]),packed=deflateSync(raw,{level:6});return[u32(raw.length),u32(packed.length),packed];})(),
+      ...(()=>{const raw=Buffer.concat([u32(this.clips.length),...this.clips]),packed=deflateSync(raw,{level:this.deflateLevel});return[u32(raw.length),u32(packed.length),packed];})(),
       u32(names.length),...names.flatMap(([name,clip])=>{const text=Buffer.from(name),size=Buffer.alloc(2);size.writeUInt16LE(text.length);return[size,text,u32(clip)];}),
       u32(this.arenas.length),...this.arenas.flatMap(({sky,mesh,xray,name,desc})=>[Buffer.from(sky),u32(mesh),u32(xray),text(name),text(desc)]),
       // The menus name racers and arenas from the same data the browser shows.
@@ -211,16 +212,26 @@ function capture({driver=0,frames=1,fps=FPS,warmup=0,speed=0,setup,each}){
 // World effects are recorded at the origin with the racer out of sight.
 const hidden=r=>{r.afk=true;r.wx=0;r.wz=0;};
 
-export function buildGraphicsPack({only=[...drivers.keys()]}={}){
-  const pack=new Pack();
-  const record=(name,options,mode=REPEAT)=>pack.clip(name,options.fps??FPS,capture(options).map(shot=>pack.frame(shot)),mode);
+// Drivers rendered with Blender PBR .glb models in Bevy WASM only need a
+// 1-frame idle silhouette in the web pack (for KnowItOwl's Dark Humor X-ray).
+const WEB_BLENDER_DRIVERS=new Set([7,8,10,14,15]);
+
+export function buildGraphicsPack({only=[...drivers.keys()],web=false}={}){
+  const fps=web?12:FPS,slowFps=web?6:SLOW_FPS,smoothFps=web?24:SMOOTH_FPS;
+  const loop=web?2:LOOP,overlayLoop=web?2:OVERLAY_LOOP,chaffFps=web?8:FPS;
+  const pack=new Pack(web?9:6);
+  const record=(name,options,mode=REPEAT)=>pack.clip(name,options.fps??fps,capture({fps,...options}).map(shot=>pack.frame(shot)),mode);
   // Records a subject twice, the second time in the marker color, to find tinted triangles.
   const tinted=(name,base,options,mode=REPEAT)=>{
-    const plain=capture(options),marked=capture({...options,setup:r=>{options.setup?.(r);options.mark(r);}});
-    pack.clip(name,options.fps??FPS,plain.map((shot,i)=>pack.frame(shot,marked[i],base)),mode);
+    const opts={fps,...options};
+    const plain=capture(opts),marked=capture({...opts,setup:r=>{options.setup?.(r);options.mark(r);}});
+    pack.clip(name,opts.fps,plain.map((shot,i)=>pack.frame(shot,marked[i],base)),mode);
     return plain;
   };
-  const once=(name,life,setup,each,options={})=>record(name,{frames:Math.ceil(life*FPS)+1,setup:r=>{hidden(r);setup?.(r);},each,...options},ONCE);
+  const once=(name,life,setup,each,options={})=>{
+    const rate=options.fps??fps;
+    return record(name,{fps:rate,frames:Math.ceil(life*rate)+1,setup:r=>{hidden(r);setup?.(r);},each,...options},ONCE);
+  };
 
   // Bake only the 3 original pack arenas; newer server-defined maps render dynamically
   // from `/api/info` and inline packet `arenaDef` so adding maps stays server-side only.
@@ -233,63 +244,69 @@ export function buildGraphicsPack({only=[...drivers.keys()]}={}){
   }
 
   const wreck=capture({setup:r=>{r.destroyed=1;}})[0];
-  pack.clip('wreck',FPS,[pack.frame(wreck)]);
+  pack.clip('wreck',fps,[pack.frame(wreck)]);
   for(const driver of only){
     const base=hex(drivers[driver].color),mark=r=>{r.color=MARKER;};
-    const idle=tinted(`driver:${driver}:idle`,base,{driver,frames:LOOP*FPS,warmup:WARMUP,mark});
-    // Boosting racers are recorded while driving so that trails stream behind them.
-    tinted(`driver:${driver}:boost`,base,{driver,frames:LOOP*FPS,warmup:WARMUP,speed:BOOST_SPEED,mark,setup:r=>{r.boost=1;}});
-    // Boosting in and out, through whatever easing the renderer keeps between
-    // frames: Pearococo's tail folds, KnowItOwl takes off, rotors tilt.
-    const steps=Math.round(TRANSITION*FPS)+1;
-    tinted(`driver:${driver}:boost:in`,base,{driver,frames:steps,warmup:WARMUP,mark,each:(r,t)=>{r.boost=t>=0?1:0;r.wz=HOME[1]+Math.max(0,t)*BOOST_SPEED;}},ONCE);
-    tinted(`driver:${driver}:boost:out`,base,{driver,frames:steps,warmup:WARMUP,mark,each:(r,t)=>{r.boost=t<0?1:0;r.wz=HOME[1]+Math.min(0,t)*BOOST_SPEED;}},ONCE);
-    tinted(`driver:${driver}:celebrate`,base,{driver,fps:SLOW_FPS,frames:Math.ceil(1.6*SLOW_FPS),mark,each:(r,t)=>{r.celebrate=Math.max(.001,1.6-t);}},ONCE);
+    const blenderWeb=web&&WEB_BLENDER_DRIVERS.has(driver);
+    const idleFrames=blenderWeb?1:loop*fps;
+    const idle=tinted(`driver:${driver}:idle`,base,{driver,frames:idleFrames,warmup:WARMUP,mark});
+    // Overlay diffs need a matching baseline frame for each overlay frame.
+    const idleBase=blenderWeb?capture({driver,fps,frames:overlayLoop*fps,warmup:WARMUP}):idle;
+    const steps=Math.round(TRANSITION*fps)+1;
+    if(!blenderWeb){
+      // Boosting racers are recorded while driving so that trails stream behind them.
+      tinted(`driver:${driver}:boost`,base,{driver,frames:loop*fps,warmup:WARMUP,speed:BOOST_SPEED,mark,setup:r=>{r.boost=1;}});
+      // Boosting in and out, through whatever easing the renderer keeps between
+      // frames: Pearococo's tail folds, KnowItOwl takes off, rotors tilt.
+      tinted(`driver:${driver}:boost:in`,base,{driver,frames:steps,warmup:WARMUP,mark,each:(r,t)=>{r.boost=t>=0?1:0;r.wz=HOME[1]+Math.max(0,t)*BOOST_SPEED;}},ONCE);
+      tinted(`driver:${driver}:boost:out`,base,{driver,frames:steps,warmup:WARMUP,mark,each:(r,t)=>{r.boost=t<0?1:0;r.wz=HOME[1]+Math.min(0,t)*BOOST_SPEED;}},ONCE);
+      tinted(`driver:${driver}:celebrate`,base,{driver,fps:slowFps,frames:Math.ceil(1.6*slowFps),mark,each:(r,t)=>{r.celebrate=Math.max(.001,1.6-t);}},ONCE);
+    }
     // One trail puff of this racer's rapid fire: the shot drawn with and without it.
     const rapid=trail=>capture({driver,setup:r=>{hidden(r);r.projectiles=[{id:1,owner:r.id,kind:'hedgehog',vulcan:true,wx:0,wz:0,heading:0,height:0,age:1,trail}];}})[0];
-    pack.clip(`trail:vulcan:${driver}`,FPS,[pack.overlay(rapid([]),rapid([{wx:0,wz:0,height:0}]))]);
-    record(`shot:vulcan:${driver}`,{driver,frames:FPS,setup:r=>{hidden(r);r.projectiles=[{id:1,owner:r.id,kind:'hedgehog',vulcan:true,wx:0,wz:0,heading:0,height:0,age:1,trail:[]}];}});
+    pack.clip(`trail:vulcan:${driver}`,fps,[pack.overlay(rapid([]),rapid([{wx:0,wz:0,height:0}]))]);
+    record(`shot:vulcan:${driver}`,{driver,frames:fps,setup:r=>{hidden(r);r.projectiles=[{id:1,owner:r.id,kind:'hedgehog',vulcan:true,wx:0,wz:0,heading:0,height:0,age:1,trail:[]}];}});
     // Nightmare Fuel's flames change shape every frame and cannot be blended, so it is recorded at the display's rate.
     if(driver===7){
-      const shots=capture({driver,fps:SMOOTH_FPS,frames:OVERLAY_LOOP*SMOOTH_FPS,warmup:1,setup:r=>{r.nightmareActive=13;r.boost=13;}});
-      pack.clip('overlay:7:nightmare',SMOOTH_FPS,shots.map((shot,i)=>pack.overlay(idle[Math.floor(i*FPS/SMOOTH_FPS)%idle.length],shot)));
-      const ending=capture({driver,fps:SMOOTH_FPS,frames:SMOOTH_FPS+1,each:(r,t)=>{r.nightmareActive=Math.max(.000001,1-Math.max(0,t));r.boost=1;}});
-      pack.clip('overlay:7:nightmare:end',SMOOTH_FPS,ending.map((shot,i)=>pack.overlay(idle[Math.floor(i*FPS/SMOOTH_FPS)%idle.length],shot)),ONCE);
+      const shots=capture({driver,fps:smoothFps,frames:overlayLoop*smoothFps,warmup:1,setup:r=>{r.nightmareActive=13;r.boost=13;}});
+      pack.clip('overlay:7:nightmare',smoothFps,shots.map((shot,i)=>pack.overlay(idleBase[Math.floor(i*fps/smoothFps)%idleBase.length],shot)));
+      const ending=capture({driver,fps:smoothFps,frames:smoothFps+1,each:(r,t)=>{r.nightmareActive=Math.max(.000001,1-Math.max(0,t));r.boost=1;}});
+      pack.clip('overlay:7:nightmare:end',smoothFps,ending.map((shot,i)=>pack.overlay(idleBase[Math.floor(i*fps/smoothFps)%idleBase.length],shot)),ONCE);
     }
     // States layered over the racer. KnowItOwl's special is a full-screen shader effect.
     const states={shield:r=>{r.shield=1;},hedge:r=>{r.hedgeShield=2;},tehilim:r=>{r.tehilim=2;},dizzy:r=>{r.dizzy=1;},vulcan:r=>{r.vulcan=3;r.fireCooldown=0;},...(driver===14?{}:{special:r=>{r.specialActive=4;}})};
     for(const [state,setup] of Object.entries(states)){
-      const shots=capture({driver,frames:OVERLAY_LOOP*FPS,warmup:1,setup});
-      pack.clip(`overlay:${driver}:${state}`,FPS,shots.map((shot,i)=>pack.overlay(idle[i],shot)));
+      const shots=capture({driver,fps,frames:overlayLoop*fps,warmup:1,setup});
+      pack.clip(`overlay:${driver}:${state}`,fps,shots.map((shot,i)=>pack.overlay(idleBase[i%idleBase.length],shot)));
     }
     // Rapid fire starting and ending: KnowItOwl's bat flies in and away.
     for(const [name,on] of [['in',t=>t>=0],['out',t=>t<0]]){
-      const shots=capture({driver,frames:steps,warmup:1,each:(r,t)=>{r.vulcan=on(t)?3:0;r.fireCooldown=0;}});
-      pack.clip(`overlay:${driver}:vulcan:${name}`,FPS,shots.map((shot,i)=>pack.overlay(idle[i],shot)),ONCE);
+      const shots=capture({driver,fps,frames:steps,warmup:1,each:(r,t)=>{r.vulcan=on(t)?3:0;r.fireCooldown=0;}});
+      pack.clip(`overlay:${driver}:vulcan:${name}`,fps,shots.map((shot,i)=>pack.overlay(idleBase[i%idleBase.length],shot)),ONCE);
     }
     // Timed states fade over their last moments, driven by the time remaining.
     const field={shield:'shield',hedge:'hedgeShield',tehilim:'tehilim'};
     for(const [state,length] of Object.entries(ENDINGS)){
-      const shots=capture({driver,frames:Math.round(length*FPS)+1,each:(r,t)=>{r[field[state]]=Math.max(.001,length-Math.max(0,t));}});
-      pack.clip(`overlay:${driver}:${state}:end`,FPS,shots.map((shot,i)=>pack.overlay(idle[i],shot)),ONCE);
+      const shots=capture({driver,fps,frames:Math.round(length*fps)+1,each:(r,t)=>{r[field[state]]=Math.max(.001,length-Math.max(0,t));}});
+      pack.clip(`overlay:${driver}:${state}:end`,fps,shots.map((shot,i)=>pack.overlay(idleBase[i%idleBase.length],shot)),ONCE);
     }
     // R-yeah's archangels descend when called and rise when the ability ends.
     if(driver===11)for(const [name,value] of [['start',t=>12-Math.max(0,t)],['end',t=>Math.max(.001,TRANSITION-Math.max(0,t))]]){
-      const shots=capture({driver,frames:steps,each:(r,t)=>{r.specialActive=value(t);}});
-      pack.clip(`overlay:${driver}:special:${name}`,FPS,shots.map((shot,i)=>pack.overlay(idle[i],shot)),ONCE);
+      const shots=capture({driver,fps,frames:steps,each:(r,t)=>{r.specialActive=value(t);}});
+      pack.clip(`overlay:${driver}:special:${name}`,fps,shots.map((shot,i)=>pack.overlay(idleBase[i%idleBase.length],shot)),ONCE);
     }
     // Ashes collapse from the body that was last drawn alive at that spot.
-    const ash=capture({driver,fps:SLOW_FPS,frames:Math.ceil(4.3*SLOW_FPS)+1,warmup:2/SLOW_FPS,each:(r,t)=>{if(t<0)return;r.destroyed=1;r.effects=[{type:'ash',wx:r.wx,wz:r.wz,age:t,life:4.3}];}});
-    pack.clip(`effect:ash:${driver}`,SLOW_FPS,ash.map(shot=>pack.overlay(wreck,shot)),ONCE);
+    const ash=capture({driver,fps:slowFps,frames:Math.ceil(4.3*slowFps)+1,warmup:2/slowFps,each:(r,t)=>{if(t<0)return;r.destroyed=1;r.effects=[{type:'ash',wx:r.wx,wz:r.wz,age:t,life:4.3}];}});
+    pack.clip(`effect:ash:${driver}`,slowFps,ash.map(shot=>pack.overlay(wreck,shot)),ONCE);
   }
 
   const shot=(kind,vulcan=false)=>r=>{hidden(r);r.projectiles=[{id:1,owner:r.id,kind,vulcan,wx:0,wz:0,heading:0,height:0,age:1,trail:[]}];};
-  record('shot:hedgehog',{frames:FPS,setup:shot('hedgehog')});
-  record('shot:missile',{frames:FPS,setup:shot('missile')});
+  record('shot:hedgehog',{frames:fps,setup:shot('hedgehog')});
+  record('shot:missile',{frames:fps,setup:shot('missile')});
   // A trail puff at its largest; the native client shrinks it along the trail.
   for(const kind of ['hedgehog','missile']){
     const single=trail=>capture({setup:r=>{shot(kind)(r);r.projectiles[0].trail=trail;}})[0];
-    pack.clip(`trail:${kind}`,FPS,[pack.overlay(single([]),single([{wx:0,wz:0,height:0}]))]);
+    pack.clip(`trail:${kind}`,fps,[pack.overlay(single([]),single([{wx:0,wz:0,height:0}]))]);
   }
   // A unit-length skid mark fading into each base arena's ground over six seconds.
   for(let arena=0;arena<baseArenas;arena++){
@@ -298,46 +315,47 @@ export function buildGraphicsPack({only=[...drivers.keys()]}={}){
     pack.clip(`skid:${arena}`,4,frames,ONCE);
   }
   // Pickups bob with sin(2t) and spin with t, so one loop lasts 2π seconds.
-  const turn={frames:150,fps:150/(2*Math.PI)};
+  const pickupFrames=web?60:150;
+  const turn={frames:pickupFrames,fps:pickupFrames/(2*Math.PI)};
   for(const kind of ['missile','hedgehog','boost','health','hedgeproof','tehilim'])record(`pickup:${kind}`,{...turn,setup:r=>{hidden(r);r.supplies=[{id:0,version:0,wx:0,wz:0,kind,cooldown:0}];}});
   record('pickup:bicycle',{...turn,setup:r=>{hidden(r);r.supplies=[{id:1000,version:0,owner:99,kind:'bicycle',cooldown:0,age:5,heading:0,wx:0,wz:0,dropWx:0,dropWz:0,dropHeight:0}];}});
   const bare=draw(renderer(),world(0),LOOP*2,HOME);
-  for(let health=1;health<=6;health++)pack.clip(`health:${health}`,FPS,[pack.overlay(bare,draw(renderer(),Object.assign(world(0),{health}),LOOP*2,HOME))]);
-  const puppetBase=capture({frames:OVERLAY_LOOP*FPS});
-  const puppet=capture({frames:OVERLAY_LOOP*FPS,setup:r=>{r.reverseControls=5;}});
-  pack.clip('overlay:reversePsychology',FPS,puppet.map((shot,i)=>pack.overlay(puppetBase[i],shot)));
-  const puppetEnd=capture({frames:Math.ceil(.4*FPS)+1,each:(r,t)=>{r.reverseControls=Math.max(.001,.4-t);}});
-  pack.clip('overlay:reversePsychology:end',FPS,puppetEnd.map((shot,i)=>pack.overlay(puppetBase[i],shot)),ONCE);
+  for(let health=1;health<=6;health++)pack.clip(`health:${health}`,fps,[pack.overlay(bare,draw(renderer(),Object.assign(world(0),{health}),LOOP*2,HOME))]);
+  const puppetBase=capture({fps,frames:overlayLoop*fps});
+  const puppet=capture({fps,frames:overlayLoop*fps,setup:r=>{r.reverseControls=5;}});
+  pack.clip('overlay:reversePsychology',fps,puppet.map((shot,i)=>pack.overlay(puppetBase[i],shot)));
+  const puppetEnd=capture({fps,frames:Math.ceil(.4*fps)+1,each:(r,t)=>{r.reverseControls=Math.max(.001,.4-t);}});
+  pack.clip('overlay:reversePsychology:end',fps,puppetEnd.map((shot,i)=>pack.overlay(puppetBase[i],shot)),ONCE);
 
   // World effects play once, frame by frame of their age.
   const effect=(type,life,extra={})=>(r,t)=>{r.effects=[{type,owner:r.id,wx:0,wz:0,age:Math.max(0,t),life,...extra}];};
   for(const [type,life] of [['reverseShockwave',2.2],['explosion',2.5],['abomb',3],['radiation',RADIATION_DURATION],['fashionSnap',1.2],['heartbeat',.7],['taxAudit',2.5],['karmaRaccoon',2.8],['teleportOut',1.35],['teleportIn',1.35],['locustSpawn',1.2],['locustBurst',.7]])once(`effect:${type}`,life,null,effect(type,life,{heading:0}));
-  record('effect:eulerGhost',{frames:Math.round(2*FPS),setup:hidden,each:(r,t)=>{r.effects=[{type:'eulerGhost',owner:r.id,wx:0,wz:0,age:1+t,life:15,heading:0}];}});
+  record('effect:eulerGhost',{frames:Math.round(2*fps),setup:hidden,each:(r,t)=>{r.effects=[{type:'eulerGhost',owner:r.id,wx:0,wz:0,age:1+t,life:15,heading:0}];}});
   once('effect:default',.65,null,effect('pickup',.65));
   // The native client stretches a ring to its radius, which its skull riders must not follow:
   // the ring and one rider are recorded apart, and scene.rs places the riders round it.
   for(const [name,color] of [['orange','#ff631c'],['blue','#4abaff']]){
     const ring={radius:FIRE_RING_RADIUS,color,part:'ring'},rider={radius:0,color,part:'rider'};
-    record(`effect:fireRing:${name}`,{frames:OVERLAY_LOOP*FPS,setup:hidden,each:effect('fireRing',.1,ring)});
-    record(`effect:fireRing:rider:${name}`,{frames:OVERLAY_LOOP*FPS,setup:hidden,each:effect('fireRing',.1,rider)});
+    record(`effect:fireRing:${name}`,{frames:overlayLoop*fps,setup:hidden,each:effect('fireRing',.1,ring)});
+    record(`effect:fireRing:rider:${name}`,{frames:overlayLoop*fps,setup:hidden,each:effect('fireRing',.1,rider)});
     once(`effect:fireRingOut:${name}`,2.4,null,effect('fireRingOut',2.4,ring));
     once(`effect:fireRingOut:rider:${name}`,.55,null,effect('fireRingOut',2.4,rider));
   }
   once('timestop',2.5,null,(r,t)=>{r.timeStop=Math.max(.001,2.5-t);r.timeOwner=r.id;});
   for(const kind of ['bomb','stink'])once(`bomb:${kind}`,BOMB_FALL_TIME,null,(r,t)=>{r.bombs=[{id:1,kind,owner:r.id,wx:0,wz:0,age:Math.max(0,t),color:r.color}];});
   const chaff=(r,t)=>{r.chaffClouds=[{id:0,owner:r.id,wx:0,wz:0,originX:0,originZ:0,color:'#a8cde1',age:Math.max(0,t),life:8}];};
-  once('cloud:chaff',8,null,chaff);
-  if(only.includes(9))once('cloud:chaff:fairy',8,null,chaff,{driver:9});
-  once('cloud:stink',5,null,(r,t)=>{r.stinkClouds=[{id:0,owner:r.id,wx:0,wz:0,age:Math.max(0,t),life:5,hits:[]}];});
+  once('cloud:chaff',8,null,chaff,{fps:chaffFps});
+  if(only.includes(9))once('cloud:chaff:fairy',8,null,chaff,{driver:9,fps:chaffFps});
+  once('cloud:stink',5,null,(r,t)=>{r.stinkClouds=[{id:0,owner:r.id,wx:0,wz:0,age:Math.max(0,t),life:5,hits:[]}];},{fps:chaffFps});
   // Drift particles are recorded over a one-second life; the native client plays them by age/life.
   const particle=(kind,level)=>(r,t)=>{r.driftParticles=[{owner:99,wx:0,wz:0,height:0,vx:0,vy:0,vz:0,age:Math.max(0,t),life:1,kind,level}];};
   once('particle:smoke',1,null,particle('smoke',0));
   for(const level of [0,1,2])once(`particle:spark:${level}`,1,null,particle('spark',level));
   const locust=jump=>({id:0,owner:99,wx:0,wz:0,heading:0,age:1,jump});
-  record('locust',{frames:2*FPS,setup:r=>{hidden(r);r.locusts=[locust(0)];}});
+  record('locust',{frames:2*fps,setup:r=>{hidden(r);r.locusts=[locust(0)];}});
   once('locust:jump',.7,null,(r,t)=>{r.locusts=[locust(Math.max(.001,.7-t))];});
   // Fourmidable's special conjures a xylophone in front of every other racer.
-  const quiet=capture({frames:FPS}),noisy=capture({frames:FPS,setup:r=>{Object.assign(r.bots[0],{driver:13,specialActive:1});}});
-  pack.clip('overlay:xylophone',FPS,noisy.map((frame,i)=>pack.overlay(quiet[i],frame)));
+  const quiet=capture({fps,frames:fps}),noisy=capture({fps,frames:fps,setup:r=>{Object.assign(r.bots[0],{driver:13,specialActive:1});}});
+  pack.clip('overlay:xylophone',fps,noisy.map((frame,i)=>pack.overlay(quiet[i],frame)));
   return pack.encode();
 }

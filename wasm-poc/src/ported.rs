@@ -684,7 +684,7 @@ pub fn animate(
         mut particles,
     } = pools;
     let still = STILL.load(Ordering::Relaxed);
-    let lookahead_frames = mobile.detail(LOOKAHEAD, [2, 2, 2, 2]);
+    let lookahead_frames = mobile.detail(LOOKAHEAD, [1, 1, 0, 0]);
     let graphics = &mut *graphics;
     graphics.collect(time.elapsed_secs(), &mut meshes);
     for (entity, mut player) in &mut players {

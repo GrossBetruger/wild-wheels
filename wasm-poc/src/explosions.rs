@@ -181,6 +181,7 @@ fn build_cloud_mesh() -> Mesh {
 fn setup_assets(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
+    mobile: Res<MobileGraphics>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
@@ -194,10 +195,21 @@ fn setup_assets(
     let spark_mesh = meshes.add(Cuboid::new(0.065, 0.065, 1.0));
     let ring_mesh = meshes.add(Torus::new(0.88, 1.0));
     let flipbook_tex = asset_server.load("textures/explosion_flipbook.png");
-    let scorch_tex = asset_server.load("textures/scorch_decal.png");
-    let debris_plate = asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/debris_plate.glb"));
-    let debris_girder = asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/debris_girder.glb"));
-    let debris_shard = asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/debris_shard.glb"));
+    let (scorch_tex, debris_plate, debris_girder, debris_shard) = if mobile.mobile {
+        (
+            Handle::default(),
+            Handle::default(),
+            Handle::default(),
+            Handle::default(),
+        )
+    } else {
+        (
+            asset_server.load("textures/scorch_decal.png"),
+            asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/debris_plate.glb")),
+            asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/debris_girder.glb")),
+            asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/debris_shard.glb")),
+        )
+    };
 
     let flash_mat = materials.add(StandardMaterial {
         base_color: Color::srgba(1.0, 0.96, 0.78, 0.95),
@@ -396,30 +408,32 @@ fn spawn_blast(
         },
     ));
 
-    // 3b. Blender-baked scorched blast-crater decal on the arena floor
-    let decal_mat = materials.add(StandardMaterial {
-        base_color: Color::srgba(1.0, 1.0, 1.0, 0.90),
-        base_color_texture: Some(assets.scorch_tex.clone()),
-        perceptual_roughness: 0.98,
-        metallic: 0.0,
-        alpha_mode: AlphaMode::Blend,
-        ..default()
-    });
-    let decal_size = (8.8 + next_rand(seed) * 2.4) * scale;
-    let y_jitter = 0.04 + next_rand(seed) * 0.025;
-    commands.spawn((
-        Mesh3d(assets.decal_mesh.clone()),
-        MeshMaterial3d(decal_mat.clone()),
-        Transform::from_translation(Vec3::new(origin.x, y_jitter, origin.z))
-            .with_rotation(Quat::from_rotation_y(next_rand(seed) * std::f32::consts::TAU))
-            .with_scale(Vec3::new(decal_size, 1.0, decal_size)),
-        ScorchDecal {
-            age: 0.0,
-            hold: 7.5 * scale.sqrt(),
-            fade: 4.0,
-            mat: decal_mat,
-        },
-    ));
+    // 3b. Blender-baked scorched blast-crater decal on the arena floor (desktop only)
+    if !mobile {
+        let decal_mat = materials.add(StandardMaterial {
+            base_color: Color::srgba(1.0, 1.0, 1.0, 0.90),
+            base_color_texture: Some(assets.scorch_tex.clone()),
+            perceptual_roughness: 0.98,
+            metallic: 0.0,
+            alpha_mode: AlphaMode::Blend,
+            ..default()
+        });
+        let decal_size = (8.8 + next_rand(seed) * 2.4) * scale;
+        let y_jitter = 0.04 + next_rand(seed) * 0.025;
+        commands.spawn((
+            Mesh3d(assets.decal_mesh.clone()),
+            MeshMaterial3d(decal_mat.clone()),
+            Transform::from_translation(Vec3::new(origin.x, y_jitter, origin.z))
+                .with_rotation(Quat::from_rotation_y(next_rand(seed) * std::f32::consts::TAU))
+                .with_scale(Vec3::new(decal_size, 1.0, decal_size)),
+            ScorchDecal {
+                age: 0.0,
+                hold: 7.5 * scale.sqrt(),
+                fade: 4.0,
+                mat: decal_mat,
+            },
+        ));
+    }
 
     // 3c. Blender Mantaflow 6x6 volumetric fire+smoke flipbook billboards (4 staggered plumes)
     let flipbooks = graphics.detail(4, [1, 1, 0, 0]);
@@ -499,8 +513,12 @@ fn spawn_blast(
 
     // 5. Turbulent cauliflower-displaced smoke column + ground dust skirt with real internal
     //    fiery glow cooling into dark soot and dissolving smoothly via alpha-blend!
-    let smoke_count = (28.0 * particle_scale) as usize;
-    let skirt_count = graphics.detail(8, [2, 1, 0, 0]);
+    let smoke_count = if mobile {
+        graphics.detail(28, [3, 2, 0, 0])
+    } else {
+        (28.0 * particle_scale) as usize
+    };
+    let skirt_count = graphics.detail(8, [1, 0, 0, 0]);
     for i in 0..smoke_count {
         let a = (i as f32 / smoke_count as f32) * std::f32::consts::TAU + next_rand(seed) * 0.45;
         let is_skirt = i < skirt_count;

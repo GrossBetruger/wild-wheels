@@ -37,7 +37,7 @@ mkdir -p -- "$output/pkg"
 staging=$(mktemp -d "$output/.build.XXXXXXXX")
 trap 'rm -rf -- "$staging"' EXIT
 "$bindgen" --target web --no-typescript --out-dir "$staging" "$target_dir/$target/release/wild_wheels_wasm_poc.wasm"
-node scripts/build/port-graphics.mjs "$staging/graphics.wwgp"
+node scripts/build/port-graphics.mjs --web "$staging/graphics.wwgp"
 node scripts/build/port-sounds.mjs "$staging/sounds.wwsp"
 for artifact in wild_wheels_wasm_poc.js wild_wheels_wasm_poc_bg.wasm graphics.wwgp; do
   gzip -n -c -- "$staging/$artifact" > "$staging/$artifact.gz"
