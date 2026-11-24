@@ -5,7 +5,14 @@ import { createHash } from 'node:crypto';
 import { Multiplayer } from './server/multiplayer.js';
 import { createTunnelControl } from './server/tunnel-control.js';
 import { createTextEndpoint } from './server/text.js';
-const mime=name=>({'html':'text/html','css':'text/css','svg':'image/svg+xml','wasm':'application/wasm','ogg':'audio/ogg','flac':'audio/flac'})[name.split('.').at(-1)]??'text/javascript';
+const mime=name=>({'html':'text/html','css':'text/css','svg':'image/svg+xml','wasm':'application/wasm','ogg':'audio/ogg','flac':'audio/flac','png':'image/png','glb':'model/gltf-binary','wwgp':'application/octet-stream','wwsp':'application/octet-stream'})[name.split('.').at(-1)]??'text/javascript';
+const experimentalAsset=route=>{
+  if(!route.startsWith('/experimental/'))return null;
+  const rel=route.slice('/experimental/'.length)||'index.html';
+  if(rel.includes('..')||rel.startsWith('/')||!/^[a-zA-Z0-9._/-]+$/.test(rel))return null;
+  if(!['index.html','app.css','app.js','graphics.wwgp','sounds.wwsp'].includes(rel)&&!rel.startsWith('pkg/')&&!rel.startsWith('assets/'))return null;
+  return ['wasm-poc/'+rel,mime(rel)];
+};
 const loadFiles=()=>new Map(JSON.parse(readFileSync(new URL('./public-assets.json',import.meta.url))).map(name=>[name==='index.html'?'/':'/'+name,[name,mime(name)]]));
 let files=loadFiles();
 export function createGameServer(options={}){
@@ -29,7 +36,8 @@ const server=createServer(async (req, res) => {
   if(await multiplayer.handle(req,res))return;
   if(req.method!=='GET'&&req.method!=='HEAD'){res.writeHead(405);res.end('Method not allowed');return;}
   const route = (req.url || '/').split('?')[0];
-  const file = files.get(route) ?? (files = loadFiles()).get(route);
+  if (route === '/experimental') { res.writeHead(302, { Location: '/experimental/' }); res.end(); return; }
+  const file = experimentalAsset(route) ?? files.get(route) ?? (files = loadFiles()).get(route);
   if (!file) { res.writeHead(404); res.end('Not found'); return; }
   try {
     const raw = await readFile(new URL(file[0], import.meta.url));
@@ -37,9 +45,10 @@ const server=createServer(async (req, res) => {
     const host=/^[a-zA-Z0-9.\[\]:-]+$/.test(req.headers.host??'')?req.headers.host:'localhost';
     const local=['localhost',`localhost:${multiplayer.port}`,'127.0.0.1',`127.0.0.1:${multiplayer.port}`].includes(host);
     const control=local&&multiplayer.controlPort?` http://127.0.0.1:${multiplayer.controlPort}`:'';
-    res.writeHead(200, { 'Content-Type': file[1]==='application/wasm'?file[1]:file[1]+'; charset=utf-8', 'Cache-Control':'no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data:; connect-src 'self' ${multiplayer.security.secure(req)?'wss':'ws'}://${host}${control}; object-src 'none'; base-uri 'none'; frame-ancestors 'none'` });
+    const binary = ['application/wasm', 'model/gltf-binary', 'image/png', 'application/octet-stream'].includes(file[1]);
+    res.writeHead(200, { 'Content-Type': binary?file[1]:file[1]+'; charset=utf-8', 'Cache-Control':'no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data:; connect-src 'self' ${multiplayer.security.secure(req)?'wss':'ws'}://${host}${control}; object-src 'none'; base-uri 'none'; frame-ancestors 'none'` });
     res.end(req.method==='HEAD'?undefined:body);
-  } catch { res.writeHead(500); res.end('Unable to load game'); }
+  } catch { res.writeHead(route.startsWith('/experimental/')?404:500); res.end(route.startsWith('/experimental/')?'Experimental client not built':'Unable to load game'); }
 });
 multiplayer.attach(server);
 server.maxConnections=256;server.headersTimeout=10000;server.requestTimeout=10000;server.on('listening',()=>{multiplayer.port=server.address().port;});server.on('close',()=>multiplayer.close());

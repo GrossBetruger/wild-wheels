@@ -597,9 +597,19 @@ playBtn.onclick = async () => {
             if (!resultsShown && menuEl.classList.contains('hidden')) {
               resultsShown = true;
               resultsWinner.textContent = s.winner ? `🏆 ${s.winner} Wins!` : 'FINISH!';
-              resultsTable.innerHTML = (s.standings || []).map((r, idx) =>
-                `<div class="res-row${r.me ? ' me' : ''}"><span>#${idx + 1} <i class="dot" style="background:${r.color}"></i>${r.name}</span><span>${Math.floor(r.kills)} K / ${r.deaths} D</span></div>`
-              ).join('');
+              resultsTable.replaceChildren(...(s.standings || []).map((r, idx) => {
+                const row = document.createElement('div');
+                row.className = `res-row${r.me ? ' me' : ''}`;
+                const left = document.createElement('span');
+                const dot = document.createElement('i');
+                dot.className = 'dot';
+                dot.style.backgroundColor = r.color || '#ffffff';
+                left.append(`#${idx + 1} `, dot, r.name || 'Bot');
+                const right = document.createElement('span');
+                right.textContent = `${Math.floor(r.kills)} K / ${r.deaths} D`;
+                row.append(left, right);
+                return row;
+              }));
               resultsModal.classList.remove('hidden');
             }
           } else if (s.destroyed > 0) {
@@ -643,9 +653,19 @@ playBtn.onclick = async () => {
           const fillPct = s.wasDrifting ? Math.min(100, (s.drift || 0) * 55) : Math.min(100, (kmh / 240) * 100);
           meterFill.style.width = `${fillPct}%`;
 
-          boardEl.innerHTML = (s.standings || []).slice(0, 6).map((r, i) =>
-            `<div class="row${r.me ? ' me' : ''}"><span>${i + 1}. <i class="dot" style="background:${r.color}"></i>${r.name}</span><span>${Math.floor(r.kills)}/${r.deaths}</span></div>`
-          ).join('');
+          boardEl.replaceChildren(...(s.standings || []).slice(0, 6).map((r, i) => {
+            const row = document.createElement('div');
+            row.className = `row${r.me ? ' me' : ''}`;
+            const left = document.createElement('span');
+            const dot = document.createElement('i');
+            dot.className = 'dot';
+            dot.style.backgroundColor = r.color || '#ffffff';
+            left.append(`${i + 1}. `, dot, r.name || 'Bot');
+            const right = document.createElement('span');
+            right.textContent = `${Math.floor(r.kills)}/${r.deaths}`;
+            row.append(left, right);
+            return row;
+          }));
 
           killFeedEl.innerHTML = (s.killFeed || []).map(k =>
             `<div class="kf-item">${k.text || `${k.attacker} → ${k.victim}`}</div>`

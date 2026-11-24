@@ -287,6 +287,54 @@ async fn http(
                 json!({"status":"ok","players":room.count(),"maxPlayers":room::CAPACITY,"ticks":room.ticks,"tickP99Us":p99,"overruns":room.overruns,"build":BUILD,"revision":REVISION}),
             )
         }
+        "/experimental" => {
+            let mut r = Response::new(Body::empty());
+            *r.status_mut() = StatusCode::FOUND;
+            r.headers_mut()
+                .insert(header::LOCATION, "/experimental/".parse().unwrap());
+            r
+        }
+        p if p.starts_with("/experimental/") => {
+            let rel = match p.strip_prefix("/experimental/").unwrap_or("") {
+                "" => "index.html",
+                other => other,
+            };
+            let allowed = !rel.contains("..")
+                && !rel.starts_with('/')
+                && rel
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-' | b'/'))
+                && (matches!(
+                    rel,
+                    "index.html" | "app.css" | "app.js" | "graphics.wwgp" | "sounds.wwsp"
+                ) || rel.starts_with("pkg/")
+                    || rel.starts_with("assets/"));
+            if !allowed {
+                return error((404, "Not found."));
+            }
+            let file_path = std::path::Path::new("wasm-poc").join(rel);
+            match std::fs::read(&file_path) {
+                Ok(bytes) => {
+                    let mime = match rel.rsplit('.').next().unwrap_or("") {
+                        "html" => "text/html; charset=utf-8",
+                        "css" => "text/css; charset=utf-8",
+                        "js" => "text/javascript; charset=utf-8",
+                        "wasm" => "application/wasm",
+                        "glb" => "model/gltf-binary",
+                        "png" => "image/png",
+                        _ => "application/octet-stream",
+                    };
+                    let mut r = Response::new(match method == Method::HEAD {
+                        true => Body::empty(),
+                        false => Body::from(bytes),
+                    });
+                    r.headers_mut()
+                        .insert(header::CONTENT_TYPE, mime.parse().unwrap());
+                    r
+                }
+                Err(_) => error((404, "Experimental Bevy WASM asset not found.")),
+            }
+        }
         _ => match ASSETS.iter().find(|a| a.0 == path) {
             Some((_, mime, data)) => {
                 let mut r = Response::new(match method == Method::HEAD {

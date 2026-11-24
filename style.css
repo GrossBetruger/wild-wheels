@@ -111,6 +111,17 @@ header {
   border-radius: 30px
 }
 
+.experimental-button {
+  text-decoration: none;
+  color: inherit;
+  border-color: #d96b38;
+  font-weight: 700
+}
+.experimental-button:hover {
+  background: #d96b38;
+  color: #fff
+}
+
 main {
   max-width: 1440px;
   padding: 0 5%;
