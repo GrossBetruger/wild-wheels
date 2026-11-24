@@ -81,3 +81,19 @@
    binary size and build times, and eliminates runtime zlib decompression,
    mid-battle GPU mesh uploads, and 12-second cache eviction churn in
    `native-client/src/ported.rs`.
+
+10. **Unified Bevy renderer (desktop + WASM) with HTML/CSS UI and rigged Blender PBR
+    characters.**
+    Validated by the local `wasm-poc/` prototype (60–120 FPS, `16.7–17.2 ms` p95, and
+    `0` mid-match `>50 ms` spikes across 18,176 frames up to 8 racers, vs. `29.6%`
+    slow-minute matches in the current JS WebGL renderer). To make this production-ready:
+    - **Keep HTML/CSS for web menus, HUD, chat (RTL), and mobile controls** layered
+      over the Bevy WebGL2/WebGPU canvas (avoiding `ui.wwup` on the web).
+    - **Author rigged Blender `.glb` PBR models** (`bevy_gltf`) shared by both native
+      desktop and Bevy WASM — faithfully translated from each character's real design,
+      with skeletal animation clips (`idle`, `celebrate`, steering/waving, wing flaps)
+      plus native Bevy particle emitters for afterburners, boost flames, and RCS jets
+      so none of the game's charm or feedback is lost.
+    - **Shrink initial web download:** replacing the `47 MB` baked `graphics.wwgp`
+      with compact rigged `.glb`s (~250–500 KB each) + procedural arenas cuts cold-load
+      size dramatically and eliminates main-thread decompression hitches on WASM.
