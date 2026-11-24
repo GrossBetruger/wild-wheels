@@ -96,7 +96,18 @@ struct BlenderModels {
     flame_outer_mat: Handle<StandardMaterial>,
     flame_inner_mat: Handle<StandardMaterial>,
     diamond_mat: Handle<StandardMaterial>,
+    smoke_mat: Handle<StandardMaterial>,
+    spark_mat: Handle<StandardMaterial>,
     rcs_mat: Handle<StandardMaterial>,
+}
+
+#[derive(Component)]
+struct ExhaustParticle {
+    vel: Vec3,
+    age: f32,
+    life: f32,
+    start_scale: f32,
+    end_scale: f32,
 }
 
 #[derive(Component)]
@@ -166,6 +177,7 @@ pub fn start_game(pack: Vec<u8>, sound_pack: Vec<u8>, driver: usize, arena: usiz
                 tick_local_match,
                 scene::sync,
                 sync_blender_models,
+                tick_exhaust_particles,
                 ported::animate,
                 sound::play,
             )
@@ -211,6 +223,21 @@ fn load_blender_models(
         cull_mode: None,
         ..default()
     });
+    let smoke_mat = materials.add(StandardMaterial {
+        base_color: Color::srgba(0.74, 0.80, 0.88, 0.34),
+        unlit: true,
+        alpha_mode: AlphaMode::Blend,
+        cull_mode: None,
+        ..default()
+    });
+    let spark_mat = materials.add(StandardMaterial {
+        base_color: Color::srgba(1.0, 0.85, 0.55, 1.0),
+        emissive: LinearRgba::rgb(8.0, 4.8, 1.8),
+        unlit: true,
+        alpha_mode: AlphaMode::Add,
+        cull_mode: None,
+        ..default()
+    });
     let rcs_mat = materials.add(StandardMaterial {
         base_color: Color::srgba(0.88, 0.95, 1.0, 0.7),
         emissive: LinearRgba::rgb(1.4, 1.7, 2.0),
@@ -230,6 +257,8 @@ fn load_blender_models(
         flame_outer_mat,
         flame_inner_mat,
         diamond_mat,
+        smoke_mat,
+        spark_mat,
         rcs_mat,
     });
 }
@@ -322,23 +351,77 @@ fn sync_blender_models(
                     }
                 }
                 for (idx, &(outer, inner, ex, ey, er)) in rig.flames.iter().enumerate() {
-                    let flicker = 1.0 + (t * 52.0 + idx as f32 * 1.7).sin() * 0.16;
+                    let f1 = (t * 58.0 + idx as f32 * 2.3).sin();
+                    let f2 = (t * 97.0 + idx as f32 * 4.1).cos();
+                    let flicker = 1.0 + f1 * 0.22 + f2 * 0.12;
+                    let wobble_x = (t * 43.0 + idx as f32 * 1.9).sin() * if firing || nightmare { 0.08 } else { 0.03 };
+                    let wobble_y = (t * 37.0 + idx as f32 * 3.1).cos() * if firing || nightmare { 0.07 } else { 0.025 };
                     let (len_o, rad_o, len_i, rad_i) = if nightmare {
-                        (8.2 * flicker, er * 1.75, 5.8 * flicker, er * 1.10)
+                        (8.4 * flicker, er * 1.85, 5.9 * flicker, er * 1.12)
                     } else if firing {
-                        (6.4 * flicker, er * 1.45, 4.4 * flicker, er * 0.88)
+                        (6.5 * flicker, er * 1.50, 4.5 * flicker, er * 0.90)
                     } else {
-                        (1.05 * flicker, er * 0.72, 0.62 * flicker, er * 0.45)
+                        (1.10 * flicker, er * 0.74, 0.66 * flicker, er * 0.48)
                     };
                     if let Ok((mut otf, mut ovis)) = parts.get_mut(outer) {
                         *ovis = Visibility::Inherited;
-                        otf.translation = Vec3::new(ex, 1.45 + ey, -3.50 - len_o * 0.5);
-                        otf.scale = Vec3::new(rad_o, len_o, rad_o);
+                        otf.translation = Vec3::new(ex + wobble_x, 1.45 + ey + wobble_y, -3.50 - len_o * 0.5);
+                        otf.rotation = Quat::from_euler(EulerRot::XYZ, -std::f32::consts::FRAC_PI_2 + wobble_y * 0.6, wobble_x * 0.6, 0.0);
+                        otf.scale = Vec3::new(rad_o * (1.0 + f2 * 0.12), len_o, rad_o * (1.0 - f2 * 0.12));
                     }
                     if let Ok((mut itf, mut ivis)) = parts.get_mut(inner) {
                         *ivis = Visibility::Inherited;
-                        itf.translation = Vec3::new(ex, 1.45 + ey, -3.50 - len_i * 0.5);
+                        itf.translation = Vec3::new(ex + wobble_x * 0.5, 1.45 + ey + wobble_y * 0.5, -3.50 - len_i * 0.5);
                         itf.scale = Vec3::new(rad_i, len_i, rad_i);
+                    }
+                }
+                // Spawn turbulent world-space exhaust smoke clouds & sputtering methalox embers!
+                let back_dir = tf.rotation * Vec3::NEG_Z;
+                let right_dir = tf.rotation * Vec3::X;
+                let up_dir = tf.rotation * Vec3::Y;
+                let emit_count = if nightmare { 3 } else if firing { 2 } else { 1 };
+                let seed = (t * 60.0) as usize;
+                for k in 0..emit_count {
+                    let eng = RAPTOR_ENGINES[(seed + k * 2 + a.id) % 3];
+                    let jitter = ((seed * 37 + k * 17) % 100) as f32 / 100.0 - 0.5;
+                    let jitter2 = ((seed * 53 + k * 29) % 100) as f32 / 100.0 - 0.5;
+                    let nozzle_pos = tf.transform_point(Vec3::new(eng.0, 1.45 + eng.1, -3.65));
+                    // Billowing exhaust smoke cloud drifting & curling in world space
+                    if firing || nightmare || (seed + k) % 3 == 0 {
+                        let spd = if firing || nightmare { 16.0 } else { 5.5 };
+                        let vel = back_dir * spd
+                            + right_dir * (jitter * if firing { 4.8 } else { 1.6 })
+                            + up_dir * (0.9 + jitter2 * 2.2);
+                        commands.spawn((
+                            Mesh3d(models.diamond_mesh.clone()),
+                            MeshMaterial3d(models.smoke_mat.clone()),
+                            Transform::from_translation(nozzle_pos).with_scale(Vec3::splat(0.38)),
+                            ExhaustParticle {
+                                vel,
+                                age: 0.0,
+                                life: if firing || nightmare { 0.55 } else { 0.35 },
+                                start_scale: if firing || nightmare { 0.45 } else { 0.22 },
+                                end_scale: if firing || nightmare { 2.35 } else { 0.95 },
+                            },
+                        ));
+                    }
+                    // Incandescent hot sparks / plasma embers spitting out on boost & Nightmare Fuel!
+                    if (firing || nightmare) && (seed + k) % 2 == 0 {
+                        let vel = back_dir * (28.0 + jitter.abs() * 14.0)
+                            + right_dir * (jitter * 9.5)
+                            + up_dir * (jitter2 * 5.5 + 1.2);
+                        commands.spawn((
+                            Mesh3d(models.diamond_mesh.clone()),
+                            MeshMaterial3d(if k % 2 == 0 { models.spark_mat.clone() } else { models.diamond_mat.clone() }),
+                            Transform::from_translation(nozzle_pos).with_scale(Vec3::splat(0.18)),
+                            ExhaustParticle {
+                                vel,
+                                age: 0.0,
+                                life: 0.28,
+                                start_scale: 0.20,
+                                end_scale: 0.03,
+                            },
+                        ));
                     }
                 }
                 // Glowing supersonic Mach shock diamonds pulsing down the 3 main Raptor plumes!
@@ -558,6 +641,27 @@ fn sync_blender_models(
                 light.intensity = 0.0;
             }
         }
+    }
+}
+
+fn tick_exhaust_particles(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut q: Query<(Entity, &mut Transform, &mut ExhaustParticle)>,
+) {
+    let dt = time.delta_secs().min(0.05);
+    for (ent, mut tf, mut p) in &mut q {
+        p.age += dt;
+        if p.age >= p.life {
+            commands.entity(ent).despawn();
+            continue;
+        }
+        let u = p.age / p.life;
+        tf.translation += p.vel * dt;
+        p.vel *= (1.0 - 3.2 * dt).max(0.2);
+        let s = p.start_scale + (p.end_scale - p.start_scale) * u.sqrt();
+        let fade = if u > 0.7 { (1.0 - u) / 0.3 } else { 1.0 };
+        tf.scale = Vec3::splat((s * fade).max(0.01));
     }
 }
 
