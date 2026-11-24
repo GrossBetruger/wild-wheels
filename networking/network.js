@@ -44,9 +44,9 @@ export class NetworkGame {
   token=null;state=null;paused=false;sequence=0;actions=[];client=null;rtt=0;lastPing=-Infinity;restoreOnVisible=false;
   // For the problem log: where to report, and when the server was last heard from.
   log=()=>{};lastPacket=0;
-  constructor({anchor,limits=()=>({}),keys,driver,arena,onState,onLeave,onArenas=()=>{},unlock,sound=()=>{},isAudioEnabled=()=>true,getAudioContext=()=>null,role='driver',clientType='browser',offline=false}){
+  constructor({anchor,limits=()=>({}),keys,driver,arena,onState,onLeave,onArenas=()=>{},beforeConnect=null,unlock,sound=()=>{},isAudioEnabled=()=>true,getAudioContext=()=>null,role='driver',clientType='browser',offline=false}){
     this.preferredColor=savedPlayerColor(document.cookie);this.colorDirty=false;this.colorPending=false;this.colorError='';
-    Object.assign(this,{limits,keys,driver,arena,onState,onLeave,onArenas,unlock,sound,isAudioEnabled,getAudioContext,role,clientType});this.dedicated=document.body.classList.contains('dedicated-server');
+    Object.assign(this,{limits,keys,driver,arena,onState,onLeave,onArenas,beforeConnect,unlock,sound,isAudioEnabled,getAudioContext,role,clientType});this.dedicated=document.body.classList.contains('dedicated-server');
     this.voice=new VoiceChat({isAudioEnabled:()=>this.isAudioEnabled(),getAudioContext:()=>this.getAudioContext(),onChange:()=>this.updateVoiceUi(),log:(level,event,data)=>this.log(level,event,data)});
     this.panel=document.createElement('section');this.panel.className='network-panel';this.panel.setAttribute('aria-label','Multiplayer arena lobby');
     const title=this.title=document.createElement('strong');title.textContent='PLAY TOGETHER · UP TO 6 PLAYERS';
@@ -273,6 +273,7 @@ export class NetworkGame {
   }
   async restore(){
     if(this.restoring)return;this.restoring=true;this.restoreOnVisible=false;
+    if(!this.active&&this.beforeConnect)await this.beforeConnect();
     this.connectionStatus();
     if(this.dedicated)await this.infoReady;
     const body={...(this.colorDirty&&isPlayerColor(this.preferredColor)?{color:this.preferredColor}:{}),...(this.afk||(this.active&&typeof document!=='undefined'&&document.hidden)?{afk:true}:{})};
@@ -329,6 +330,7 @@ export class NetworkGame {
     if(!this.hasName){this.connectionStatus();this.status.textContent='Enter your name before joining.';this.hostButton.disabled=true;this.focusName();return;}
     if(this.connecting||this.active&&(path!=='/api/rooms'||!this.isHost))return;
     this.connecting=true;
+    if(this.beforeConnect)await this.beforeConnect();
     this.connectionStatus();
     this.hostButton.disabled=true;this.status.textContent='Connecting…';
     try{

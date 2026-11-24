@@ -68,6 +68,10 @@ export class BevyPresentation {
     this.mobile = mobile;
     this.nextFrame = 0;
     this.encode = createBinaryEncoder();
+    this.ready = false;
+    this.failed = false;
+    this.progress = { stage: 'downloading', percent: 0, loadedBytes: 0, totalBytes: 0 };
+    this.progressListeners = new Set();
     this.canvas.addEventListener('webglcontextlost', () => this.fail('graphics-lost'));
     if (mobile) this.configureMobile();
     // Eagerly begin downloading WASM + graphics pack while the player is in the lobby.
@@ -80,6 +84,17 @@ export class BevyPresentation {
     if (this.failed) return 'BEVY UNAVAILABLE';
     if (!this.active) return 'BEVY BETA';
     return this.mobile ? `BEVY MOBILE · ${this.quality.profile.name.toUpperCase()}` : 'BEVY';
+  }
+
+  onProgress(listener) {
+    this.progressListeners.add(listener);
+    listener(this.progress);
+    return () => this.progressListeners.delete(listener);
+  }
+
+  reportProgress(patch) {
+    this.progress = { ...this.progress, ...patch };
+    for (const listener of this.progressListeners) listener(this.progress);
   }
 
   configureMobile() {
@@ -120,28 +135,71 @@ export class BevyPresentation {
     this.nextFrame = 0;
   }
 
+  async fetchWithProgress(url, onBytes) {
+    const response = await fetch(url, { signal: AbortSignal.timeout(300000) });
+    if (!response.ok) throw new Error(`${url} returned HTTP ${response.status}`);
+    const total = Number(response.headers.get('content-length')) || 0;
+    if (!response.body?.getReader) {
+      const buf = await response.arrayBuffer();
+      onBytes(buf.byteLength, total || buf.byteLength);
+      return buf;
+    }
+    const reader = response.body.getReader();
+    const chunks = [];
+    let loaded = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      loaded += value.byteLength;
+      onBytes(loaded, total);
+    }
+    const out = new Uint8Array(loaded);
+    let offset = 0;
+    for (const chunk of chunks) {
+      out.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return out.buffer;
+  }
+
   async load() {
     const started = performance.now();
     const build = typeof document !== 'undefined' ? document.body?.dataset?.build : '';
     const v = build ? `?v=${encodeURIComponent(build)}` : '';
+    let wasmDone = false;
+    let packLoaded = 0;
+    let packTotal = 0;
+    const emit = () => {
+      const packRatio = packTotal > 0 ? Math.min(1, packLoaded / packTotal) : (packLoaded > 0 ? Math.min(0.9, packLoaded / 16_000_000) : 0);
+      const wasmRatio = wasmDone ? 1 : 0.15;
+      const percent = Math.min(95, Math.round((packRatio * 0.72 + wasmRatio * 0.28) * 100));
+      this.reportProgress({ stage: 'downloading', percent, loadedBytes: packLoaded, totalBytes: packTotal });
+    };
     try {
       const [{ bindings, wasmMs }, { pack, assetMs }] = await Promise.all([
         import(`${prefix}pkg/wild_wheels_wasm_poc.js${v}`).then(async bindings => {
           await bindings.default({ module_or_path: `${prefix}pkg/wild_wheels_wasm_poc_bg.wasm${v}` });
+          wasmDone = true;
+          emit();
           return { bindings, wasmMs: performance.now() - started };
         }),
-        fetch(`${prefix}graphics.wwgp${v}`, { signal: AbortSignal.timeout(120000) }).then(response => {
-          if (!response.ok) throw new Error(`Graphics pack returned HTTP ${response.status}`);
-          return response.arrayBuffer();
+        this.fetchWithProgress(`${prefix}graphics.wwgp${v}`, (loaded, total) => {
+          packLoaded = loaded;
+          packTotal = total;
+          emit();
         }).then(pack => ({ pack, assetMs: performance.now() - started })),
       ]);
       if (this.mobile && typeof bindings.set_mobile_presentation_level !== 'function') {
         throw new Error('Mobile Bevy graphics require the current WASM build');
       }
+      this.reportProgress({ stage: 'initializing', percent: 97, loadedBytes: pack.byteLength, totalBytes: pack.byteLength });
       bindings.start_presentation(new Uint8Array(pack), this.mobile);
       this.bindings = bindings;
+      this.ready = true;
       if (this.mobile) this.updateMobileLevel();
       this.startup = { started, wasmMs, assetMs, graphicsBytes: pack.byteLength };
+      this.reportProgress({ stage: 'ready', percent: 100, loadedBytes: pack.byteLength, totalBytes: pack.byteLength });
     } catch (error) {
       this.fail('bevy-startup-failed', error);
     }
@@ -149,8 +207,10 @@ export class BevyPresentation {
 
   fail(event, error) {
     this.failed = true;
+    this.ready = true;
     this.viewport.classList.remove('bevy-active');
     if (this.mobile) this.updateMobileLevel();
+    this.reportProgress({ stage: 'failed', percent: 100 });
     this.log.note('error', event, { message: error?.message });
   }
 

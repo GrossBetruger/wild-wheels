@@ -3550,6 +3550,60 @@ body.mobile-playing {
   overflow-wrap: anywhere
 }
 
+.bevy-loading-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px;
+  text-align: center;
+  background: radial-gradient(ellipse at 50% 40%, #4b3968, #1d1b2d 78%);
+  color: #fff3d7;
+  visibility: visible !important
+}
+
+.bevy-loading-screen.hidden {
+  display: none
+}
+
+.bevy-loading-screen>strong {
+  font: bold clamp(16px, 2.8vw, 26px) monospace;
+  letter-spacing: 2px;
+  color: #ffe28a
+}
+
+.bevy-loading-screen>p {
+  margin: 0;
+  font: 13px/1.5 monospace;
+  color: #f3e8ff
+}
+
+.bevy-loading-screen>small {
+  font: 11px/1.4 monospace;
+  color: #bfb2d6
+}
+
+.bevy-loading-track {
+  width: min(340px, 82%);
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 226, 138, 0.35);
+  overflow: hidden
+}
+
+.bevy-loading-bar {
+  width: 6%;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #ff8a3d, #ffd84d, #6cf5d4);
+  transition: width 160ms ease-out
+}
+
 .preview-ability-entry+.preview-ability-entry {
   margin-top: 13px;
   padding-top: 13px;
