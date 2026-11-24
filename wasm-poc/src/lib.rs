@@ -1242,9 +1242,11 @@ fn tick_local_match(
                 }
             }
         }
-        if let Ok(bytes) = client.outbound(move_input)
+        // Encoding advances the send cursors. Keep the packet until JavaScript takes it.
+        if let Ok(mut out) = OUTBOUND_TEXT.lock()
+            && out.is_none()
+            && let Ok(bytes) = client.outbound(move_input)
             && let Ok(text) = String::from_utf8(bytes)
-            && let Ok(mut out) = OUTBOUND_TEXT.lock()
         {
             *out = Some(text);
         }

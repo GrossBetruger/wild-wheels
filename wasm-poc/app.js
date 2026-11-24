@@ -285,12 +285,12 @@ async function connectOnline(c) {
   sock.onclose = () => {
     if (netSocket !== sock || !activeOnline) return;
     setTimeout(() => {
-      if (activeOnline) connectOnline(currentConfig()).catch(() => {});
+      if (netSocket === sock && activeOnline) connectOnline(currentConfig()).catch(() => {});
     }, 1000);
   };
 
   netSendTimer = setInterval(() => {
-    if (!activeOnline || !netSocket || netSocket.readyState !== WebSocket.OPEN) return;
+    if (!activeOnline || netSocket !== sock || sock.readyState !== WebSocket.OPEN || sock.bufferedAmount > 16384) return;
     const now = performance.now() / 1000;
     if (now - lastPing >= 1.0) {
       lastPing = now;
