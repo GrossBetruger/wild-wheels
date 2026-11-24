@@ -147,39 +147,59 @@ fn fragment(in: Plume) -> @location(0) vec4<f32> {
         let across_barb = normalize(lift * facing_side + vec3(1e-6, 0.0, 0.0));
         let surface = normalize(normal + across_barb * ridge * 0.9 * fine);
 
-        // The browser's iridescence: teal face on, blue then violet at a glance,
-        // and a pale sheen where the lamp reflects.
+        // Upgraded thin-film peacock iridescence: emerald-gold head-on, shifting
+        // through electric peacock turquoise -> royal sapphire -> ultraviolet-magenta
+        // at grazing angles, lit by both the arena sun and a soft chase-camera rim!
         let facing = abs(dot(surface, sight));
         let reflection = abs(dot(surface, halfway));
-        var grazing = 1.0 - (0.7 * facing + 0.3 * reflection);
-        // Native only: barbs differ a little in where they sit on that palette.
+        let shoulder = normalize(sight * 0.62 + vec3(0.0, 0.72, 0.0) + cross(sight, vec3(0.0, 1.0, 0.0)) * 0.28);
+        let back_half = normalize(shoulder + sight);
+        let back_refl = abs(dot(surface, back_half));
+        var grazing = 1.0 - (0.64 * facing + 0.24 * reflection + 0.12 * back_refl);
+        // Barb-to-barb spectral phase variation for living structural-color depth
         let seed = hash(vec2(floor(barb), sign(across)));
-        grazing += (seed - 0.5) * 0.16 * fine;
-        var silk = mix(vec3(0.12, 0.52, 0.43), vec3(0.17, 0.3, 0.7), smoothstep(0.12, 0.72, grazing));
-        silk = mix(silk, vec3(0.51, 0.24, 0.64), smoothstep(0.6, 0.95, grazing) * 0.7);
-        // Native only: a green-gold flash when a barb is seen square on.
-        silk = mix(silk, vec3(0.34, 0.66, 0.26), (1.0 - smoothstep(0.02, 0.16, grazing)) * 0.45);
-        let sheen = pow(reflection, 22.0);
-        tint = mix(mix(in.color, silk, 0.85), vec3(0.85, 0.94, 0.72), sheen * 0.55);
-        light = 0.62 + 0.38 * abs(dot(surface, LAMP));
+        let along_shift = sin(along * 1.15 - abs(across) * 2.4) * 0.06;
+        grazing = clamp(grazing + (seed - 0.5) * 0.18 * fine + along_shift, 0.0, 1.0);
 
-        // Native only from here. Grooves between barbs, and a blade that deepens
-        // towards its root.
-        let groove = smoothstep(0.0, 0.2, 0.5 - abs(ridge));
-        tint *= mix(1.0, mix(0.78, 1.0, groove), fine);
-        tint *= mix(0.88, 1.05, smoothstep(0.0, 3.0, along));
-        // Rings of bronze and green around the eye, where the blade shows past it.
+        // 5-stop peacock photonic-crystal spectrum
+        let emerald_gold = vec3(0.24, 0.78, 0.42);
+        let turquoise    = vec3(0.06, 0.68, 0.64);
+        let sapphire     = vec3(0.11, 0.34, 0.88);
+        let violet       = vec3(0.56, 0.18, 0.82);
+        let rose_magenta = vec3(0.82, 0.24, 0.62);
+
+        var silk = mix(emerald_gold, turquoise, smoothstep(0.05, 0.32, grazing));
+        silk = mix(silk, sapphire, smoothstep(0.28, 0.62, grazing));
+        silk = mix(silk, violet, smoothstep(0.54, 0.84, grazing));
+        silk = mix(silk, rose_magenta, smoothstep(0.78, 0.98, grazing) * 0.65);
+
+        // Anisotropic silk sheen from both sun and over-the-shoulder chase light
+        let sheen = pow(reflection, 18.0) * 0.65 + pow(back_refl, 14.0) * 0.45;
+        let fresnel_rim = pow(1.0 - facing, 3.0);
+        tint = mix(mix(in.color, silk, 0.90), vec3(0.88, 0.98, 0.82), clamp(sheen * 0.62, 0.0, 0.72));
+        tint += vec3(0.32, 0.72, 0.95) * fresnel_rim * 0.22;
+        light = 0.68 + 0.32 * max(abs(dot(surface, LAMP)), abs(dot(surface, shoulder)) * 0.85);
+
+        // Micro-grooves between barbs, deepening toward the root & glowing toward the crown
+        let groove = smoothstep(0.0, 0.22, 0.5 - abs(ridge));
+        tint *= mix(1.0, mix(0.76, 1.0, groove), fine);
+        tint *= mix(0.86, 1.12, smoothstep(0.0, 3.2, along));
+        // Luminous metallic bronze-gold & emerald rings around the peacock eye (ocellus)
         let ring = length(in.feather.zw / vec2(0.28, 0.4));
-        let bronze = smoothstep(0.95, 1.15, ring) * (1.0 - smoothstep(1.35, 1.75, ring));
-        let green = smoothstep(1.45, 1.8, ring) * (1.0 - smoothstep(2.1, 2.7, ring));
-        tint = mix(tint, vec3(0.76, 0.52, 0.2) * (0.8 + 0.5 * reflection), bronze * 0.6);
-        tint = mix(tint, vec3(0.3, 0.72, 0.36), green * 0.4);
-        // Glints: a few facets along each barb catch the lamp as the tail moves.
-        let cell = vec2(floor(barb), floor(along * 4.0) + sign(across) * 31.0);
+        let bronze = smoothstep(0.92, 1.12, ring) * (1.0 - smoothstep(1.38, 1.78, ring));
+        let green = smoothstep(1.42, 1.78, ring) * (1.0 - smoothstep(2.15, 2.75, ring));
+        let eye_shimmer = 0.85 + 0.65 * max(reflection, back_refl);
+        tint = mix(tint, vec3(0.92, 0.66, 0.24) * eye_shimmer, bronze * 0.78);
+        tint = mix(tint, vec3(0.22, 0.86, 0.46) * (0.9 + 0.3 * back_refl), green * 0.55);
+        // Diamond micro-barbule glints that dance as the fan sways & turns!
+        let cell = vec2(floor(barb), floor(along * 4.5) + sign(across) * 31.0);
         let scatter = vec3(hash(cell), hash(cell + 17.3), hash(cell + 41.7)) - 0.5;
-        let facet = normalize(surface + scatter * 0.8);
-        let glint = pow(abs(dot(facet, halfway)), 120.0) * fine;
-        tint += vec3(1.0, 0.97, 0.82) * glint * 0.9;
+        let facet = normalize(surface + scatter * 0.75);
+        let glint_sun = pow(abs(dot(facet, halfway)), 95.0);
+        let glint_cam = pow(abs(dot(facet, back_half)), 85.0) * 0.85;
+        let glint = (glint_sun + glint_cam) * fine;
+        let glint_tint = mix(vec3(1.0, 0.96, 0.78), vec3(0.68, 0.98, 1.0), seed);
+        tint += glint_tint * glint * 1.15;
     } else if abs(across) < 0.07 && length(in.feather.zw / vec2(0.28, 0.4)) > 1.5 {
         // Native only: the beads along the shaft are jewels. Each facet mirrors a
         // pale sky above and warm ground below, turns from gold to rose to mint

@@ -3,6 +3,7 @@ mod arena_mesh;
 mod bench;
 mod explosions;
 mod knowitowl;
+mod pearococo;
 mod plumage;
 mod ported;
 mod ryeah;
@@ -211,6 +212,7 @@ const RAPTOR_ENGINES: [(f32, f32, f32); 6] = [
 pub(crate) fn has_blender_model(driver: usize) -> bool {
     driver == 7
         || driver == 8
+        || driver == pearococo::DRIVER
         || driver == knowitowl::DRIVER
         || driver == ryeah::DRIVER
         || driver == yuda::DRIVER
@@ -484,6 +486,7 @@ fn presentation_app(pack: Vec<u8>, canvas: &str, interactive: bool, mobile: bool
             scene::ArenaPresentationPlugin,
             explosions::ExplosionsPlugin,
             knowitowl::KnowItOwlPlugin,
+            pearococo::PearococoPlugin,
             ryeah::RYeahPlugin,
             yuda::YudaPlugin,
         ))
