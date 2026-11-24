@@ -5,7 +5,7 @@ import {checkPreview} from './check-preview-scenario.mjs';
 export async function checkCharacters(evaluate,app,room,id,sleep,capture){
   const wait=async predicate=>{for(let i=0;i<120;i++){if(await predicate())return true;await sleep(25);}return false;};
   const menu=await evaluate("[...document.querySelectorAll('#drivers button')].map(button=>button.getAttribute('aria-label'))");
-  const menuPass=['Ellie the Elephant','Tammy the Cricket','Elon Musk','Houston the RTPL','Avita-Jas','Pearococo','Master-Yuda','R-yeah','Catheterpillar','Fourmidable','KnowItOwl'].every(name=>menu.includes(name))&&menu.length===15;
+  const menuPass=['Ellie the Elephant','Tammy the Cricket','Elon Musk','Houston the RTPL','Avita-Jas','Pearococo','Master-Yuda','R-yeah','Catheterpillar','Fourmidable','KnowItOwl','Tai-Coon'].every(name=>menu.includes(name))&&menu.length===16;
   if(room.members.size<2)app.join(room,{name:'Observer',driver:1});
   const observer=[...room.members.values()].find(member=>member.id!==id),characters=[];
   // This observer has no browser polling/input loop. Keep its session active
