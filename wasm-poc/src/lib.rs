@@ -7,6 +7,8 @@ mod sound;
 mod sprite;
 mod xray;
 
+use bevy::asset::AssetMetaCheck;
+use bevy::gltf::GltfAssetLabel;
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
 use serde_json::json;
@@ -67,6 +69,12 @@ pub(crate) fn sound_pack_bytes() -> &'static [u8] {
     SOUND_BYTES.get().copied().unwrap_or(&[])
 }
 
+#[derive(Resource)]
+struct BlenderTaicoon(Handle<WorldAsset>);
+
+#[derive(Component)]
+struct BlenderRacer(usize);
+
 #[wasm_bindgen]
 pub fn start_game(pack: Vec<u8>, sound_pack: Vec<u8>, driver: usize, arena: usize, bots: usize) {
     console_error_panic_hook::set_once();
@@ -83,17 +91,24 @@ pub fn start_game(pack: Vec<u8>, sound_pack: Vec<u8>, driver: usize, arena: usiz
 
     let mut bevy_app = App::new();
     bevy_app
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: "Wild Wheels — Bevy WASM PoC".into(),
-                canvas: Some("#bevy-canvas".into()),
-                fit_canvas_to_parent: true,
-                prevent_default_event_handling: true,
-                resolution: WindowResolution::new(1280, 720),
-                ..default()
-            }),
-            ..default()
-        }))
+        .add_plugins(
+            DefaultPlugins
+                .set(AssetPlugin {
+                    meta_check: AssetMetaCheck::Never,
+                    ..default()
+                })
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        title: "Wild Wheels — Bevy WASM PoC".into(),
+                        canvas: Some("#bevy-canvas".into()),
+                        fit_canvas_to_parent: true,
+                        prevent_default_event_handling: true,
+                        resolution: WindowResolution::new(1280, 720),
+                        ..default()
+                    }),
+                    ..default()
+                }),
+        )
         .insert_resource(cfg)
         .insert_resource(app::GameSession::default())
         .insert_resource(scene::Capture(None))
@@ -102,13 +117,82 @@ pub fn start_game(pack: Vec<u8>, sound_pack: Vec<u8>, driver: usize, arena: usiz
             scene::ArenaPresentationPlugin,
             sound::GameAudioPlugin,
         ))
-        .add_systems(Startup, start_local_match)
+        .add_systems(Startup, (start_local_match, load_blender_taicoon))
         .add_systems(
             Update,
-            (tick_local_match, scene::sync, ported::animate, sound::play).chain(),
+            (
+                tick_local_match,
+                scene::sync,
+                sync_blender_taicoon,
+                ported::animate,
+                sound::play,
+            )
+                .chain(),
         );
 
     bevy_app.run();
+}
+
+fn load_blender_taicoon(mut commands: Commands, assets: Res<AssetServer>) {
+    let scene = assets.load(GltfAssetLabel::Scene(0).from_asset("taicoon.glb"));
+    commands.insert_resource(BlenderTaicoon(scene));
+}
+
+fn sync_blender_taicoon(
+    mut commands: Commands,
+    time: Res<Time>,
+    session: Res<app::GameSession>,
+    model: Option<Res<BlenderTaicoon>>,
+    mut existing: Query<(Entity, &BlenderRacer, &mut Transform, &mut Visibility)>,
+) {
+    let Some(model) = model else { return };
+    let Some(client) = session.client.as_ref() else { return };
+    let view = client.view();
+    let t = time.elapsed_secs();
+    let mut alive_ids = std::collections::HashSet::new();
+    for a in view.actors {
+        if a.driver != 15 || a.inactive || a.afk || a.bomber || a.destroyed > 0.0 {
+            continue;
+        }
+        alive_ids.insert(a.id);
+        let bounce = if a.celebrate > 0.0 {
+            (t * 14.0).sin().abs() * 0.65
+        } else {
+            (t * 6.0 + a.id as f32).sin() * 0.04
+        };
+        let pitch = if a.somersault > 0.0 {
+            let p = (1.0 - a.somersault as f32 / 0.55).clamp(0.0, 1.0);
+            p * std::f32::consts::TAU
+        } else {
+            0.0
+        };
+        let height = if a.somersault > 0.0 {
+            let p = (1.0 - a.somersault as f32 / 0.55).clamp(0.0, 1.0);
+            (p * std::f32::consts::PI).sin() * 3.2
+        } else {
+            bounce
+        };
+        let tf = ported::placement(
+            Vec3::new(a.wx as f32, height, a.wz as f32),
+            a.heading as f32,
+            pitch,
+            0.0,
+        );
+        if let Some((_, _, mut cur_tf, mut vis)) =
+            existing.iter_mut().find(|(_, r, _, _)| r.0 == a.id)
+        {
+            *cur_tf = tf;
+            *vis = Visibility::Visible;
+        } else {
+            commands.spawn((BlenderRacer(a.id), WorldAssetRoot(model.0.clone()), tf));
+        }
+    }
+    for (entity, r, _, mut vis) in &mut existing {
+        if !alive_ids.contains(&r.0) {
+            *vis = Visibility::Hidden;
+            let _ = entity;
+        }
+    }
 }
 
 fn start_local_match(

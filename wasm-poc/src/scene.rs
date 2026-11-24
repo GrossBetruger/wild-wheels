@@ -562,7 +562,9 @@ fn racers(stage: &mut Stage, view: &ClientView, bats: &Bats, dt: f32, now: f32, 
             };
             stage.show(Role::Ghost, a.id, ghost, body);
         }
-        stage.show(Role::Racer, a.id, play, body);
+        if a.driver != 15 || wrecked {
+            stage.show(Role::Racer, a.id, play, body);
+        }
         if wrecked {
             continue;
         }
