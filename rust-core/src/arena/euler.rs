@@ -86,8 +86,8 @@ fn on_bridge(b: &[f64; 5], wx: f64, wz: f64) -> bool {
 pub const EULER_CONFIDENT_NOTICE: &str = "6/7 bridges, Euler remains confident of his result...";
 pub const EULER_ACHIEVED_NOTICE: &str = "EULERIAN PATH ACHIEVED!";
 const GHOST_DURATION: f64 = 1e6;
-const GHOST_SPEED: f64 = 56.0;
-const GHOST_KILL_RADIUS: f64 = 7.0;
+const GHOST_SPEED: f64 = 38.0;
+const GHOST_KILL_RADIUS: f64 = 5.5;
 const GHOST_RISE_GRACE: f64 = 1.0;
 
 impl Game {
@@ -340,6 +340,19 @@ mod tests {
         assert!(
             game.actors[0].destroyed > 0.0,
             "Euler's Ghost must chase down and kill the theorem-breaker"
+        );
+        // Respawning must place the player far away from Euler's Ghost (never spawn-camped).
+        let ghost_pos = game
+            .global
+            .effects
+            .iter()
+            .find(|fx| fx.kind == "eulerGhost")
+            .map(|fx| (fx.wx, fx.wz))
+            .unwrap();
+        game.spawn(0);
+        assert!(
+            distance(game.actors[0].wx, game.actors[0].wz, ghost_pos.0, ghost_pos.1) > 40.0,
+            "respawn must avoid Euler's Ghost instead of camping the same spot"
         );
         // Ghost persists for the entire match and cannot be triggered a second time.
         game.actors[0].destroyed = 0.0;

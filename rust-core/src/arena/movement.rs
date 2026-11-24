@@ -58,8 +58,13 @@ impl Game{
     }
     pub(super) fn spawn(&mut self,id:usize){
         let mut candidates:Vec<_>=arena_spawn_points(self.global.arena).into_iter().map(|[wx,wz]|Point{wx,wz}).collect();
-        let nearest=|point:&Point|self.actors.iter().filter(|a|a.id!=id&&a.destroyed==0.0).map(|a|distance(a.wx,a.wz,point.wx,point.wz)).fold(999.0,f64::min);
-        candidates.sort_by(|a,b|nearest(b).total_cmp(&nearest(a)));let p=&candidates[0];let a=&mut self.actors[id];
+        let prev=(self.actors[id].wx,self.actors[id].wz);
+        let clearance=|point:&Point|{
+            let racer=self.actors.iter().filter(|a|a.id!=id&&a.destroyed==0.0).map(|a|distance(a.wx,a.wz,point.wx,point.wz)).fold(999.0,f64::min);
+            let hazard=self.global.effects.iter().filter(|fx|matches!(fx.kind.as_str(),"eulerGhost"|"radiation")).map(|fx|distance(fx.wx,fx.wz,point.wx,point.wz)).fold(999.0,f64::min);
+            racer.min(hazard)
+        };
+        candidates.sort_by(|a,b|clearance(b).total_cmp(&clearance(a)).then_with(||distance(b.wx,b.wz,prev.0,prev.1).total_cmp(&distance(a.wx,a.wz,prev.0,prev.1))));let p=&candidates[0];let a=&mut self.actors[id];
         a.wx=p.wx;a.wz=p.wz;a.heading=(-p.wx).atan2(-p.wz);a.speed=0.0;a.reverse_controls=0.0;a.health=3.0;a.heal_timer=0.0;a.destroyed=0.0;a.shield=0.0;a.hedge_shield=0.0;a.tehilim=0.0;a.ammo=START_HEDGEHOGS;a.missiles=1;a.turbos=1;a.item="hedgehog".into();a.fire_cooldown=0.5;a.boost=0.0;a.nightmare_active=0.0;a.path.clear();
         a.motion_heading=a.heading;a.camera_heading=a.heading;a.drift=0.0;a.was_drifting=false;a.drift_trail=None;a.drift_emit=0.0;a.owl_boosting=false;a.kill_streak=0;a.bat_cooldown=0.0;a.vulcan=0.0;a.chaff=4;a.chaff_cooldown=0.0;a.somersault=0.0;a.somersault_cooldown=0.0;a.somersault_camera_start=a.camera_heading;a.dizzy=0.0;a.euler_bridges=0;a.euler_on_bridge=None;a.euler_hinted=false;a.credits.clear();
     }
