@@ -69,7 +69,7 @@ Without `day` the reply lists the days on disk and their sizes. With `day`
 
 | Query | Keeps lines |
 | --- | --- |
-| `source` | from `server`, `browser`, `native` or `log` |
+| `source` | from `server`, `browser`, `bevy-wasm`, `native` or `log` |
 | `level` | at `error`, `warn` or `info` |
 | `event` | with exactly this event name |
 | `contains` | containing this text anywhere |
@@ -137,6 +137,18 @@ never logged. Player names and whatever text a client's error carries are.
 | `slow-minute` | A minute with a 95th-percentile frame over 40 ms, ten frames over 50 ms, or a second without news from the server. |
 | `match-frames` | One line per finished match: frames, long frames, the longest frame and wait. |
 | `reports-dropped` | The client had more to report than it is allowed to send. |
+
+3D Bevy Beta reports as `bevy-wasm` when playing online on the dedicated server.
+It reports the same `slow-minute` and `match-frames` metrics, including server
+snapshot gaps and ping. `bevy-startup` records WASM and asset load times and time
+to the first HUD state. `bevy-startup-failed`, `hud-error`, and `packet-invalid`
+identify failures in the game client. Use `source=bevy-wasm` to find these reports.
+Server socket events include the connection's reported `client` label. Older
+clients that omit it appear as `unknown`.
+
+```sh
+curl 'http://localhost:5173/logz/all?days=1&source=bevy-wasm'
+```
 
 ## Setting a client's slowdown beside the match
 

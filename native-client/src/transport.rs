@@ -402,7 +402,7 @@ async fn connect(
     .await?;
     socket
         .send(Message::Text(
-            json!({"type":"authenticate","token":token})
+            json!({"type":"authenticate","token":token,"client":"native"})
                 .to_string()
                 .into(),
         ))

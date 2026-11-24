@@ -86,7 +86,15 @@ export class FrameHealth {
   // `clock` is the match and its seconds as this client shows them: the server
   // notes the same clock on abilities and kills, so slow frames can be set beside them.
   frame(t, racing, packetAt, rtt = 0, clock = null) {
-    if (!racing) { if (this.match.frames) { this.minute(rtt); this.report('info', 'match-frames', { ...this.match, rttMs: Math.round(rtt * 1000) }); this.match = { frames: 0, long: 0, worst: 0, gap: 0, slowMinutes: 0 }; } this.last = null; this.started = null; return; }
+    if (!racing) {
+      if (this.times.length || this.match.frames) {
+        this.minute(rtt);
+        this.report('info', 'match-frames', { ...this.match, rttMs: Math.round(rtt * 1000) });
+        this.match = { frames: 0, long: 0, worst: 0, gap: 0, slowMinutes: 0 };
+      }
+      this.last = null; this.started = null; this.from = null; this.clock = null;
+      return;
+    }
     if (this.last !== null) {
       const took = t - this.last; this.times.push(took);
       if (took > 50) { this.long++; if (clock) { this.slowest.push([Math.round(clock.seconds * 10) / 10, Math.round(took)]); this.slowest.sort((a, b) => b[1] - a[1]).splice(8); } }

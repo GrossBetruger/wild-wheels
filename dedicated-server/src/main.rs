@@ -522,6 +522,8 @@ async fn connection(app: App, mut socket: WebSocket) {
     let Some(token) = auth["token"].as_str() else {
         return refuse("the sign-in had no session");
     };
+    // A client-provided label for diagnostics. The token still identifies the player.
+    let client = logs::client_source(&auth["client"]).unwrap_or("unknown");
     let (id, generation, notify) = {
         let mut room = app.room.lock().unwrap();
         let Some(id) = room.find(token) else {
@@ -534,7 +536,7 @@ async fn connection(app: App, mut socket: WebSocket) {
         p.seen = Instant::now();
         p.notify.notify_one();
         let opened = (id, p.generation, p.notify.clone());
-        app.logs.note("info", "socket-open", json!({"who":room.who(id),"connection":opened.1}));
+        app.logs.note("info", "socket-open", json!({"who":room.who(id),"connection":opened.1,"client":client}));
         opened
     };
     let opened = Instant::now();
@@ -620,7 +622,7 @@ async fn connection(app: App, mut socket: WebSocket) {
         true => "error",
         false => "info",
     };
-    app.logs.note(level, "socket-closed", json!({"who":room.who(id),"connection":generation,"seconds":opened.elapsed().as_secs(),"reason":reason,"detail":detail}));
+    app.logs.note(level, "socket-closed", json!({"who":room.who(id),"connection":generation,"client":client,"seconds":opened.elapsed().as_secs(),"reason":reason,"detail":detail}));
     room.disconnect(id, generation);
 }
 // Keep the 60 Hz simulation timer independent of HTTP and WebSocket scheduling.

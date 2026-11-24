@@ -67,6 +67,7 @@ static PENDING_RESTART: Mutex<Option<LaunchConfig>> = Mutex::new(None);
 static QUEUED_ACTIONS: Mutex<Vec<(String, String)>> = Mutex::new(Vec::new());
 static INCOMING_PACKETS: Mutex<Vec<Vec<u8>>> = Mutex::new(Vec::new());
 static OUTBOUND_TEXT: Mutex<Option<String>> = Mutex::new(None);
+static INVALID_PACKETS: AtomicU32 = AtomicU32::new(0);
 static PAUSED: AtomicBool = AtomicBool::new(false);
 static INPUT_BLOCKED: AtomicBool = AtomicBool::new(false);
 static ONLINE_MODE: AtomicBool = AtomicBool::new(false);
@@ -123,6 +124,11 @@ pub fn poll_net_outbound() -> String {
         .ok()
         .and_then(|mut g| g.take())
         .unwrap_or_default()
+}
+
+#[wasm_bindgen]
+pub fn take_invalid_packets() -> u32 {
+    INVALID_PACKETS.swap(0, Ordering::Relaxed)
 }
 
 #[wasm_bindgen]
@@ -1081,6 +1087,7 @@ fn publish_hud(client: &NativeClient) {
         .map(|a| a.name.as_deref().unwrap_or("Bot").to_string());
     let snap = json!({
         "multiplayer": view.multiplayer,
+        "match": view.epoch,
         "phase": view.phase,
         "elapsed": view.elapsed,
         "duration": view.duration,
@@ -1158,10 +1165,14 @@ fn tick_local_match(
             .map(|mut q| q.drain(..).collect())
             .unwrap_or_default();
         for pkt in packets {
-            if let Some(client) = session.client.as_mut() {
-                let _ = client.accept(&pkt, local.elapsed);
-            } else if let Ok(c) = NativeClient::from_packet(&pkt, local.elapsed) {
-                session.client = Some(c);
+            let result = match session.client.as_mut() {
+                Some(client) => client.accept(&pkt, local.elapsed),
+                None => NativeClient::from_packet(&pkt, local.elapsed).map(|client| {
+                    session.client = Some(client);
+                }),
+            };
+            if result.is_err() {
+                INVALID_PACKETS.fetch_add(1, Ordering::Relaxed);
             }
         }
         let Some(client) = session.client.as_mut() else {

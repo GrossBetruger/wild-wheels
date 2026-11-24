@@ -65,3 +65,18 @@ test('only a bad minute of frames is reported, and a finished match is summed up
   const summary = reports.at(-1); assert.deepEqual([summary[0], summary[1]], ['info', 'match-frames']); assert.ok(summary[2].frames > 5000 && summary[2].slowMinutes >= 1 && summary[2].gap === 2500);
   health.frame(t + 32, false, 0); assert.equal(reports.filter(report => report[1] === 'match-frames').length, 1);
 });
+test('matches shorter than a minute get separate frame summaries', () => {
+  const reports = [];
+  const health = new FrameHealth((level, event, data) => reports.push({ level, event, data }));
+  health.frame(100, true, 90, .02);
+  health.frame(120, true, 100, .02);
+  health.frame(155, true, 125, .02);
+  health.frame(175, false, 0, .02);
+  health.frame(300, true, 290, .03);
+  health.frame(316, true, 302, .03);
+  health.frame(332, false, 0, .03);
+  assert.deepEqual(reports, [
+    { level: 'info', event: 'match-frames', data: { frames: 2, long: 0, worst: 35, gap: 30, slowMinutes: 0, rttMs: 20 } },
+    { level: 'info', event: 'match-frames', data: { frames: 1, long: 0, worst: 16, gap: 14, slowMinutes: 0, rttMs: 30 } },
+  ]);
+});

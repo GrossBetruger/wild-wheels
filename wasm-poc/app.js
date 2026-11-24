@@ -11,6 +11,7 @@ import init, {
   trigger_action,
   get_metadata,
   hud_state,
+  take_invalid_packets,
 } from './pkg/wild_wheels_wasm_poc.js';
 
 const $ = id => document.getElementById(id);
@@ -91,6 +92,44 @@ let netSendTimer = null;
 let chatTimer = null;
 let chatCursor = 0;
 let lastPing = 0;
+let lastPacketAt = 0;
+let rtt = 0;
+
+const client = 'bevy-wasm';
+const logger = location.pathname.startsWith('/experimental/')
+  ? await import('/client/log.js').catch(() => null)
+  : null;
+const clientLog = logger && new logger.ClientLog({ client });
+const frameHealth = logger && new logger.FrameHealth((level, event, data) => clientLog.note(level, event, data));
+let flushLog;
+
+function reportProblem(event, stage, error, details = {}) {
+  if (!clientLog) return;
+  let message = String(error?.message ?? error ?? '');
+  for (const secret of [netToken, new URLSearchParams(location.hash.slice(1)).get('invite')]) {
+    if (secret) message = message.replaceAll(secret, '[redacted]');
+  }
+  message = message.replace(/https?:\/\/[^\s)]+/gi, '[url]');
+  clientLog.limited(`${event}:${stage}`, 15000, 'error', event, {
+    stage, message, status: error?.status, ...details,
+  });
+}
+
+if (clientLog) {
+  addEventListener('error', event => {
+    reportProblem('js-error', 'runtime', event.error ?? event.message, {
+      line: event.lineno, column: event.colno,
+    });
+  });
+  addEventListener('unhandledrejection', event => reportProblem('js-rejection', 'runtime', event.reason));
+  $('bevy-canvas').addEventListener('webglcontextlost', () => clientLog.note('error', 'graphics-lost'));
+  addEventListener('pagehide', () => frameHealth.frame(performance.now(), false, lastPacketAt, rtt));
+  flushLog = logger.startReporting(clientLog, { token: () => netToken });
+  fetch('/build.json', { signal: AbortSignal.timeout(3000) })
+    .then(response => response.ok ? response.json() : null)
+    .then(info => { if (typeof info?.build === 'string') clientLog.build = info.build.slice(0, 64); })
+    .catch(() => {});
+}
 
 function setModeUI(isOnline) {
   onlineSelected = isOnline && serverAvailable;
@@ -234,13 +273,12 @@ hudStartOnline.onclick = async () => {
     await apiPost('/api/control', { action: 'bots', bots: c.bots }).catch(() => {});
     await apiPost('/api/control', { action: 'start' });
   } catch (e) {
+    reportProblem('control-failed', 'start-battle', e);
     console.warn('start battle error:', e);
   }
 };
 
-async function connectOnline(c) {
-  disconnectOnline(false);
-  set_network_mode(true);
+async function joinOnline(c) {
   let reply;
   const invite = new URLSearchParams(location.hash.slice(1)).get('invite') || '';
   const code = new URL(location.href).searchParams.get('room') || '00';
@@ -258,6 +296,12 @@ async function connectOnline(c) {
     });
   }
   netToken = reply.token || netToken;
+}
+
+async function connectOnline(c) {
+  disconnectOnline(false);
+  set_network_mode(true);
+  await joinOnline(c);
   // Apply chosen driver if room is between matches
   await apiPost('/api/driver', { driver: c.driver }).catch(() => {});
 
@@ -271,21 +315,45 @@ async function connectOnline(c) {
   const sock = new WebSocket(wsUrl);
   sock.binaryType = 'arraybuffer';
   netSocket = sock;
+  const openedAt = performance.now();
+  lastPacketAt = openedAt;
+  lastPing = 0;
+  rtt = 0;
 
   sock.onopen = () => {
     if (netSocket !== sock) return;
-    sock.send(JSON.stringify({ type: 'authenticate', token: netToken }));
+    sock.send(JSON.stringify({ type: 'authenticate', token: netToken, client }));
   };
   sock.onmessage = ev => {
     if (netSocket !== sock) return;
     if (ev.data instanceof ArrayBuffer) {
+      lastPacketAt = performance.now();
       accept_net_packet(new Uint8Array(ev.data));
+      return;
+    }
+    try {
+      const message = JSON.parse(ev.data);
+      if (message.type === 'pong' && Number.isFinite(message.sent)) {
+        rtt = Math.max(0, performance.now() / 1000 - message.sent);
+      }
+    } catch (error) {
+      reportProblem('socket-message-invalid', 'socket', error.name);
     }
   };
-  sock.onclose = () => {
+  sock.onerror = () => {
+    if (netSocket === sock) clientLog?.limited('socket-error', 15000, 'warn', 'socket-error');
+  };
+  sock.onclose = event => {
     if (netSocket !== sock || !activeOnline) return;
+    const now = performance.now();
+    clientLog?.limited('socket-closed', 15000, 'warn', 'socket-closed', {
+      code: event.code, clean: event.wasClean, openSeconds: (now - openedAt) / 1000,
+      waitingBytes: sock.bufferedAmount, sinceServerMs: Math.round(now - lastPacketAt),
+    });
     setTimeout(() => {
-      if (netSocket === sock && activeOnline) connectOnline(currentConfig()).catch(() => {});
+      if (netSocket === sock && activeOnline) {
+        connectOnline(currentConfig()).catch(error => reportProblem('reconnect-failed', 'socket', error));
+      }
     }, 1000);
   };
 
@@ -350,6 +418,7 @@ async function doRestart() {
         await apiPost('/api/control', { action: 'start' }).catch(() => {});
       }
     } catch (e) {
+      reportProblem('control-failed', 'restart', e);
       statusEl.textContent = `Online error: ${e.message}`;
       returnToLobby();
       return;
@@ -533,11 +602,16 @@ playBtn.onclick = async () => {
   }
   playBtn.disabled = true;
   const c = currentConfig();
+  const online = onlineSelected;
   const t0 = performance.now();
+  let stage = 'wasm';
   try {
     statusEl.textContent = '1/2 Loading Bevy WASM engine...';
+    const wasmStart = performance.now();
     await init();
-    const tWasm = performance.now() - t0;
+    const tWasm = performance.now() - wasmStart;
+    stage = 'assets';
+    const assetStart = performance.now();
     statusEl.textContent = `2/2 Fetching graphics.wwgp + sounds.wwsp... (WASM ready in ${(tWasm / 1000).toFixed(2)}s)`;
     const [respG, respS] = await Promise.all([fetch('./graphics.wwgp'), fetch('./sounds.wwsp')]);
     if (!respG.ok) throw new Error(`graphics.wwgp HTTP ${respG.status}`);
@@ -546,17 +620,21 @@ playBtn.onclick = async () => {
       respG.arrayBuffer().then(b => new Uint8Array(b)),
       respS.arrayBuffer().then(b => new Uint8Array(b)),
     ]);
-    const tTotal = performance.now() - t0;
+    const assetMs = performance.now() - assetStart;
+    const graphicsBytes = buf.byteLength;
+    const soundBytes = soundBuf.byteLength;
 
+    stage = 'connection';
+    if (online) await connectOnline(c);
+
+    stage = 'renderer';
+    set_muted(muted);
+    start_game(buf, soundBuf, c.driver, c.arena, c.bots, c.playerName, c.targetScore, c.matchMinutes, c.specialAbilities);
     menuEl.classList.add('hidden');
     hudLayer.classList.remove('hidden');
     wasmStarted = true;
-    set_muted(muted);
 
-    if (onlineSelected) {
-      await connectOnline(c);
-    }
-
+    let firstHud = true;
     let frames = 0, last = performance.now(), worst = 0, prev = last;
     function tickHud(now) {
       const dt = now - prev; prev = now;
@@ -566,6 +644,8 @@ playBtn.onclick = async () => {
         const fps = (frames * 1000 / (now - last)).toFixed(0);
         const tag = activeOnline ? 'ONLINE' : 'SOLO';
         perfEl.textContent = `Bevy WASM · ${tag} | ${fps} FPS | worst ${worst.toFixed(1)}ms`;
+        const invalidPackets = take_invalid_packets();
+        if (invalidPackets) clientLog?.limited('packet-invalid', 15000, 'warn', 'packet-invalid', { invalidPackets });
         frames = 0; worst = 0; last = now;
       }
       populateMetadataFromWasm();
@@ -573,6 +653,14 @@ playBtn.onclick = async () => {
         const raw = hud_state();
         if (raw) {
           const s = JSON.parse(raw);
+          if (firstHud) {
+            firstHud = false;
+            if (online) clientLog?.note('info', 'bevy-startup', {
+              wasmMs: tWasm, assetMs, firstHudMs: now - t0, graphicsBytes, soundBytes,
+            });
+          }
+          frameHealth?.frame(now, activeOnline && s.phase === 'racing' && !document.hidden,
+            lastPacketAt, rtt, { match: s.match, seconds: s.elapsed });
           clockEl.textContent = fmtClock(Math.max(0, s.duration - s.elapsed));
 
           if (s.bridgeCount > 0) {
@@ -673,15 +761,24 @@ playBtn.onclick = async () => {
 
           drawRadar(s.radar);
         }
-      } catch {}
+      } catch (error) { reportProblem('hud-error', 'hud', error); }
       requestAnimationFrame(tickHud);
     }
     requestAnimationFrame(tickHud);
-
-    start_game(buf, soundBuf, c.driver, c.arena, c.bots, c.playerName, c.targetScore, c.matchMinutes, c.specialAbilities);
   } catch (e) {
-    console.error(e);
+    reportProblem('bevy-startup-failed', stage, e);
     statusEl.textContent = `Error: ${e.message || e}`;
+    if (online && clientLog && !netToken && stage !== 'connection') {
+      // The player picked Online. Try to get a session for the startup report.
+      await joinOnline(c).catch(() => {});
+    }
+    if (online && netToken) {
+      // Send startup failures while the room still recognizes this session.
+      await flushLog?.();
+      disconnectOnline(true);
+      netToken = null;
+    }
+    console.error(e);
     playBtn.disabled = false;
   }
 };

@@ -40,6 +40,8 @@ try{
   assert.equal((await post('/api/log',report)).status,401);
   const joined=await(await post('/api/join',{code:'00',name:'Reporter',driver:10,role:'driver'})).json();
   assert.equal((await post('/api/log',report,joined.token)).status,200);
+  const bevyFrame={level:'warn',event:'slow-minute',data:{match:3,p95Ms:47.5,longestWaitForServerMs:1100}};
+  assert.equal((await post('/api/log',{client:'bevy-wasm',build:'check',entries:[bevyFrame]},joined.token)).status,200);
   assert.equal((await post('/api/log',{client:'server',entries:report.entries},joined.token)).status,400);
   assert.equal((await post('/api/log',{client:'browser',entries:[{level:'error',event:'Bad Name'}]},joined.token)).status,400);
   assert.equal((await post('/api/log',{client:'browser',entries:[{level:'info',event:'big',data:{text:'x'.repeat(9000)}}]},joined.token)).status,413,'a report larger than the limit is refused');
@@ -49,7 +51,7 @@ try{
   const socket=new WebSocket(origin.replace('http','ws')+'/api/socket',{headers:{origin}});
   await new Promise(resolve=>socket.once('open',resolve));
   const snapshot=new Promise(resolve=>socket.on('message',(data,binary)=>{if(binary)resolve(data);}));
-  socket.send(JSON.stringify({type:'authenticate',token:joined.token}));
+  socket.send(JSON.stringify({type:'authenticate',token:joined.token,client:'bevy-wasm'}));
   // A snapshot is a 16-byte header, then JSON of the length in bytes 4–8.
   const packet=await snapshot,epoch=JSON.parse(packet.subarray(16,16+packet.readUInt32LE(4))).state.world.soundEpoch;
   socket.send(JSON.stringify({type:'input',sequence:0,epoch,keys:[],actions:[],moves:[{sequence:41,keys:['arrowup']}]}));
@@ -61,6 +63,8 @@ try{
   assert.equal(named('server-start').length,1);
   const closed=named('socket-closed')[0];
   assert.equal(closed.level,'error');assert.match(closed.reason,/refused input: Movement out of sequence/);
+  assert.equal(closed.client,'bevy-wasm');
+  assert.ok(named('socket-open').some(entry=>entry.client==='bevy-wasm'&&entry.connection===closed.connection));
   assert.deepEqual([closed.who.name,closed.who.driver,closed.detail.input.moves.first,closed.detail.held.acceptedMove],['Reporter',10,41,-1]);
   const reported=named('js-error')[0];
   assert.deepEqual([reported.source,reported.level,reported.who.name,reported.count,reported.agoMs,reported.build,reported.data.message],['browser','error','Reporter',2,1200,'check','boom\nline two']);
@@ -69,6 +73,11 @@ try{
   assert.ok(named('match-phase').some(entry=>entry.to==='countdown'));
   assert.ok(!JSON.stringify(all).includes(joined.token)&&!JSON.stringify(all).includes(key),'No session or key may appear in the log');
   assert.equal((await read('?day=today&source=browser')).body.returned,1);
+  const bevyReports=await events('&source=bevy-wasm');
+  assert.equal(bevyReports.length,1);
+  assert.equal(bevyReports[0].event,'slow-minute');
+  assert.equal(bevyReports[0].who.name,'Reporter');
+  assert.deepEqual(bevyReports[0].data,bevyFrame.data);
   assert.equal((await read('?day=today&level=error&contains=Movement')).body.returned,1);
 
   // The files themselves: one line of JSON each, private, in the day's two files.

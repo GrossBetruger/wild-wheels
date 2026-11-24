@@ -467,13 +467,18 @@ pub fn collected(directory: &Path, day: &str, query: &Query) -> Vec<u8> {
     bytes
 }
 
+pub fn client_source(value: &Value) -> Option<&'static str> {
+    match value.as_str() {
+        Some("browser") => Some("browser"),
+        Some("native") => Some("native"),
+        Some("bevy-wasm") => Some("bevy-wasm"),
+        _ => None,
+    }
+}
+
 /// What a client may report in one request, checked and cut to size.
 pub fn reports(body: &Value) -> Result<(&'static str, Vec<Report>), &'static str> {
-    let source = match body["client"].as_str() {
-        Some("browser") => "browser",
-        Some("native") => "native",
-        _ => return Err("Say which client is reporting."),
-    };
+    let source = client_source(&body["client"]).ok_or("Say which client is reporting.")?;
     let entries = body["entries"].as_array().filter(|entries| (1..=32).contains(&entries.len())).ok_or("Report 1–32 entries.")?;
     let mut checked = Vec::new();
     for entry in entries {
