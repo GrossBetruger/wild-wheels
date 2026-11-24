@@ -8,5 +8,8 @@ rust-core/target/
 
 dedicated-server/target/
 native-client/target/
+wasm-poc/target/
+wasm-poc/pkg/
+wasm-poc/graphics.wwgp
 
 .wild-wheels/

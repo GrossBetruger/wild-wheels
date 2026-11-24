@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Wild Wheels — Bevy WASM PoC</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #141720; color: #f4f6fb; font-family: system-ui, -apple-system, sans-serif; }
+    #bevy-canvas { width: 100%; height: 100%; display: block; outline: none; }
+    #menu {
+      position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+      background: radial-gradient(circle at 50% 30%, #242b3d, #11141c 75%); z-index: 10;
+    }
+    .card {
+      width: 440px; padding: 28px; border-radius: 16px; background: rgba(24, 29, 42, 0.94);
+      border: 1px solid rgba(255, 255, 255, 0.12); box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+    }
+    h1 { font-size: 26px; margin-bottom: 6px; letter-spacing: 0.4px; }
+    .sub { font-size: 13px; color: #9aa7c2; margin-bottom: 20px; }
+    label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 0.8px; color: #9fb0d0; margin: 12px 0 6px; }
+    select, input[type=range] {
+      width: 100%; padding: 9px 10px; border-radius: 8px; border: 1px solid #35405a;
+      background: #141824; color: #fff; font-size: 14px;
+    }
+    button {
+      margin-top: 20px; width: 100%; padding: 12px; border: 0; border-radius: 10px;
+      background: linear-gradient(135deg, #ff8f3f, #ff5454); color: #fff; font-size: 15px;
+      font-weight: 700; cursor: pointer;
+    }
+    button:disabled { opacity: 0.55; cursor: wait; }
+    #status { margin-top: 12px; font-size: 12px; color: #b7c5e3; min-height: 18px; }
+    #hud {
+      position: fixed; top: 12px; left: 12px; padding: 8px 12px; border-radius: 8px;
+      background: rgba(12, 16, 24, 0.72); border: 1px solid rgba(255,255,255,0.12);
+      font: 12px/1.5 ui-monospace, SFMono-Regular, monospace; color: #d8e5ff; z-index: 5; display: none;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="bevy-canvas"></canvas>
+  <div id="hud"></div>
+  <div id="menu">
+    <div class="card">
+      <h1>Wild Wheels · Bevy WASM PoC</h1>
+      <div class="sub">HTML Menu + Native Rust Bevy Renderer compiled to WebAssembly (WebGL2)</div>
+      <label for="driver">Driver</label>
+      <select id="driver">
+        <option value="0">0 · Pip the Panda</option>
+        <option value="1">1 · Rocco the Raccoon</option>
+        <option value="2">2 · Felix the Fox</option>
+        <option value="5" selected>5 · Tammy the Cricket</option>
+        <option value="7">7 · Houston the RTPL</option>
+        <option value="8">8 · Avita-Jas</option>
+        <option value="9">9 · Pearococo</option>
+        <option value="10">10 · Master-Yuda</option>
+        <option value="11">11 · R-yeah</option>
+        <option value="14">14 · KnowItOwl</option>
+        <option value="15">15 · Tai-Coon</option>
+      </select>
+      <label for="arena">Arena</label>
+      <select id="arena">
+        <option value="0">Scrapyard</option>
+        <option value="1">Crossfire Court</option>
+        <option value="2">Octagon</option>
+      </select>
+      <label for="bots">Bots: <span id="bots-val">5</span></label>
+      <input id="bots" type="range" min="1" max="7" value="5" />
+      <button id="play">Launch Bevy WASM</button>
+      <div id="status">Ready. Controls: WASD/Arrows drive · Shift drift · Space fire · E boost · Q special · F flip</div>
+    </div>
+  </div>
+  <script type="module">
+    import init, { start_game } from './pkg/wild_wheels_wasm_poc.js';
+    const botsEl = document.getElementById('bots');
+    const botsVal = document.getElementById('bots-val');
+    botsEl.oninput = () => botsVal.textContent = botsEl.value;
+    const status = document.getElementById('status');
+    const btn = document.getElementById('play');
+    const hud = document.getElementById('hud');
+
+    btn.onclick = async () => {
+      btn.disabled = true;
+      const t0 = performance.now();
+      try {
+        status.textContent = '1/2 Loading Bevy WASM module...';
+        await init();
+        const tWasm = performance.now() - t0;
+        status.textContent = `2/2 Fetching graphics.wwgp... (WASM ready in ${(tWasm/1000).toFixed(2)}s)`;
+        const resp = await fetch('./graphics.wwgp');
+        if (!resp.ok) throw new Error(`graphics.wwgp HTTP ${resp.status}`);
+        const buf = new Uint8Array(await resp.arrayBuffer());
+        const tTotal = performance.now() - t0;
+        document.getElementById('menu').style.display = 'none';
+        hud.style.display = 'block';
+
+        // Live FPS / worst-frame meter on top of Bevy canvas
+        let frames = 0, last = performance.now(), worst = 0, prev = last;
+        function tickFps(now) {
+          const dt = now - prev; prev = now;
+          if (dt > worst) worst = dt;
+          frames++;
+          if (now - last >= 500) {
+            const fps = (frames * 1000 / (now - last)).toFixed(0);
+            hud.textContent = `Bevy WASM | ${fps} FPS | worst ${worst.toFixed(1)}ms | pack ${(buf.byteLength/1048576).toFixed(1)}MB | boot ${(tTotal/1000).toFixed(2)}s`;
+            frames = 0; worst = 0; last = now;
+          }
+          requestAnimationFrame(tickFps);
+        }
+        requestAnimationFrame(tickFps);
+
+        start_game(buf, +document.getElementById('driver').value, +document.getElementById('arena').value, +botsEl.value);
+      } catch (err) {
+        status.textContent = 'Error: ' + err;
+        btn.disabled = false;
+      }
+    };
+  </script>
+</body>
+</html>
