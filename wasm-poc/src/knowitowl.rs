@@ -51,7 +51,10 @@ impl Plugin for KnowItOwlPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, load).add_systems(
             Update,
-            (ride, drift_feathers).chain().after(scene::sync).in_set(Presentation),
+            (ride, sync_bats, drift_feathers)
+                .chain()
+                .after(scene::sync)
+                .in_set(Presentation),
         );
     }
 }
@@ -66,11 +69,24 @@ struct OwlAssets {
     wings: [Handle<WorldAsset>; 2],
     thigh: Handle<WorldAsset>,
     shin: Handle<WorldAsset>,
+    bat_body: Handle<WorldAsset>,
+    bat_wings: [Handle<WorldAsset>; 2],
+    bat_uzi: Handle<WorldAsset>,
+    muzzle_mesh: Handle<Mesh>,
+    muzzle_mat: Handle<StandardMaterial>,
     feather: Handle<Mesh>,
     feather_looks: [Handle<StandardMaterial>; 2],
     lens: Handle<Mesh>,
     ring: Handle<Mesh>,
     ring_looks: [Handle<StandardMaterial>; RINGS],
+}
+
+#[derive(Component)]
+struct BatRig {
+    id: usize,
+    wings: [Entity; 2],
+    uzi: Entity,
+    muzzle: Entity,
 }
 
 /// One owl. Index 0 of each pair is his left (-x) side, index 1 his right.
@@ -172,6 +188,15 @@ fn load(
             ..default()
         })
     });
+    let muzzle_mesh = meshes.add(Sphere::new(0.18).mesh().uv(10, 6));
+    let muzzle_mat = materials.add(StandardMaterial {
+        base_color: Color::srgba(1.0, 0.85, 0.45, 0.95),
+        emissive: LinearRgba::rgb(12.0, 6.5, 1.5),
+        unlit: true,
+        alpha_mode: AlphaMode::Add,
+        cull_mode: None,
+        ..default()
+    });
     commands.insert_resource(OwlAssets {
         bike: part("bike"),
         wheel: part("wheel"),
@@ -181,6 +206,14 @@ fn load(
         wings: [part("wing_l"), part("wing_r")],
         thigh: part("thigh"),
         shin: part("shin"),
+        bat_body: assets.load(GltfAssetLabel::Scene(0).from_asset("models/bat_body.glb")),
+        bat_wings: [
+            assets.load(GltfAssetLabel::Scene(0).from_asset("models/bat_wing_l.glb")),
+            assets.load(GltfAssetLabel::Scene(0).from_asset("models/bat_wing_r.glb")),
+        ],
+        bat_uzi: assets.load(GltfAssetLabel::Scene(0).from_asset("models/bat_uzi.glb")),
+        muzzle_mesh,
+        muzzle_mat,
         feather: meshes.add(feather_mesh()),
         feather_looks,
         lens: meshes.add(Circle::new(1.0)),
@@ -356,8 +389,8 @@ fn ride(
     mobile: Res<MobileGraphics>,
     assets: Option<Res<OwlAssets>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut rigs: Query<(&mut OwlRig, &mut Transform, &mut Visibility)>,
-    mut parts: Query<(&mut Transform, &mut Visibility), Without<OwlRig>>,
+    mut rigs: Query<(&mut OwlRig, &mut Transform, &mut Visibility), Without<BatRig>>,
+    mut parts: Query<(&mut Transform, &mut Visibility), (Without<OwlRig>, Without<BatRig>)>,
     mut lights: Query<&mut PointLight>,
 ) {
     let Some(assets) = assets else { return };
@@ -566,6 +599,109 @@ fn ride(
             if let Ok(mut light) = lights.get_mut(light) {
                 light.intensity = 0.0;
             }
+        }
+    }
+}
+
+/// Articulated Blender PBR BatYouDidn'tKnow: hovers beside KnowItOwl while rapid-fire
+/// (`vulcan`) is active, flaps scalloped wings, aims at targets, and kicks his Uzi with
+/// a bright muzzle flash on shots.
+fn sync_bats(
+    mut commands: Commands,
+    time: Res<Time>,
+    session: Res<GameSession>,
+    assets: Option<Res<OwlAssets>>,
+    mut bats: Query<(&BatRig, &mut Transform, &mut Visibility), Without<OwlRig>>,
+    mut parts: Query<(&mut Transform, &mut Visibility), (Without<BatRig>, Without<OwlRig>)>,
+) {
+    let Some(assets) = assets else { return };
+    let Some(client) = session.client.as_ref() else { return };
+    let view = client.view();
+    let now = time.elapsed_secs();
+    let mut active = HashSet::new();
+
+    for a in view.actors {
+        if a.driver != DRIVER || a.inactive || a.afk || a.bomber || a.destroyed > 0.0 || a.vulcan <= 0.0 {
+            continue;
+        }
+        let Some([bx, bz, aim]) = client.bat_aim(a.id) else {
+            continue;
+        };
+        active.insert(a.id);
+        let (jump, _, _, _) = scene::somersault(DRIVER, a.somersault);
+        let lift = if a.boost > 0.0 { FLIGHT_HEIGHT } else { 0.0 };
+        let bob = (now * 7.2 + a.id as f32).sin() * 0.22;
+        let place = ported::placement(
+            Vec3::new(bx as f32, 3.35 + jump + lift + bob, bz as f32),
+            aim as f32,
+            0.0,
+            0.0,
+        );
+        let flap = (now * 16.0 + a.id as f32).sin();
+        let firing = a.bat_cooldown > 0.09;
+        let recoil = if firing { -0.11 } else { 0.0 };
+
+        if let Some((rig, mut root_tf, mut vis)) = bats.iter_mut().find(|(r, ..)| r.id == a.id) {
+            *root_tf = place;
+            *vis = Visibility::Visible;
+            for (i, &wing_ent) in rig.wings.iter().enumerate() {
+                let sign = if i == 0 { -1.0f32 } else { 1.0f32 };
+                if let Ok((mut wtf, _)) = parts.get_mut(wing_ent) {
+                    wtf.rotation = Quat::from_euler(EulerRot::YXZ, sign * (-0.18 + flap * 0.22), 0.0, sign * (flap * 0.58));
+                }
+            }
+            if let Ok((mut utf, _)) = parts.get_mut(rig.uzi) {
+                utf.translation = Vec3::new(0.0, -0.52, 0.42 + recoil);
+            }
+            if let Ok((mut mtf, mut mvis)) = parts.get_mut(rig.muzzle) {
+                *mvis = if firing { Visibility::Inherited } else { Visibility::Hidden };
+                let s = 0.85 + (now * 60.0).sin().abs() * 0.55;
+                mtf.scale = Vec3::new(s, s, s * 1.45);
+            }
+        } else {
+            let none = Entity::PLACEHOLDER;
+            let (mut wing_ents, mut uzi_ent, mut muzzle_ent) = ([none; 2], none, none);
+            let root = commands
+                .spawn((WorldAssetRoot(assets.bat_body.clone()), place, Visibility::Visible))
+                .with_children(|bat| {
+                    for (i, side) in [-1.0f32, 1.0f32].into_iter().enumerate() {
+                        wing_ents[i] = bat
+                            .spawn((
+                                WorldAssetRoot(assets.bat_wings[i].clone()),
+                                Transform::from_xyz(side * 0.33, 0.85, -0.05),
+                            ))
+                            .id();
+                    }
+                    uzi_ent = bat
+                        .spawn((
+                            WorldAssetRoot(assets.bat_uzi.clone()),
+                            Transform::from_xyz(0.0, -0.52, 0.42),
+                        ))
+                        .with_children(|uzi| {
+                            muzzle_ent = uzi
+                                .spawn((
+                                    Mesh3d(assets.muzzle_mesh.clone()),
+                                    MeshMaterial3d(assets.muzzle_mat.clone()),
+                                    Transform::from_xyz(0.0, 0.22, 1.12),
+                                    Visibility::Hidden,
+                                ))
+                                .id();
+                        })
+                        .id();
+                })
+                .id();
+            commands.entity(root).insert(BatRig {
+                id: a.id,
+                wings: wing_ents,
+                uzi: uzi_ent,
+                muzzle: muzzle_ent,
+            });
+        }
+    }
+
+    for (rig, _, mut vis) in &mut bats {
+        if !active.contains(&rig.id) {
+            *vis = Visibility::Hidden;
         }
     }
 }

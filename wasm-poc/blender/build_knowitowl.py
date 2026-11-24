@@ -18,8 +18,10 @@ Every moving part is authored with its hinge at (0, 0, 0):
 """
 import math
 import os
+import random
 import sys
 import bpy
+import bmesh
 from mathutils import Euler, Vector
 
 argv = sys.argv
@@ -45,14 +47,16 @@ def hex_to_linear(h):
 
 MATS = {}
 PALETTE = {
-    # Plumage: soft and matte, with a cooler grey for shafts and barring.
-    "white": ("#f5f4ec", 0.88, 0.0),
-    "ivory": ("#e2e4dc", 0.9, 0.0),
-    "edge": ("#c1cbd4", 0.72, 0.0),
-    "sigma": ("#9164ac", 0.82, 0.0),
-    "sigma_soft": ("#b59ac7", 0.85, 0.0),
-    "disc": ("#e8dfce", 0.86, 0.0),
-    "disc_rim": ("#cdbfa3", 0.84, 0.0),
+    # Plumage: warm downy matte white/cream with natural snowy-owl ash-taupe flecks.
+    "white": ("#f7f5ee", 0.92, 0.0),
+    "ivory": ("#ece7db", 0.94, 0.0),
+    "down": ("#e3dccd", 0.95, 0.0),
+    "fleck": ("#a99f93", 0.90, 0.0),
+    "edge": ("#c6ccd2", 0.82, 0.0),
+    "sigma": ("#8f62ab", 0.86, 0.0),
+    "sigma_soft": ("#b89dca", 0.89, 0.0),
+    "disc": ("#eae2d2", 0.91, 0.0),
+    "disc_rim": ("#cfc1a6", 0.89, 0.0),
     # Beak and feet are horn, not metal.
     "horn": ("#d3ab58", 0.38, 0.0),
     "talon": ("#2a2b33", 0.22, 0.0),
@@ -118,11 +122,64 @@ def sphere(x, y, z, rx, ry, rz, material, segs=12, rings=8, rot=(0, 0, 0)):
     return finish(obj, material)
 
 
+def sculpted_feather(x, y, z, width, length, thickness, material, rot=(0, 0, 0), curl=0.06, tip_mat=None):
+    """A broad, soft, rounded snowy-owl flight feather blade (real owls have soft
+    rounded silent-flight tips, never sharp spiky daggers)."""
+    bm = bmesh.new()
+    steps = 7
+    rings = []
+    for i in range(steps + 1):
+        t = i / steps
+        # Broad, soft, rounded-tip feather contour
+        if t < 0.15:
+            w = width * (0.45 + 0.55 * (t / 0.15))
+        elif t < 0.78:
+            w = width * (1.0 - 0.12 * ((t - 0.15) / 0.63))
+        else:
+            u = (t - 0.78) / 0.22
+            w = width * 0.88 * math.sqrt(max(0.02, 1.0 - u * u))
+        th = thickness * (1.0 - 0.55 * t)
+        cy = -t * length
+        cz = math.sin(t * math.pi) * curl
+        pts = [
+            (-w, cy, cz),
+            (-w * 0.55, cy, cz + th),
+            (w * 0.55, cy, cz + th),
+            (w, cy, cz),
+            (w * 0.55, cy, cz - th * 0.6),
+            (-w * 0.55, cy, cz - th * 0.6),
+        ]
+        rings.append([bm.verts.new((px, -pz, py)) for (px, py, pz) in pts])
+    n = 6
+    for r in range(steps):
+        for j in range(n):
+            jn = (j + 1) % n
+            bm.faces.new((rings[r][j], rings[r][jn], rings[r + 1][jn], rings[r + 1][j]))
+    bm.faces.new(rings[0][::-1])
+    bm.faces.new(rings[-1])
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
+    mesh = bpy.data.meshes.new("Feather")
+    bm.to_mesh(mesh)
+    bm.free()
+    obj = bpy.data.objects.new("Feather", mesh)
+    bpy.context.collection.objects.link(obj)
+    obj.location = loc(x, y, z)
+    obj.rotation_euler = Euler(rot, "XYZ")
+    obj.data.materials.append(mat(material) if isinstance(material, str) else material)
+    if tip_mat is not None:
+        obj.data.materials.append(mat(tip_mat) if isinstance(tip_mat, str) else tip_mat)
+        for p in obj.data.polygons:
+            if p.center.z < -length * 0.76:
+                p.material_index = 1
+    return obj
+
+
 def scale_feather(x, y, z, rx, ry, rz, material, facing=0.0, tuck=0.3):
-    """One overlapping body feather: a flat low-polygon ellipsoid whose face
-    turns `facing` radians about the vertical and whose top tucks under the
-    row above."""
-    return sphere(x, y, z, rx, ry, rz, material, segs=6, rings=3, rot=(-tuck, 0, facing))
+    """Soft, flush-tucked downy contour tuft."""
+    return sculpted_feather(
+        x, y + ry * 0.55, z, rx * 1.05, ry * 1.65, rz * 0.55, material,
+        rot=(-tuck * 0.55, 0, facing), curl=rz * 0.4,
+    )
 
 
 def box(x, y, z, sx, sy, sz, material, bevel=0.02, rot=(0, 0, 0)):
@@ -316,41 +373,61 @@ def sigma_distance(x, y):
 
 def build_body():
     reset_scene()
-    sphere(0, 3.35, -0.3, 1, 0.95, 0.72, "white", segs=24, rings=14)
-    # Breast: eight rows of overlapping feathers carrying the Sigma.
-    for row in range(8):
-        for i in range(11):
-            a = (i - 5) * 0.21
-            x, y = math.sin(a) * (0.9 - row * 0.04), 3.78 - row * 0.145
-            distance = sigma_distance(x, y)
-            color = "sigma" if distance < 0.065 else "sigma_soft" if distance < 0.11 else "white" if row % 2 else "ivory"
-            surface = -0.3 + 0.72 * math.sqrt(max(0.02, 1 - x * x - ((y - 3.35) / 0.95) ** 2))
-            scale_feather(x, y, surface + 0.035, 0.115, 0.17, 0.06, color, facing=a * 1.4, tuck=0.22)
-    # Mantle: the back the chase camera sees, shingled in alternating white and ivory.
-    for row in range(5):
-        for i in range(7):
-            a = (i - 3) * 0.34
-            x, y = math.sin(a) * (0.92 - row * 0.07), 3.95 - row * 0.3
-            depth = -0.3 - 0.72 * math.sqrt(max(0.02, 1 - x * x * 0.92 - ((y - 3.35) / 0.95) ** 2))
-            color = "white" if (row + i) % 2 else "ivory"
-            sphere(x, y, depth - 0.02, 0.23, 0.3, 0.09, color, segs=10, rings=5,
-                   rot=(0.22, 0, math.pi - a * 1.2))
-    # Fluffed flanks soften the join between breast and mantle.
-    for side in (-1, 1):
-        for i in range(4):
-            scale_feather(side * (0.93 - i * 0.05), 3.6 - i * 0.3, -0.3, 0.09, 0.24, 0.26,
-                          "ivory" if i % 2 else "white", tuck=0)
-    # Tail fan: eight blades swept down and back.
-    for side in (-1, 1):
-        for i in range(4):
-            spread = side * (0.15 + i * 0.17)
-            sphere(spread, 2.72 - i * 0.03, -1.04 - (3 - i) * 0.02, 0.15, 0.52, 0.06,
-                   "white" if i % 2 else "ivory", segs=8, rings=5, rot=(0.42, side * (0.05 + i * 0.07), 0))
-    # Neck ruff under the head.
-    for i in range(12):
-        a = i * math.pi / 6
-        scale_feather(math.sin(a) * 0.72, 4.18, -0.2 + math.cos(a) * 0.56, 0.2, 0.2, 0.1,
-                      "white" if i % 2 else "ivory", facing=a, tuck=0.5)
+    # Velvety, plush snowy-owl torso with soft downy surface (no uncanny bumpy scales!)
+    torso = sphere(0, 3.35, -0.3, 1.0, 0.96, 0.73, "white", segs=40, rings=24)
+    torso.data.materials.append(mat("ivory"))
+    torso.data.materials.append(mat("fleck"))
+    torso.data.materials.append(mat("sigma"))
+    torso.data.materials.append(mat("sigma_soft"))
+    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+    # Paint soft snowy-owl mantle flecks on the back; draw crisp flush Sigma on the plush breast!
+    for poly in torso.data.polygons:
+        px = poly.center.x
+        py = poly.center.z + 3.35   # WW y
+        pz = -poly.center.y - 0.30  # WW z
+        if pz > 0.05:
+            poly.material_index = 0 if py > 3.10 else 1
+        else:
+            band = math.sin(py * 11.0 + math.sin(px * 6.0) * 0.9)
+            speck = math.sin(px * 9.5 + py * 4.2) * math.cos(py * 7.8 - px * 3.1)
+            if py > 2.8 and py < 4.05 and band > 0.62 and speck > 0.25:
+                poly.material_index = 2
+            elif band > 0.15:
+                poly.material_index = 1
+            else:
+                poly.material_index = 0
+
+    # Smooth, flush-curved purple Sigma embroidered cleanly across the plush breast
+    for (ax, ay), (bx, by) in SIGMA:
+        pts = []
+        for s in range(7):
+            t = s / 6.0
+            sx = ax + (bx - ax) * t
+            sy = ay + (by - ay) * t
+            sz = -0.3 + 0.73 * math.sqrt(max(0.02, 1 - sx * sx - ((sy - 3.35) / 0.96) ** 2)) + 0.012
+            pts.append((sx, sy, sz))
+        for p, q in zip(pts, pts[1:]):
+            rod(p, q, 0.048, "sigma", verts=8)
+        sphere(*pts[0], 0.050, 0.050, 0.032, "sigma", segs=8, rings=5)
+        sphere(*pts[-1], 0.050, 0.050, 0.032, "sigma", segs=8, rings=5)
+
+    # Soft lower belly fluff & smooth draped collar ruff
+    sphere(0, 2.86, -0.24, 0.80, 0.52, 0.64, "ivory", segs=22, rings=12)
+    torus(0, 4.14, -0.22, 0.62, 0.19, "white", rot=(0.12, 0, 0), major=28, minor=10, scale=(1.08, 0.85, 0.92))
+
+    # Softly overlapped broad rounded tail fan (7 feathers)
+    for i in range(7):
+        frac = (i - 3) / 3.0
+        spread = frac * 0.52
+        length = 0.98 - abs(frac) * 0.12
+        sculpted_feather(
+            spread, 3.00 - abs(frac) * 0.04, -0.94 - (1.0 - abs(frac)) * 0.04,
+            0.18, length, 0.028,
+            "white" if i % 2 else "ivory",
+            rot=(0.46, frac * 0.20, math.pi),
+            curl=-0.05,
+            tip_mat="down" if i % 2 == 0 else None,
+        )
     TOTAL["body"] = export_part("knowitowl_body.glb", "KnowItOwlBody")
 
 
@@ -367,17 +444,10 @@ def build_head():
     reset_scene()
     sphere(0, 0.45, 0, 1.12, 1.05, 0.83, "white", segs=28, rings=16)
     for side in (-1, 1):
-        # Facial disc, ringed by a ruffle of short darker feathers.
-        sphere(side * 0.48, 0.48, 0.63, 0.51, 0.61, 0.23, "disc", segs=18, rings=10)
-        for i in range(16):
-            a = i * math.tau / 16
-            x, y = side * 0.48 + math.cos(a) * 0.47, 0.48 + math.sin(a) * 0.57
-            z = skull_surface(x, y)
-            if z is None or abs(x) < 0.07:
-                continue
-            sphere(x, y, max(z, 0.5) + 0.01, 0.1, 0.12, 0.035, "disc_rim" if i % 2 else "disc",
-                   segs=8, rings=4, rot=(0, HALF_PI - a, 0))
-        sphere(side * 0.46, 0.48, 0.8, 0.36, 0.4, 0.07, "white", segs=14, rings=6)
+        # Plush, soft facial disc framed by a smooth downy rim (no bumpy bead ring!)
+        sphere(side * 0.48, 0.48, 0.63, 0.52, 0.61, 0.24, "disc", segs=22, rings=12)
+        torus(side * 0.48, 0.48, 0.72, 0.48, 0.065, "disc_rim", rot=(HALF_PI, 0, 0), major=28, minor=8, scale=(1.0, 1.18, 0.7))
+        sphere(side * 0.46, 0.48, 0.8, 0.36, 0.4, 0.07, "white", segs=16, rings=8)
         # Glossy amber eye, navy pupil and a catchlight.
         sphere(side * 0.43, 0.48, 0.87, 0.22, 0.22, 0.04, "iris", segs=14, rings=6)
         sphere(side * 0.4, 0.48, 0.91, 0.105, 0.14, 0.025, "pupil", segs=10, rings=5)
@@ -388,19 +458,32 @@ def build_head():
         for end in (0.2, 0.7):
             sphere(side * end, 0.85 - (end - 0.2) * 0.16, 0.82 - (end - 0.2) * 0.04, 0.055, 0.055, 0.055,
                    "edge", segs=6, rings=4)
-        # Ear tufts, leaning outward.
-        for i in range(4):
-            sphere(side * (0.73 + i * 0.065), 1.01 + i * 0.1, -0.07, 0.13, 0.25 - i * 0.035, 0.12,
-                   "white", segs=8, rings=5, rot=(0, side * 0.3, 0))
-    # Crown and nape feathers for the chase camera.
+        # Graceful sculpted ear tufts tapering to soft pointed owl-plume tips
+        for i in range(3):
+            sculpted_feather(
+                side * (0.68 + i * 0.10), 1.02 + i * 0.06, -0.05 - i * 0.04,
+                0.13 - i * 0.015, 0.46 - i * 0.06, 0.04,
+                "white" if i != 1 else "ivory",
+                rot=(math.pi - 0.15, side * (-0.36 - i * 0.08), 0),
+                curl=0.04,
+                tip_mat="fleck" if i == 2 else None,
+            )
+    # Soft nape feathers blending smoothly down the back of the head (chase camera view)
+    rng_h = random.Random(1402)
     for row in range(3):
-        for i in range(6):
-            a = (i - 2.5) * 0.36
-            x, y = math.sin(a) * (0.95 - row * 0.05), 1.0 - row * 0.36
+        for i in range(5):
+            a = (i - 2.0) * 0.36 + rng_h.uniform(-0.04, 0.04)
+            x, y = math.sin(a) * (0.90 - row * 0.06), 1.05 - row * 0.34
             z = skull_surface(x, y)
             if z is not None:
-                scale_feather(x, y, -z - 0.02, 0.2, 0.26, 0.06, "ivory" if (row + i) % 2 else "white",
-                              facing=math.pi - a, tuck=-0.25)
+                sculpted_feather(
+                    x, y + 0.06, -z - 0.01,
+                    0.20, 0.34, 0.025,
+                    "ivory" if (row + i) % 2 else "white",
+                    rot=(0.14, 0, math.pi - a),
+                    curl=-0.02,
+                    tip_mat="fleck" if (row == 1 and i % 2 == 0) else None,
+                )
     # Hooked beak: a rounded cere and a tip that curves down.
     sphere(0, 0.2, 0.9, 0.15, 0.17, 0.17, "horn", segs=10, rings=7)
     cone(0, 0.05, 0.98, 0.13, 0.0, 0.34, "horn", verts=10, rot=(2.5, 0, 0))
@@ -420,26 +503,29 @@ def build_head():
 
 
 def build_wing(side, filename, name):
-    """A wing hanging from its shoulder at the origin; +x * side points away
-    from the body, so turning it about z spreads it."""
+    """A soft, cohesive, broad-feathered snowy-owl wing hanging from its shoulder
+    at the origin; +x * side points away from the body."""
     reset_scene()
-    sphere(side * 0.4, -0.3, 0, 0.6, 0.8, 0.26, "ivory", segs=14, rings=8)
-    # Nine primaries, lengthening outward and shingled so each overlaps the next.
+    # Smooth, plush curved wing-shoulder / covert pillow (no scaly plates!)
+    sphere(side * 0.52, -0.24, 0.02, 0.72, 0.64, 0.25, "white", segs=22, rings=12, rot=(0.0, side * -0.18, 0.0))
+    sphere(side * 0.96, -0.44, -0.02, 0.62, 0.46, 0.18, "ivory", segs=18, rings=10, rot=(0.0, side * -0.28, 0.0))
+    # Nine broad, tightly-overlapping, rounded-tip primary & secondary feathers
     for i in range(9):
-        x, y, length = 0.15 + i * 0.19, -0.2 - i * 0.1, 0.9 + i * 0.11
-        sphere(side * x, y - length * 0.45, -0.05 - i * 0.012, 0.15, length * 0.58, 0.085,
-               "white" if i % 2 else "ivory", segs=8, rings=6)
-        # The shaft shows on both faces.
-        for face in (0.03, -0.13 - i * 0.012):
-            box(side * x, y - length * 0.5, face, 0.022, length * 0.8, 0.02, "edge", bevel=0)
-    # Coverts over the shoulder, front and back.
-    for face in (1, -1):
-        for row in range(2):
-            for i in range(4 - row):
-                scale_feather(side * (0.2 + i * 0.25 + row * 0.12), -0.1 - row * 0.36 - i * 0.12,
-                              face * (0.2 - row * 0.03), 0.17, 0.26, 0.07,
-                              "white" if (i + row) % 2 else "ivory",
-                              facing=0 if face > 0 else math.pi, tuck=face * 0.2)
+        t = i / 8.0
+        x = 0.16 + i * 0.175
+        y = -0.18 - i * 0.085
+        length = 1.05 + i * 0.12
+        splay = side * (-0.04 - t * 0.15)
+        sculpted_feather(
+            side * x, y, -0.02 - i * 0.012,
+            0.22 - t * 0.02,
+            length,
+            0.036,
+            "white" if i % 2 else "ivory",
+            rot=(0.08, splay, 0.0),
+            curl=0.09 + t * 0.03,
+            tip_mat="down" if i < 5 else "fleck",
+        )
     TOTAL[name] = export_part(filename, name)
 
 

@@ -654,6 +654,8 @@ fn racers(stage: &mut Stage, view: &ClientView, bats: &Bats, dt: f32, now: f32, 
                         };
                         stage.show(Role::GhostBat, a.id, ghost, place);
                     }
+                    // The articulated Blender PBR BatYouDidn'tKnow is rendered by knowitowl.rs.
+                    continue;
                 }
                 stage.show(Role::Overlay(index), key, overlay, place);
             }
