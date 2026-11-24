@@ -108,7 +108,9 @@ async fn headers(State(app): State<App>, request: axum::extract::Request, next: 
     let h = r.headers_mut();
     h.insert("referrer-policy", "no-referrer".parse().unwrap());
     if secure { h.insert("strict-transport-security", "max-age=31536000".parse().unwrap()); }
-    h.insert(header::CACHE_CONTROL, "no-store".parse().unwrap());
+    if !h.contains_key(header::CACHE_CONTROL) {
+        h.insert(header::CACHE_CONTROL, "no-store".parse().unwrap());
+    }
     h.insert("x-content-type-options", "nosniff".parse().unwrap());
     h.insert(header::CONTENT_SECURITY_POLICY,"default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'".parse().unwrap());
     r
@@ -333,7 +335,16 @@ async fn http(
                         "png" => "image/png",
                         _ => "application/octet-stream",
                     };
-                    static_response(&method, mime, Bytes::from(bytes), encoding)
+                    let mut r = static_response(&method, mime, Bytes::from(bytes), encoding);
+                    r.headers_mut().insert(
+                        header::CACHE_CONTROL,
+                        if uri.query().is_some_and(|q| q.contains("v=")) {
+                            HeaderValue::from_static("public, max-age=31536000, immutable")
+                        } else {
+                            HeaderValue::from_static("public, max-age=0, must-revalidate")
+                        },
+                    );
+                    r
                 }
                 Err(_) => error((404, "Experimental Bevy WASM asset not found.")),
             }
@@ -343,6 +354,36 @@ async fn http(
                 let gzip = COMPRESSED_ASSETS.iter().find(|asset| asset.0 == path).map(|asset| asset.1);
                 let encoding = gzip.map(|_| accepts_gzip(&h));
                 let data = gzip.filter(|_| encoding == Some(true)).unwrap_or(data);
+                let cacheable = path.starts_with("/experimental/")
+                    && !matches!(path, "/experimental/" | "/experimental/index.html");
+                if cacheable {
+                    let etag = format!("\"{BUILD}-{}\"", u8::from(encoding == Some(true)));
+                    let cache_ctl = if uri.query().is_some_and(|q| q.contains("v=")) {
+                        "public, max-age=31536000, immutable"
+                    } else {
+                        "public, max-age=0, must-revalidate"
+                    };
+                    if h.get(header::IF_NONE_MATCH)
+                        .and_then(|v| v.to_str().ok())
+                        .is_some_and(|v| v == etag)
+                    {
+                        let mut r = Response::new(Body::empty());
+                        *r.status_mut() = StatusCode::NOT_MODIFIED;
+                        r.headers_mut().insert(header::ETAG, etag.parse().unwrap());
+                        r.headers_mut()
+                            .insert(header::CACHE_CONTROL, cache_ctl.parse().unwrap());
+                        if encoding.is_some() {
+                            r.headers_mut()
+                                .insert(header::VARY, HeaderValue::from_static("Accept-Encoding"));
+                        }
+                        return r;
+                    }
+                    let mut r = static_response(&method, mime, Bytes::from_static(data), encoding);
+                    r.headers_mut().insert(header::ETAG, etag.parse().unwrap());
+                    r.headers_mut()
+                        .insert(header::CACHE_CONTROL, cache_ctl.parse().unwrap());
+                    return r;
+                }
                 static_response(&method, mime, Bytes::from_static(data), encoding)
             }
             None => error((404, "Not found.")),

@@ -65,8 +65,21 @@ const server=createServer(async (req, res) => {
     const binary = ['application/wasm', 'model/gltf-binary', 'image/png', 'application/octet-stream'].includes(file[1]);
     if(compressible)res.setHeader('Vary','Accept-Encoding');
     if(gzip)res.setHeader('Content-Encoding','gzip');
+    const cacheable = route.startsWith('/experimental/') && route !== '/experimental/' && route !== '/experimental/index.html';
+    const cacheControl = cacheable
+      ? ((req.url ?? '').includes('v=') ? 'public, max-age=31536000, immutable' : 'public, max-age=0, must-revalidate')
+      : 'no-store';
+    if (cacheable) {
+      const etag = `"${Buffer.byteLength(body)}-${gzip ? 1 : 0}"`;
+      res.setHeader('ETag', etag);
+      if (req.headers['if-none-match'] === etag) {
+        res.writeHead(304, { 'Cache-Control': cacheControl, 'X-Content-Type-Options': 'nosniff' });
+        res.end();
+        return;
+      }
+    }
     res.setHeader('Content-Length',Buffer.byteLength(body));
-    res.writeHead(200, { 'Content-Type': binary?file[1]:file[1]+'; charset=utf-8', 'Cache-Control':'no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data:; connect-src 'self' ${multiplayer.security.secure(req)?'wss':'ws'}://${host}${control}; object-src 'none'; base-uri 'none'; frame-ancestors 'none'` });
+    res.writeHead(200, { 'Content-Type': binary?file[1]:file[1]+'; charset=utf-8', 'Cache-Control': cacheControl, 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data:; connect-src 'self' ${multiplayer.security.secure(req)?'wss':'ws'}://${host}${control}; object-src 'none'; base-uri 'none'; frame-ancestors 'none'` });
     res.end(req.method==='HEAD'?undefined:body);
   } catch { res.writeHead(route.startsWith('/experimental/')?404:500); res.end(route.startsWith('/experimental/')?'Experimental client not built':'Unable to load game'); }
 });

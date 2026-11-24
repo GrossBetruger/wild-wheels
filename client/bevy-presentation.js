@@ -70,6 +70,8 @@ export class BevyPresentation {
     this.encode = createBinaryEncoder();
     this.canvas.addEventListener('webglcontextlost', () => this.fail('graphics-lost'));
     if (mobile) this.configureMobile();
+    // Eagerly begin downloading WASM + graphics pack while the player is in the lobby.
+    this.loading = this.load();
   }
 
   get active() { return this.viewport.classList.contains('bevy-active'); }
@@ -120,13 +122,15 @@ export class BevyPresentation {
 
   async load() {
     const started = performance.now();
+    const build = typeof document !== 'undefined' ? document.body?.dataset?.build : '';
+    const v = build ? `?v=${encodeURIComponent(build)}` : '';
     try {
       const [{ bindings, wasmMs }, { pack, assetMs }] = await Promise.all([
-        import(`${prefix}pkg/wild_wheels_wasm_poc.js`).then(async bindings => {
-          await bindings.default();
+        import(`${prefix}pkg/wild_wheels_wasm_poc.js${v}`).then(async bindings => {
+          await bindings.default({ module_or_path: `${prefix}pkg/wild_wheels_wasm_poc_bg.wasm${v}` });
           return { bindings, wasmMs: performance.now() - started };
         }),
-        fetch(`${prefix}graphics.wwgp`, { signal: AbortSignal.timeout(120000) }).then(response => {
+        fetch(`${prefix}graphics.wwgp${v}`, { signal: AbortSignal.timeout(120000) }).then(response => {
           if (!response.ok) throw new Error(`Graphics pack returned HTTP ${response.status}`);
           return response.arrayBuffer();
         }).then(pack => ({ pack, assetMs: performance.now() - started })),

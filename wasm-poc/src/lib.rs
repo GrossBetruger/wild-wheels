@@ -206,7 +206,7 @@ const RAPTOR_ENGINES: [(f32, f32, f32); 6] = [
 ];
 
 pub(crate) fn has_blender_model(driver: usize) -> bool {
-    driver == 7 || BLENDER_MODELS.iter().any(|&(d, _)| d == driver)
+    driver == 7 || driver == 8 || BLENDER_MODELS.iter().any(|&(d, _)| d == driver)
 }
 
 #[derive(Resource)]
@@ -216,9 +216,15 @@ struct BlenderModels {
     houston_pilot: Handle<WorldAsset>,
     houston_arm_l: Handle<WorldAsset>,
     houston_arm_r: Handle<WorldAsset>,
+    avita_plane: Handle<WorldAsset>,
+    avita_prop: Handle<WorldAsset>,
+    avita_worm: Handle<WorldAsset>,
     taicoon_tail: Handle<WorldAsset>,
     flame_mesh: Handle<Mesh>,
     diamond_mesh: Handle<Mesh>,
+    prop_blur_mesh: Handle<Mesh>,
+    prop_blur_mat: Handle<StandardMaterial>,
+    contrail_mat: Handle<StandardMaterial>,
     flame_outer_mat: Handle<StandardMaterial>,
     idle_outer_mat: Handle<StandardMaterial>,
     flame_inner_mat: Handle<StandardMaterial>,
@@ -255,6 +261,15 @@ struct HoustonRig {
     diamonds: Vec<(Entity, f32, f32, f32, usize)>, // (entity, ex, ey, er, diamond_idx)
     rcs: [Entity; 2],
     plume_light: Entity,
+}
+
+#[derive(Component)]
+struct AvitaRig {
+    id: usize,
+    prop: Entity,
+    prop_blur: Entity,
+    worm: Entity,
+    prop_angle: f32,
 }
 
 #[wasm_bindgen]
@@ -551,15 +566,38 @@ fn load_blender_models(
         cull_mode: None,
         ..default()
     });
+    let prop_blur_mesh = meshes.add(Cylinder::new(1.36, 0.03));
+    let prop_blur_mat = materials.add(StandardMaterial {
+        base_color: Color::srgba(0.62, 0.86, 0.96, 0.28),
+        emissive: LinearRgba::rgb(0.35, 0.75, 1.15),
+        unlit: true,
+        alpha_mode: AlphaMode::Add,
+        cull_mode: None,
+        ..default()
+    });
+    let contrail_mat = materials.add(StandardMaterial {
+        base_color: Color::srgba(0.84, 0.94, 1.0, 0.42),
+        emissive: LinearRgba::rgb(0.45, 0.65, 0.85),
+        unlit: true,
+        alpha_mode: AlphaMode::Add,
+        cull_mode: None,
+        ..default()
+    });
     commands.insert_resource(BlenderModels {
         static_models,
         houston_ship: assets.load(GltfAssetLabel::Scene(0).from_asset("houston_ship.glb")),
         houston_pilot: assets.load(GltfAssetLabel::Scene(0).from_asset("houston_pilot.glb")),
         houston_arm_l: assets.load(GltfAssetLabel::Scene(0).from_asset("houston_arm_l.glb")),
         houston_arm_r: assets.load(GltfAssetLabel::Scene(0).from_asset("houston_arm_r.glb")),
+        avita_plane: assets.load(GltfAssetLabel::Scene(0).from_asset("avita_plane.glb")),
+        avita_prop: assets.load(GltfAssetLabel::Scene(0).from_asset("avita_prop.glb")),
+        avita_worm: assets.load(GltfAssetLabel::Scene(0).from_asset("avita_worm.glb")),
         taicoon_tail: assets.load(GltfAssetLabel::Scene(0).from_asset("taicoon_tail.glb")),
         flame_mesh,
         diamond_mesh,
+        prop_blur_mesh,
+        prop_blur_mat,
+        contrail_mat,
         flame_outer_mat,
         idle_outer_mat,
         flame_inner_mat,
@@ -577,11 +615,21 @@ fn sync_blender_models(
     session: Res<app::GameSession>,
     mobile: Res<MobileGraphics>,
     models: Option<Res<BlenderModels>>,
-    mut existing: Query<(Entity, &BlenderRacer, &mut Transform, &mut Visibility), Without<HoustonRig>>,
-    mut rigs: Query<(Entity, &HoustonRig, &mut Transform, &mut Visibility), Without<BlenderRacer>>,
+    mut existing: Query<
+        (Entity, &BlenderRacer, &mut Transform, &mut Visibility),
+        (Without<HoustonRig>, Without<AvitaRig>),
+    >,
+    mut rigs: Query<
+        (Entity, &HoustonRig, &mut Transform, &mut Visibility),
+        (Without<BlenderRacer>, Without<AvitaRig>),
+    >,
+    mut avita_rigs: Query<
+        (Entity, &mut AvitaRig, &mut Transform, &mut Visibility),
+        (Without<BlenderRacer>, Without<HoustonRig>),
+    >,
     mut parts: Query<
         (&mut Transform, &mut Visibility, Option<&mut MeshMaterial3d<StandardMaterial>>),
-        (Without<BlenderRacer>, Without<HoustonRig>, Without<PointLight>),
+        (Without<BlenderRacer>, Without<HoustonRig>, Without<AvitaRig>, Without<PointLight>),
     >,
     mut lights: Query<&mut PointLight>,
 ) {
@@ -589,8 +637,10 @@ fn sync_blender_models(
     let Some(client) = session.client.as_ref() else { return };
     let view = client.view();
     let t = time.elapsed_secs();
+    let dt = time.delta_secs().min(0.05);
     let mut alive_static = std::collections::HashSet::new();
     let mut alive_houston = std::collections::HashSet::new();
+    let mut alive_avita = std::collections::HashSet::new();
 
     for a in view.actors {
         if a.inactive || a.afk || a.bomber || a.destroyed > 0.0 {
@@ -962,6 +1012,117 @@ fn sync_blender_models(
             continue;
         }
 
+        // Animated multi-part Blender Avita-Jas: Cessna 172 + spinning propeller + wiggling worm + wingtip contrails!
+        if a.driver == 8 {
+            alive_avita.insert(a.id);
+            let boost_pitch = if a.boost > 0.0 && a.somersault <= 0.0 {
+                -0.06
+            } else {
+                0.0
+            };
+            let tf = ported::placement(
+                Vec3::new(a.wx as f32, somersault_h, a.wz as f32),
+                a.heading as f32,
+                pitch + boost_pitch,
+                0.0,
+            );
+            let progress = (1.6 - a.celebrate as f32).max(0.0);
+            let envelope = if a.celebrate > 0.0 {
+                (progress / 0.25).min(a.celebrate as f32 / 0.4).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+            let turn = envelope * envelope * (3.0 - 2.0 * envelope);
+            let cel_bounce = turn * (progress * 15.0).sin() * 0.14;
+            let boosting = a.boost > 0.0 || a.somersault > 0.0;
+            let wiggle = (t * 7.5 + a.id as f32).sin();
+
+            if let Some((_, mut rig, mut plane_tf, mut plane_vis)) =
+                avita_rigs.iter_mut().find(|(_, r, _, _)| r.id == a.id)
+            {
+                *plane_tf = tf;
+                *plane_vis = Visibility::Visible;
+                rig.prop_angle = (rig.prop_angle + dt * if boosting { 54.0 } else { 22.0 })
+                    % std::f32::consts::TAU;
+                if let Ok((mut ptf, _, _)) = parts.get_mut(rig.prop) {
+                    ptf.rotation = Quat::from_rotation_z(rig.prop_angle);
+                }
+                if let Ok((_, mut bvis, _)) = parts.get_mut(rig.prop_blur) {
+                    *bvis = if boosting {
+                        Visibility::Inherited
+                    } else {
+                        Visibility::Hidden
+                    };
+                }
+                if let Ok((mut wtf, _, _)) = parts.get_mut(rig.worm) {
+                    wtf.translation = Vec3::new(wiggle * 0.06, cel_bounce, 0.0);
+                    wtf.rotation = Quat::from_rotation_y(turn * std::f32::consts::PI)
+                        * Quat::from_rotation_z(wiggle * 0.055);
+                }
+                if boosting && !mobile.mobile {
+                    let backward = tf.rotation * Vec3::NEG_Z;
+                    for side in [-1.0f32, 1.0f32] {
+                        let tip_world =
+                            tf.transform_point(Vec3::new(side * 3.55, 3.28, -0.88));
+                        commands.spawn((
+                            Mesh3d(models.diamond_mesh.clone()),
+                            MeshMaterial3d(models.contrail_mat.clone()),
+                            Transform::from_translation(tip_world)
+                                .looking_to(backward, Vec3::Y)
+                                .with_scale(Vec3::new(0.14, 0.14, 0.55)),
+                            ExhaustParticle {
+                                vel: backward * 10.0 + Vec3::new(side * 0.5, 0.25, 0.0),
+                                age: 0.0,
+                                life: 0.34,
+                                start_scale: Vec3::new(0.14, 0.14, 0.55),
+                                end_scale: Vec3::new(0.42, 0.42, 1.35),
+                            },
+                        ));
+                    }
+                }
+            } else {
+                let mut prop_ent = Entity::PLACEHOLDER;
+                let mut blur_ent = Entity::PLACEHOLDER;
+                let mut worm_ent = Entity::PLACEHOLDER;
+                let plane_ent = commands
+                    .spawn((WorldAssetRoot(models.avita_plane.clone()), tf))
+                    .with_children(|plane| {
+                        prop_ent = plane
+                            .spawn((
+                                WorldAssetRoot(models.avita_prop.clone()),
+                                Transform::from_xyz(0.0, 1.78, 3.16),
+                            ))
+                            .id();
+                        blur_ent = plane
+                            .spawn((
+                                Mesh3d(models.prop_blur_mesh.clone()),
+                                MeshMaterial3d(models.prop_blur_mat.clone()),
+                                Transform::from_xyz(0.0, 1.78, 3.17)
+                                    .with_rotation(Quat::from_rotation_x(
+                                        std::f32::consts::FRAC_PI_2,
+                                    )),
+                                Visibility::Hidden,
+                            ))
+                            .id();
+                        worm_ent = plane
+                            .spawn((
+                                WorldAssetRoot(models.avita_worm.clone()),
+                                Transform::IDENTITY,
+                            ))
+                            .id();
+                    })
+                    .id();
+                commands.entity(plane_ent).insert(AvitaRig {
+                    id: a.id,
+                    prop: prop_ent,
+                    prop_blur: blur_ent,
+                    worm: worm_ent,
+                    prop_angle: 0.0,
+                });
+            }
+            continue;
+        }
+
         let Some(handle) = models.static_models.get(&a.driver) else {
             continue;
         };
@@ -1020,6 +1181,14 @@ fn sync_blender_models(
     for (_, r, _, mut vis) in &mut existing {
         if !alive_static.contains(&r.id) {
             *vis = Visibility::Hidden;
+        }
+    }
+    for (_, rig, _, mut vis) in &mut avita_rigs {
+        if !alive_avita.contains(&rig.id) {
+            *vis = Visibility::Hidden;
+            if let Ok((_, mut bvis, _)) = parts.get_mut(rig.prop_blur) {
+                *bvis = Visibility::Hidden;
+            }
         }
     }
     for (_, rig, _, mut vis) in &mut rigs {
