@@ -45,6 +45,8 @@ Use this for things that turn or slide without bending (wheels, cranks, propelle
   ```
 - Export assets to `wasm-poc/assets/models/<name>.glb`.
 - Keep triangle counts WASM-friendly (~2k–15k tris per racer) so load times and WebGL2 draw costs stay low.
+- Keep a generator script in the repo for every `.glb` you export. When rewriting a script, keep (or move to its own script) the builders for models it no longer exports, so they can be rebuilt later.
+- Logos, crests and markings: build them from the same data the browser draws (R-yeah's torch crest comes from `logoRuns` in `characters/r-yeah/r-yeah-logo.js`; see `build_ryeah_chopper.py`). Never redraw them by eye.
 - `bpy.ops.object.join()` invalidates references to the objects it merges: split a list into groups *before* joining any of them, and `transform_apply` the result so its origin is the hinge.
 - Re-exporting rewrites every `.glb` with slightly different bytes. `git checkout` the ones whose geometry you did not change, so unrelated assets do not churn.
 
