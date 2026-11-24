@@ -44,3 +44,12 @@
    - **Keep in browser JS/WebGL/DOM:** Procedural WebGL renderer (`client/renderer.js`
      as the canonical art source), WebAudio, HTML/CSS HUD/menus/chat/mobile controls,
      and WebSocket/WebRTC transport glue — preserving the ~1 MB web payload.
+
+5. **Train bots with reinforcement learning.**
+   Use headless `rust-core` simulation for fast self-play RL training (running matches
+   at thousands of ticks per second) so bots learn real combat skills beyond scripted
+   pathfinding — drift-boosting, leading shots, chaff/evasion timing, pickup control,
+   map-specific navigation (e.g., corridors and Königsberg bridges), and effective use
+   of each character's special ability. Export compact policy weights for fast,
+   deterministic inference directly inside `rust-core` (with adjustable difficulty
+   tiers so bots stay fun rather than unbeatably robotic).
