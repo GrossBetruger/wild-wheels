@@ -4941,3 +4941,122 @@ body.match-active .lobby-column>.map-switch {
 .chat-emoji-picker button:hover {
   background: #eee8f8;
 }
+
+:root.bevy-beta {
+  color-scheme: dark;
+  --ink: #edeaf6;
+  --paper: #111017;
+  --muted: #b6aec5;
+  --line: #494155;
+  --beta-surface: #1c1925;
+  --beta-raised: #2b2538;
+  --beta-inset: #15121d;
+  --beta-active: #3e2e55;
+  --beta-accent: #cbb9ff;
+}
+
+.bevy-beta .race-panel {
+  box-shadow: 0 5px 0 var(--beta-inset);
+}
+
+.bevy-beta :is(
+  .racer-panel, .track-panel, .network-panel, .chat-panel, .leaderboard,
+  .preview-ability, .ability-dialog, .chat-emoji-picker, .game-chat-notice
+) {
+  background: var(--beta-surface);
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+.bevy-beta :is(
+  .driver, .mode-switch button, .map-switch button, .character-preview figcaption button,
+  .chat-tab, .chat-scroll-down, .mobile-panel button, .touch-controls button,
+  .network-panel button.voice-mute, kbd
+) {
+  background: var(--beta-raised);
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+.bevy-beta :is(.driver.selected, .mode-switch button[aria-pressed=true], .map-switch button[aria-pressed=true], .chat-tab[aria-selected=true]) {
+  background: var(--beta-active);
+  border-color: #a584ed;
+  color: var(--beta-accent);
+}
+
+.bevy-beta :is(.network-panel input, .network-panel select, .match-limits select, .chat-recipient select, .chat-compose, .start-name input) {
+  background: var(--beta-inset);
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+.bevy-beta :is(.match-limits select:hover:enabled, .match-limits select:focus-visible, .chat-compose:focus-within) {
+  background: var(--beta-inset);
+  border-color: #a584ed;
+}
+
+.bevy-beta .start-name input {
+  border: 1px solid var(--line);
+  box-shadow: 0 4px var(--beta-active);
+}
+
+.bevy-beta :is(.pill, .character-preview, .preview-ability-entry+.preview-ability-entry, .player-colors) {
+  border-color: var(--line);
+}
+
+.bevy-beta :is(.character-preview, .character-preview figcaption, .mobile-panel, .chat-messages, .chat-quote) {
+  background: var(--beta-inset);
+  color: var(--muted);
+}
+
+.bevy-beta :is(
+  .intro-note p, .section-label, .driver-info span, .driver-info .driver-number,
+  .track-bottom>span, .tip p, .map-switch small, .controls-title .eyebrow,
+  .control>span, footer, .footer-logo,
+  .network-panel p, .color-feedback, .preview-ability small, .chat-context,
+  .chat-recipient>span, .chat-status, .chat-meta time, .chat-deleted, .game-chat-notice-heading small
+),
+.bevy-beta .chat-messages:empty::before,
+.bevy-beta input::placeholder {
+  color: var(--muted);
+}
+
+.bevy-beta :is(
+  h1 em, .section-label>span:last-child, .tip>span, .tip strong, .purple,
+  .preview-ability .ability-read-more, .chat-meta strong, .chat-compose>.chat-emoji-toggle,
+  .chat-reply-button, .chat-delete
+) {
+  color: var(--beta-accent);
+}
+
+.bevy-beta :is(.network-players span, .chat-bubble, .chat-compose>.chat-emoji-toggle:hover, .chat-emoji-picker button:hover) {
+  background: var(--beta-raised);
+}
+
+.bevy-beta :is(.leaderboard>.you, .preview-ability span, .chat-room, .chat-own .chat-bubble, .chat-reply-preview, .chat-scroll-down:hover, .game-chat-notice button) {
+  background: var(--beta-active);
+  color: var(--beta-accent);
+}
+
+.bevy-beta .stat i:not(.on) {
+  background: var(--beta-raised);
+}
+
+.bevy-beta :is(.preview-ability.disabled span, .preview-ability-entry.disabled span, .chat-delete:hover) {
+  background: #49283a;
+  color: #ffb9c9;
+}
+
+.bevy-beta :is(.network-players span.speaking, .chat-recipient .chat-notification) {
+  background: #20392c;
+  color: #bdebd1;
+}
+
+.bevy-beta .touch-controls {
+  background: #201c2af2;
+}
+
+.bevy-beta :is(.track-heading>span, .touch-controls button[data-key=arrowup]) {
+  background: #36432b;
+  color: #e3eeaa;
+}

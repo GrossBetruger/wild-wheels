@@ -18,8 +18,9 @@ import { CharacterPreview } from './character-preview.js';
 import { canChoosePlayerColor, playerColors, savedPlayerColor, applyPlayerColors } from '../gameplay/player-colors.js';
 import { ClientLog, FrameHealth, startReporting } from './log.js';
 import { allTimeRows, loadAllTime } from '../ui/all-time.js';
+import { isBevyBetaPath } from './build-refresh.js';
 const $ = id => document.getElementById(id);
-const beta = location.pathname === '/experimental/' || location.pathname === '/experimental/index.html';
+const beta = isBevyBetaPath(location.pathname);
 const soloBeta = beta && document.body.classList.contains('dedicated-server') && new URLSearchParams(location.search).get('solo') === '1';
 if (soloBeta) {
   document.body.classList.remove('dedicated-server');
