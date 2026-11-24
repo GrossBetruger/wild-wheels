@@ -39,7 +39,7 @@ fn hanging_lion_local(x: f32, y: f32, z: f32) -> Vec3 {
     let y = y - 5.15;
     let xx = x * c - y * s;
     let yy = x * s + y * c;
-    Vec3::new(0.05 + xx, 4.48 + yy * cp - z * sp, 0.05 + yy * sp + z * cp)
+    Vec3::new(0.22 + xx, 4.64 + yy * cp - z * sp, 0.08 + yy * sp + z * cp)
 }
 
 /// Hover bob height matching `lionChopper` in `client/renderer.js`.
@@ -135,30 +135,32 @@ struct RotorWashPuff {
     end_scale: f32,
 }
 
-/// Procedural slender, silky lion-mane fur tuft rooted at `(0,0,0)` extending along `-Z`.
-/// Fine taper (0.78 units long, ~0.12 half-width) so 64 overlapping tufts read as a
-/// cohesive, regal lion's mane rather than thick spikes!
+/// Refined silky S-curved mane lock rooted at `(0,0,0)` extending along `-Z`:
+/// preserves the sculpted diamond-ridge fur profile of the original design,
+/// gently trimmed (~25% shorter & slimmer) for a clean, regal lion's mane!
 fn build_mane_lock_mesh() -> Mesh {
-    let steps: [(f32, f32, f32, f32); 6] = [
-        (0.00, 0.00, 0.115, 0.095),
-        (-0.14, 0.025, 0.128, 0.102),
-        (-0.30, 0.015, 0.105, 0.082),
-        (-0.48, -0.018, 0.072, 0.056),
-        (-0.64, -0.022, 0.036, 0.028),
-        (-0.76, -0.008, 0.010, 0.009),
+    let steps: [(f32, f32, f32, f32); 7] = [
+        (0.00, 0.00, 0.165, 0.148),
+        (-0.20, 0.052, 0.185, 0.162),
+        (-0.42, 0.030, 0.162, 0.138),
+        (-0.66, -0.036, 0.122, 0.102),
+        (-0.88, -0.056, 0.078, 0.064),
+        (-1.08, -0.015, 0.040, 0.032),
+        (-1.21, 0.014, 0.014, 0.012),
     ];
-    let segs = 6usize;
+    let segs = 8usize;
     let mut positions: Vec<[f32; 3]> = Vec::new();
     let mut indices: Vec<u32> = Vec::new();
 
     for &(gz, gy, rx, ry) in &steps {
         for k in 0..segs {
             let a = (k as f32) * TAU / (segs as f32);
-            positions.push([a.cos() * rx, gy + a.sin() * ry, gz]);
+            let pinch = if k % 2 == 0 { 1.08 } else { 0.92 };
+            positions.push([a.cos() * rx * pinch, gy + a.sin() * ry * pinch, gz]);
         }
     }
     let tip_idx = positions.len() as u32;
-    positions.push([0.0, 0.0, -0.82]);
+    positions.push([0.0, 0.02, -1.27]);
 
     for r in 0..(steps.len() - 1) {
         let base0 = (r * segs) as u32;
@@ -353,15 +355,15 @@ fn rig_ryeah(
         let head_center_rel = hanging_lion_local(0.0, 4.02, 0.30) - head_hinge;
         let ring_specs: &[(u8, usize, f32, f32, f32)] = if mobile.mobile {
             &[
-                (0, 9, 0.42, -0.30, 1.02),
-                (1, 13, 0.88, 0.14, 1.05),
+                (0, 7, 0.38, -0.35, 1.00),
+                (1, 10, 0.86, 0.14, 1.05),
             ]
         } else {
             &[
-                (0, 10, 0.28, -0.44, 0.92),
-                (1, 14, 0.56, -0.32, 0.98),
-                (2, 18, 0.78, -0.10, 1.04),
-                (3, 22, 0.94, 0.16, 1.00),
+                (0, 6, 0.24, -0.48, 0.96),
+                (1, 10, 0.52, -0.34, 1.02),
+                (2, 12, 0.76, -0.12, 1.06),
+                (3, 16, 0.94, 0.16, 1.02),
             ]
         };
         let mut mane_locks = Vec::new();
@@ -572,32 +574,32 @@ fn fly_ryeah(
                 };
             }
 
-            // 3. COHESIVE REGAL LION'S MANE!
-            // Spatially coherent traveling wind wave (adjacent tufts ripple together cleanly
-            // instead of thrashing randomly), sweeping back gently with speed/boost & turns.
-            let wind_freq = if boost { 13.5 } else { 6.5 + speed_norm * 3.5 };
-            let wave_amp = if boost { 0.16 } else { 0.075 + speed_norm * 0.04 };
+            // 3. REFINED FLOWING LION MANE!
+            // Restores the outward-flaring S-curved silhouette of the original design,
+            // with smooth spatially coherent wind waves and controlled length/width!
+            let wind_freq = if boost { 15.0 } else { 7.5 + speed_norm * 4.0 };
+            let wave_amp = if boost { 0.22 } else { 0.11 + speed_norm * 0.06 };
             let length_stretch = if boost {
-                1.30
+                1.32
             } else {
-                0.95 + speed_norm * 0.16
+                0.96 + speed_norm * 0.18
             };
-            let downwash_pitch = if boost { 0.06 } else { -0.04 };
+            let downwash_pitch = if boost { 0.08 } else { -0.05 };
             for slot in &rig.mane_locks {
                 if let Ok((mut mtf, _)) = parts.get_mut(slot.entity) {
                     let ring_f = slot.ring as f32;
                     let w1 = (t * wind_freq - slot.phase).sin();
-                    let w2 = (t * (wind_freq * 1.45) - slot.phase * 1.3 + ring_f * 0.6).cos();
-                    // Clean radial lion-mane crown flare (wider around face ruff, sleeker at back)
-                    let flare = (0.14 + ring_f * 0.11) * if boost { 0.72 } else { 1.0 };
+                    let w2 = (t * (wind_freq * 1.52) - slot.phase * 1.4 + ring_f * 0.6).cos();
+                    let flare = (0.16 + ring_f * 0.12) * if boost { 0.68 } else { 1.0 };
 
-                    let yaw_out = -slot.angle.sin() * flare + w1 * wave_amp + rig.turn_swing * 0.65;
+                    let yaw_out = slot.angle.sin() * flare + w1 * wave_amp + rig.turn_swing * 0.85;
                     let pitch_out =
-                        slot.angle.cos() * flare + downwash_pitch + w2 * (wave_amp * 0.65);
+                        slot.angle.cos() * flare + downwash_pitch + w2 * (wave_amp * 0.68);
+                    let roll_twist = w1 * 0.16;
 
                     mtf.translation = slot.base_pos;
-                    mtf.rotation = Quat::from_euler(EulerRot::YXZ, yaw_out, pitch_out, slot.angle);
-                    let pulse = 1.0 + w2 * 0.045;
+                    mtf.rotation = Quat::from_euler(EulerRot::YXZ, yaw_out, pitch_out, roll_twist);
+                    let pulse = 1.0 + w2 * 0.055;
                     mtf.scale = Vec3::new(
                         slot.base_scale,
                         slot.base_scale,

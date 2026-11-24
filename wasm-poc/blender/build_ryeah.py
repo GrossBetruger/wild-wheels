@@ -49,14 +49,15 @@ def loc(x, y, z):
 
 
 def hanging_model(x, y, z):
-    """hangingLion transform in model space (x, y, z)."""
+    """hangingLion transform in model space (x, y, z), anchored naturally under the
+    Bell 206 left skid while keeping the kippah clear of the Vulcan pod."""
     c, s = math.cos(0.27), math.sin(0.27)
     cp, sp = math.cos(0.18), math.sin(0.18)
     x += 0.85
     y -= 5.15
     xx = x * c - y * s
     yy = x * s + y * c
-    return (0.05 + xx, 4.48 + yy * cp - z * sp, 0.05 + yy * sp + z * cp)
+    return (0.22 + xx, 4.64 + yy * cp - z * sp, 0.08 + yy * sp + z * cp)
 
 
 def hanging_pt(x, y, z):
@@ -250,48 +251,54 @@ def build_lion_rig():
 
     body_parts = []
 
-    # 1. Torso & cream chest
+    # 1. Sculpted athletic torso (broad chest, tapered waist, natural hips)
     rigging.carry(torso=1.0)
     bm = bmesh.new()
-    add_sphere(bm, hanging_pt(0, 2.58, 0.20), 0.72, 0.84, 0.62, segs=18, rings=10)
+    add_sphere(bm, hanging_pt(0, 2.74, 0.22), 0.74, 0.64, 0.60, segs=18, rings=10)
+    add_sphere(bm, hanging_pt(0, 2.26, 0.16), 0.56, 0.54, 0.50, segs=16, rings=8)
     make_piece("Torso", bm, mat_gold, body_parts)
     bm = bmesh.new()
-    add_sphere(bm, hanging_pt(0, 2.50, 0.62), 0.44, 0.56, 0.24, segs=12, rings=8)
+    add_sphere(bm, hanging_pt(0, 2.64, 0.60), 0.44, 0.52, 0.24, segs=12, rings=8)
     make_piece("Chest", bm, mat_cream, body_parts)
 
-    # 2. Left gripping arm (firmly on the Bell 206 left skid)
+    # 2. Left gripping arm (pulling naturally up onto the Bell 206 left skid)
     rigging.carry(arm_l=1.0)
-    left_grip_w = loc(0.31, 4.77, 0.70)
+    left_grip_w = loc(0.31, 4.77, 0.45)
     bm = bmesh.new()
-    add_capsule(bm, hanging_pt(-0.58, 2.85, 0.30), left_grip_w, 0.21, segs=10)
+    add_capsule(bm, hanging_pt(-0.58, 2.95, 0.28), left_grip_w, 0.21, segs=10)
     add_sphere(bm, left_grip_w, 0.27, 0.25, 0.25, segs=12, rings=8)
     make_piece("ArmL", bm, mat_gold, body_parts)
     bm = bmesh.new()
     for finger in range(3):
-        add_sphere(bm, loc(0.31 + (finger - 1) * 0.10, 4.88, 0.77), 0.065, 0.10, 0.09, segs=8, rings=5)
+        add_sphere(bm, loc(0.31 + (finger - 1) * 0.10, 4.88, 0.52), 0.065, 0.10, 0.09, segs=8, rings=5)
     make_piece("ArmLFingers", bm, mat_cream, body_parts)
 
     # 3. Right two-bone articulated arm
     rigging.carry(arm_r_upper=1.0)
     bm = bmesh.new()
-    add_capsule(bm, hanging_pt(0.58, 2.85, 0.30), hanging_pt(0.80, 3.10, 0.68), 0.20, segs=10)
+    add_capsule(bm, hanging_pt(0.58, 2.95, 0.28), hanging_pt(0.80, 3.16, 0.68), 0.20, segs=10)
     make_piece("ArmRUpper", bm, mat_gold, body_parts)
     rigging.carry(arm_r_upper=0.5, arm_r_lower=0.5)
     bm = bmesh.new()
-    add_sphere(bm, hanging_pt(0.80, 3.10, 0.68), 0.20, 0.20, 0.20, segs=10, rings=6)
+    add_sphere(bm, hanging_pt(0.80, 3.16, 0.68), 0.20, 0.20, 0.20, segs=10, rings=6)
     make_piece("ArmRElbow", bm, mat_gold, body_parts)
     rigging.carry(arm_r_lower=1.0)
     bm = bmesh.new()
-    add_capsule(bm, hanging_pt(0.80, 3.10, 0.68), hanging_pt(0.96, 3.45, 0.98), 0.19, segs=10)
-    add_sphere(bm, hanging_pt(0.96, 3.45, 0.98), 0.26, 0.25, 0.24, segs=12, rings=8)
+    add_capsule(bm, hanging_pt(0.80, 3.16, 0.68), hanging_pt(0.96, 3.48, 0.98), 0.19, segs=10)
+    add_sphere(bm, hanging_pt(0.96, 3.48, 0.98), 0.26, 0.25, 0.24, segs=12, rings=8)
     make_piece("ArmRLower", bm, mat_gold, body_parts)
 
-    # 4. Dangling legs
+    # 4. Naturally bent hanging legs (thigh -> knee -> calf -> paw)
     for side, bone in ((-1, "leg_l"), (1, "leg_r")):
         rigging.carry(**{bone: 1.0})
+        hip = hanging_pt(side * 0.36, 2.08, 0.16)
+        knee = hanging_pt(side * 0.42, 1.54, 0.42 + side * 0.06)
+        ankle = hanging_pt(side * 0.44, 1.04, 0.18 + side * 0.08)
+        paw = hanging_pt(side * 0.45, 0.94, 0.40 + side * 0.08)
         bm = bmesh.new()
-        add_capsule(bm, hanging_pt(side * 0.38, 2.15, 0.18), hanging_pt(side * 0.44, 1.12, 0.34 + side * 0.10), 0.22, segs=10)
-        add_sphere(bm, hanging_pt(side * 0.45, 0.96, 0.52 + side * 0.10), 0.30, 0.23, 0.40, segs=12, rings=8)
+        add_capsule(bm, hip, knee, 0.22, segs=10)
+        add_capsule(bm, knee, ankle, 0.18, segs=10)
+        add_sphere(bm, paw, 0.27, 0.21, 0.36, segs=12, rings=8)
         make_piece(f"Leg_{bone}", bm, mat_gold, body_parts)
 
     # 5. Two-bone tufted lion tail
