@@ -191,11 +191,14 @@ def build_ship():
     m_nav_red = mat("nav_port", "#ff3b30", roughness=0.15, emission=3.4, emission_color="#ff3b30")
     m_nav_grn = mat("nav_stbd", "#34e87a", roughness=0.15, emission=3.4, emission_color="#34e87a")
 
+    # Fat-cute chubby cartoon Starship outline (plump wider barrel, shorter rounded dome nose,
+    # lower belly skimming the ground while keeping the top cockpit deck at the exact same height!)
+    yc = 1.32
     rings = [
-        (-3.15, 1.03), (-2.65, 1.03), (-2.10, 1.03), (-1.55, 1.03),
-        (-1.00, 1.03), (-0.45, 1.03), (0.10, 1.03),  (0.65, 1.03),
-        (1.18, 1.02),  (1.65, 0.97),  (2.12, 0.86),  (2.58, 0.69),
-        (3.02, 0.47),  (3.42, 0.23),  (3.72, 0.05),
+        (-2.95, 1.12), (-2.50, 1.18), (-1.95, 1.22), (-1.40, 1.25),
+        (-0.85, 1.26), (-0.30, 1.26), (0.25, 1.25),  (0.80, 1.22),
+        (1.30, 1.16),  (1.75, 1.06),  (2.15, 0.90),  (2.50, 0.70),
+        (2.80, 0.46),  (3.04, 0.22),  (3.18, 0.05),
     ]
     sides = 44
     hull_mesh = bpy.data.meshes.new("StarshipHull")
@@ -211,7 +214,8 @@ def build_ship():
         rv = []
         for s in range(sides):
             a = s * 2.0 * math.pi / sides
-            rv.append(bm.verts.new(loc(math.cos(a) * r, 1.45 + math.sin(a) * r, z)))
+            # Slightly wider horizontally (1.06x) and cozy vertically (0.94x) for extra fat-cute chubbiness!
+            rv.append(bm.verts.new(loc(math.cos(a) * r * 1.06, yc + math.sin(a) * r * 0.94, z)))
         ring_verts.append(rv)
 
     for ri in range(len(rings) - 1):
@@ -245,15 +249,15 @@ def build_ship():
 
     # Recessed soot-blackened aft thrust bay
     aft_ring_in = [
-        bm.verts.new(loc(math.cos(s * 2.0 * math.pi / sides) * 0.94, 1.45 + math.sin(s * 2.0 * math.pi / sides) * 0.94, -3.15))
+        bm.verts.new(loc(math.cos(s * 2.0 * math.pi / sides) * 1.08, yc + math.sin(s * 2.0 * math.pi / sides) * 0.96, -2.95))
         for s in range(sides)
     ]
     aft_ring_deep = [
-        bm.verts.new(loc(math.cos(s * 2.0 * math.pi / sides) * 0.92, 1.45 + math.sin(s * 2.0 * math.pi / sides) * 0.92, -2.85))
+        bm.verts.new(loc(math.cos(s * 2.0 * math.pi / sides) * 1.04, yc + math.sin(s * 2.0 * math.pi / sides) * 0.92, -2.68))
         for s in range(sides)
     ]
-    aft_center = bm.verts.new(loc(0, 1.45, -2.82))
-    nose_center = bm.verts.new(loc(0, 1.45, 3.76))
+    aft_center = bm.verts.new(loc(0, yc, -2.65))
+    nose_center = bm.verts.new(loc(0, yc, 3.22))
     for s in range(sides):
         sn = (s + 1) % sides
         bm.faces.new([ring_verts[0][s], ring_verts[0][sn], aft_ring_in[sn], aft_ring_in[s]]).material_index = 7
@@ -266,55 +270,56 @@ def build_ship():
     bm.free()
     smooth(hull_obj)
 
-    # Darkened heat-affected weld seams along the barrel
+    # Darkened heat-affected weld seams along the plump barrel
     for z, r in rings[1:9]:
-        torus(0, 1.45, z, r + 0.005, 0.015, m_seam, rot=(math.pi / 2, 0, 0))
+        t_obj = torus(0, yc, z, r + 0.005, 0.015, m_seam, rot=(math.pi / 2, 0, 0))
+        t_obj.scale = (1.06, 0.94, 1.0)
 
     # Leeward avionics raceway spine + weathered bolts
-    box(0, 2.46, -1.78, 0.22, 0.09, 2.45, m_steel_worn, bevel=0.025)
-    for rz in (-2.7, -2.1, -1.5, -0.9):
-        box(0, 2.51, rz, 0.24, 0.03, 0.06, m_soot, bevel=0.008)
+    box(0, 2.48, -1.68, 0.24, 0.09, 2.15, m_steel_worn, bevel=0.025)
+    for rz in (-2.5, -1.95, -1.4, -0.88):
+        box(0, 2.53, rz, 0.26, 0.03, 0.06, m_soot, bevel=0.008)
 
     # Mechazilla catch pins (slightly scorched lifting lugs)
     for side in (-1.0, 1.0):
-        cyl(side * 1.12, 1.72, 1.08, 0.075, 0.28, m_manifold, verts=16, rot=(0, math.pi / 2, 0), bevel=0.015)
-        sphere(side * 1.26, 1.72, 1.08, 0.085, 0.095, 0.095, m_heat_bronze, segs=14, rings=10)
+        cyl(side * 1.32, 1.62, 1.02, 0.075, 0.28, m_manifold, verts=16, rot=(0, math.pi / 2, 0), bevel=0.015)
+        sphere(side * 1.46, 1.62, 1.02, 0.085, 0.095, 0.095, m_heat_bronze, segs=14, rings=10)
 
-    # Swept forward & aft Starship flaps with heat-scorched hinge covers, soot & nav strobes
+    # Chunky, cute swept forward & aft Starship flaps with heat-scorched hinge covers, soot & nav strobes
     for side in (-1.0, 1.0):
-        fwd = [(side * 0.87, 1.46, 1.82), (side * 1.78, 1.52, 1.24), (side * 1.58, 1.56, 2.34), (side * 0.72, 1.55, 2.74)]
-        aft = [(side * 0.92, 1.42, -3.02), (side * 2.58, 1.12, -3.22), (side * 2.38, 1.28, -1.74), (side * 0.99, 1.54, -1.04)]
-        add_flap(fwd, 0.11, m_steel_worn, m_tile_a, m_heat_bronze)
-        add_flap(aft, 0.13, m_steel_worn, m_tile_a, m_heat_bronze)
+        fwd = [(side * 1.02, 1.36, 1.55), (side * 2.02, 1.40, 1.02), (side * 1.82, 1.44, 2.05), (side * 0.86, 1.43, 2.42)]
+        aft = [(side * 1.10, 1.30, -2.84), (side * 2.68, 1.02, -3.02), (side * 2.50, 1.18, -1.62), (side * 1.18, 1.42, -0.98)]
+        add_flap(fwd, 0.13, m_steel_worn, m_tile_a, m_heat_bronze)
+        add_flap(aft, 0.15, m_steel_worn, m_tile_a, m_heat_bronze)
         # Scorched aerodynamic hinge covers
-        cyl(side * 0.94, 1.50, 2.20, 0.10, 0.96, m_heat_bronze, verts=18, rot=(math.pi / 2 - 0.12, 0, 0), bevel=0.02)
-        cyl(side * 1.01, 1.46, -2.02, 0.14, 1.98, m_heat_bronze, verts=20, rot=(math.pi / 2, 0, 0), bevel=0.03)
+        cyl(side * 1.10, 1.40, 1.92, 0.11, 0.88, m_heat_bronze, verts=18, rot=(math.pi / 2 - 0.12, 0, 0), bevel=0.02)
+        cyl(side * 1.18, 1.34, -1.90, 0.15, 1.82, m_heat_bronze, verts=20, rot=(math.pi / 2, 0, 0), bevel=0.03)
         # Soot scorch patches near hinge joints
-        sphere(side * 1.08, 1.44, -2.75, 0.22, 0.06, 0.42, m_soot, segs=12, rings=8)
+        sphere(side * 1.24, 1.32, -2.58, 0.22, 0.06, 0.42, m_soot, segs=12, rings=8)
         # Port (red) / Starboard (green) navigation strobes
         nav_m = m_nav_red if side < 0 else m_nav_grn
-        sphere(side * 2.48, 1.22, -2.48, 0.075, 0.075, 0.12, nav_m, segs=12, rings=8)
+        sphere(side * 2.60, 1.12, -2.32, 0.08, 0.08, 0.12, nav_m, segs=12, rings=8)
         # RCS cold-gas thruster pods with soot smudge behind them
-        for rz in (-2.35, 2.05):
-            sphere(side * 0.98, 1.64, rz, 0.09, 0.12, 0.18, m_dark, segs=14, rings=10)
-            sphere(side * 1.00, 1.63, rz - 0.18, 0.05, 0.11, 0.22, m_soot, segs=10, rings=6)
+        for rz in (-2.22, 1.78):
+            sphere(side * 1.16, 1.54, rz, 0.09, 0.12, 0.18, m_dark, segs=14, rings=10)
+            sphere(side * 1.18, 1.53, rz - 0.18, 0.05, 0.11, 0.22, m_soot, segs=10, rings=6)
 
     # Cockpit collar + SpaceX X deck emblem
-    torus(0, 2.42, -0.12, 0.80, 0.09, m_rim)
-    cyl(0, 2.37, -0.12, 0.72, 0.12, m_dark, verts=32, bevel=0.02)
-    box(0, 2.50, 0.63, 0.86, 0.09, 0.09, m_accent, bevel=0.02)
-    box(0, 2.48, 1.38, 0.11, 0.04, 0.82, m_xmark, bevel=0.01, rot=(0.06, 0, 0.54))
-    box(0, 2.48, 1.38, 0.11, 0.04, 0.82, m_xmark, bevel=0.01, rot=(0.06, 0, -0.54))
+    torus(0, 2.45, -0.12, 0.82, 0.095, m_rim)
+    cyl(0, 2.40, -0.12, 0.74, 0.12, m_dark, verts=32, bevel=0.02)
+    box(0, 2.52, 0.63, 0.88, 0.09, 0.09, m_accent, bevel=0.02)
+    box(0, 2.46, 1.28, 0.11, 0.04, 0.78, m_xmark, bevel=0.01, rot=(0.08, 0, 0.54))
+    box(0, 2.46, 1.28, 0.11, 0.04, 0.78, m_xmark, bevel=0.01, rot=(0.08, 0, -0.54))
 
     # 6 Heat-tempered Raptor engine bells with regenerative cooling manifolds
     for ex, ey, er in [
         (0.0, 0.64, 0.28), (-0.55, -0.32, 0.28), (0.55, -0.32, 0.28),
         (0.0, -0.27, 0.16), (-0.23, 0.14, 0.16), (0.23, 0.14, 0.16),
     ]:
-        cone(ex, 1.45 + ey, -3.26, er, er * 0.50, 0.58, m_nozzle, verts=28, rot=(-math.pi / 2, 0, 0))
-        torus(ex, 1.45 + ey, -3.14, er * 0.76, 0.024, m_manifold, rot=(math.pi / 2, 0, 0))
-        torus(ex, 1.45 + ey, -3.38, er * 0.94, 0.022, m_soot, rot=(math.pi / 2, 0, 0))
-        sphere(ex, 1.45 + ey, -3.48, er * 0.78, er * 0.78, 0.12, m_glow, segs=16, rings=10)
+        cone(ex, yc + ey, -3.08, er, er * 0.50, 0.56, m_nozzle, verts=28, rot=(-math.pi / 2, 0, 0))
+        torus(ex, yc + ey, -2.96, er * 0.76, 0.024, m_manifold, rot=(math.pi / 2, 0, 0))
+        torus(ex, yc + ey, -3.20, er * 0.94, 0.022, m_soot, rot=(math.pi / 2, 0, 0))
+        sphere(ex, yc + ey, -3.30, er * 0.78, er * 0.78, 0.12, m_glow, segs=16, rings=10)
 
     export_part("houston_ship.glb", "HoustonShip")
 
