@@ -3,6 +3,10 @@ import init, {
   restart_local_match,
   set_paused,
   set_muted,
+  set_input_blocked,
+  set_network_mode,
+  accept_net_packet,
+  poll_net_outbound,
   set_virtual_keys,
   trigger_action,
   get_metadata,
@@ -27,6 +31,11 @@ const scoreVal = $('score-val');
 const minsEl = $('match-minutes');
 const minsVal = $('mins-val');
 const specialsEl = $('special-abilities');
+const modeTabsEl = $('mode-tabs');
+const tabOnline = $('tab-online');
+const tabSolo = $('tab-solo');
+const allTimeBox = $('alltime-box');
+const allTimeList = $('alltime-list');
 
 const perfEl = $('perf');
 const boardEl = $('board');
@@ -44,13 +53,17 @@ const radarCanvas = $('radar');
 const radarCtx = radarCanvas.getContext('2d');
 const resultsWinner = $('results-winner');
 const resultsTable = $('results-table');
+const hudStartOnline = $('hud-start-online');
+const hudChatBtn = $('hud-chat-btn');
+const chatBox = $('chat-box');
+const chatLog = $('chat-log');
+const chatForm = $('chat-form');
+const chatInput = $('chat-input');
 
-// Show "← Classic" return link when served under the main game server (/experimental/)
 if (location.pathname.startsWith('/experimental')) {
   $('classic-link')?.classList.remove('hidden');
 }
 
-// Persist basic pilot preferences
 playerNameEl.value = localStorage.getItem('ww_wasm_name') || 'WASM Pilot';
 const savedDriver = localStorage.getItem('ww_wasm_driver');
 if (savedDriver !== null) driverEl.value = savedDriver;
@@ -67,6 +80,63 @@ let muted = localStorage.getItem('ww_wasm_muted') === '1';
 let resultsShown = false;
 let metaCache = null;
 let virtualBits = 0;
+
+// Online multiplayer state
+let serverAvailable = false;
+let onlineSelected = false;
+let activeOnline = false;
+let netToken = null;
+let netSocket = null;
+let netSendTimer = null;
+let chatTimer = null;
+let chatCursor = 0;
+let lastPing = 0;
+
+function setModeUI(isOnline) {
+  onlineSelected = isOnline && serverAvailable;
+  tabOnline.classList.toggle('active', onlineSelected);
+  tabSolo.classList.toggle('active', !onlineSelected);
+  playBtn.textContent = onlineSelected ? 'Join Online Arena' : (wasmStarted ? 'Start Solo Match' : 'Launch Bevy WASM');
+}
+
+tabOnline.onclick = () => setModeUI(true);
+tabSolo.onclick = () => setModeUI(false);
+
+// Auto-detect live Wild Wheels server & load all-time leaderboard
+async function probeServer() {
+  try {
+    const resp = await fetch('/api/info', { signal: AbortSignal.timeout(1500) });
+    if (!resp.ok) return;
+    const info = await resp.json();
+    if (!info || typeof info.room !== 'string') return;
+    serverAvailable = true;
+    modeTabsEl.classList.remove('hidden');
+    if (Array.isArray(info.arenas) && info.arenas.length) {
+      const curA = arenaEl.value;
+      arenaEl.innerHTML = info.arenas.map((a, idx) =>
+        `<option value="${idx}">${idx} · ${a.name}</option>`
+      ).join('');
+      arenaEl.value = curA;
+    }
+    setModeUI(true);
+    statusEl.textContent = `Connected to Wild Wheels server (Room ${info.room}). Choose Online Arena or Solo vs Bots.`;
+    // Load All-Time Leaderboard
+    try {
+      const lb = await fetch('/api/leaderboard', { cache: 'no-store', signal: AbortSignal.timeout(2500) });
+      if (lb.ok) {
+        const data = await lb.json();
+        const players = data.players || data.entries || [];
+        if (players.length) {
+          allTimeBox.classList.remove('hidden');
+          allTimeList.innerHTML = players.slice(0, 10).map((p, i) =>
+            `<div class="at-row"><span>${i + 1}. ${p.name || 'Pilot'}</span><span>${p.wins ?? 0}W · ${Math.floor(p.kills ?? 0)}K</span></div>`
+          ).join('');
+        }
+      }
+    } catch {}
+  } catch {}
+}
+probeServer();
 
 function syncMuteUI() {
   const icon = muted ? '🔇' : '🔊';
@@ -86,10 +156,159 @@ $('menu-mute').onclick = toggleMute;
 $('hud-mute').onclick = toggleMute;
 $('btn-mute-modal').onclick = toggleMute;
 
+async function apiPost(path, body) {
+  const resp = await fetch(path, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(netToken ? { Authorization: `Bearer ${netToken}` } : {}),
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(4000),
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) throw Object.assign(new Error(data.error || `HTTP ${resp.status}`), { status: resp.status });
+  return data;
+}
+
+function disconnectOnline(notify = false) {
+  activeOnline = false;
+  if (netSendTimer) { clearInterval(netSendTimer); netSendTimer = null; }
+  if (chatTimer) { clearInterval(chatTimer); chatTimer = null; }
+  if (netSocket) { try { netSocket.close(); } catch {} netSocket = null; }
+  if (notify && netToken) apiPost('/api/leave', {}).catch(() => {});
+  hudStartOnline.classList.add('hidden');
+  hudChatBtn.classList.add('hidden');
+  chatBox.classList.add('hidden');
+}
+
+async function pollChat() {
+  if (!activeOnline || !netToken) return;
+  try {
+    const res = await apiPost('/api/chat', { after: chatCursor });
+    const msgs = res.messages || [];
+    for (const m of msgs) {
+      if (m.id > chatCursor) chatCursor = m.id;
+      if (m.deleted) continue;
+      const line = document.createElement('div');
+      line.className = 'chat-line';
+      const strong = document.createElement('strong');
+      strong.textContent = `${m.name || 'Pilot'}:`;
+      if (m.color) strong.style.color = m.color;
+      line.append(strong, document.createTextNode(m.text || ''));
+      chatLog.append(line);
+      while (chatLog.children.length > 30) chatLog.firstChild.remove();
+      chatLog.scrollTop = chatLog.scrollHeight;
+    }
+  } catch {}
+}
+
+chatInput.addEventListener('focus', () => { if (wasmStarted) set_input_blocked(true); });
+chatInput.addEventListener('blur', () => { if (wasmStarted) set_input_blocked(false); });
+playerNameEl.addEventListener('focus', () => { if (wasmStarted) set_input_blocked(true); });
+playerNameEl.addEventListener('blur', () => { if (wasmStarted) set_input_blocked(false); });
+
+chatForm.onsubmit = async e => {
+  e.preventDefault();
+  const text = chatInput.value.trim();
+  chatInput.value = '';
+  chatInput.blur();
+  if (!text || !activeOnline) return;
+  try {
+    await apiPost('/api/chat', { after: chatCursor, text, to: null });
+    pollChat();
+  } catch {}
+};
+
+hudChatBtn.onclick = () => {
+  chatBox.classList.toggle('hidden');
+  if (!chatBox.classList.contains('hidden')) chatInput.focus();
+};
+
+hudStartOnline.onclick = async () => {
+  if (!activeOnline) return;
+  const c = currentConfig();
+  try {
+    await apiPost('/api/driver', { driver: c.driver }).catch(() => {});
+    await apiPost('/api/control', { action: 'arena', arena: c.arena }).catch(() => {});
+    await apiPost('/api/control', { action: 'bots', bots: c.bots }).catch(() => {});
+    await apiPost('/api/control', { action: 'start' });
+  } catch (e) {
+    console.warn('start battle error:', e);
+  }
+};
+
+async function connectOnline(c) {
+  disconnectOnline(false);
+  set_network_mode(true);
+  let reply;
+  const invite = new URLSearchParams(location.hash.slice(1)).get('invite') || '';
+  const code = new URL(location.href).searchParams.get('room') || '00';
+  try {
+    reply = await apiPost('/api/session', {});
+  } catch {
+    reply = await apiPost('/api/join', {
+      name: c.playerName,
+      driver: c.driver,
+      role: 'driver',
+      arena: c.arena,
+      bots: c.bots,
+      code: code.toUpperCase(),
+      invite,
+    });
+  }
+  netToken = reply.token || netToken;
+  // Apply chosen driver if room is between matches
+  await apiPost('/api/driver', { driver: c.driver }).catch(() => {});
+
+  activeOnline = true;
+  chatCursor = 0;
+  chatLog.innerHTML = '';
+  hudChatBtn.classList.remove('hidden');
+
+  const wsUrl = new URL('/api/socket', location.href);
+  wsUrl.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const sock = new WebSocket(wsUrl);
+  sock.binaryType = 'arraybuffer';
+  netSocket = sock;
+
+  sock.onopen = () => {
+    if (netSocket !== sock) return;
+    sock.send(JSON.stringify({ type: 'authenticate', token: netToken }));
+  };
+  sock.onmessage = ev => {
+    if (netSocket !== sock) return;
+    if (ev.data instanceof ArrayBuffer) {
+      accept_net_packet(new Uint8Array(ev.data));
+    }
+  };
+  sock.onclose = () => {
+    if (netSocket !== sock || !activeOnline) return;
+    setTimeout(() => {
+      if (activeOnline) connectOnline(currentConfig()).catch(() => {});
+    }, 1000);
+  };
+
+  netSendTimer = setInterval(() => {
+    if (!activeOnline || !netSocket || netSocket.readyState !== WebSocket.OPEN) return;
+    const now = performance.now() / 1000;
+    if (now - lastPing >= 1.0) {
+      lastPing = now;
+      netSocket.send(JSON.stringify({ type: 'ping', sent: now }));
+    }
+    const out = poll_net_outbound();
+    if (out) netSocket.send(out);
+  }, 33);
+
+  chatTimer = setInterval(pollChat, 1500);
+  pollChat();
+}
+
 function setPauseState(next) {
   if (!wasmStarted || !menuEl.classList.contains('hidden')) return;
   paused = next;
   set_paused(paused);
+  if (activeOnline) apiPost('/api/afk', { afk: paused }).catch(() => {});
   pauseModal.classList.toggle('hidden', !paused);
 }
 
@@ -112,7 +331,7 @@ function currentConfig() {
   };
 }
 
-function doRestart() {
+async function doRestart() {
   const c = currentConfig();
   paused = false;
   resultsShown = false;
@@ -120,15 +339,29 @@ function doRestart() {
   resultsModal.classList.add('hidden');
   menuEl.classList.add('hidden');
   hudLayer.classList.remove('hidden');
-  restart_local_match(
-    c.driver,
-    c.arena,
-    c.bots,
-    c.playerName,
-    c.targetScore,
-    c.matchMinutes,
-    c.specialAbilities
-  );
+  if (onlineSelected) {
+    try {
+      if (!activeOnline) {
+        await connectOnline(c);
+      } else {
+        await apiPost('/api/driver', { driver: c.driver }).catch(() => {});
+        await apiPost('/api/control', { action: 'arena', arena: c.arena }).catch(() => {});
+        await apiPost('/api/control', { action: 'bots', bots: c.bots }).catch(() => {});
+        await apiPost('/api/control', { action: 'start' }).catch(() => {});
+      }
+    } catch (e) {
+      statusEl.textContent = `Online error: ${e.message}`;
+      returnToLobby();
+      return;
+    }
+  } else {
+    disconnectOnline(true);
+    set_network_mode(false);
+    restart_local_match(
+      c.driver, c.arena, c.bots, c.playerName,
+      c.targetScore, c.matchMinutes, c.specialAbilities
+    );
+  }
   $('bevy-canvas').focus();
 }
 
@@ -141,7 +374,7 @@ function returnToLobby() {
   hudLayer.classList.add('hidden');
   menuEl.classList.remove('hidden');
   playBtn.disabled = false;
-  playBtn.textContent = 'Start Match';
+  setModeUI(onlineSelected);
 }
 
 $('btn-restart').onclick = doRestart;
@@ -150,10 +383,18 @@ $('btn-lobby').onclick = returnToLobby;
 $('btn-results-lobby').onclick = returnToLobby;
 
 window.addEventListener('keydown', e => {
-  if (e.code === 'Escape' && wasmStarted && menuEl.classList.contains('hidden') && resultsModal.classList.contains('hidden')) {
+  const typing = document.activeElement === chatInput || document.activeElement === playerNameEl;
+  if (e.code === 'Escape') {
+    if (typing) { document.activeElement.blur(); return; }
+    if (wasmStarted && menuEl.classList.contains('hidden') && resultsModal.classList.contains('hidden')) {
+      e.preventDefault();
+      setPauseState(!paused);
+    }
+  } else if (e.code === 'Enter' && activeOnline && !typing && menuEl.classList.contains('hidden')) {
     e.preventDefault();
-    setPauseState(!paused);
-  } else if (e.code === 'KeyM' && document.activeElement !== playerNameEl) {
+    chatBox.classList.remove('hidden');
+    chatInput.focus();
+  } else if (e.code === 'KeyM' && !typing) {
     toggleMute();
   }
 });
@@ -165,12 +406,8 @@ for (const btn of document.querySelectorAll('#touch-controls .tbtn')) {
   const press = e => {
     e.preventDefault();
     if (!wasmStarted) return;
-    if (bit) {
-      virtualBits |= bit;
-      set_virtual_keys(virtualBits);
-    } else if (act) {
-      trigger_action(act, '');
-    }
+    if (bit) { virtualBits |= bit; set_virtual_keys(virtualBits); }
+    else if (act) trigger_action(act, '');
   };
   const release = e => {
     e.preventDefault();
@@ -184,7 +421,6 @@ for (const btn of document.querySelectorAll('#touch-controls .tbtn')) {
   btn.addEventListener('pointerleave', release);
 }
 
-// Clickable HUD weapon/ability slots
 loadoutEl.addEventListener('click', e => {
   const btn = e.target.closest('[data-act]');
   if (!btn || !wasmStarted) return;
@@ -213,7 +449,7 @@ function populateMetadataFromWasm() {
       driverEl.value = cur;
       updateDriverMeta();
     }
-    if (metaCache.arenas?.length) {
+    if (metaCache.arenas?.length && !serverAvailable) {
       const curA = arenaEl.value;
       arenaEl.innerHTML = metaCache.arenas.map(a =>
         `<option value="${a.id}">${a.id} · ${a.name}</option>`
@@ -237,52 +473,34 @@ function drawRadar(radar) {
   const sy = z => pad + ((z + half) / (half * 2)) * (h - pad * 2);
   const sw = v => (v / (half * 2)) * (w - pad * 2);
 
-  // Arena outline
   ctx.strokeStyle = 'rgba(255,255,255,0.22)';
   ctx.lineWidth = 1.5;
   ctx.strokeRect(pad, pad, w - pad * 2, h - pad * 2);
 
-  // Water channels (e.g. Seven Bridges of Königsberg)
   if (radar.water?.length) {
     ctx.fillStyle = 'rgba(54, 152, 232, 0.45)';
-    for (const [x, z, bw, bd] of radar.water) {
-      ctx.fillRect(sx(x - bw / 2), sy(z - bd / 2), sw(bw), sw(bd));
-    }
+    for (const [x, z, bw, bd] of radar.water) ctx.fillRect(sx(x - bw / 2), sy(z - bd / 2), sw(bw), sw(bd));
   }
-  // Bridges
   if (radar.bridges?.length) {
     ctx.fillStyle = 'rgba(222, 184, 120, 0.85)';
-    for (const [x, z, bw, bd] of radar.bridges) {
-      ctx.fillRect(sx(x - bw / 2), sy(z - bd / 2), sw(bw), sw(bd));
-    }
+    for (const [x, z, bw, bd] of radar.bridges) ctx.fillRect(sx(x - bw / 2), sy(z - bd / 2), sw(bw), sw(bd));
   }
-  // Walls / blocks
   if (radar.blocks?.length) {
     ctx.fillStyle = 'rgba(148, 164, 194, 0.5)';
-    for (const [x, z, bw, bd] of radar.blocks) {
-      ctx.fillRect(sx(x - bw / 2), sy(z - bd / 2), sw(bw), sw(bd));
-    }
+    for (const [x, z, bw, bd] of radar.blocks) ctx.fillRect(sx(x - bw / 2), sy(z - bd / 2), sw(bw), sw(bd));
   }
-  // Supplies
   for (const s of radar.supplies || []) {
     ctx.fillStyle = s.kind === 'health' ? '#ff6688' : s.kind === 'missile' ? '#ff9944' : '#7ae5ff';
     ctx.fillRect(sx(s.wx) - 2, sy(s.wz) - 2, 4, 4);
   }
-  // Missiles
   ctx.fillStyle = '#ff3d3d';
   for (const m of radar.missiles || []) {
-    ctx.beginPath();
-    ctx.arc(sx(m.wx), sy(m.wz), 2.8, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(sx(m.wx), sy(m.wz), 2.8, 0, Math.PI * 2); ctx.fill();
   }
-  // Euler Ghost
   for (const g of radar.ghosts || []) {
     ctx.fillStyle = '#9ef7ff';
-    ctx.beginPath();
-    ctx.arc(sx(g.wx), sy(g.wz), 4.5, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(sx(g.wx), sy(g.wz), 4.5, 0, Math.PI * 2); ctx.fill();
   }
-  // Racers
   for (const a of radar.actors || []) {
     if (a.dead) continue;
     const x = sx(a.wx), y = sy(a.wz);
@@ -292,17 +510,13 @@ function drawRadar(radar) {
       ctx.rotate(-a.heading);
       ctx.fillStyle = '#ffe47a';
       ctx.beginPath();
-      ctx.moveTo(0, 6);
-      ctx.lineTo(-4.5, -5);
-      ctx.lineTo(4.5, -5);
+      ctx.moveTo(0, 6); ctx.lineTo(-4.5, -5); ctx.lineTo(4.5, -5);
       ctx.closePath();
       ctx.fill();
       ctx.restore();
     } else {
       ctx.fillStyle = a.color || '#ffffff';
-      ctx.beginPath();
-      ctx.arc(x, y, 3.6, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.beginPath(); ctx.arc(x, y, 3.6, 0, Math.PI * 2); ctx.fill();
     }
   }
 }
@@ -314,7 +528,7 @@ const fmtClock = s => {
 
 playBtn.onclick = async () => {
   if (wasmStarted) {
-    doRestart();
+    await doRestart();
     return;
   }
   playBtn.disabled = true;
@@ -339,19 +553,9 @@ playBtn.onclick = async () => {
     wasmStarted = true;
     set_muted(muted);
 
-    // Optional local perf telemetry (only active on wasm-poc/serve.py)
-    const canPerfLog = location.port === '8088';
-    const matchMeta = {
-      driver: c.driver, arena: c.arena, bots: c.bots,
-      bootMs: Math.round(tTotal),
-      packBytes: buf.byteLength + soundBuf.byteLength,
-    };
-    const sendLog = payload => {
-      if (!canPerfLog) return;
-      const body = JSON.stringify({ ...matchMeta, ...payload });
-      if (navigator.sendBeacon) navigator.sendBeacon('/perf-log', body);
-      else fetch('/perf-log', { method: 'POST', body, keepalive: true }).catch(() => {});
-    };
+    if (onlineSelected) {
+      await connectOnline(c);
+    }
 
     let frames = 0, last = performance.now(), worst = 0, prev = last;
     function tickHud(now) {
@@ -360,7 +564,8 @@ playBtn.onclick = async () => {
       frames++;
       if (now - last >= 500) {
         const fps = (frames * 1000 / (now - last)).toFixed(0);
-        perfEl.textContent = `Bevy WASM | ${fps} FPS | worst ${worst.toFixed(1)}ms | ${(tTotal / 1000).toFixed(1)}s boot`;
+        const tag = activeOnline ? 'ONLINE' : 'SOLO';
+        perfEl.textContent = `Bevy WASM · ${tag} | ${fps} FPS | worst ${worst.toFixed(1)}ms`;
         frames = 0; worst = 0; last = now;
       }
       populateMetadataFromWasm();
@@ -377,7 +582,14 @@ playBtn.onclick = async () => {
             bridgesBadge.classList.add('hidden');
           }
 
-          if (s.phase === 'countdown') {
+          hudStartOnline.classList.toggle('hidden', !(activeOnline && (s.phase === 'ready' || s.phase === 'finished')));
+
+          if (s.phase === 'ready' && activeOnline) {
+            bannerEl.classList.remove('hidden');
+            bannerEl.textContent = 'PRESS START BATTLE ↗';
+          } else if (s.phase === 'countdown') {
+            resultsShown = false;
+            resultsModal.classList.add('hidden');
             bannerEl.classList.remove('hidden');
             bannerEl.textContent = Math.max(1, Math.ceil(s.countdown));
           } else if (s.phase === 'finished') {
@@ -389,7 +601,6 @@ playBtn.onclick = async () => {
                 `<div class="res-row${r.me ? ' me' : ''}"><span>#${idx + 1} <i class="dot" style="background:${r.color}"></i>${r.name}</span><span>${Math.floor(r.kills)} K / ${r.deaths} D</span></div>`
               ).join('');
               resultsModal.classList.remove('hidden');
-              sendLog({ event: 'match-finish', elapsed: Math.round(s.elapsed) });
             }
           } else if (s.destroyed > 0) {
             bannerEl.classList.remove('hidden');

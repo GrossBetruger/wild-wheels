@@ -116,7 +116,40 @@ button:disabled { opacity: 0.55; cursor: wait; }
   position: fixed; top: 12px; right: 12px;
   display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
 }
-.hud-actions { display: flex; gap: 6px; }
+.hud-actions { display: flex; gap: 6px; align-items: center; }
+.action-pill {
+  padding: 0 12px; height: 36px; border: 1px solid rgba(255, 166, 77, 0.7);
+  background: linear-gradient(135deg, #ff8f3f, #ff5454); color: #fff;
+  font-size: 12px; font-weight: 800; letter-spacing: 0.4px; cursor: pointer; pointer-events: auto;
+}
+.mode-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+.mode-tab {
+  padding: 8px 10px; border-radius: 9px; border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06); color: #b7c5e3; font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.mode-tab.active {
+  background: rgba(255, 143, 63, 0.22); border-color: rgba(255, 143, 63, 0.75); color: #fff;
+}
+.alltime-box {
+  margin-top: 12px; padding: 8px 10px; border-radius: 10px;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); font-size: 12px;
+}
+.alltime-box summary { cursor: pointer; font-weight: 700; color: #ffe27a; }
+#alltime-list { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; max-height: 120px; overflow-y: auto; }
+.at-row { display: flex; justify-content: space-between; color: #d5e2ff; }
+#chat-box {
+  position: fixed; bottom: 112px; left: 16px; width: 290px; padding: 8px;
+  display: flex; flex-direction: column; gap: 6px; pointer-events: auto; z-index: 16;
+}
+#chat-log {
+  max-height: 110px; overflow-y: auto; font-size: 12px; line-height: 1.4;
+  display: flex; flex-direction: column; gap: 3px; color: #e8eefc;
+}
+.chat-line strong { margin-right: 5px; }
+#chat-input {
+  width: 100%; padding: 6px 8px; border-radius: 7px; font-size: 12px;
+  border: 1px solid rgba(255,255,255,0.2); background: rgba(10, 14, 22, 0.85); color: #fff;
+}
 #radar { width: 156px; height: 156px; display: block; }
 #kill-feed { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; max-width: 260px; }
 .kf-item {

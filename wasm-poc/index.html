@@ -26,11 +26,21 @@
 
     <div id="top-right">
       <div class="hud-actions">
+        <button id="hud-start-online" class="action-pill pill hidden">START BATTLE ↗</button>
+        <button id="hud-chat-btn" class="icon-btn pill hidden" title="Room Chat (Enter)">💬</button>
         <button id="hud-mute" class="icon-btn pill" title="Mute / Unmute (M)">🔊</button>
         <button id="hud-pause" class="icon-btn pill" title="Pause (Esc)">⏸</button>
       </div>
       <canvas id="radar" class="pill" width="156" height="156" aria-label="Arena radar"></canvas>
       <div id="kill-feed"></div>
+    </div>
+
+    <!-- Live Online Room Chat -->
+    <div id="chat-box" class="pill hidden">
+      <div id="chat-log"></div>
+      <form id="chat-form">
+        <input id="chat-input" type="text" maxlength="200" placeholder="Press Enter to chat…" autocomplete="off" />
+      </form>
     </div>
 
     <div id="center-banner" class="hidden"></div>
@@ -107,6 +117,11 @@
       </div>
       <div class="sub">Native Rust Bevy 3D WebGL2 renderer + Blender PBR models + Mantaflow explosions + full ported audio</div>
 
+      <div id="mode-tabs" class="mode-tabs hidden">
+        <button id="tab-online" type="button" class="mode-tab active">🌐 Online Arena</button>
+        <button id="tab-solo" type="button" class="mode-tab">🤖 Solo vs Bots</button>
+      </div>
+
       <div class="grid-2">
         <div>
           <label for="player-name">Pilot Name</label>
@@ -166,6 +181,11 @@
 
       <button id="play" class="primary">Launch Bevy WASM</button>
       <div id="status">Ready. Full keyboard, mouse HUD, and touch controls supported.</div>
+
+      <details id="alltime-box" class="alltime-box hidden">
+        <summary>🏆 All-Time Server Leaderboard</summary>
+        <div id="alltime-list"></div>
+      </details>
     </div>
   </div>
 

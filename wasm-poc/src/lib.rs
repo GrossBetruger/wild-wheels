@@ -17,7 +17,7 @@ use serde_json::json;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Mutex, OnceLock};
 use wasm_bindgen::prelude::*;
-use wild_wheels_core::{Action, Frame, Input, NativeArena, NativeClient};
+use wild_wheels_core::{Action, ClientAction, ClientInput, Frame, Input, NativeArena, NativeClient};
 
 pub mod reports {
     pub fn limited(_key: &str, _seconds: f64, _level: &str, _event: &str, _data: impl FnOnce() -> serde_json::Value) {}
@@ -65,7 +65,12 @@ static HUD_JSON: Mutex<String> = Mutex::new(String::new());
 static METADATA_JSON: Mutex<String> = Mutex::new(String::new());
 static PENDING_RESTART: Mutex<Option<LaunchConfig>> = Mutex::new(None);
 static QUEUED_ACTIONS: Mutex<Vec<(String, String)>> = Mutex::new(Vec::new());
+static INCOMING_PACKETS: Mutex<Vec<Vec<u8>>> = Mutex::new(Vec::new());
+static OUTBOUND_TEXT: Mutex<Option<String>> = Mutex::new(None);
 static PAUSED: AtomicBool = AtomicBool::new(false);
+static INPUT_BLOCKED: AtomicBool = AtomicBool::new(false);
+static ONLINE_MODE: AtomicBool = AtomicBool::new(false);
+static ONLINE_RESET: AtomicBool = AtomicBool::new(false);
 static VIRTUAL_KEYS: AtomicU32 = AtomicU32::new(0);
 
 #[wasm_bindgen]
@@ -81,6 +86,43 @@ pub fn get_metadata() -> String {
 #[wasm_bindgen]
 pub fn set_paused(paused: bool) {
     PAUSED.store(paused, Ordering::Relaxed);
+}
+
+#[wasm_bindgen]
+pub fn set_input_blocked(blocked: bool) {
+    INPUT_BLOCKED.store(blocked, Ordering::Relaxed);
+}
+
+#[wasm_bindgen]
+pub fn set_network_mode(online: bool) {
+    ONLINE_MODE.store(online, Ordering::Relaxed);
+    ONLINE_RESET.store(true, Ordering::Relaxed);
+    PAUSED.store(false, Ordering::Relaxed);
+    if let Ok(mut q) = INCOMING_PACKETS.lock() {
+        q.clear();
+    }
+    if let Ok(mut o) = OUTBOUND_TEXT.lock() {
+        *o = None;
+    }
+}
+
+#[wasm_bindgen]
+pub fn accept_net_packet(bytes: Vec<u8>) {
+    if let Ok(mut q) = INCOMING_PACKETS.lock() {
+        if q.len() > 8 {
+            q.clear();
+        }
+        q.push(bytes);
+    }
+}
+
+#[wasm_bindgen]
+pub fn poll_net_outbound() -> String {
+    OUTBOUND_TEXT
+        .lock()
+        .ok()
+        .and_then(|mut g| g.take())
+        .unwrap_or_default()
 }
 
 #[wasm_bindgen]
@@ -948,12 +990,272 @@ fn start_local_match(
     });
 }
 
+fn publish_hud(client: &NativeClient) {
+    let view = client.view();
+    let p = view.player;
+    let mut standings: Vec<_> = view
+        .actors
+        .iter()
+        .filter(|a| !a.inactive)
+        .map(|a| {
+            (
+                a.kills,
+                a.deaths,
+                a.id,
+                a.driver,
+                a.name.as_deref().unwrap_or("Bot"),
+                a.color.as_str(),
+            )
+        })
+        .collect();
+    standings.sort_by(|a, b| b.0.total_cmp(&a.0).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2)));
+    let rows: Vec<_> = standings
+        .into_iter()
+        .map(|(kills, deaths, id, driver, name, color)| {
+            json!({
+                "id": id,
+                "driver": driver,
+                "name": name,
+                "color": color,
+                "kills": kills,
+                "deaths": deaths,
+                "me": id == view.you
+            })
+        })
+        .collect();
+    let kill_feed: Vec<_> = view
+        .kill_feed
+        .iter()
+        .rev()
+        .take(5)
+        .map(|k| {
+            json!({
+                "id": k.id,
+                "attacker": k.attacker_name,
+                "victim": k.victim_name,
+                "victimColor": k.victim_color,
+                "kind": k.kind,
+                "text": k.text,
+                "time": k.time,
+            })
+        })
+        .collect();
+    let radar_actors: Vec<_> = view
+        .actors
+        .iter()
+        .filter(|a| !a.inactive)
+        .map(|a| {
+            json!({
+                "wx": a.wx,
+                "wz": a.wz,
+                "heading": a.heading,
+                "color": a.color,
+                "me": a.id == view.you,
+                "dead": a.destroyed > 0.0,
+            })
+        })
+        .collect();
+    let radar_supplies: Vec<_> = view
+        .supplies
+        .iter()
+        .filter(|s| s.cooldown <= 0.0)
+        .map(|s| json!({ "wx": s.wx, "wz": s.wz, "kind": s.kind }))
+        .collect();
+    let radar_missiles: Vec<_> = view
+        .projectiles
+        .iter()
+        .filter(|s| s.kind == "missile")
+        .map(|s| json!({ "wx": s.wx, "wz": s.wz }))
+        .collect();
+    let radar_ghosts: Vec<_> = view
+        .effects
+        .iter()
+        .filter(|e| e.kind == "eulerGhost")
+        .map(|e| json!({ "wx": e.wx, "wz": e.wz }))
+        .collect();
+    let bridge_count = view.arena_def.bridges.len();
+    let bridges_crossed = p.euler_bridges.count_ones();
+    let winner_name = view
+        .winner
+        .and_then(|wid| view.actors.get(wid))
+        .map(|a| a.name.as_deref().unwrap_or("Bot").to_string());
+    let snap = json!({
+        "multiplayer": view.multiplayer,
+        "phase": view.phase,
+        "elapsed": view.elapsed,
+        "duration": view.duration,
+        "countdown": view.countdown,
+        "finishCountdown": view.finish_countdown,
+        "targetScore": view.target_score,
+        "winner": winner_name,
+        "you": view.you,
+        "driver": p.driver,
+        "health": p.health,
+        "destroyed": p.destroyed,
+        "speed": p.speed,
+        "ammo": p.ammo,
+        "missiles": p.missiles,
+        "turbos": p.turbos,
+        "chaff": p.chaff,
+        "bombAmmo": p.bomb_ammo,
+        "stinkAmmo": p.stink_ammo,
+        "item": p.item,
+        "shield": p.shield,
+        "hedgeShield": p.hedge_shield,
+        "tehilim": p.tehilim,
+        "vulcan": p.vulcan,
+        "boost": p.boost,
+        "drift": p.drift,
+        "wasDrifting": p.was_drifting,
+        "specialCooldown": p.special_cooldown,
+        "specialActive": p.special_active,
+        "nightmareActive": p.nightmare_active,
+        "nightmareCooldown": p.nightmare_cooldown,
+        "somersaultCooldown": p.somersault_cooldown,
+        "bridgeCount": bridge_count,
+        "bridgesCrossed": bridges_crossed,
+        "notice": p.notice,
+        "noticeTime": p.notice_time,
+        "standings": rows,
+        "killFeed": kill_feed,
+        "radar": {
+            "size": view.arena_def.size,
+            "shape": view.arena_def.shape,
+            "blocks": view.blocks,
+            "water": view.arena_def.water,
+            "bridges": view.arena_def.bridges,
+            "actors": radar_actors,
+            "supplies": radar_supplies,
+            "missiles": radar_missiles,
+            "ghosts": radar_ghosts,
+        }
+    })
+    .to_string();
+    if let Ok(mut guard) = HUD_JSON.lock() {
+        *guard = snap;
+    }
+}
+
 fn tick_local_match(
     time: Res<Time>,
     keys: Res<ButtonInput<KeyCode>>,
     mut local: ResMut<LocalMatch>,
     mut session: ResMut<app::GameSession>,
 ) {
+    let dt = f64::from(time.delta_secs()).clamp(1.0 / 240.0, 0.05);
+
+    // Online multiplayer mode: feed server packets to NativeClient and emit predicted outbound JSON
+    if ONLINE_MODE.load(Ordering::Relaxed) {
+        if ONLINE_RESET.swap(false, Ordering::Relaxed) {
+            session.client = None;
+            session.sounds.clear();
+            session.voices.clear();
+            local.elapsed = 0.0;
+        }
+        local.elapsed += dt;
+        let packets: Vec<Vec<u8>> = INCOMING_PACKETS
+            .lock()
+            .map(|mut q| q.drain(..).collect())
+            .unwrap_or_default();
+        for pkt in packets {
+            if let Some(client) = session.client.as_mut() {
+                let _ = client.accept(&pkt, local.elapsed);
+            } else if let Ok(c) = NativeClient::from_packet(&pkt, local.elapsed) {
+                session.client = Some(c);
+            }
+        }
+        let Some(client) = session.client.as_mut() else {
+            return;
+        };
+        let blocked = PAUSED.load(Ordering::Relaxed) || INPUT_BLOCKED.load(Ordering::Relaxed);
+        let mut bits = if blocked {
+            0
+        } else {
+            VIRTUAL_KEYS.load(Ordering::Relaxed)
+        };
+        if !blocked {
+            if keys.pressed(KeyCode::KeyW) || keys.pressed(KeyCode::ArrowUp) {
+                bits |= 1;
+            }
+            if keys.pressed(KeyCode::KeyS) || keys.pressed(KeyCode::ArrowDown) {
+                bits |= 2;
+            }
+            if keys.pressed(KeyCode::KeyA) || keys.pressed(KeyCode::ArrowLeft) {
+                bits |= 8;
+            }
+            if keys.pressed(KeyCode::KeyD) || keys.pressed(KeyCode::ArrowRight) {
+                bits |= 4;
+            }
+            if keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight) {
+                bits |= 16;
+            }
+            if keys.pressed(KeyCode::Space) {
+                bits |= 32;
+            }
+        }
+        let move_input = ClientInput {
+            keys: bits & 31,
+            steer: None,
+        };
+        let _ = client.advance(dt, move_input, local.elapsed);
+        if !blocked {
+            if (bits & 32) != 0 {
+                let _ = client.action(ClientAction::Fire, local.elapsed);
+            }
+            if keys.just_pressed(KeyCode::KeyX) || keys.just_pressed(KeyCode::KeyE) {
+                let _ = client.action(ClientAction::Boost, local.elapsed);
+            }
+            if keys.just_pressed(KeyCode::KeyF) {
+                let _ = client.action(ClientAction::Special, local.elapsed);
+            }
+            if keys.just_pressed(KeyCode::KeyZ) {
+                let _ = client.action(ClientAction::Somersault, local.elapsed);
+            }
+            if keys.just_pressed(KeyCode::KeyC) {
+                let _ = client.action(ClientAction::Chaff, local.elapsed);
+            }
+            if keys.just_pressed(KeyCode::Tab) || keys.just_pressed(KeyCode::KeyQ) {
+                let _ = client.action(ClientAction::CycleWeapon, local.elapsed);
+            }
+            if keys.just_pressed(KeyCode::Digit1) {
+                let _ = client.action(ClientAction::SelectHedgehog, local.elapsed);
+            }
+            if keys.just_pressed(KeyCode::Digit2) {
+                let _ = client.action(ClientAction::SelectMissile, local.elapsed);
+            }
+            if let Ok(mut q) = QUEUED_ACTIONS.lock() {
+                for (kind, item) in q.drain(..) {
+                    let act = match (kind.as_str(), item.as_str()) {
+                        ("fire", _) => Some(ClientAction::Fire),
+                        ("turbo", _) => Some(ClientAction::Boost),
+                        ("special", _) => Some(ClientAction::Special),
+                        ("somersault", _) => Some(ClientAction::Somersault),
+                        ("chaff", _) => Some(ClientAction::Chaff),
+                        ("cycle", _) => Some(ClientAction::CycleWeapon),
+                        ("select", "hedgehog") => Some(ClientAction::SelectHedgehog),
+                        ("select", "missile") => Some(ClientAction::SelectMissile),
+                        _ => None,
+                    };
+                    if let Some(a) = act {
+                        let _ = client.action(a, local.elapsed);
+                    }
+                }
+            }
+        }
+        if let Ok(bytes) = client.outbound(move_input)
+            && let Ok(text) = String::from_utf8(bytes)
+            && let Ok(mut out) = OUTBOUND_TEXT.lock()
+        {
+            *out = Some(text);
+        }
+        let mut drained_sounds = client.drain_audio();
+        let mut drained_voices = client.drain_voices();
+        publish_hud(client);
+        session.sounds.append(&mut drained_sounds);
+        session.voices.append(&mut drained_voices);
+        return;
+    }
+
     // Handle instant match restart / driver or arena change without reloading WASM
     if let Ok(mut pending) = PENDING_RESTART.lock()
         && let Some(new_cfg) = pending.take()
@@ -973,27 +1275,29 @@ fn tick_local_match(
         return;
     }
 
-    let dt = f64::from(time.delta_secs()).clamp(1.0 / 240.0, 0.05);
     local.elapsed += dt;
 
-    let mut bits = VIRTUAL_KEYS.load(Ordering::Relaxed);
-    if keys.pressed(KeyCode::KeyW) || keys.pressed(KeyCode::ArrowUp) {
-        bits |= 1;
-    }
-    if keys.pressed(KeyCode::KeyS) || keys.pressed(KeyCode::ArrowDown) {
-        bits |= 2;
-    }
-    if keys.pressed(KeyCode::KeyA) || keys.pressed(KeyCode::ArrowLeft) {
-        bits |= 8;
-    }
-    if keys.pressed(KeyCode::KeyD) || keys.pressed(KeyCode::ArrowRight) {
-        bits |= 4;
-    }
-    if keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight) {
-        bits |= 16;
-    }
-    if keys.pressed(KeyCode::Space) {
-        bits |= 32;
+    let blocked = INPUT_BLOCKED.load(Ordering::Relaxed);
+    let mut bits = if blocked { 0 } else { VIRTUAL_KEYS.load(Ordering::Relaxed) };
+    if !blocked {
+        if keys.pressed(KeyCode::KeyW) || keys.pressed(KeyCode::ArrowUp) {
+            bits |= 1;
+        }
+        if keys.pressed(KeyCode::KeyS) || keys.pressed(KeyCode::ArrowDown) {
+            bits |= 2;
+        }
+        if keys.pressed(KeyCode::KeyA) || keys.pressed(KeyCode::ArrowLeft) {
+            bits |= 8;
+        }
+        if keys.pressed(KeyCode::KeyD) || keys.pressed(KeyCode::ArrowRight) {
+            bits |= 4;
+        }
+        if keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight) {
+            bits |= 16;
+        }
+        if keys.pressed(KeyCode::Space) {
+            bits |= 32;
+        }
     }
 
     let mut actions = Vec::new();
@@ -1009,50 +1313,52 @@ fn tick_local_match(
         });
         *id += 1;
     };
-    if let Ok(mut q) = QUEUED_ACTIONS.lock() {
-        for (kind, item) in q.drain(..) {
-            if kind == "turbo" {
-                if local.elapsed - local.last_x_tap <= 0.38 {
-                    push("nightmare", "", None, &mut local.next_action);
-                    local.last_x_tap = -10.0;
+    if !blocked {
+        if let Ok(mut q) = QUEUED_ACTIONS.lock() {
+            for (kind, item) in q.drain(..) {
+                if kind == "turbo" {
+                    if local.elapsed - local.last_x_tap <= 0.38 {
+                        push("nightmare", "", None, &mut local.next_action);
+                        local.last_x_tap = -10.0;
+                    } else {
+                        push("turbo", "", None, &mut local.next_action);
+                        local.last_x_tap = local.elapsed;
+                    }
                 } else {
-                    push("turbo", "", None, &mut local.next_action);
-                    local.last_x_tap = local.elapsed;
+                    push(&kind, &item, None, &mut local.next_action);
                 }
-            } else {
-                push(&kind, &item, None, &mut local.next_action);
             }
         }
-    }
-    if keys.just_pressed(KeyCode::KeyX) || keys.just_pressed(KeyCode::KeyE) {
-        if local.elapsed - local.last_x_tap <= 0.38 {
-            push("nightmare", "", None, &mut local.next_action);
-            local.last_x_tap = -10.0;
-        } else {
-            push("turbo", "", None, &mut local.next_action);
-            local.last_x_tap = local.elapsed;
+        if keys.just_pressed(KeyCode::KeyX) || keys.just_pressed(KeyCode::KeyE) {
+            if local.elapsed - local.last_x_tap <= 0.38 {
+                push("nightmare", "", None, &mut local.next_action);
+                local.last_x_tap = -10.0;
+            } else {
+                push("turbo", "", None, &mut local.next_action);
+                local.last_x_tap = local.elapsed;
+            }
         }
-    }
-    if keys.just_pressed(KeyCode::KeyF) {
-        push("special", "", None, &mut local.next_action);
-    }
-    if keys.just_pressed(KeyCode::KeyZ) {
-        push("somersault", "", None, &mut local.next_action);
-    }
-    if keys.just_pressed(KeyCode::KeyC) {
-        push("chaff", "", None, &mut local.next_action);
-    }
-    if keys.just_pressed(KeyCode::Tab) || keys.just_pressed(KeyCode::KeyQ) {
-        push("cycle", "", None, &mut local.next_action);
-    }
-    if keys.just_pressed(KeyCode::Digit1) {
-        push("select", "hedgehog", None, &mut local.next_action);
-    }
-    if keys.just_pressed(KeyCode::Digit2) {
-        push("select", "missile", None, &mut local.next_action);
-    }
-    if keys.just_pressed(KeyCode::Digit3) || keys.just_pressed(KeyCode::KeyB) {
-        push("bomb", "", Some("bomb".into()), &mut local.next_action);
+        if keys.just_pressed(KeyCode::KeyF) {
+            push("special", "", None, &mut local.next_action);
+        }
+        if keys.just_pressed(KeyCode::KeyZ) {
+            push("somersault", "", None, &mut local.next_action);
+        }
+        if keys.just_pressed(KeyCode::KeyC) {
+            push("chaff", "", None, &mut local.next_action);
+        }
+        if keys.just_pressed(KeyCode::Tab) || keys.just_pressed(KeyCode::KeyQ) {
+            push("cycle", "", None, &mut local.next_action);
+        }
+        if keys.just_pressed(KeyCode::Digit1) {
+            push("select", "hedgehog", None, &mut local.next_action);
+        }
+        if keys.just_pressed(KeyCode::Digit2) {
+            push("select", "missile", None, &mut local.next_action);
+        }
+        if keys.just_pressed(KeyCode::Digit3) || keys.just_pressed(KeyCode::KeyB) {
+            push("bomb", "", Some("bomb".into()), &mut local.next_action);
+        }
     }
 
     let frame = Frame {
@@ -1076,148 +1382,7 @@ fn tick_local_match(
         let _ = client.accept(&pkt, local.elapsed);
         drained_sounds = client.drain_audio();
         drained_voices = client.drain_voices();
-        let view = client.view();
-        let p = view.player;
-        let mut standings: Vec<_> = view
-            .actors
-            .iter()
-            .filter(|a| !a.inactive)
-            .map(|a| {
-                (
-                    a.kills,
-                    a.deaths,
-                    a.id,
-                    a.driver,
-                    a.name.as_deref().unwrap_or("Bot"),
-                    a.color.as_str(),
-                )
-            })
-            .collect();
-        standings.sort_by(|a, b| b.0.total_cmp(&a.0).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2)));
-        let rows: Vec<_> = standings
-            .into_iter()
-            .map(|(kills, deaths, id, driver, name, color)| {
-                json!({
-                    "id": id,
-                    "driver": driver,
-                    "name": name,
-                    "color": color,
-                    "kills": kills,
-                    "deaths": deaths,
-                    "me": id == view.you
-                })
-            })
-            .collect();
-        let kill_feed: Vec<_> = view
-            .kill_feed
-            .iter()
-            .rev()
-            .take(5)
-            .map(|k| {
-                json!({
-                    "id": k.id,
-                    "attacker": k.attacker_name,
-                    "victim": k.victim_name,
-                    "victimColor": k.victim_color,
-                    "kind": k.kind,
-                    "text": k.text,
-                    "time": k.time,
-                })
-            })
-            .collect();
-        let radar_actors: Vec<_> = view
-            .actors
-            .iter()
-            .filter(|a| !a.inactive)
-            .map(|a| {
-                json!({
-                    "wx": a.wx,
-                    "wz": a.wz,
-                    "heading": a.heading,
-                    "color": a.color,
-                    "me": a.id == view.you,
-                    "dead": a.destroyed > 0.0,
-                })
-            })
-            .collect();
-        let radar_supplies: Vec<_> = view
-            .supplies
-            .iter()
-            .filter(|s| s.cooldown <= 0.0)
-            .map(|s| json!({ "wx": s.wx, "wz": s.wz, "kind": s.kind }))
-            .collect();
-        let radar_missiles: Vec<_> = view
-            .projectiles
-            .iter()
-            .filter(|s| s.kind == "missile")
-            .map(|s| json!({ "wx": s.wx, "wz": s.wz }))
-            .collect();
-        let radar_ghosts: Vec<_> = view
-            .effects
-            .iter()
-            .filter(|e| e.kind == "eulerGhost")
-            .map(|e| json!({ "wx": e.wx, "wz": e.wz }))
-            .collect();
-        let bridge_count = view.arena_def.bridges.len();
-        let bridges_crossed = p.euler_bridges.count_ones();
-        let winner_name = view
-            .winner
-            .and_then(|wid| view.actors.get(wid))
-            .map(|a| a.name.as_deref().unwrap_or("Bot").to_string());
-        let snap = json!({
-            "phase": view.phase,
-            "elapsed": view.elapsed,
-            "duration": view.duration,
-            "countdown": view.countdown,
-            "finishCountdown": view.finish_countdown,
-            "targetScore": view.target_score,
-            "winner": winner_name,
-            "you": view.you,
-            "driver": p.driver,
-            "health": p.health,
-            "destroyed": p.destroyed,
-            "speed": p.speed,
-            "ammo": p.ammo,
-            "missiles": p.missiles,
-            "turbos": p.turbos,
-            "chaff": p.chaff,
-            "bombAmmo": p.bomb_ammo,
-            "stinkAmmo": p.stink_ammo,
-            "item": p.item,
-            "shield": p.shield,
-            "hedgeShield": p.hedge_shield,
-            "tehilim": p.tehilim,
-            "vulcan": p.vulcan,
-            "boost": p.boost,
-            "drift": p.drift,
-            "wasDrifting": p.was_drifting,
-            "specialCooldown": p.special_cooldown,
-            "specialActive": p.special_active,
-            "nightmareActive": p.nightmare_active,
-            "nightmareCooldown": p.nightmare_cooldown,
-            "somersaultCooldown": p.somersault_cooldown,
-            "bridgeCount": bridge_count,
-            "bridgesCrossed": bridges_crossed,
-            "notice": p.notice,
-            "noticeTime": p.notice_time,
-            "standings": rows,
-            "killFeed": kill_feed,
-            "radar": {
-                "size": view.arena_def.size,
-                "shape": view.arena_def.shape,
-                "blocks": view.blocks,
-                "water": view.arena_def.water,
-                "bridges": view.arena_def.bridges,
-                "actors": radar_actors,
-                "supplies": radar_supplies,
-                "missiles": radar_missiles,
-                "ghosts": radar_ghosts,
-            }
-        })
-        .to_string();
-        if let Ok(mut guard) = HUD_JSON.lock() {
-            *guard = snap;
-        }
+        publish_hud(client);
     } else {
         session.client = NativeClient::from_packet(&pkt, local.elapsed).ok();
     }
