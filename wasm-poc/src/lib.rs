@@ -2,6 +2,7 @@
 mod arena_mesh;
 mod bench;
 mod explosions;
+mod knowitowl;
 mod plumage;
 mod ported;
 mod scene;
@@ -206,7 +207,7 @@ const RAPTOR_ENGINES: [(f32, f32, f32); 6] = [
 ];
 
 pub(crate) fn has_blender_model(driver: usize) -> bool {
-    driver == 7 || driver == 8 || BLENDER_MODELS.iter().any(|&(d, _)| d == driver)
+    driver == 7 || driver == 8 || driver == knowitowl::DRIVER || BLENDER_MODELS.iter().any(|&(d, _)| d == driver)
 }
 
 #[derive(Resource)]
@@ -475,6 +476,7 @@ fn presentation_app(pack: Vec<u8>, canvas: &str, interactive: bool, mobile: bool
             ported::PortedGraphicsPlugin,
             scene::ArenaPresentationPlugin,
             explosions::ExplosionsPlugin,
+            knowitowl::KnowItOwlPlugin,
         ))
         .add_systems(Startup, load_blender_models)
         .add_systems(
