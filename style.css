@@ -181,9 +181,39 @@ header {
 }
 @media (prefers-reduced-motion: reduce) {
   .experimental-button,
-  .experimental-button::after {
+  .experimental-button::after,
+  .wasm-build-badge.compiling {
     animation: none;
   }
+}
+
+.wasm-build-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 12px;
+  border-radius: 999px;
+  font: 800 10.5px/1 monospace;
+  letter-spacing: 0.6px;
+  white-space: nowrap;
+}
+.wasm-build-badge.compiling {
+  background: rgba(255, 166, 48, 0.16);
+  color: #b85d00;
+  border: 1px solid rgba(255, 145, 36, 0.55);
+  animation: bevy-cta-pulse 1.8s ease-in-out infinite;
+}
+.wasm-build-badge.ready {
+  background: rgba(34, 184, 96, 0.16);
+  color: #167a3e;
+  border: 1px solid rgba(34, 184, 96, 0.55);
+}
+:root.bevy-beta .wasm-build-badge.compiling {
+  color: #ffd080;
+  background: rgba(255, 166, 48, 0.2);
+}
+:root.bevy-beta .wasm-build-badge.ready {
+  color: #7df0a6;
+  background: rgba(34, 184, 96, 0.22);
 }
 
 main {

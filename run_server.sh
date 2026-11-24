@@ -29,8 +29,22 @@ mkdir -p -- "$server_target_dir"
 server_target_dir=$(cd -- "$server_target_dir" && pwd)
 experimental_dir="$server_target_dir/experimental"
 wasm_target_dir=${CARGO_TARGET_DIR:+$server_target_dir/bevy-wasm}
+build_status_file="$server_state_dir/build-status.json"
+write_build_status(){
+  local tmp="$build_status_file.tmp.$$"
+  printf '{"state":"%s","at":%s}\n' "$1" "$(date +%s)" > "$tmp" && mv -f -- "$tmp" "$build_status_file"
+}
+clear_compiling_status(){
+  if [[ -f $build_status_file ]] && grep -q '"compiling-' "$build_status_file" 2>/dev/null; then
+    write_build_status failed || true
+  fi
+}
+trap 'clear_compiling_status; rmdir -- "$server_state_dir/lock" 2>/dev/null || true' EXIT
+write_build_status compiling-wasm
 bash "$project_dir/scripts/build/build-experimental.sh" "$experimental_dir" "$wasm_target_dir"
+write_build_status compiling-server
 WILD_WHEELS_EXPERIMENTAL_DIR="$experimental_dir" "$cargo_bin" build --release --locked --jobs "${CARGO_BUILD_JOBS:-1}" --manifest-path "$project_dir/dedicated-server/Cargo.toml" --target-dir "$server_target_dir"
+write_build_status ready
 if [[ ${1:-} == --restart ]]; then server_stop; fi
 server_executable="$server_target_dir/release/wild-wheels-server"
 nohup "$server_executable" >> "$server_log_file" 2>&1 < /dev/null &

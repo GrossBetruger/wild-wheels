@@ -226,7 +226,25 @@ async fn http(
         }
         "/build.json" => {
             let failed = app.updates.try_lock().is_ok_and(|mut updates| updates.failed());
-            response(200, json!({"build":BUILD,"revision":REVISION,"updateFailed":failed}))
+            let run_dir = std::env::var_os("WILD_WHEELS_RUN_DIR")
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(|| std::path::PathBuf::from(".wild-wheels"));
+            let wasm_build = std::fs::read_to_string(run_dir.join("build-status.json"))
+                .ok()
+                .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+                .unwrap_or(Value::Null);
+            let wasm_ready = ASSETS.iter().any(|a| a.0 == "/experimental/graphics.wwgp")
+                || std::path::Path::new("wasm-poc/pkg/wild_wheels_wasm_poc_bg.wasm").is_file();
+            response(
+                200,
+                json!({
+                    "build": BUILD,
+                    "revision": REVISION,
+                    "updateFailed": failed,
+                    "wasmReady": wasm_ready,
+                    "wasmBuild": wasm_build
+                }),
+            )
         }
         "/logz" | "/logz/all" => {
             // Collecting everything is the heavier request, so it is allowed less often.
