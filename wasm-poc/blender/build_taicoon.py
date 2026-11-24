@@ -282,15 +282,7 @@ for i in range(11):
     )
 add_lotus(0, 2.48, 0.58, 0.18)
 
-# Fluffy ringed raccoon tail curling cheerfully behind the seat
-for i in range(8):
-    t = i / 7.0
-    tx = math.sin(t * 1.6) * 0.22
-    ty = 1.65 + t * 0.88 + math.sin(t * math.pi) * 0.24
-    tz = -0.60 - t * 0.82
-    r = 0.25 + math.sin(t * math.pi) * 0.18
-    mat = M_MASK if i % 2 else (M_BELLY if i == 7 else M_FUR)
-    add_sphere(tx, ty, tz, r, r * 0.96, r, mat, segs=18, rings=12)
+# Tail is exported separately as taicoon_tail.glb so Bevy can wiggle it continuously!
 
 # Serene arms & paws holding the steering wheel
 for side in (-1.0, 1.0):
@@ -373,3 +365,37 @@ bpy.ops.export_scene.gltf(
     export_materials="EXPORT",
 )
 print(f"Exported Blender PBR Tai-Coon to {out_path}")
+
+# Export Tai-Coon's fluffy ringed raccoon tail as a separate GLB pivoted at its root (0,0,0)!
+import os
+tail_path = os.path.join(os.path.dirname(out_path) or ".", "taicoon_tail.glb")
+bpy.ops.wm.read_factory_settings(use_empty=True)
+MAT_CACHE.clear()
+m_fur = make_mat("fur_grey", "#a6a29a", roughness=0.80)
+m_belly = make_mat("fur_cream", "#f8f0df", roughness=0.82)
+m_mask = make_mat("fur_mask", "#3d373a", roughness=0.78)
+for i in range(8):
+    t = i / 7.0
+    tx = math.sin(t * 1.4) * 0.10
+    ty = t * 0.88 + math.sin(t * math.pi) * 0.24
+    tz = -t * 0.86
+    r = 0.24 + math.sin(t * math.pi) * 0.19
+    tm = m_mask if i % 2 else (m_belly if i == 7 else m_fur)
+    add_sphere(tx, ty, tz, r, r * 0.96, r, tm, segs=20, rings=14)
+bpy.ops.object.select_all(action="SELECT")
+bpy.context.view_layer.objects.active = bpy.context.selected_objects[0]
+bpy.ops.object.convert(target="MESH")
+bpy.ops.object.join()
+tobj = bpy.context.active_object
+tobj.name = "TaiCoonTail"
+tobj.data.polygons.foreach_set("use_smooth", [True] * len(tobj.data.polygons))
+tobj.data.update()
+bpy.ops.export_scene.gltf(
+    filepath=tail_path,
+    export_format="GLB",
+    export_yup=True,
+    export_apply=True,
+    export_normals=True,
+    export_materials="EXPORT",
+)
+print(f"Exported Blender PBR Tai-Coon tail to {tail_path}")

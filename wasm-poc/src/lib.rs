@@ -91,6 +91,7 @@ struct BlenderModels {
     houston_pilot: Handle<WorldAsset>,
     houston_arm_l: Handle<WorldAsset>,
     houston_arm_r: Handle<WorldAsset>,
+    taicoon_tail: Handle<WorldAsset>,
     flame_mesh: Handle<Mesh>,
     diamond_mesh: Handle<Mesh>,
     flame_outer_mat: Handle<StandardMaterial>,
@@ -106,14 +107,15 @@ struct ExhaustParticle {
     vel: Vec3,
     age: f32,
     life: f32,
-    start_scale: f32,
-    end_scale: f32,
+    start_scale: Vec3,
+    end_scale: Vec3,
 }
 
 #[derive(Component)]
 struct BlenderRacer {
     id: usize,
     driver: usize,
+    tail: Option<Entity>,
 }
 
 #[derive(Component)]
@@ -224,9 +226,10 @@ fn load_blender_models(
         ..default()
     });
     let smoke_mat = materials.add(StandardMaterial {
-        base_color: Color::srgba(0.74, 0.80, 0.88, 0.34),
+        base_color: Color::srgba(0.26, 0.40, 0.78, 0.22),
+        emissive: LinearRgba::rgb(0.28, 0.45, 1.15),
         unlit: true,
-        alpha_mode: AlphaMode::Blend,
+        alpha_mode: AlphaMode::Add,
         cull_mode: None,
         ..default()
     });
@@ -252,6 +255,7 @@ fn load_blender_models(
         houston_pilot: assets.load(GltfAssetLabel::Scene(0).from_asset("houston_pilot.glb")),
         houston_arm_l: assets.load(GltfAssetLabel::Scene(0).from_asset("houston_arm_l.glb")),
         houston_arm_r: assets.load(GltfAssetLabel::Scene(0).from_asset("houston_arm_r.glb")),
+        taicoon_tail: assets.load(GltfAssetLabel::Scene(0).from_asset("taicoon_tail.glb")),
         flame_mesh,
         diamond_mesh,
         flame_outer_mat,
@@ -375,51 +379,63 @@ fn sync_blender_models(
                         itf.scale = Vec3::new(rad_i, len_i, rad_i);
                     }
                 }
-                // Spawn turbulent world-space exhaust smoke clouds & sputtering methalox embers!
+                // Spawn sleek elongated methalox plasma streaks & sparks seamlessly from the flame body!
                 let back_dir = tf.rotation * Vec3::NEG_Z;
                 let right_dir = tf.rotation * Vec3::X;
                 let up_dir = tf.rotation * Vec3::Y;
-                let emit_count = if nightmare { 3 } else if firing { 2 } else { 1 };
-                let seed = (t * 60.0) as usize;
-                for k in 0..emit_count {
-                    let eng = RAPTOR_ENGINES[(seed + k * 2 + a.id) % 3];
-                    let jitter = ((seed * 37 + k * 17) % 100) as f32 / 100.0 - 0.5;
-                    let jitter2 = ((seed * 53 + k * 29) % 100) as f32 / 100.0 - 0.5;
-                    let nozzle_pos = tf.transform_point(Vec3::new(eng.0, 1.45 + eng.1, -3.65));
-                    // Billowing exhaust smoke cloud drifting & curling in world space
-                    if firing || nightmare || (seed + k) % 3 == 0 {
-                        let spd = if firing || nightmare { 16.0 } else { 5.5 };
-                        let vel = back_dir * spd
-                            + right_dir * (jitter * if firing { 4.8 } else { 1.6 })
-                            + up_dir * (0.9 + jitter2 * 2.2);
+                if firing || nightmare {
+                    let emit_count = if nightmare { 3 } else { 2 };
+                    let seed = (t * 60.0) as usize;
+                    for k in 0..emit_count {
+                        let eng = RAPTOR_ENGINES[(seed + k * 2 + a.id) % 3];
+                        let jitter = ((seed * 37 + k * 17) % 100) as f32 / 100.0 - 0.5;
+                        let jitter2 = ((seed * 53 + k * 29) % 100) as f32 / 100.0 - 0.5;
+                        // Spawn right inside the Raptor flame tail so streaks connect seamlessly!
+                        let spawn_z = if nightmare { -7.6 } else { -6.0 };
+                        let streak_pos = tf.transform_point(Vec3::new(
+                            eng.0 + jitter * 0.22,
+                            1.45 + eng.1 + jitter2 * 0.18,
+                            spawn_z,
+                        ));
+                        // Elongated translucent violet-blue plasma/vapor streak
+                        let vel = back_dir * 26.0
+                            + right_dir * (jitter * 3.8)
+                            + up_dir * (jitter2 * 2.4);
                         commands.spawn((
                             Mesh3d(models.diamond_mesh.clone()),
                             MeshMaterial3d(models.smoke_mat.clone()),
-                            Transform::from_translation(nozzle_pos).with_scale(Vec3::splat(0.38)),
+                            Transform {
+                                translation: streak_pos,
+                                rotation: tf.rotation,
+                                scale: Vec3::new(0.24, 0.24, 1.45),
+                            },
                             ExhaustParticle {
                                 vel,
                                 age: 0.0,
-                                life: if firing || nightmare { 0.55 } else { 0.35 },
-                                start_scale: if firing || nightmare { 0.45 } else { 0.22 },
-                                end_scale: if firing || nightmare { 2.35 } else { 0.95 },
+                                life: 0.26,
+                                start_scale: Vec3::new(0.26, 0.26, 1.55),
+                                end_scale: Vec3::new(0.55, 0.55, 2.40),
                             },
                         ));
-                    }
-                    // Incandescent hot sparks / plasma embers spitting out on boost & Nightmare Fuel!
-                    if (firing || nightmare) && (seed + k) % 2 == 0 {
-                        let vel = back_dir * (28.0 + jitter.abs() * 14.0)
-                            + right_dir * (jitter * 9.5)
-                            + up_dir * (jitter2 * 5.5 + 1.2);
+                        // Crisp glowing orange-gold / cyan supersonic sparks streaking from the bells
+                        let spark_pos = tf.transform_point(Vec3::new(eng.0, 1.45 + eng.1, -3.75));
+                        let spark_vel = back_dir * (34.0 + jitter.abs() * 14.0)
+                            + right_dir * (jitter * 7.5)
+                            + up_dir * (jitter2 * 4.5 + 0.6);
                         commands.spawn((
                             Mesh3d(models.diamond_mesh.clone()),
                             MeshMaterial3d(if k % 2 == 0 { models.spark_mat.clone() } else { models.diamond_mat.clone() }),
-                            Transform::from_translation(nozzle_pos).with_scale(Vec3::splat(0.18)),
+                            Transform {
+                                translation: spark_pos,
+                                rotation: tf.rotation,
+                                scale: Vec3::new(0.06, 0.06, 0.72),
+                            },
                             ExhaustParticle {
-                                vel,
+                                vel: spark_vel,
                                 age: 0.0,
-                                life: 0.28,
-                                start_scale: 0.20,
-                                end_scale: 0.03,
+                                life: 0.22,
+                                start_scale: Vec3::new(0.065, 0.065, 0.78),
+                                end_scale: Vec3::new(0.01, 0.01, 0.15),
                             },
                         ));
                     }
@@ -598,17 +614,43 @@ fn sync_blender_models(
             pitch,
             0.0,
         );
-        if let Some((_, _, mut cur_tf, mut vis)) =
+        if let Some((_, br, mut cur_tf, mut vis)) =
             existing.iter_mut().find(|(_, r, _, _)| r.id == a.id && r.driver == a.driver)
         {
             *cur_tf = tf;
             *vis = Visibility::Visible;
+            if let Some(tail_ent) = br.tail
+                && let Ok((mut ttf, mut tvis)) = parts.get_mut(tail_ent)
+            {
+                *tvis = Visibility::Inherited;
+                let freq = if a.celebrate > 0.0 || a.boost > 0.0 { 11.0 } else { 6.0 };
+                let amp = if a.celebrate > 0.0 { 0.55 } else { 0.36 };
+                let yaw = (t * freq + a.id as f32).sin() * amp;
+                let bob = (t * freq * 2.0 + a.id as f32).cos() * 0.10;
+                ttf.rotation = Quat::from_euler(EulerRot::YXZ, yaw, bob, yaw * 0.25);
+            }
         } else {
-            commands.spawn((
-                BlenderRacer { id: a.id, driver: a.driver },
-                WorldAssetRoot(handle.clone()),
-                tf,
-            ));
+            let mut tail_ent = None;
+            let ent = commands
+                .spawn((WorldAssetRoot(handle.clone()), tf))
+                .with_children(|parent| {
+                    if a.driver == 15 {
+                        tail_ent = Some(
+                            parent
+                                .spawn((
+                                    WorldAssetRoot(models.taicoon_tail.clone()),
+                                    Transform::from_xyz(0.0, 1.65, -0.58),
+                                ))
+                                .id(),
+                        );
+                    }
+                })
+                .id();
+            commands.entity(ent).insert(BlenderRacer {
+                id: a.id,
+                driver: a.driver,
+                tail: tail_ent,
+            });
         }
     }
     for (_, r, _, mut vis) in &mut existing {
@@ -658,10 +700,10 @@ fn tick_exhaust_particles(
         }
         let u = p.age / p.life;
         tf.translation += p.vel * dt;
-        p.vel *= (1.0 - 3.2 * dt).max(0.2);
-        let s = p.start_scale + (p.end_scale - p.start_scale) * u.sqrt();
-        let fade = if u > 0.7 { (1.0 - u) / 0.3 } else { 1.0 };
-        tf.scale = Vec3::splat((s * fade).max(0.01));
+        p.vel *= (1.0 - 2.6 * dt).max(0.2);
+        let s = p.start_scale.lerp(p.end_scale, u.sqrt());
+        let fade = (1.0 - u).powf(1.4);
+        tf.scale = (s * fade).max(Vec3::splat(0.005));
     }
 }
 
