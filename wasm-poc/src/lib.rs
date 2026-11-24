@@ -69,7 +69,7 @@ pub(crate) fn sound_pack_bytes() -> &'static [u8] {
     SOUND_BYTES.get().copied().unwrap_or(&[])
 }
 
-const BLENDER_MODELS: &[(usize, &str)] = &[(15, "taicoon.glb")];
+const BLENDER_MODELS: &[(usize, &str)] = &[(7, "houston.glb"), (15, "taicoon.glb")];
 
 pub(crate) fn has_blender_model(driver: usize) -> bool {
     BLENDER_MODELS.iter().any(|&(d, _)| d == driver)
