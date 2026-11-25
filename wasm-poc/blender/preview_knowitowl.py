@@ -1,8 +1,10 @@
 """
-Render every KnowItOwl animation clip into one short film, each labelled, so
-the moves can be judged without playing a match.
+Render KnowItOwl's animation clips into one short film, each labelled, so
+the moves can be judged without playing a match. Pass clip names after the
+output folder to render only a subset (e.g. `headspin`).
 
     blender --background --python wasm-poc/blender/preview_knowitowl.py -- "$TMPDIR/knowitowl-preview" && open "$TMPDIR/knowitowl-preview/knowitowl-clips.mp4"
+    blender --background --python wasm-poc/blender/preview_knowitowl.py -- "$TMPDIR/knowitowl-preview" headspin && open "$TMPDIR/knowitowl-preview/knowitowl-clips.mp4"
 """
 import importlib.util
 import math
@@ -16,8 +18,9 @@ sys.dont_write_bytecode = True
 here = os.path.dirname(os.path.abspath(__file__))
 models = os.path.join(here, "..", "assets", "models")
 # The builder exports wherever the argument after "--" says: the preview's own
-# folder, so the game's model is left alone.
-out_dir = sys.argv[sys.argv.index("--") + 1]
+# folder, so the game's model is left alone. Optional clip names follow it.
+extra = sys.argv[sys.argv.index("--") + 1:]
+out_dir, only_clips = extra[0], extra[1:]
 spec = importlib.util.spec_from_file_location("build_knowitowl", os.path.join(here, "build_knowitowl.py"))
 owl = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(owl)
@@ -53,6 +56,12 @@ SHOTS = [
     ("monocle: Dark Humor", "monocle", 3, False),
     ("headspin: 360 celebration", "headspin", 2, False),
 ]
+if only_clips:
+    known = {clip for _, clip, _, _ in SHOTS}
+    unknown = [c for c in only_clips if c not in known]
+    if unknown:
+        raise SystemExit(f"Unknown clip(s): {', '.join(unknown)}. Available: {', '.join(sorted(known))}")
+    SHOTS = [shot for shot in SHOTS if shot[1] in only_clips]
 timeline = []
 for label, clip, plays, flying in SHOTS:
     frames = clips[clip][0]
