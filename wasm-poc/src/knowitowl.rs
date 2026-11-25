@@ -130,6 +130,9 @@ struct OwlRig {
     celebrating: bool,
     celebration: usize,
     celebration_count: u32,
+    /// Seconds spent waiting for `rig_up` to bind the skeleton (for diagnostics).
+    unrigged_secs: f32,
+    stalled_logged: bool,
     /// How brightly the monocle sees through the dark.
     glow: f32,
     /// Seconds until the next blink; negative while the eyes are closing and opening.
@@ -310,6 +313,8 @@ fn spawn(
         celebrating: false,
         celebration: 0,
         celebration_count: 0,
+        unrigged_secs: 0.0,
+        stalled_logged: false,
         glow: 0.0,
         blink: 1.5 + id as f32 * 0.7,
         shed: 0.0,
@@ -353,21 +358,36 @@ fn rig_up(
         if assets.moves.is_none() {
             let Some(model) = models.get(&assets.owl) else { continue };
             let mut graph = AnimationGraph::new();
+            let (mut leg_bones, mut upper_bones) = (0usize, 0usize);
             for part in family.iter_descendants(rig.rider) {
                 let Ok((name, &bone)) = bones.get(part) else { continue };
                 let leg = ["thigh", "shin", "foot"].iter().any(|leg| name.starts_with(leg));
+                if leg { leg_bones += 1; } else { upper_bones += 1; }
                 graph.add_target_to_mask_group(bone, if leg { LEGS } else { UPPER });
             }
             let root = graph.root;
             let mut nodes = [root; CLIPS.len()];
             let mut crank_turn = 1.0;
+            let mut missing = Vec::new();
             for (index, name) in CLIPS.into_iter().enumerate() {
-                let Some(clip) = model.named_animations.get(name) else { continue };
+                let Some(clip) = model.named_animations.get(name) else {
+                    missing.push(name);
+                    continue;
+                };
                 if index == PEDAL {
                     crank_turn = clips.get(clip).map_or(1.0, |clip| clip.duration());
                 }
                 let keep_off = if index < LEG_CLIPS { UPPER } else { LEGS };
                 nodes[index] = graph.add_clip_with_mask(clip.clone(), 1 << keep_off, 1.0, root);
+            }
+            if !missing.is_empty() || leg_bones == 0 || upper_bones == 0 {
+                warn!(
+                    "knowitowl rig_up incomplete: leg_bones={} upper_bones={} missing={:?} available={:?}",
+                    leg_bones,
+                    upper_bones,
+                    missing,
+                    model.named_animations.keys().collect::<Vec<_>>()
+                );
             }
             assets.moves = Some(Moves { graph: graphs.add(graph), clips: nodes, crank_turn });
         }
@@ -547,6 +567,18 @@ fn ride(
             rider.translation = Vec3::Y * lift;
         }
 
+        if rig.skeleton.is_none() {
+            rig.unrigged_secs += dt;
+            if rig.unrigged_secs > 2.5 && !rig.stalled_logged {
+                rig.stalled_logged = true;
+                warn!(
+                    "knowitowl rig_up stalled for actor {} after {:.1}s (moves_ready={})",
+                    a.id,
+                    rig.unrigged_secs,
+                    assets.moves.is_some()
+                );
+            }
+        }
         if let (Some(skeleton), Some(moves)) = (&rig.skeleton, &assets.moves) {
             // Legs pedal with the crank or trail in flight; the upper body
             // rests, flies, or gives way to a gesture.

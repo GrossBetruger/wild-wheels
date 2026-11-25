@@ -54,6 +54,49 @@ export class ClientLog {
   sent() { if (!this.sending) return; this.queue.splice(0, this.sending.entries); this.dropped -= this.sending.dropped; this.sending = null; }
 }
 
+const IGNORED_CONSOLE = /OrderIndependentTransparencyPlugin|BackgroundMotionVectorsPlugin|ScreenSpaceAmbientOcclusionPlugin|AtmospherePlugin/;
+
+function formatConsole(args) {
+  if (!args.length) return '';
+  if (typeof args[0] === 'string' && args[0].includes('%c')) {
+    const styles = (args[0].match(/%c/g) ?? []).length;
+    const head = args[0].replace(/%c/g, '').replace(/\s+/g, ' ').trim();
+    const rest = args.slice(1 + styles).map(arg => (typeof arg === 'string' ? arg : String(arg)));
+    return [head, ...rest].filter(Boolean).join(' ');
+  }
+  return args.map(arg => (arg instanceof Error ? `${arg.message} ${arg.stack ?? ''}` : typeof arg === 'string' ? arg : String(arg))).join(' ').replace(/\s+/g, ' ').trim();
+}
+
+// Forwards browser console errors/warnings — including Bevy WASM's styled
+// `%cERROR%c` / `%cWARN%c` console.log lines — to the server log, rate-limited.
+export function captureConsole(log, target = console) {
+  const report = (level, args) => {
+    const message = formatConsole(args);
+    if (!message || IGNORED_CONSOLE.test(message)) return;
+    log.limited(`console:${level}:${message.slice(0, 120)}`, 30000, level, `console-${level}`, { message });
+  };
+  for (const [method, level] of [['error', 'error'], ['warn', 'warn']]) {
+    const original = target[method]?.bind(target);
+    if (!original) continue;
+    target[method] = (...args) => {
+      try { report(level, args); } catch { /* Never break console logging. */ }
+      return original(...args);
+    };
+  }
+  const originalLog = target.log?.bind(target);
+  if (originalLog) {
+    target.log = (...args) => {
+      const first = typeof args[0] === 'string' ? args[0] : '';
+      if (first.startsWith('%cERROR%c')) {
+        try { report('error', args); } catch { /* Never break console logging. */ }
+      } else if (first.startsWith('%cWARN%c')) {
+        try { report('warn', args); } catch { /* Never break console logging. */ }
+      }
+      return originalLog(...args);
+    };
+  }
+}
+
 // Sends what waits every `everyMs` and when the page is hidden. A server that
 // has no log (404) or refuses this client's reports ends reporting for the visit.
 export function startReporting(log, { token, post = defaultPost, every = LIMITS.everyMs, schedule = setInterval, onHide = hidden => addEventListener('pagehide', hidden) } = {}) {

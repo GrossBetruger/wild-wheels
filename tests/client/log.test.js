@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ClientLog, FrameHealth, LIMITS, startReporting } from '../../client/log.js';
+import { ClientLog, FrameHealth, LIMITS, captureConsole, startReporting } from '../../client/log.js';
 
 test('the same problem is counted instead of repeated, and a batch says how long ago each happened', () => {
   let now = 1000; const log = new ClientLog({ build: 'abc', now: () => now });
@@ -79,4 +79,25 @@ test('matches shorter than a minute get separate frame summaries', () => {
     { level: 'info', event: 'match-frames', data: { frames: 2, long: 0, worst: 35, gap: 30, slowMinutes: 0, rttMs: 20 } },
     { level: 'info', event: 'match-frames', data: { frames: 1, long: 0, worst: 16, gap: 14, slowMinutes: 0, rttMs: 30 } },
   ]);
+});
+test('captureConsole forwards console errors, warnings, and Bevy styled WARN/ERROR logs while filtering WebGL2 startup noise', () => {
+  const log = new ClientLog({ client: 'bevy-wasm' });
+  const fake = { error() {}, warn() {}, log() {} };
+  captureConsole(log, fake);
+  fake.error('WebGL error:', 'INVALID_OPERATION');
+  fake.warn('Asset slow');
+  fake.log('%cERROR%c bevy_asset::server%c Path not found: models/knowitowl.glb', 'color: red', 'color: gray', 'color: inherit');
+  fake.log('%cWARN%c bevy_animation%c Animation application failed', 'color: orange', 'color: gray', 'color: inherit');
+  fake.log('%cWARN%c bevy_pbr%c ScreenSpaceAmbientOcclusionPlugin not loaded.', 'color: orange', 'color: gray', 'color: inherit');
+  fake.log('%cINFO%c bevy_render%c Normal info line', 'color: white', 'color: gray', 'color: inherit');
+  const entries = JSON.parse(log.batch()).entries;
+  assert.equal(entries.length, 4);
+  assert.deepEqual(entries.map(e => [e.level, e.event]), [
+    ['error', 'console-error'],
+    ['warn', 'console-warn'],
+    ['error', 'console-error'],
+    ['warn', 'console-warn'],
+  ]);
+  assert.match(entries[2].data.message, /Path not found: models\/knowitowl\.glb/);
+  assert.match(entries[3].data.message, /Animation application failed/);
 });

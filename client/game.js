@@ -16,7 +16,7 @@ import { KillCelebration, ChaffNotice, RingOfFireNotice } from '../ui/combat-not
 import { usesMobileControls, bombTarget, panBomber } from '../ui/mobile.js';
 import { CharacterPreview } from './character-preview.js';
 import { canChoosePlayerColor, playerColors, savedPlayerColor, applyPlayerColors } from '../gameplay/player-colors.js';
-import { ClientLog, FrameHealth, startReporting } from './log.js';
+import { ClientLog, FrameHealth, captureConsole, startReporting } from './log.js';
 import { allTimeRows, loadAllTime } from '../ui/all-time.js';
 import { isBevyBetaPath } from './build-refresh.js';
 const $ = id => document.getElementById(id);
@@ -44,6 +44,7 @@ canvas.tabIndex = 0;
 const keys = new Set(), audio = new RaceAudio(), renderer = new Renderer(canvas);
 // This browser's problems, reported to the server's log; see docs/logging.md.
 const clientLog = new ClientLog({ client: beta ? 'bevy-wasm' : 'browser', build: document.body.dataset.build ?? '' }), frameHealth = new FrameHealth((level, event, data) => clientLog.note(level, event, data));
+captureConsole(clientLog);
 let bevy;
 const mobile = usesMobileControls(navigator.maxTouchPoints, matchMedia('(pointer:coarse)').matches);
 
