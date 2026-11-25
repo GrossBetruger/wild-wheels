@@ -51,6 +51,7 @@ SHOTS = [
     ("wink: left eyelid shape key", "wink", 3, False),
     ("flourish", "flourish", 2, False),
     ("monocle: Dark Humor", "monocle", 3, False),
+    ("headspin: 360 celebration", "headspin", 2, False),
 ]
 timeline = []
 for label, clip, plays, flying in SHOTS:

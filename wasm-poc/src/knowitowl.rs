@@ -38,13 +38,18 @@ const TEAL: Vec3 = Vec3::new(0.12, 0.9, 0.78);
 
 /// The clips in `knowitowl.glb`, by name. The first two move only the legs;
 /// the rest move everything else, so legs and upper body blend separately.
-const CLIPS: [&str; 9] = ["pedal", "trail", "perch", "fly", "wave", "cheer", "wink", "flourish", "monocle"];
+const CLIPS: [&str; 10] = [
+    "pedal", "trail", "perch", "fly", "wave", "cheer", "wink", "flourish", "monocle", "headspin",
+];
 const PEDAL: usize = 0;
 const TRAIL: usize = 1;
 const PERCH: usize = 2;
 const FLY: usize = 3;
-/// The celebration poses of the browser, in its order, start here.
+/// The celebration poses start here (wave, cheer, wink, flourish, monocle, headspin).
 const GESTURES: usize = 4;
+const WINK_GESTURE: usize = 2;
+const MONOCLE_GESTURE: usize = 4;
+const HEADSPIN_GESTURE: usize = 5;
 const LEG_CLIPS: usize = 2;
 /// Mask groups of the animation graph: which bones a clip may not move.
 const LEGS: u32 = 0;
@@ -121,6 +126,10 @@ struct OwlRig {
     turn: f32,
     /// How far into each celebration pose he is.
     gestures: [f32; CLIPS.len() - GESTURES],
+    /// Whether a celebration was active on the previous frame, and which gesture was chosen.
+    celebrating: bool,
+    celebration: usize,
+    celebration_count: u32,
     /// How brightly the monocle sees through the dark.
     glow: f32,
     /// Seconds until the next blink; negative while the eyes are closing and opening.
@@ -298,6 +307,9 @@ fn spawn(
         roll: 0.0,
         turn: 0.0,
         gestures: [0.0; CLIPS.len() - GESTURES],
+        celebrating: false,
+        celebration: 0,
+        celebration_count: 0,
         glow: 0.0,
         blink: 1.5 + id as f32 * 0.7,
         shed: 0.0,
@@ -474,19 +486,38 @@ fn ride(
             rig.turn = (rig.turn + covered / WHEEL_RADIUS * GEARING).rem_euclid(TAU);
         }
 
-        // Celebrations cycle through the browser's poses; Dark Humor holds the last.
-        let pose = match (view.special_abilities && a.special_active > 0.0, a.celebrate > 0.0) {
-            (true, _) => 6,
-            (false, true) => 1 + (now * 1.3) as usize % 6,
-            (false, false) => 0,
+        // Celebrations pick randomly among all celebration gestures (including 360° headspin);
+        // Dark Humor holds the monocle pose.
+        let dark_humor = view.special_abilities && a.special_active > 0.0;
+        let celebrating = !dark_humor && a.celebrate > 0.0;
+        let mut restart_headspin = false;
+        if celebrating && !rig.celebrating {
+            rig.celebration_count = rig.celebration_count.wrapping_add(1);
+            let n = rig.gestures.len();
+            let seed = (now.to_bits() as u64)
+                ^ ((a.id as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15))
+                ^ ((rig.celebration_count as u64).wrapping_mul(0xBF58_476D_1CE4_E5B9))
+                ^ (rig.turn.to_bits() as u64);
+            let mut pick = (seed.wrapping_mul(0x94D0_49BB_1331_11EB) >> 32) as usize % n;
+            if n > 1 && rig.celebration_count > 1 && pick == rig.celebration {
+                pick = (pick + 1) % n;
+            }
+            rig.celebration = pick;
+            restart_headspin = pick == HEADSPIN_GESTURE;
+        }
+        rig.celebrating = celebrating;
+        let gesture = if dark_humor {
+            Some(MONOCLE_GESTURE)
+        } else if celebrating {
+            Some(rig.celebration)
+        } else {
+            None
         };
-        // Poses 5 and 6 are both the wing at the monocle.
-        let gesture = pose.checked_sub(1).map(|gesture| gesture.min(rig.gestures.len() - 1));
         for (index, depth) in rig.gestures.iter_mut().enumerate() {
             *depth += (f32::from(gesture == Some(index)) - *depth) * ease(10.0);
         }
-        rig.glow += (f32::from(pose == 6) - rig.glow) * ease(7.0);
-        let monocle = rig.gestures[rig.gestures.len() - 1];
+        rig.glow += (f32::from(dark_humor) - rig.glow) * ease(7.0);
+        let monocle = rig.gestures[MONOCLE_GESTURE];
 
         // The bicycle stays behind the moment he takes off.
         if let Ok((_, mut bike)) = parts.get_mut(rig.bike) {
@@ -535,6 +566,11 @@ fn ride(
                 if let Some(pedal) = player.animation_mut(moves.clips[PEDAL]) {
                     pedal.seek_to(rig.turn / TAU * moves.crank_turn);
                 }
+                if restart_headspin
+                    && let Some(spin) = player.animation_mut(moves.clips[GESTURES + HEADSPIN_GESTURE])
+                {
+                    spin.replay();
+                }
             }
 
             // He blinks every few seconds, and winks his left eye for the wink pose.
@@ -549,7 +585,7 @@ fn ride(
             if let Ok(mut lids) = morphs.get_mut(skeleton.lids)
                 && let [left, right, ..] = lids.weights_mut()
             {
-                *left = blink.max(rig.gestures[2]).clamp(0.0, 1.0);
+                *left = blink.max(rig.gestures[WINK_GESTURE]).clamp(0.0, 1.0);
                 *right = blink.clamp(0.0, 1.0);
             }
 

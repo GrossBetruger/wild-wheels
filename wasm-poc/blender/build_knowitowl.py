@@ -831,6 +831,46 @@ def clip_monocle(cycle):
     return pose
 
 
+def clip_headspin(cycle):
+    """Celebration 360-degree owl headspin: brief wind-up, snappy full-circle
+    whip with trailing monocle chain and streaming ear tufts, crisp settle."""
+    pose = still()
+    if cycle < 0.14:
+        # Anticipation wind-up opposite the spin direction.
+        u = cycle / 0.14
+        s = u * u * (3 - 2 * u)
+        yaw = -0.24 * s
+        vel = -0.24 * 6 * u * (1 - u) / 0.14
+        pitch = 0.07 * s
+        lift = 0.36 * s
+    elif cycle < 0.78:
+        # Smooth full 360+ degree whip around the neck.
+        u = (cycle - 0.14) / 0.64
+        s = u * u * (3 - 2 * u)
+        yaw = -0.24 + (math.tau + 0.42) * s
+        vel = (math.tau + 0.42) * 6 * u * (1 - u) / 0.64
+        pitch = 0.07 * (1 - s) - 0.10 * math.sin(math.pi * u)
+        lift = 0.36 + 0.18 * math.sin(math.pi * u)
+    else:
+        # Overshoot settle back to 360° (0°) with a proud little nod.
+        u = (cycle - 0.78) / 0.22
+        s = u * u * (3 - 2 * u)
+        yaw = math.tau + 0.18 * (1 - s)
+        vel = -0.18 * 6 * u * (1 - u) / 0.22
+        pitch = 0.06 * math.sin(math.pi * u)
+        lift = 0.36 * (1 - s)
+
+    spin_norm = max(-1.0, min(1.0, vel / 12.0))
+    pose["body"] = RX(0.04 * abs(spin_norm))
+    pose["head"] = RY(yaw) @ RX(pitch)
+    pose["chain"] = RZ(-0.55 * spin_norm) @ RX(0.28 * abs(spin_norm))
+    pose["tail"] = RX(-0.14 * abs(spin_norm))
+    for side in SIDES:
+        pose["tuft" + SIDES[side]] = RX(-0.28 * abs(spin_norm)) @ RZ(side * -0.18 * spin_norm)
+        wings(pose, side, 0.12 + lift, 0.14 * abs(spin_norm), 0.12 * abs(spin_norm))
+    return pose
+
+
 # (name, frames at 30 a second, bones it moves, pose at each point of its cycle)
 CLIPS = [
     ("pedal", 32, LEGS, clip_pedal),
@@ -842,6 +882,7 @@ CLIPS = [
     ("wink", 30, UPPER, clip_wink),
     ("flourish", 45, UPPER, clip_flourish),
     ("monocle", 30, UPPER, clip_monocle),
+    ("headspin", 36, UPPER, clip_headspin),
 ]
 # Model space -> Blender space, as `loc` does for points.
 TO_BLENDER = Matrix(((1, 0, 0, 0), (0, 0, -1, 0), (0, 1, 0, 0), (0, 0, 0, 1)))
