@@ -6,7 +6,7 @@
 //! `characters/knowitowl/knowitowl.js`.
 
 use crate::{MobileGraphics, Presentation, app::GameSession, ported, scene};
-use bevy::animation::{AnimationTargetId, graph::AnimationNodeIndex};
+use bevy::animation::{AnimatedBy, AnimationTargetId, graph::AnimationNodeIndex};
 use bevy::gltf::{Gltf, GltfAssetLabel};
 use bevy::mesh::morph::MorphWeights;
 use bevy::prelude::*;
@@ -142,9 +142,11 @@ struct OwlRig {
 
 struct Skeleton {
     player: Entity,
-    lids: Entity,
+    lids: Option<Entity>,
+    wing: Option<Entity>,
     rings: [Entity; RINGS],
     gleam: Option<Entity>,
+    frozen_logged: bool,
 }
 
 #[derive(Component)]
@@ -326,6 +328,7 @@ fn spawn(
 #[allow(clippy::too_many_arguments)]
 fn rig_up(
     mut commands: Commands,
+    time: Res<Time>,
     mobile: Res<MobileGraphics>,
     assets: Option<ResMut<OwlAssets>>,
     models: Res<Assets<Gltf>>,
@@ -333,34 +336,64 @@ fn rig_up(
     mut graphs: ResMut<Assets<AnimationGraph>>,
     mut rigs: Query<&mut OwlRig>,
     family: Query<&Children>,
-    bones: Query<(&Name, &AnimationTargetId)>,
+    bones: Query<(&Name, &AnimationTargetId, Option<&AnimatedBy>)>,
     mut players: Query<&mut AnimationPlayer>,
     morphs: Query<(), With<MorphWeights>>,
 ) {
     let Some(mut assets) = assets else { return };
+    let dt = time.delta_secs().min(0.05);
     for mut rig in &mut rigs {
         if rig.skeleton.is_some() {
             continue;
         }
-        let (mut player, mut lids, mut head) = (None, None, None);
+        let (mut player, mut lids, mut head, mut wing, mut descendants) = (None, None, None, None, 0usize);
         for part in family.iter_descendants(rig.rider) {
+            descendants += 1;
             if players.contains(part) {
                 player = Some(part);
             }
             if morphs.contains(part) {
                 lids = Some(part);
             }
-            if bones.get(part).is_ok_and(|(name, _)| name.as_str() == "head") {
-                head = Some(part);
+            if let Ok((name, _, _)) = bones.get(part) {
+                if name.as_str() == "head" {
+                    head = Some(part);
+                } else if name.as_str() == "wing_upper_l" {
+                    wing = Some(part);
+                }
             }
         }
-        let (Some(player), Some(lids), Some(head)) = (player, lids, head) else { continue };
+        let (Some(player), Some(head)) = (player, head) else {
+            rig.unrigged_secs += dt;
+            if rig.unrigged_secs > 2.5 && !rig.stalled_logged {
+                rig.stalled_logged = true;
+                warn!(
+                    "knowitowl rig_up stalled actor={} after {:.1}s: descendants={} player={} head={} lids={} model={} moves={}",
+                    rig.id,
+                    rig.unrigged_secs,
+                    descendants,
+                    player.is_some(),
+                    head.is_some(),
+                    lids.is_some(),
+                    models.get(&assets.owl).is_some(),
+                    assets.moves.is_some(),
+                );
+            }
+            continue;
+        };
         if assets.moves.is_none() {
-            let Some(model) = models.get(&assets.owl) else { continue };
+            let Some(model) = models.get(&assets.owl) else {
+                rig.unrigged_secs += dt;
+                if rig.unrigged_secs > 2.5 && !rig.stalled_logged {
+                    rig.stalled_logged = true;
+                    warn!("knowitowl rig_up waiting on Gltf asset for actor {} after {:.1}s", rig.id, rig.unrigged_secs);
+                }
+                continue;
+            };
             let mut graph = AnimationGraph::new();
             let (mut leg_bones, mut upper_bones) = (0usize, 0usize);
             for part in family.iter_descendants(rig.rider) {
-                let Ok((name, &bone)) = bones.get(part) else { continue };
+                let Ok((name, &bone, _)) = bones.get(part) else { continue };
                 let leg = ["thigh", "shin", "foot"].iter().any(|leg| name.starts_with(leg));
                 if leg { leg_bones += 1; } else { upper_bones += 1; }
                 graph.add_target_to_mask_group(bone, if leg { LEGS } else { UPPER });
@@ -390,6 +423,19 @@ fn rig_up(
                 );
             }
             assets.moves = Some(Moves { graph: graphs.add(graph), clips: nodes, crank_turn });
+        }
+        // Self-heal AnimatedBy if any bone points at a different AnimationPlayer entity.
+        let mut fixed_targets = 0usize;
+        for part in family.iter_descendants(rig.rider) {
+            if let Ok((_, _, animated_by)) = bones.get(part)
+                && animated_by.map(|ab| ab.0) != Some(player)
+            {
+                commands.entity(part).insert(AnimatedBy(player));
+                fixed_targets += 1;
+            }
+        }
+        if fixed_targets > 0 {
+            warn!("knowitowl actor {} repaired {} mismatched AnimatedBy targets -> {:?}", rig.id, fixed_targets, player);
         }
         let Some(moves) = assets.moves.clone() else { continue };
         let Ok(mut playing) = players.get_mut(player) else { continue };
@@ -442,7 +488,7 @@ fn rig_up(
                     }
                 });
         });
-        rig.skeleton = Some(Skeleton { player, lids, rings, gleam });
+        rig.skeleton = Some(Skeleton { player, lids, wing, rings, gleam, frozen_logged: false });
     }
 }
 
@@ -567,19 +613,7 @@ fn ride(
             rider.translation = Vec3::Y * lift;
         }
 
-        if rig.skeleton.is_none() {
-            rig.unrigged_secs += dt;
-            if rig.unrigged_secs > 2.5 && !rig.stalled_logged {
-                rig.stalled_logged = true;
-                warn!(
-                    "knowitowl rig_up stalled for actor {} after {:.1}s (moves_ready={})",
-                    a.id,
-                    rig.unrigged_secs,
-                    assets.moves.is_some()
-                );
-            }
-        }
-        if let (Some(skeleton), Some(moves)) = (&rig.skeleton, &assets.moves) {
+        if let (Some(skeleton), Some(moves)) = (&mut rig.skeleton, &assets.moves) {
             // Legs pedal with the crank or trail in flight; the upper body
             // rests, flies, or gives way to a gesture.
             let gesturing = rig.gestures.iter().sum::<f32>().min(1.0);
@@ -603,6 +637,25 @@ fn ride(
                 {
                     spin.replay();
                 }
+                if boosting && flight > 0.85 && !skeleton.frozen_logged
+                    && let Some(wing_ent) = skeleton.wing
+                    && let Ok((wing_tf, _)) = parts.get(wing_ent)
+                    && wing_tf.rotation.angle_between(Quat::IDENTITY) < 0.05
+                {
+                    skeleton.frozen_logged = true;
+                    let fly = player.animation(moves.clips[FLY]);
+                    warn!(
+                        "knowitowl wing frozen during boost actor={} fly_weight={:.2} fly_seek={:?} fly_paused={:?} gesturing={:.2}",
+                        a.id,
+                        weights[FLY],
+                        fly.map(|c| c.seek_time()),
+                        fly.map(|c| c.is_paused()),
+                        gesturing,
+                    );
+                }
+            } else if !skeleton.frozen_logged {
+                skeleton.frozen_logged = true;
+                warn!("knowitowl actor {} AnimationPlayer missing on {:?}", a.id, skeleton.player);
             }
 
             // He blinks every few seconds, and winks his left eye for the wink pose.
@@ -614,7 +667,8 @@ fn ride(
                 true => 1.0 - (rig.blink / -0.08 - 1.0).abs(),
                 false => 0.0,
             };
-            if let Ok(mut lids) = morphs.get_mut(skeleton.lids)
+            if let Some(lids_ent) = skeleton.lids
+                && let Ok(mut lids) = morphs.get_mut(lids_ent)
                 && let [left, right, ..] = lids.weights_mut()
             {
                 *left = blink.max(rig.gestures[WINK_GESTURE]).clamp(0.0, 1.0);
