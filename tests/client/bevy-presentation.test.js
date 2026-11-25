@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { MobileBevyQuality } from '../../client/bevy-presentation.js';
+import { MobileBevyQuality, versionAssetUrl } from '../../client/bevy-presentation.js';
 
 test('a phone that misses the frame budget drops resolution, then caps rendering at 20 FPS', () => {
   const quality = new MobileBevyQuality();
@@ -34,4 +34,12 @@ test('Retina and landscape views stay within the same mobile pixel budget', () =
   assert.equal(Math.round(380 * phoneScale * 3), 228);
   const landscapeScale = quality.scale(844, 390, 3);
   assert.equal(Math.round(844 * 390 * (landscapeScale * 3) ** 2), 80000);
+});
+
+test('versionAssetUrl appends ?v=<build> only to unversioned Bevy asset paths', () => {
+  assert.equal(versionAssetUrl('assets/models/knowitowl.glb', 'ABC123'), 'assets/models/knowitowl.glb?v=ABC123');
+  assert.equal(versionAssetUrl('/experimental/assets/models/knowitowl.glb', 'ABC123'), '/experimental/assets/models/knowitowl.glb?v=ABC123');
+  assert.equal(versionAssetUrl('assets/models/knowitowl.glb?v=OLD', 'ABC123'), 'assets/models/knowitowl.glb?v=OLD');
+  assert.equal(versionAssetUrl('/api/session', 'ABC123'), '/api/session');
+  assert.equal(versionAssetUrl('assets/models/knowitowl.glb', ''), 'assets/models/knowitowl.glb');
 });

@@ -2,6 +2,28 @@ import { createBinaryEncoder } from '../networking/binary-wire.js';
 import { arenas } from '../gameplay/combat.js';
 
 const prefix = '/experimental/';
+let assetFetchVersioned = false;
+// Appends `?v=<build>` to Bevy's unversioned `assets/...` fetches so browsers
+// and Cloud CDN cache `.glb` models as immutable per build without stale hits.
+export function versionAssetUrl(url, build) {
+  if (!build || typeof url !== 'string' || url.includes('?')) return url;
+  if (url.startsWith('assets/') || url.startsWith(`${prefix}assets/`)) {
+    return `${url}?v=${encodeURIComponent(build)}`;
+  }
+  return url;
+}
+function installAssetFetchVersioning(build) {
+  if (assetFetchVersioned || !build || typeof globalThis.fetch !== 'function') return;
+  assetFetchVersioned = true;
+  const originalFetch = globalThis.fetch.bind(globalThis);
+  globalThis.fetch = (input, init) => {
+    if (typeof input === 'string') {
+      const next = versionAssetUrl(input, build);
+      if (next !== input) return originalFetch(next, init);
+    }
+    return originalFetch(input, init);
+  };
+}
 const mobileProfiles = [
   { name: 'High', scale: .8, pixels: 120000, fps: 30 },
   { name: 'Balanced', scale: .6, pixels: 80000, fps: 30 },
@@ -169,6 +191,7 @@ export class BevyPresentation {
     const started = performance.now();
     const build = typeof document !== 'undefined' ? document.body?.dataset?.build : '';
     const v = build ? `?v=${encodeURIComponent(build)}` : '';
+    installAssetFetchVersioning(build);
     let wasmDone = false;
     let packLoaded = 0;
     let packTotal = 0;
