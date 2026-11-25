@@ -54,6 +54,9 @@ test('public transport requires exact origin and explicitly trusted loopback pro
   assert.equal(security.check(request({origin:'https://game.example','x-forwarded-proto':'https'})),'https://game.example');
   for(const origin of ['http://game.example','https://game.example.attacker.invalid','null','https://game.example/'])assert.throws(()=>security.check(request({origin,'x-forwarded-proto':'https'})),{status:403});
   assert.throws(()=>security.check(request({origin:'https://game.example','x-forwarded-proto':'https'},'203.0.113.7')),{status:403});
+  for(const proxyIp of ['35.191.12.34','::ffff:130.211.2.5','10.128.0.5']){
+    assert.equal(security.check(request({origin:'https://game.example','x-forwarded-proto':'https'},proxyIp)),'https://game.example');
+  }
   assert.equal(new RequestSecurity().origin(request()),'http://game.example');
 });
 

@@ -7,6 +7,14 @@ export function localHost(host){
     return name==='localhost'||name==='::1'||isIP(name)===4&&(/^(127\.|10\.|192\.168\.)/.test(name)||/^172\.(1[6-9]|2\d|3[01])\./.test(name));
   }catch{return false;}
 }
+function trustedProxyPeer(peer){
+  if(!peer)return false;
+  const ip=peer.startsWith('::ffff:')?peer.slice(7):peer;
+  if(ip==='127.0.0.1'||ip==='::1')return true;
+  if(isIP(ip)!==4)return false;
+  // Private VPC subnets + Google Cloud Load Balancer GFE ranges (35.191.0.0/16, 130.211.0.0/22).
+  return /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|35\.191\.|130\.211\.[0-3]\.)/.test(ip);
+}
 export class RequestSecurity {
   constructor({publicOrigin=process.env.PUBLIC_ORIGIN,trustProxy=process.env.TRUST_PROXY==='1'}={}){
     this.trustProxy=trustProxy;
@@ -19,7 +27,8 @@ export class RequestSecurity {
   secure(req){
     const peer=req.socket.remoteAddress;
     const loopback=peer==='127.0.0.1'||peer==='::1'||peer==='::ffff:127.0.0.1';
-    return Boolean(req.socket.encrypted||(this.trustProxy||this.tunnelOrigin&&req.headers.host===new URL(this.tunnelOrigin).host)&&loopback&&req.headers['x-forwarded-proto']==='https');
+    const forwarded=String(req.headers['x-forwarded-proto']||'').split(',')[0].trim()==='https';
+    return Boolean(req.socket.encrypted||forwarded&&(this.trustProxy&&trustedProxyPeer(peer)||this.tunnelOrigin&&req.headers.host===new URL(this.tunnelOrigin).host&&loopback));
   }
   origin(req){
     const host=req.headers.host;
