@@ -915,7 +915,7 @@ export class Renderer {
       const t=cloud.age,fade=Math.min(1,(cloud.life-t)/1.4),expansion=1-Math.exp(-t*2.5);
       const fairy=[r,...r.bots].some(actor=>actor.id===cloud.owner&&actor.driver===9);
       const tint=rgb(cloud.color??'#a8cde1'),flake=tint.map(c=>.15+c*.85),highlight=tint.map(c=>.65+c*.35),smoke=tint.map(c=>.45+c*.45);
-      for(let i=0;i<96;i++){
+      for(let i=0;i<24;i++){
         const a=i*2.399,spread=(2+expansion*3.5)*(1+i%5*.16),x=cloud.wx+Math.cos(a)*spread+Math.sin(t*.7+i)*.4,z=cloud.wz+Math.sin(a)*spread+Math.cos(t*.6+i)*.4,y=2.5+(i%7)*.55+Math.sin(t*1.8+i)*.7-(1-fade);
         m.at(x,y,z,a+t*4);
         if(fairy&&i%8===0)this.model('fairy-star',x,y,z,a+t,drawFairyStar);
@@ -923,7 +923,7 @@ export class Renderer {
         this.glow.at(x,y,z);const sparkle=(.55+.45*Math.sin(i*3+t*12)**2)*fade;this.glow.particle(0,0,0,(i%3===0?1.8:.8)*fade,(fairy&&i%2?[.95,.62,.22]:flake).map(c=>c*sparkle));
       }
       this.smoke.at(cloud.wx,3+Math.sin(t)*.3,cloud.wz);this.smoke.particle(0,0,0,(fairy?5:10+expansion*8)*Math.sqrt(fade),fairy?[.98,.65,.81]:smoke);
-      if(t<.45){this.glow.at(cloud.wx,2.5,cloud.wz);this.glow.particle(0,0,0,9*(1-t/.45),flake);for(let i=0;i<16;i++){const f=i/15;this.glow.at(cloud.originX+(cloud.wx-cloud.originX)*f,1.5+Math.sin(f*Math.PI)*2,cloud.originZ+(cloud.wz-cloud.originZ)*f);this.glow.particle(0,0,0,1.2*(1-t/.45),flake);}}
+      if(t<.45){this.glow.at(cloud.wx,2.5,cloud.wz);this.glow.particle(0,0,0,9*(1-t/.45),flake);for(let i=0;i<4;i++){const f=i/3;this.glow.at(cloud.originX+(cloud.wx-cloud.originX)*f,1.5+Math.sin(f*Math.PI)*2,cloud.originZ+(cloud.wz-cloud.originZ)*f);this.glow.particle(0,0,0,1.2*(1-t/.45),flake);}}
     }
     const bikers=new Set([r,...r.bots].filter(actor=>actor.driver===10).map(actor=>actor.id));
     for(const particle of r.driftParticles){
