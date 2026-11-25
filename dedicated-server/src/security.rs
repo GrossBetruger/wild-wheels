@@ -5,10 +5,25 @@ fn valid_host(host:&str)->bool{
     uri.path()=="/"&&uri.query().is_none()&&uri.host().is_some()&&uri.authority().is_some_and(|a|a.as_str()==host&&!host.contains('@'))
 }
 
+fn trusted_proxy_peer(peer: IpAddr) -> bool {
+    match peer.to_canonical() {
+        IpAddr::V4(ip) => {
+            let [a, b, c, _] = ip.octets();
+            ip.is_loopback()
+                || ip.is_private()
+                || (a == 35 && b == 191)
+                || (a == 130 && b == 211 && c <= 3)
+        }
+        IpAddr::V6(ip) => ip.is_loopback(),
+    }
+}
+
 pub fn trusted_https(app: &App, h: &HeaderMap, peer: IpAddr) -> bool {
     app.trust_proxy
-        && peer.to_canonical().is_loopback()
-        && h.get("x-forwarded-proto").is_some_and(|v| v == "https")
+        && trusted_proxy_peer(peer)
+        && h.get("x-forwarded-proto")
+            .and_then(|v| v.to_str().ok())
+            .is_some_and(|v| v.split(',').next().is_some_and(|s| s.trim() == "https"))
 }
 
 pub fn same_origin(app: &App, h: &HeaderMap, peer: IpAddr) -> bool {
@@ -157,6 +172,11 @@ mod tests {
         assert!(same_origin(&app, &headers, local));
         assert!(same_origin_get(&app, &headers, local));
         assert!(!same_origin(&app, &headers, remote));
+        for proxy_ip in ["35.191.12.34", "::ffff:130.211.2.5", "10.128.0.5"] {
+            let peer: IpAddr = proxy_ip.parse().unwrap();
+            assert!(transport(&app, &headers, peer), "proxy {proxy_ip} should be trusted");
+            assert!(same_origin(&app, &headers, peer), "proxy {proxy_ip} should pass same_origin");
+        }
         headers.insert(header::ORIGIN, "http://wildwheels.duckdns.org".parse().unwrap());
         assert!(!same_origin(&app, &headers, local));
         headers.insert(header::ORIGIN, "https://attacker.invalid".parse().unwrap());
