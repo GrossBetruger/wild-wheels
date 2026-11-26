@@ -1,0 +1,1 @@
+releases/bevy-web/*.gz filter=lfs diff=lfs merge=lfs -text

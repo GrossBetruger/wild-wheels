@@ -166,7 +166,7 @@ pub struct Notices {
     averted: f64,
     burning: bool,
     ring: Option<(bool, f64)>,
-    abilities: HashMap<usize, (usize, f64, f64, f64, f64, String)>,
+    abilities: HashMap<usize, (usize, f64, f64, f64, f64, String, u16)>,
     last_karma_id: u32,
     ability: Option<Notice>,
     intelligence: Option<u32>,
@@ -358,6 +358,7 @@ impl Notices {
                 a.somersault_cooldown,
                 a.nightmare_cooldown,
                 a.notice.clone(),
+                a.euler_bridges,
             );
             let before = self.abilities.insert(a.id, state.clone());
             let Some(before) = before else {
@@ -400,6 +401,18 @@ impl Notices {
                     }
                     continue;
                 }
+            }
+            let crossed = a.euler_bridges.count_ones();
+            if a.id == view.you && a.euler_bridges != before.6 && (1..=5).contains(&crossed) {
+                used = Some((true, Notice {
+                    title: format!("{crossed}/7 BRIDGES"),
+                    detail: "Distinct bridges crossed on this path".into(),
+                    color: Some([0x9f, 0xd8, 0xf5]),
+                    card_key: Some("euler:progress".into()),
+                    started: now,
+                    until: now + 1.8,
+                }));
+                continue;
             }
             if before.0 != a.driver || !view.special_abilities {
                 continue;
@@ -467,7 +480,8 @@ impl Notices {
             self.ability = Some(event);
         }
         if !racing
-            || !view.special_abilities
+            || (!view.special_abilities && !self.ability.as_ref()
+                .and_then(|n| n.card_key.as_deref()).is_some_and(|key| key.starts_with("euler:")))
             || self.ability.as_ref().is_some_and(|c| now >= c.until)
         {
             self.ability = None;

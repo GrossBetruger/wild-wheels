@@ -29,6 +29,9 @@ export function watchServerBuild({ served = '', load, reload, onBuild, onError, 
 
 const serviceStages = new Map([
   ['checking-assets', 'Checking asset cache…'],
+  ['fetching-wasm', 'Downloading WASM release…'],
+  ['unpacking-wasm', 'Unpacking WASM release…'],
+  ['checking-wasm-release', 'Checking published WASM release…'],
   ['preparing-wasm', 'Checking WASM toolchain…'],
   ['waiting-wasm', 'Waiting for WASM build lock…'],
   ['compiling-wasm', 'Compiling 3D WASM…'],

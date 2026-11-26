@@ -24,6 +24,7 @@
     "scenario:missile-stress": "node scripts/scenarios/missile-stress.mjs",
     "scenario:lethality": "node scripts/scenarios/lethality.mjs",
     "scenario:ability-importance": "node scripts/scenarios/ability-importance.mjs",
+    "release:wasm": "bash scripts/build/build-experimental.sh wasm-poc && node scripts/build/wasm-release.mjs publish wasm-poc",
     "build:core": "node scripts/build/build-rust-core.mjs",
     "port:graphics": "node scripts/build/port-graphics.mjs",
     "port:sounds": "node scripts/build/port-sounds.mjs",

@@ -17,7 +17,7 @@ apt_cmd=(apt-get)
 if [[ $EUID -ne 0 ]]; then command -v sudo >/dev/null || { printf '%s\n' 'sudo is required to install system packages.' >&2; exit 1; }; apt_cmd=(sudo apt-get); fi
 printf '%s\n' '1/3 Installing system build tools…'
 "${apt_cmd[@]}" update
-"${apt_cmd[@]}" install -y --no-install-recommends build-essential ca-certificates curl ffmpeg git nodejs
+"${apt_cmd[@]}" install -y --no-install-recommends build-essential ca-certificates curl ffmpeg git git-lfs nodejs
 cargo_bin_dir="${CARGO_HOME:-$HOME/.cargo}/bin"
 export PATH="$cargo_bin_dir:$PATH"
 printf '%s\n' '2/3 Installing the pinned Rust toolchain…'

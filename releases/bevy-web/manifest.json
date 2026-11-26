@@ -1,0 +1,7 @@
+{
+  "source": "3ef6926f66601486ba7f0a2d179cc356b4a147e0c1c4424d5446032bc3d8cd1a",
+  "sha256": {
+    "wild_wheels_wasm_poc.js": "d5ee12aa6ea5a7279245aeb698ac03bd4267e80c4fe0e7bf2a9d31d35d1ef9d4",
+    "wild_wheels_wasm_poc_bg.wasm": "5a43e982dbafb5acbf6c140f02b1d6e8a2b118feee4d3991a8b84ab4fd3f3ca3"
+  }
+}

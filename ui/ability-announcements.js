@@ -46,6 +46,7 @@ export class AbilityUsage {
     }
     for(const a of [world,...world.bots]){
       const state={driver:a.driver,cooldown:a.specialCooldown??0,boost:a.boost??0,flip:a.somersaultCooldown??0,nightmare:a.nightmareCooldown??0,notice:a.notice??''};
+      state.bridges=a.eulerBridges??0;
       const before=this.previous.get(a.id);this.previous.set(a.id,state);
       if(!before||world.phase!=='racing'||a.inactive||a.afk||a.destroyed||a.bomber)continue;
       if(state.notice!==before.notice){
@@ -56,6 +57,13 @@ export class AbilityUsage {
         }
         if(state.notice==='6/7 bridges, Euler remains confident of his result...'){
           events.push({id:`euler-near:${identity}:${++this.sequence}`,owner:a.id,title:'6/7 BRIDGES',icon:'🌉',color:'#9fd8f5',theme:'euler',detail:'6/7 bridges, Euler remains confident of his result...',duration:3.2});
+          continue;
+        }
+      }
+      if(a.id===world.id && state.bridges!==before.bridges){
+        const count=state.bridges.toString(2).replace(/0/g,'').length;
+        if(count>0 && count<6){
+          events.push({id:`bridge:${identity}:${++this.sequence}`,owner:a.id,title:`${count}/7 BRIDGES`,icon:'🌉',color:'#9fd8f5',theme:'euler',detail:'Distinct bridges crossed on this path',duration:1.8});
           continue;
         }
       }
@@ -81,7 +89,8 @@ export class AbilityAnnouncements extends RewardNotice {
   constructor(parent){super(parent);this.node.id='ability-announcement';this.node.classList.add('ability-announcement','special-status');}
   update(world,now){
     const events=this.usage.sample(world);
-    if(world.phase!=='racing'||world.specialAbilities===false){this.reset();this.render(now);return;}
+    if(world.phase!=='racing'){this.reset();this.render(now);return;}
+    if(world.specialAbilities===false && this.active && this.active.theme!=='euler')this.reset();
     const event=events.find(e=>e.owner===world.id)??events.at(-1);
     if(event){this.pending=[];this.active=null;this.show(event);}
     this.render(now);

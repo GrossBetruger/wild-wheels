@@ -60,6 +60,9 @@ test('the same build leaves the page in place', async () => {
 });
 
 test('the update notice follows the active job and confirms readiness only after an observed update', () => {
+  assert.equal(serviceBuildNotice('fetching-wasm', true), 'Downloading WASM release…');
+  assert.equal(serviceBuildNotice('unpacking-wasm', true), 'Unpacking WASM release…');
+  assert.equal(serviceBuildNotice('compiling-wasm', true), 'Compiling 3D WASM…');
   assert.equal(serviceBuildNotice('waiting-wasm', true), 'Waiting for WASM build lock…');
   assert.equal(serviceBuildNotice('packing-graphics', true), 'Building graphics pack…');
   assert.equal(serviceBuildNotice('packing-sounds', true), 'Building sound pack…');

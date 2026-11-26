@@ -71,6 +71,11 @@ staging=$(mktemp -d "$output/.build.XXXXXXXX")
 trap 'rm -rf -- "$staging"' EXIT
 
 if (( need_wasm )); then
+  build_status checking-wasm-release
+  if node scripts/build/wasm-release.mjs restore "$output" "$wasm_hash" "$staging"; then need_wasm=0; fi
+fi
+
+if (( need_wasm )); then
   build_status preparing-wasm
   command -v rustup >/dev/null || { printf '%s\n' 'rustup is required to build the experimental client.' >&2; exit 1; }
   if ! rustup run "$toolchain" rustc --version >/dev/null 2>&1; then
@@ -102,7 +107,7 @@ if (( need_wasm )); then
   printf '%s\n' "$wasm_hash" > "$output/.wasm.sha256"
   printf 'WASM bindings and compression took %ss.\n' "$((SECONDS-stage_started))"
 else
-  printf 'Skipping WASM rebuild (unchanged).\n'
+  printf 'WASM ready; skipping source compilation.\n'
 fi
 
 if (( need_graphics )); then

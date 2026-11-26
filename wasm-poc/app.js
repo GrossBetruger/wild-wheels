@@ -638,6 +638,8 @@ playBtn.onclick = async () => {
     hudLayer.classList.remove('hidden');
     wasmStarted = true;
 
+    let previousBridgeMask;
+    let bridgeNoticeUntil = 0;
     let firstHud = true;
     let frames = 0, last = performance.now(), worst = 0, prev = last;
     function tickHud(now) {
@@ -711,7 +713,16 @@ playBtn.onclick = async () => {
             bannerEl.classList.add('hidden');
           }
 
-          if (s.notice && s.noticeTime > 0) {
+          const bridgeMask = s.radar?.eulerBridges ?? 0;
+          if (s.phase !== 'racing' || s.bridgesCrossed === 0 || s.bridgesCrossed >= 6) bridgeNoticeUntil = 0;
+          if (s.phase === 'racing' && previousBridgeMask !== undefined && previousBridgeMask !== bridgeMask && s.bridgesCrossed > 0 && s.bridgesCrossed < 6) {
+            bridgeNoticeUntil = now + 1800;
+          }
+          previousBridgeMask = bridgeMask;
+          if (now < bridgeNoticeUntil) {
+            noticeEl.classList.remove('hidden');
+            noticeEl.textContent = `${s.bridgesCrossed}/${s.bridgeCount} BRIDGES`;
+          } else if (s.notice && s.noticeTime > 0) {
             noticeEl.classList.remove('hidden');
             noticeEl.textContent = s.notice;
           } else {

@@ -23,3 +23,31 @@ test('Tax-Audit and Xylophone-Attack receive distinct designs and no disabled ab
 test('each character’s activated ability has its own visual theme',()=>{
   assert.equal(new Set(Object.values(abilityCards).map(card=>card.theme)).size,10);
 });
+
+test('driving across two Königsberg bridges announces 1/7 then 2/7 on the multiplayer HUD', async () => {
+  const {createBattle, arenas} = await import('../../gameplay/combat.js');
+  const {ArenaClient, ArenaCore} = await import('../../gameplay/arena-core.js');
+  const world = Object.assign(createBattle(0), {
+    arena:4, phase:'racing', wx:-35, wz:-36, heading:0, motionHeading:0, human:true,
+    specialAbilities:false, supplies:[], arenaDef:{
+      ...arenas[0], name:'Bridges of Königsberg', shape:'square', blocks:[],
+      bridges:[[-35,-24,16,10,0],[-5,-24,16,10,0],[55,-32,16,12,0],
+        [-35,24,16,10,0],[-5,24,16,10,0],[55,32,16,12,0],[15,0,10,18,1]],
+      spawns:[], water:[]
+    }
+  });
+  for(const bot of world.bots) bot.inactive=true;
+  const core = new ArenaCore(world), client = new ArenaClient(), tracker = new AbilityUsage();
+  const titles=[];
+  let crossed=0;
+  for(let frame=0; frame<300 && crossed!==9; frame++){
+    core.step(1/60,[{actor:0,keys:['w']}]);
+    client.accept(core.packet(0),frame/60);
+    client.frame(0,[],frame/60);
+    const displayed=client.present();
+    crossed=displayed.eulerBridges;
+    titles.push(...tracker.sample(displayed).map(event=>event.title));
+  }
+  assert.equal(crossed,9,'both bridge bits reach the local HUD');
+  assert.deepEqual(titles,['1/7 BRIDGES','2/7 BRIDGES']);
+});

@@ -18,6 +18,8 @@ Build and run from the repository root (the launcher finds Rust even before you 
 ./run_server.sh
 ```
 
+On a cache miss the launcher checks the Git LFS release in `releases/bevy-web/`. It verifies the build fingerprint and both file checksums before unpacking the browser WASM and its JavaScript loader. A stale or unavailable release falls back to a source build. Existing Ubuntu hosts can install `git-lfs` with `sudo apt-get install git-lfs`. To publish a changed renderer, run `npm run release:wasm` locally and commit the resulting release directory with the source change.
+
 Use `PORT=5174 ./run_server.sh` to choose another port. The launcher bundles the default Bevy arena renderer. Choose **Classic Graphics** to switch back. Existing `/experimental/` links still work. Its first build installs the pinned Bevy Rust toolchain and matching `wasm-bindgen` CLI as needed. Cargo uses the available logical CPU count for both the WASM and server builds. Set `CARGO_BUILD_JOBS=2` to limit parallelism on a small VM. It returns after starting the server detached, so closing SSH keeps the game running. Logs append to `.wild-wheels/server.log`. It prevents duplicate managed starts.
 
 ```sh

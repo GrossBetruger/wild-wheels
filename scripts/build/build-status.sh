@@ -32,3 +32,7 @@ run_cargo_build() {
   }
   printf 'Cargo %s check/build took %ss (including lock waits).\n' "$component" "$((SECONDS-started))"
 }
+
+if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
+  build_status "$1"
+fi
