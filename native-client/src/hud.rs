@@ -113,6 +113,7 @@ pub enum Part {
     HtmlCard(Id),
     /// Radial burst spark around a ported HTML/CSS announcement card.
     CardSpark(Id, usize),
+    KarmaScore(usize),
 }
 #[derive(Component, Clone, Copy, PartialEq, Debug)]
 pub enum Label {
@@ -122,6 +123,7 @@ pub enum Label {
     Plate(usize),
     /// Dynamic detail text overlaid into the ported HTML card's `<small>` slot.
     CardDetail(Id),
+    KarmaScore(usize),
 }
 /// Image node displaying a Chrome-ported HTML/CSS announcement texture.
 #[derive(Component, Clone, Copy, PartialEq, Eq)]
@@ -151,6 +153,7 @@ struct Notice {
     detail: String,
     color: Option<[u8; 3]>,
     card_key: Option<String>,
+    score_swap: Option<[String; 2]>,
     started: f64,
     until: f64,
 }
@@ -239,6 +242,7 @@ impl Notices {
                 ),
                 color: None,
                 card_key: None,
+                score_swap: None,
                 started: now,
                 until: 0.0,
             });
@@ -306,6 +310,7 @@ impl Notices {
                     Notice {
                         title, detail, color: Some(color),
                         card_key: Some("ability:15".into()),
+                        score_swap: karma.swapped.then(|| [karma.victim_after.to_string(), karma.caster_after.to_string()]),
                         started: now,
                         until: now + 2.4,
                     },
@@ -341,6 +346,7 @@ impl Notices {
                         detail: format!("{who} BROKE THE THEOREM · EULER'S GHOST HAUNTS THE ARENA!"),
                         color: Some([0xf5, 0xd7, 0x7f]),
                         card_key: Some("euler:path".into()),
+                        score_swap: None,
                         started: now,
                         until: now + 4.2,
                     };
@@ -355,6 +361,7 @@ impl Notices {
                         detail: "6/7 bridges, Euler remains confident of his result...".into(),
                         color: Some([0x9f, 0xd8, 0xf5]),
                         card_key: Some("euler:near".into()),
+                        score_swap: None,
                         started: now,
                         until: now + 3.2,
                     };
@@ -371,6 +378,7 @@ impl Notices {
                     detail: "Distinct bridges crossed on this path".into(),
                     color: Some([0x9f, 0xd8, 0xf5]),
                     card_key: Some("euler:progress".into()),
+                    score_swap: None,
                     started: now,
                     until: now + 1.8,
                 }));
@@ -430,6 +438,7 @@ impl Notices {
                 detail: match a.driver { 15 => detail, _ => format!("{who} · {detail}") },
                 color: Some(color),
                 card_key,
+                score_swap: None,
                 started: now,
                 until: now + 2.4,
             };
@@ -468,6 +477,7 @@ impl Notices {
                 ),
                 color: Some([0xc6, 0xad, 0xff]),
                 card_key: Some("reward:intelligence".into()),
+                score_swap: None,
                 started: now,
                 until: now + 3.0,
             });
@@ -520,6 +530,7 @@ impl Notices {
                                         detail: "6/7 bridges, Euler remains confident of his result...".into(),
                                         color: Some([0x9f, 0xd8, 0xf5]),
                                         card_key: Some("euler:near".into()),
+                                        score_swap: None,
                                         started: now,
                                         until: now + 3.2,
                                     });
@@ -531,6 +542,7 @@ impl Notices {
                                         detail: "YOU BROKE THE THEOREM · EULER'S GHOST HAUNTS THE ARENA!".into(),
                                         color: Some([0xf5, 0xd7, 0x7f]),
                                         card_key: Some("euler:path".into()),
+                                        score_swap: None,
                                         started: now,
                                         until: now + 4.2,
                                     });
@@ -1590,6 +1602,18 @@ pub fn setup(mut commands: Commands, mut fonts: ResMut<Assets<Font>>) {
             },
             Some(Label::CardDetail(id)),
         );
+        if id == Id::Ability {
+            for side in 0..2 {
+                let chip = ui.node(card, fixed(Node {
+                    display: Display::None, width: px(40. * K), height: px(23. * K),
+                    border_radius: BorderRadius::MAX, justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center, ..default()
+                }), hex(0x203a35ff), none);
+                ui.commands.entity(chip).insert(Part::KarmaScore(side));
+                let ink = [0xa9ffdcff, 0xffe5a2ff][side];
+                ui.words(chip, "", Style::new(16., hex(ink)), Some(Label::KarmaScore(side)));
+            }
+        }
         for spark_i in 0..10 {
             let spark = ui.node(
                 card,
@@ -2103,6 +2127,20 @@ pub fn update(
                     node.margin = UiRect::top(px(dy * K));
                 }
             }
+            Part::KarmaScore(side) => {
+                let active = notices.ability.as_ref().filter(|n| n.score_swap.is_some())
+                    .zip(ui_cards.get("ability:15"));
+                show(&mut node, active.is_some());
+                if let Some((notice, art)) = active {
+                    let t = ((now - notice.started - 0.275) / 0.825).clamp(0., 1.) as f32;
+                    let ease = t * t * (3. - 2. * t);
+                    let direction = [1., -1.][side];
+                    let offset = direction * (ease - 0.5) * 52.;
+                    node.left = px((art.logical_w * 0.41 + offset - 20.) * K);
+                    node.top = px(((art.detail_top + art.detail_h) * 0.82 + 10.
+                        - direction * (ease * std::f32::consts::PI).sin() * 10.) * K);
+                }
+            }
             Part::CardSpark(id, index) => {
                 let active_card = notice_for(&notices, id).and_then(|n| {
                     n.card_key
@@ -2228,6 +2266,10 @@ pub fn update(
                 Some((_, name, _)) => (name.as_str(), None),
                 None => ("", None),
             },
+            Label::KarmaScore(side) => (
+                notices.ability.as_ref().and_then(|n| n.score_swap.as_ref())
+                    .map_or("", |scores| scores[side].as_str()), None,
+            ),
             Label::CardDetail(id) => match notice_for(&notices, id) {
                 // The fixed two-line Karma card includes its large caption in the HTML artwork.
                 Some(notice) if notice.card_key.as_deref() == Some("ability:15") => ("", None),

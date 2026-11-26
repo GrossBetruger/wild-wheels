@@ -51,6 +51,19 @@ export class RewardNotice extends RewardQueue {
       roll.style.setProperty('--reward-steps',steps);window.append(roll);counter.append(before,arrow,window);card.append(counter);
     }
     card.append(detail);
+    if(event.scoreSwap){
+      const row=document.createElement('div');
+      row.className='karma-scores';
+      row.setAttribute('aria-hidden','true');
+      for(const score of event.scoreSwap){
+        const chip=document.createElement('span');
+        chip.textContent=String(score);
+        row.append(chip);
+      }
+      card.append(row);
+      const [victim,caster]=event.scoreSwap;
+      this.node.setAttribute('aria-label',`${event.title}. ${event.detail}. Scores swapped. Caster ${caster}, rival ${victim}.`);
+    }
     for(let i=0;i<10;i++){const spark=document.createElement('i');spark.className='reward-spark';spark.style.setProperty('--spark-angle',`${i*36}deg`);card.append(spark);}
     this.node.replaceChildren(card);
   }

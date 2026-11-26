@@ -30,6 +30,8 @@ export class AbilityUsage {
           ...abilityCards[15],
           id:`karma:${identity}:${karma.id}`,
           owner:karma.caster,
+          // The KO is credited before scores trade places (including half-point assists).
+          ...(karma.swapped?{scoreSwap:[karma.victimAfter,karma.casterAfter]}:{}),
           duration:2.4,
         });
       }

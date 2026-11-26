@@ -4645,6 +4645,43 @@ body.mobile-playing {
   letter-spacing: 0
 }
 
+.karma-scores {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 50%;
+  display: flex;
+  gap: 12px;
+  transform: translateX(-50%);
+}
+
+.karma-scores span {
+  --travel: calc(100% + 12px);
+  --arc: -10px;
+  width: 4ch;
+  border-radius: 1em;
+  background: #203a35;
+  color: #a9ffdc;
+  text-align: center;
+  font: bold 18px/1.35 monospace;
+  animation: karma-score-exchange 1.1s ease-in-out both;
+}
+
+.karma-scores span + span {
+  --travel: calc(-100% - 12px);
+  --arc: 10px;
+  color: #ffe5a2;
+}
+
+@keyframes karma-score-exchange {
+  0%, 25% { transform: translate(0); }
+  62.5% { transform: translate(calc(var(--travel) / 2), var(--arc)); }
+  100% { transform: translateX(var(--travel)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .karma-scores span { animation: none; transform: translateX(var(--travel)); }
+}
+
 .ability-announcement[data-theme=euler] .reward-card {
   max-width: min(500px, 100%);
   animation-duration: 3.8s;

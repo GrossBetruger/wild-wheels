@@ -172,7 +172,7 @@ for (const engine of ['JavaScript', 'Rust']) {
   });
 }
 
-test('Karmic Raccooning displays only the title and catchphrase even when scores swap', () => {
+test('a confirmed Karma swap exchanges both KO-adjusted scores under the two-line notice', () => {
   const tracker = new AbilityUsage();
   const queue = new RewardQueue();
   const world = {
@@ -191,9 +191,22 @@ test('Karmic Raccooning displays only the title and catchphrase even when scores
   assert.equal(events[0].theme, 'karma');
   assert.equal(events[0].title,'KARMIC RACCOONING');
   assert.equal(events[0].detail,'karma is a Waschbitch');
-  assert.equal(events[0].from,undefined);
-  assert.equal(events[0].to,undefined);
+  assert.deepEqual(events[0].scoreSwap,[2,7]);
+  assert.deepEqual(tracker.sample(world),[]);
   queue.show(events[0]);
   assert.equal(queue.sample(0).theme, 'karma');
   assert.equal(queue.sample(3.8), null);
+});
+
+
+test('a Karma KO without a swap shows the original two-line notice',()=>{
+  const tracker=new AbilityUsage();
+  const world={mode:'combat',phase:'racing',soundEpoch:1,arena:0,elapsed:10,
+    id:0,driver:15,bots:[],specialCooldown:0};
+  tracker.sample(world);
+  world.lastKarma={id:1,caster:0,victim:1,swapped:false,casterBefore:8,casterAfter:9,victimBefore:4,victimAfter:4,time:10};
+  const [event]=tracker.sample(world);
+  assert.equal(event.title,'KARMIC RACCOONING');
+  assert.equal(event.detail,'karma is a Waschbitch');
+  assert.equal(event.scoreSwap,undefined);
 });
