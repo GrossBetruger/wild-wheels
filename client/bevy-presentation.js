@@ -1,4 +1,5 @@
 import { createBinaryEncoder } from '../networking/binary-wire.js';
+import { kartNameplates } from '../ui/nameplates.js';
 import { arenas } from '../gameplay/combat.js';
 
 const prefix = '/experimental/';
@@ -6,14 +7,16 @@ let assetFetchVersioned = false;
 // Appends `?v=<build>` to Bevy's unversioned `assets/...` fetches so browsers
 // and Cloud CDN cache `.glb` models as immutable per build without stale hits.
 export function versionAssetUrl(url, build) {
-  if (!build || typeof url !== 'string' || url.includes('?')) return url;
-  if (url.startsWith('assets/') || url.startsWith(`${prefix}assets/`)) {
+  if (typeof url !== 'string') return url;
+  if (url.startsWith('assets/')) url = prefix + url;
+  if (!build || url.includes('?')) return url;
+  if (url.startsWith(`${prefix}assets/`)) {
     return `${url}?v=${encodeURIComponent(build)}`;
   }
   return url;
 }
 function installAssetFetchVersioning(build) {
-  if (assetFetchVersioned || !build || typeof globalThis.fetch !== 'function') return;
+  if (assetFetchVersioned || typeof globalThis.fetch !== 'function') return;
   assetFetchVersioned = true;
   const originalFetch = globalThis.fetch.bind(globalThis);
   globalThis.fetch = (input, init) => {
@@ -104,7 +107,7 @@ export class BevyPresentation {
   get fps() { return Math.round(this.quality?.fps ?? 0); }
   get status() {
     if (this.failed) return 'BEVY UNAVAILABLE';
-    if (!this.active) return 'BEVY BETA';
+    if (!this.active) return 'BEVY';
     return this.mobile ? `BEVY MOBILE · ${this.quality.profile.name.toUpperCase()}` : 'BEVY';
   }
 
@@ -117,6 +120,13 @@ export class BevyPresentation {
   reportProgress(patch) {
     this.progress = { ...this.progress, ...patch };
     for (const listener of this.progressListeners) listener(this.progress);
+  }
+
+  setQuality(value) {
+    if (this.mobile) return;
+    const scale = { balanced: .75, low: .5 }[value] ?? 1;
+    this.surface.style.width = this.surface.style.height = `${scale * 100}%`;
+    this.surface.style.transform = `scale(${1 / scale})`;
   }
 
   configureMobile() {
@@ -237,6 +247,12 @@ export class BevyPresentation {
     if (this.mobile) this.updateMobileLevel();
     this.reportProgress({ stage: 'failed', percent: 100 });
     this.log.note('error', event, { message: error?.message });
+  }
+
+  nameplates(world) {
+    const camera = this.bindings?.arena_camera?.();
+    if (camera?.length !== 19) return [];
+    return kartNameplates(world, camera.subarray(0, 16), camera.subarray(16));
   }
 
   draw(world, client) {

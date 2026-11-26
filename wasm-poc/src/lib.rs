@@ -79,6 +79,7 @@ static INCOMING_PACKETS: Mutex<Vec<Vec<u8>>> = Mutex::new(Vec::new());
 static OUTBOUND_TEXT: Mutex<Option<String>> = Mutex::new(None);
 static INVALID_PACKETS: AtomicU32 = AtomicU32::new(0);
 static PRESENTATION_FRAME: Mutex<Option<Vec<u8>>> = Mutex::new(None);
+static ARENA_CAMERA: Mutex<[f32; 19]> = Mutex::new([0.0; 19]);
 static PRESENTATION_READY: AtomicBool = AtomicBool::new(false);
 // Mobile profiles are ordered from highest detail to idle in bevy-presentation.js.
 const MOBILE_IDLE: u32 = 4;
@@ -364,6 +365,11 @@ pub fn present_frame(packet: Vec<u8>) {
     if let Ok(mut frame) = PRESENTATION_FRAME.lock() {
         *frame = Some(packet);
     }
+}
+
+#[wasm_bindgen]
+pub fn arena_camera() -> Vec<f32> {
+    ARENA_CAMERA.lock().map(|camera| camera.to_vec()).unwrap_or_default()
 }
 
 #[wasm_bindgen]

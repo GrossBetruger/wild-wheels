@@ -11,7 +11,7 @@ npm install --ignore-scripts
 npm start
 ```
 
-Open [localhost:5173](http://localhost:5173). Keep the terminal open while playing.
+Open [localhost:5173](http://localhost:5173). Keep the terminal open while playing. Desktop arenas use Bevy 3D when the bundle and hardware acceleration are available. Grand Prix and mobile bombers use the classic renderer. Choose **Classic Graphics** to use it for desktop arenas too.
 
 ## Dedicated Rust server
 

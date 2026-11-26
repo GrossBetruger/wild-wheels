@@ -103,7 +103,24 @@ impl Game{
                 }
             }}
         }
-        let decoy=shot.decoy.and_then(|id|self.global.chaff_clouds.iter().find(|c|c.id==id).map(|c|(c.wx,c.wz,c.owner))).or_else(||shot.decoy_center.as_ref().map(|p|(p.wx,p.wz,shot.decoy_owner.unwrap_or(0))));
+        use super::nightmare::{WORMHOLE_OFFSET, WORMHOLE_KILL_RADIUS};
+        let mut field = None;
+        let mut radius = 44.0;
+        for source in &self.actors {
+            if !self.global.special_abilities || source.driver != 8 || source.id == shot.owner || source.nightmare_active <= 0.0 || source.destroyed > 0.0 || source.inactive || source.afk || self.frozen(source.id) { continue; }
+            let x = source.wx + source.heading.sin() * WORMHOLE_OFFSET;
+            let z = source.wz + source.heading.cos() * WORMHOLE_OFFSET;
+            let d = distance(x, z, shot.wx, shot.wz);
+            if d < radius {
+                radius = d;
+                field = Some((x, z));
+            }
+        }
+        if field.is_some() && shot.chaffed {
+            shot.chaffed = false;
+            shot.orbit_age = None;
+        }
+        let decoy=shot.decoy.and_then(|id|self.global.chaff_clouds.iter().find(|c|c.id==id).map(|c|(c.wx,c.wz,c.owner))).or_else(||shot.decoy_center.as_ref().map(|p|(p.wx,p.wz,shot.decoy_owner.unwrap_or(0)))).filter(|_| field.is_none());
         let orbit=|shot:&mut Shot,point:(f64,f64,usize),delta:f64|{
             let age=shot.orbit_age.unwrap_or(0.0)+delta;shot.orbit_age=Some(age);let direction=match shot.orbit_direction<0.0{true=>-1.0,false=>1.0};let circling=(age/0.6).min(1.0);let fall=(age-0.6).max(0.0);let angle=shot.orbit_angle+direction*std::f64::consts::TAU*circling;let radius=shot.orbit_radius;let speed=radius*std::f64::consts::TAU/0.6;
             let center=shot.orbit_center.as_ref().map_or((point.0,point.1),|p|(p.wx,p.wz));shot.heading=angle+direction*std::f64::consts::FRAC_PI_2;
@@ -118,9 +135,15 @@ impl Game{
         if let Some(a)=shot.repelled_from.and_then(|id|self.actors.get(id)).filter(|a|a.tehilim>0.0&&a.destroyed<=0.0&&!a.inactive&&!a.afk){let d=distance(shot.wx,shot.wz,a.wx,a.wz);if d<45.0{let away=(shot.wx-a.wx).atan2(shot.wz-a.wz);steering=angle(away,shot.heading).clamp(-12.0*dt,12.0*dt);shot.heading=match d<5.0{true=>away,false=>shot.heading+steering};}}
         let steps=(shot.speed*dt/1.5).ceil() as usize;
         for step in 0..steps{
+            if let Some((x, z)) = field {
+                let dx = x - shot.wx;
+                let dz = z - shot.wz;
+                let turn = (12.0 + 18.0 * (1.0 - dx.hypot(dz) / 44.0).max(0.0)) * dt / steps as f64;
+                shot.heading += angle(dx.atan2(dz), shot.heading).clamp(-turn, turn);
+            }
             let (previous_x,previous_z)=(shot.wx,shot.wz);
             shot.wx+=shot.heading.sin()*shot.speed*dt/steps as f64;shot.wz+=shot.heading.cos()*shot.speed*dt/steps as f64;
-            if self.ring_blocks(previous_x,previous_z,shot.wx,shot.wz){shot.quenched=true;shot.life=0.0;return(true,None,None);}
+            if field.is_some_and(|(x,z)| distance(x,z,shot.wx,shot.wz) <= WORMHOLE_KILL_RADIUS) || self.ring_blocks(previous_x,previous_z,shot.wx,shot.wz){shot.quenched=true;shot.life=0.0;return(true,None,None);}
             if let Some(point)=decoy{if distance(shot.wx,shot.wz,point.0,point.1)<6.0{shot.orbit_age=Some(0.0);shot.orbit_direction=match steering<0.0{true=>-1.0,false=>1.0};shot.orbit_angle=shot.heading-shot.orbit_direction*std::f64::consts::FRAC_PI_2;shot.orbit_radius=shot.speed*0.6/std::f64::consts::TAU;shot.orbit_height=shot.height;shot.orbit_center=Some(Point{wx:shot.wx-shot.orbit_angle.sin()*shot.orbit_radius,wz:shot.wz-shot.orbit_angle.cos()*shot.orbit_radius});shot.chaffed=true;shot.life=shot.life.max(3.0);return orbit(shot,point,dt*(steps-step-1)as f64/steps as f64);}}
             let victim=match decoy.is_some(){true=>None,false=>self.actors.iter().find(|a|a.id!=shot.owner&&!a.bomber&&!a.afk&&a.destroyed<=0.0&&a.shield<=0.0&&distance(a.wx,a.wz,shot.wx,shot.wz)<2.7).map(|a|a.id)};
             if wall_blocked(self.global.arena,shot.wx,shot.wz,0.3)||victim.is_some(){shot.life=0.0;return(true,victim,decoy.map(|p|p.2));}

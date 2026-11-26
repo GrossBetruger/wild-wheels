@@ -37,9 +37,9 @@ test('Retina and landscape views stay within the same mobile pixel budget', () =
 });
 
 test('versionAssetUrl appends ?v=<build> only to unversioned Bevy asset paths', () => {
-  assert.equal(versionAssetUrl('assets/models/knowitowl.glb', 'ABC123'), 'assets/models/knowitowl.glb?v=ABC123');
+  assert.equal(versionAssetUrl('assets/models/knowitowl.glb', 'ABC123'), '/experimental/assets/models/knowitowl.glb?v=ABC123');
   assert.equal(versionAssetUrl('/experimental/assets/models/knowitowl.glb', 'ABC123'), '/experimental/assets/models/knowitowl.glb?v=ABC123');
-  assert.equal(versionAssetUrl('assets/models/knowitowl.glb?v=OLD', 'ABC123'), 'assets/models/knowitowl.glb?v=OLD');
+  assert.equal(versionAssetUrl('assets/models/knowitowl.glb?v=OLD', 'ABC123'), '/experimental/assets/models/knowitowl.glb?v=OLD');
   assert.equal(versionAssetUrl('/api/session', 'ABC123'), '/api/session');
-  assert.equal(versionAssetUrl('assets/models/knowitowl.glb', ''), 'assets/models/knowitowl.glb');
+  assert.equal(versionAssetUrl('assets/models/knowitowl.glb', ''), '/experimental/assets/models/knowitowl.glb');
 });

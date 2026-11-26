@@ -1132,6 +1132,11 @@ pub fn sync(
                 _ => 1.07,
             };
         }
+        if let Ok(mut data) = crate::ARENA_CAMERA.lock() {
+            let view = camera.to_matrix().inverse();
+            data[..16].copy_from_slice(&(projection.get_clip_from_view() * view).to_cols_array());
+            data[16..].copy_from_slice(&camera.translation.to_array());
+        }
         for (_, _, mut xray, mut lens) in &mut darkness.xray {
             *xray = *camera;
             *lens = projection.clone();

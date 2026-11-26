@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { Multiplayer } from './server/multiplayer.js';
 import { createTunnelControl } from './server/tunnel-control.js';
@@ -58,7 +58,8 @@ const server=createServer(async (req, res) => {
       ? await readFile(new URL(file[0]+'.gz',import.meta.url)).catch(error=>{if(error.code==='ENOENT')return null;throw error;})
       : null;
     const raw = gzip??await readFile(new URL(file[0], import.meta.url));
-    const body = file[0] === 'index.html' ? raw.toString().replace('<body>', `<body data-build="${await build()}">`) : raw;
+    const hasBevy = file[0] === 'index.html' && [...compressedBetaAssets].every(asset => existsSync(new URL('wasm-poc/' + asset.slice('/experimental/'.length), import.meta.url)));
+    const body = file[0] === 'index.html' ? raw.toString().replace('<body>', `<body data-bevy="${hasBevy}" data-build="${await build()}">`) : raw;
     const host=/^[a-zA-Z0-9.\[\]:-]+$/.test(req.headers.host??'')?req.headers.host:'localhost';
     const local=['localhost',`localhost:${multiplayer.port}`,'127.0.0.1',`127.0.0.1:${multiplayer.port}`].includes(host);
     const control=local&&multiplayer.controlPort?` http://127.0.0.1:${multiplayer.controlPort}`:'';

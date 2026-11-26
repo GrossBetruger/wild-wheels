@@ -1,5 +1,5 @@
 import {placeSupply,tickSupplySpawns} from './supply-spawns.js';
-import {activateNightmare,tapNightmare,tickNightmare} from '../characters/houston/nightmare-fuel.js';
+import {activateNightmare,tapNightmare,tickNightmare,WORMHOLE_OFFSET,WORMHOLE_KILL_RADIUS} from '../characters/houston/nightmare-fuel.js';
 import { tickBicycles } from './bicycle-pickup.js';
 import {tickLocusts} from './locusts.js';
 import { tickFireRings, fireRingBlocks } from '../characters/master-yuda/fire-ring.js';
@@ -216,6 +216,20 @@ function orbitChaff(shot, decoy, dt, arena) {
   if (impact) { shot.height = Math.max(.15, shot.height); shot.life = 0; }
   return { impact, decoy };
 }
+function projectileWormhole(world, actors, shot) {
+  if (world.specialAbilities === false) return null;
+  let nearest = null, radius = 44;
+  for (const source of actors) {
+    if (source.driver !== 8 || source.id === shot.owner || !(source.nightmareActive > 0) || source.destroyed || source.inactive || source.afk || frozen(world, source.id)) continue;
+    const wx = source.wx + Math.sin(source.heading) * WORMHOLE_OFFSET;
+    const wz = source.wz + Math.cos(source.heading) * WORMHOLE_OFFSET;
+    const distance = Math.hypot(wx - shot.wx, wz - shot.wz);
+    if (distance >= radius) continue;
+    radius = distance;
+    nearest = {wx, wz};
+  }
+  return nearest;
+}
 export function advanceProjectile(r, shot, dt) {
   const actors = [r, ...r.bots], arena = arenas[r.arena];
   shot.age = (shot.age ?? 0) + dt; shot.life -= dt; shot.trail.push({ wx: shot.wx, wz: shot.wz, height: shot.height }); if (shot.trail.length > 24) shot.trail.shift();
@@ -226,7 +240,12 @@ export function advanceProjectile(r, shot, dt) {
       else if (defender.tehilim > 0) { shot.repelledFrom = defender.id; shot.target = null; }
     }
   }
-  const decoy = r.chaffClouds?.find(c => c.id === shot.decoy) ?? (shot.decoyCenter ? { ...shot.decoyCenter, owner: shot.decoyOwner } : null), target = decoy ?? actors.find(k => k.id === shot.target && !k.destroyed);
+  const field = projectileWormhole(r, actors, shot);
+  if (field && shot.chaffed) {
+    shot.chaffed = false;
+    delete shot.orbitAge;
+  }
+  const decoy = field ? null : r.chaffClouds?.find(c => c.id === shot.decoy) ?? (shot.decoyCenter ? { ...shot.decoyCenter, owner: shot.decoyOwner } : null), target = decoy ?? actors.find(k => k.id === shot.target && !k.destroyed);
   if (decoy && shot.orbitAge !== undefined) { const x = shot.wx, z = shot.wz, result = orbitChaff(shot, decoy, dt, arena); if (fireRingBlocks(r, x, z, shot.wx, shot.wz)) { shot.quenched = true; shot.life = 0; return { impact: true, victim: null, decoy: null }; } return result; }
   let steering = 0;
   if (shot.kind === 'missile' && target) { const turnRate = decoy ? 4.5 : shot.reflected ? 10 : 1.6, lead = shot.reflected && !decoy ? Math.min(.8, distance(shot, target) / shot.speed) : 0, heading = target.motionHeading ?? target.heading ?? 0, speed = (target.speed ?? 0) * .085; steering = clamp(angleDelta(Math.atan2(target.wx + Math.sin(heading) * speed * lead - shot.wx, target.wz + Math.cos(heading) * speed * lead - shot.wz), shot.heading), -turnRate * dt, turnRate * dt); shot.heading += steering; }
@@ -234,9 +253,14 @@ export function advanceProjectile(r, shot, dt) {
   if (repeller && distance(shot, repeller) < 45) { const d = distance(shot, repeller), away = Math.atan2(shot.wx - repeller.wx, shot.wz - repeller.wz); steering = clamp(angleDelta(away, shot.heading), -12 * dt, 12 * dt); shot.heading = d < 5 ? away : shot.heading + steering; }
   let impact = false, victim; const steps = Math.ceil(shot.speed * dt / 1.5);
   for (let step = 0; step < steps && !impact; step++) {
+    if (field) {
+      const dx = field.wx - shot.wx, dz = field.wz - shot.wz;
+      const turn = (12 + 18 * Math.max(0, 1 - Math.hypot(dx, dz) / 44)) * dt / steps;
+      shot.heading += clamp(angleDelta(Math.atan2(dx, dz), shot.heading), -turn, turn);
+    }
     const previousX = shot.wx, previousZ = shot.wz;
     shot.wx += Math.sin(shot.heading) * shot.speed * dt / steps; shot.wz += Math.cos(shot.heading) * shot.speed * dt / steps;
-    if (fireRingBlocks(r, previousX, previousZ, shot.wx, shot.wz)) { shot.quenched = true; shot.life = 0; return { impact: true, victim: null, decoy: null }; }
+    if ((field && distance(shot, field) <= WORMHOLE_KILL_RADIUS) || fireRingBlocks(r, previousX, previousZ, shot.wx, shot.wz)) { shot.quenched = true; shot.life = 0; return { impact: true, victim: null, decoy: null }; }
     if (decoy && distance(shot, decoy) < 6) {
       shot.orbitAge = 0; shot.orbitDirection = steering < 0 ? -1 : 1; shot.orbitAngle = shot.heading - shot.orbitDirection * Math.PI / 2; shot.orbitRadius = shot.speed * .6 / (Math.PI * 2); shot.orbitHeight = shot.height;
       shot.orbitCenter = { wx: shot.wx - Math.sin(shot.orbitAngle) * shot.orbitRadius, wz: shot.wz - Math.cos(shot.orbitAngle) * shot.orbitRadius }; shot.chaffed = true; shot.life = Math.max(shot.life, 3);

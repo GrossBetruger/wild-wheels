@@ -1,5 +1,5 @@
 export const BUILD_REFRESH_MS = 2000;
-export const isBevyBetaPath = pathname => pathname === '/experimental/' || pathname === '/experimental/index.html';
+export const usesBevyRenderer = (pathname, search) => ['/', '/experimental/', '/experimental/index.html'].includes(pathname) && new URLSearchParams(search).get('renderer') !== 'classic';
 const buildId = value => typeof value === 'string' && /^[A-F0-9]{10}$/.test(value);
 
 export function watchServerBuild({ served = '', load, reload, onBuild, onError, every = BUILD_REFRESH_MS, hidden = () => false, schedule = setInterval, cancel = clearInterval, listen, unlisten } = {}) {
@@ -28,7 +28,7 @@ export function watchServerBuild({ served = '', load, reload, onBuild, onError, 
 }
 
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-  if (isBevyBetaPath(location.pathname)) {
+  if (usesBevyRenderer(location.pathname, location.search)) {
     document.documentElement.classList.add('bevy-beta');
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', '#111017');
   }

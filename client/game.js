@@ -18,56 +18,60 @@ import { CharacterPreview } from './character-preview.js';
 import { canChoosePlayerColor, playerColors, savedPlayerColor, applyPlayerColors } from '../gameplay/player-colors.js';
 import { ClientLog, FrameHealth, captureConsole, startReporting } from './log.js';
 import { allTimeRows, loadAllTime } from '../ui/all-time.js';
-import { isBevyBetaPath } from './build-refresh.js';
+import { usesBevyRenderer } from './build-refresh.js';
 const $ = id => document.getElementById(id);
-const beta = isBevyBetaPath(location.pathname);
-const soloBeta = beta && document.body.classList.contains('dedicated-server') && new URLSearchParams(location.search).get('solo') === '1';
-if (soloBeta) {
+const useBevy = usesBevyRenderer(location.pathname, location.search);
+const dedicatedSolo = document.body.classList.contains('dedicated-server') && new URLSearchParams(location.search).get('solo') === '1';
+if (dedicatedSolo) {
   document.body.classList.remove('dedicated-server');
   $('arena-connection')?.remove();
 }
 const alternateClient = document.querySelector('.experimental-button');
 function rendererLink() {
   const target = new URL(location.href);
-  target.pathname = beta ? '/' : '/experimental/';
-  target.searchParams.delete('solo');
+  target.pathname = '/';
+  if (useBevy) target.searchParams.set('renderer', 'classic');
+  else target.searchParams.delete('renderer');
   alternateClient.href = target.href;
 }
 rendererLink();
 alternateClient.addEventListener('click', rendererLink);
-if (beta) {
-  alternateClient.textContent = 'REGULAR CLIENT';
-  alternateClient.title = 'Return to the regular renderer';
+if (!useBevy) {
+  alternateClient.textContent = '3D GRAPHICS';
+  alternateClient.title = 'Switch to the Bevy renderer';
 }
 const canvas = $('game'), map = $('map').getContext('2d');
 canvas.tabIndex = 0;
 const keys = new Set(), audio = new RaceAudio(), renderer = new Renderer(canvas);
 // This browser's problems, reported to the server's log; see docs/logging.md.
-const clientLog = new ClientLog({ client: beta ? 'bevy-wasm' : 'browser', build: document.body.dataset.build ?? '' }), frameHealth = new FrameHealth((level, event, data) => clientLog.note(level, event, data));
+const mobile = usesMobileControls(navigator.maxTouchPoints, matchMedia('(pointer:coarse)').matches);
+const canLoadBevy = useBevy && !mobile && document.body.dataset.bevy !== 'false' && (!renderer.softwareGPU || location.pathname.startsWith('/experimental/'));
+const clientLog = new ClientLog({ client: canLoadBevy ? 'bevy-wasm' : 'browser', build: document.body.dataset.build ?? '' }), frameHealth = new FrameHealth((level, event, data) => clientLog.note(level, event, data));
 captureConsole(clientLog);
 let bevy;
-const mobile = usesMobileControls(navigator.maxTouchPoints, matchMedia('(pointer:coarse)').matches);
-
-const bevyImport = beta && !mobile
-  ? import('./bevy-presentation.js').then(({ BevyPresentation }) => {
-      bevy = new BevyPresentation(canvas, clientLog, mobile);
-      characterPreview.uplifted = bevy;
-      return bevy;
-    }).catch(error => {
-      clientLog.note('error', 'bevy-startup-failed', { message: error.message });
-      return null;
-    })
-  : Promise.resolve(null);
+let bevyImport;
+function loadArenaRenderer() {
+  if (!canLoadBevy) return;
+  return bevyImport ??= import('./bevy-presentation.js').then(({ BevyPresentation }) => {
+    bevy = new BevyPresentation(canvas, clientLog, mobile);
+    bevy.setQuality(qualitySelect.value);
+    characterPreview.uplifted = bevy;
+    return bevy;
+  }).catch(error => {
+    clientLog.note('error', 'bevy-startup-failed', { message: error.message });
+    return null;
+  });
+}
 const bevyLoadingScreen = document.createElement('div');
 bevyLoadingScreen.className = 'bevy-loading-screen hidden';
 bevyLoadingScreen.setAttribute('role', 'status');
 bevyLoadingScreen.setAttribute('aria-live', 'polite');
-bevyLoadingScreen.innerHTML = '<strong>⚡ LOADING 3D ENGINE…</strong><div class="bevy-loading-track"><div class="bevy-loading-bar"></div></div><p class="bevy-loading-detail">Downloading 3D graphics pack…</p><small>Cached automatically — future matches load in under a second.</small>';
+bevyLoadingScreen.innerHTML = '<strong>⚡ LOADING 3D ENGINE…</strong><div class="bevy-loading-track"><div class="bevy-loading-bar"></div></div><p class="bevy-loading-detail">Downloading 3D graphics pack…</p>';
 document.querySelector('.viewport')?.append(bevyLoadingScreen);
 let bevyWaitPromise = null;
 async function ensureBevyReady() {
-  if (!beta || mobile) return;
-  const instance = bevy ?? await bevyImport;
+  if (!useBevy || mobile) return;
+  const instance = bevy ?? await loadArenaRenderer();
   if (!instance || instance.ready || instance.failed) return;
   if (bevyWaitPromise) return bevyWaitPromise;
   const bar = bevyLoadingScreen.querySelector('.bevy-loading-bar');
@@ -112,18 +116,19 @@ function enterMobileFullscreen() {
 }
 document.addEventListener('fullscreenchange', () => { if (document.fullscreenElement === racePanel) mobileNativeFullscreen = true; if (mobileNativeFullscreen && !document.fullscreenElement) exitMobileFullscreen(); });
 const dedicated = document.body.classList.contains('dedicated-server');
-let race = applyPlayerColors(mobile ? equipBomber(createBattle()) : dedicated || beta ? createBattle() : createRace(), savedPlayerColor(document.cookie)), lastTime = 0, selected = 0, track = 0, mode = mobile || dedicated || beta ? 'combat' : 'race', lastPhase = '', lastCount = -1;
+const startInArena = mobile || dedicated || dedicatedSolo || location.pathname.startsWith('/experimental/');
+let race = applyPlayerColors(mobile ? equipBomber(createBattle()) : startInArena ? createBattle() : createRace(), savedPlayerColor(document.cookie)), lastTime = 0, selected = 0, track = 0, mode = startInArena ? 'combat' : 'race', lastPhase = '', lastCount = -1;
 const renderControls = document.createElement('div'); renderControls.className = 'render-controls'; const graphicsLabel = document.createElement('label'); graphicsLabel.textContent = 'GRAPHICS ';
-const qualitySelect = document.createElement('select'); qualitySelect.setAttribute('aria-label', 'Graphics quality'); for (const [value, label] of [['auto', 'Auto'], ['high', 'High'], ['balanced', 'Balanced'], ['low', 'Low']]) { const option = document.createElement('option'); option.value = value; option.textContent = label; qualitySelect.append(option); } qualitySelect.onchange = () => renderer.setQuality(qualitySelect.value); graphicsLabel.append(qualitySelect);
+const qualitySelect = document.createElement('select'); qualitySelect.setAttribute('aria-label', 'Graphics quality'); for (const [value, label] of [['auto', 'Auto'], ['high', 'High'], ['balanced', 'Balanced'], ['low', 'Low']]) { const option = document.createElement('option'); option.value = value; option.textContent = label; qualitySelect.append(option); } qualitySelect.onchange = () => { renderer.setQuality(qualitySelect.value); bevy?.setQuality(qualitySelect.value); }; graphicsLabel.append(qualitySelect);
 const fpsMeter = document.createElement('span'); fpsMeter.id = 'render-fps'; fpsMeter.textContent = 'Measuring FPS…'; fpsMeter.title = renderer.gpuName; renderControls.append(graphicsLabel, fpsMeter); if (renderer.softwareGPU) { const warning = document.createElement('span'); warning.textContent = 'SOFTWARE GPU'; warning.title = 'Chrome is rendering graphics without hardware acceleration.'; renderControls.append(warning); } document.querySelector('.race-panel').append(renderControls);
 const buildLabel = document.createElement('span'); buildLabel.id = 'build-version'; buildLabel.textContent = document.body.dataset.build ? `BUILD ${document.body.dataset.build}` : 'BUILD …'; buildLabel.title = 'Compare this build ID on both computers after refreshing.'; renderControls.append(buildLabel);
-if (beta && (dedicated || soloBeta)) {
+if (dedicated || dedicatedSolo) {
   const soloLink = document.createElement('a');
   const target = new URL(location.href);
-  if (soloBeta) target.searchParams.delete('solo');
+  if (dedicatedSolo) target.searchParams.delete('solo');
   else target.searchParams.set('solo', '1');
   soloLink.href = target.href;
-  soloLink.textContent = soloBeta ? 'ONLINE ARENA' : 'SOLO VS BOTS';
+  soloLink.textContent = dedicatedSolo ? 'ONLINE ARENA' : 'SOLO VS BOTS';
   renderControls.append(soloLink);
 }
 globalThis.__syncBuildLabel?.();
@@ -241,7 +246,7 @@ for (const [field, caption, maximum] of [['targetScore', 'Kills to win', 100], [
 function resetMap() { race = newGame(); lastPhase = ''; lastCount = -1; keys.clear(); updateMapLabels(); }
 function chooseMap(index) { if (dedicated && !network.active) return; if (index === track) return; if (network.active) { if (network.canConfigure) network.control('arena', index); return; } track = index; selectedMaps[mode] = index; resetMap(); }
 const network = new NetworkGame({
-  anchor: modeSwitch, limits: () => soloLimits, keys, role: mobile ? 'bomber' : 'driver', clientType: clientLog.client, offline: soloBeta, beforeConnect: ensureBevyReady, driver: () => selected, arena: () => track, onArenas: () => { ensureMapButtons(); updateMapLabels(); }, unlock: () => audio.unlock(), sound: type => audio.event(type), isAudioEnabled: () => audio.enabled, getAudioContext: () => audio.context, onState: world => {
+  anchor: modeSwitch, limits: () => soloLimits, keys, role: mobile ? 'bomber' : 'driver', clientType: clientLog.client, offline: dedicatedSolo, beforeConnect: ensureBevyReady, driver: () => selected, arena: () => track, onArenas: () => { ensureMapButtons(); updateMapLabels(); }, unlock: () => audio.unlock(), sound: type => audio.event(type), isAudioEnabled: () => audio.enabled, getAudioContext: () => audio.context, onState: world => {
     const changed = mode !== 'combat' || track !== world.arena;
     if (race.soundEpoch !== world.soundEpoch) bomberWeapon = 'abomb';
     if (world.phase === "ready" && (world.targetScore !== race.targetScore || world.duration !== race.duration)) lastPhase = "";
@@ -395,13 +400,13 @@ function announceFinish() {
 }
 function finishText() { return (battleTieNotice(race) ? battleTieNotice(race) + ' · ' : '') + `${mode === 'combat' ? `${race.kills} KILLS` : timeLabel(race.finishTime)} · ${mode === 'combat' ? 'BATTLE' : 'RACE'} ENDING IN ${Math.ceil(race.finishCountdown)}…`; }
 function draw(refreshUi) {
+  if (race.mode === 'combat' && !bevyImport && canLoadBevy) loadArenaRenderer();
   if (refreshUi) characterPreview.frame(performance.now(), selected, race.color ?? drivers[selected].color, race.phase, race.specialAbilities !== false);
   const drawnByBevy = bevy?.draw(race, network.active ? network.client : null);
   if (!drawnByBevy) renderer.draw(race, race.elapsed);
-  if (beta) qualitySelect.disabled = Boolean(drawnByBevy);
   if (refreshUi) drawMap();
   const visible = new Set();
-  for (const plate of drawnByBevy ? [] : renderer.nameplates ?? []) {
+  for (const plate of drawnByBevy ? bevy.nameplates(race) : renderer.nameplates ?? []) {
     visible.add(plate.id); let label = nameplateNodes.get(plate.id);
     if (!label) { label = document.createElement('span'); label.className = 'kart-nameplate'; nameplateNodes.set(plate.id, label); nameplateLayer.append(label); }
     if (label.textContent !== plate.name) label.textContent = plate.name;
@@ -614,13 +619,13 @@ function hud() {
 function showDriver(index) { selected = index;[...$('drivers').children].forEach((b, i) => { b.classList.toggle('selected', i === index); b.setAttribute('aria-pressed', String(i === index)); }); const d = drivers[index]; $('driver-name').textContent = d.name; $('driver-desc').textContent = d.desc; $('intelligence-stat').parentElement.title = 'Carrying limits: ' + itemCapacity(index, 'hedgehog') + ' hedgehogs, ' + itemCapacity(index, 'missile') + ' missiles, ' + itemCapacity(index, 'boost') + ' turbos, ' + itemCapacity(index, 'abomb') + ' of each bomb.'; $('cuteness-stat').parentElement.title = 'Arena: recovers one heart every ' + recoveryInterval(index) + ' seconds without taking damage, up to 3 hearts. Replenishes one hedgehog every ' + hedgehogRecoveryInterval(index) + ' seconds.'; $('fuel-stat').parentElement.title = 'Each turbo lasts ' + boostDuration(index) + ' seconds.'; $('driver-number').textContent = String(index + 1).padStart(2, '0'); for (const [id, value] of [['fuel-stat', d.fuel], ['speed-stat', d.speed], ['handling-stat', d.handling], ['accel-stat', d.accel], ['cuteness-stat', d.cuteness], ['intelligence-stat', d.intelligence]]) { $(id).replaceChildren(...Array.from({ length: 5 }, (_, i) => Object.assign(document.createElement('i'), { className: i < value ? 'on' : '' }))); } }
 function selectDriver(index) { if (network.active) { network.chooseDriver(index); return; } showDriver(index); race = newGame(); lastPhase = ''; }
 drivers.forEach((d, i) => { const b = document.createElement('button'); b.className = 'driver'; b.textContent = d.emoji; b.title = d.name; b.setAttribute('aria-label', d.name); b.onclick = () => selectDriver(i); $('drivers').append(b); });
-async function start() { if (!network.hasName) { network.focusName(); return; } await ensureBevyReady(); if (!network.active && network.invitation) { await network.connect('/api/join'); if (!network.active) return; } if (dedicated && !network.active) return; if (race.bomber && mobile) enterMobileFullscreen(); audio.unlock().catch(() => { $('sound').textContent = 'CLICK FOR SOUND'; }); if (network.active) { if (network.paused) { network.pause(); return; } if (network.canControl) { network.control('start'); return; } network.requestPlay(); return; } if (race.phase === 'paused') { race.phase = race.resumePhase || 'racing'; return; } if (race.phase === 'racing' || race.phase === 'countdown') return; race = newGame(); race.name = network.name.value.trim(); network.rememberName(); race.phase = 'countdown'; lastCount = -1; tone(400); }
+async function start() { if (!network.hasName) { network.focusName(); return; } if (mode === 'combat') await ensureBevyReady(); if (!network.active && network.invitation) { await network.connect('/api/join'); if (!network.active) return; } if (dedicated && !network.active) return; if (race.bomber && mobile) enterMobileFullscreen(); audio.unlock().catch(() => { $('sound').textContent = 'CLICK FOR SOUND'; }); if (network.active) { if (network.paused) { network.pause(); return; } if (network.canControl) { network.control('start'); return; } network.requestPlay(); return; } if (race.phase === 'paused') { race.phase = race.resumePhase || 'racing'; return; } if (race.phase === 'racing' || race.phase === 'countdown') return; race = newGame(); race.name = network.name.value.trim(); network.rememberName(); race.phase = 'countdown'; lastCount = -1; tone(400); }
 function pause() { if (network.active) { network.pause(); return; } if (race.phase === 'paused') { race.phase = race.resumePhase; return; } if (!['racing', 'countdown'].includes(race.phase)) return; race.resumePhase = race.phase; race.phase = 'paused'; keys.clear(); }
 $('start').onclick = start; $('pause').onclick = pause; $('restart').onclick = () => { if (dedicated) return; if (network.active) { network.control('reset'); return; } race = newGame(); lastPhase = ''; keys.clear(); };
 $('change-track').onclick = () => chooseMap((track + 1) % mapButtons.length);
 $('sound').textContent = 'SOUND ON'; $('sound').setAttribute('aria-label', 'Mute sound');
 $('sound').onclick = () => { audio.toggle(); $('sound').textContent = audio.enabled ? 'SOUND ON' : 'SOUND OFF'; $('sound').setAttribute('aria-label', audio.enabled ? 'Mute sound' : 'Enable sound'); tone(660); };
-$('fullscreen').onclick = async () => { try { if (document.fullscreenElement) { await document.exitFullscreen(); return; } await (beta && mobile ? racePanel : document.querySelector('.viewport')).requestFullscreen(); } catch { uiNotice = { text: 'Fullscreen unavailable in this browser', until: performance.now() + 3000 }; } };
+$('fullscreen').onclick = async () => { try { if (document.fullscreenElement) { await document.exitFullscreen(); return; } await (useBevy && mobile ? racePanel : document.querySelector('.viewport')).requestFullscreen(); } catch { uiNotice = { text: 'Fullscreen unavailable in this browser', until: performance.now() + 3000 }; } };
 window.addEventListener('keydown', e => {
   if (e.target !== chat.input || !returnsToGame(e, race.phase)) return;
   e.preventDefault(); e.stopPropagation();
@@ -673,7 +678,7 @@ function frame(t) {
   lastTime = t;
   renderer.recordFrame(t);
   frameHealth.frame(t, network.active && race.phase === 'racing' && !document.hidden, network.lastPacket, network.rtt, { match: race.soundEpoch, seconds: race.elapsed });
-  const graphics = bevy ? bevy.status : `${renderer.pixelRatio().toFixed(2)}×`;
+  const graphics = bevy?.active ? bevy.status : `${renderer.pixelRatio().toFixed(2)}×`;
   const mobileBevy = bevy?.active && mobile;
   const fps = mobileBevy ? bevy.fps : renderer.fps;
   const performanceText = `${fps || '…'} FPS · ${graphics}${network.active ? ` · ${network.rtt ? Math.round(network.rtt * 1000) : '…'} ms ping` : ''}`;
@@ -691,8 +696,8 @@ function frame(t) {
   for (const call of race.voices) audio.voice(call);
   race.voices.length = 0;
   audio.update(race);
-  const refreshUi = !beta || !mobile || t + 1 >= nextMobileUiFrame;
-  if (beta && mobile && refreshUi) nextMobileUiFrame = Math.max(nextMobileUiFrame + 1000 / 30, t + 1);
+  const refreshUi = !useBevy || !mobile || t + 1 >= nextMobileUiFrame;
+  if (useBevy && mobile && refreshUi) nextMobileUiFrame = Math.max(nextMobileUiFrame + 1000 / 30, t + 1);
   draw(refreshUi);
   if (photography.requested) photography.afterDraw();
   if (refreshUi) hud();

@@ -96,3 +96,27 @@ test('a single multiplayer X becomes one turbo once the double-tap window expire
   assert.equal(client.snapshot().turbos,0);
   assert.deepEqual(client.outbound([]).actions.map(action=>action.type),['turbo']);
 });
+
+for (const mode of ['solo', 'multiplayer']) {
+  test(`${mode}: the Wormhole bends and absorbs enemy fire while Avita can shoot through it`, () => {
+    const world = Object.assign(createBattle(8), {phase:'racing', human:true, wx:65, wz:40, heading:0, nightmareActive:8, supplies:[]});
+    for (const bot of world.bots) bot.inactive = true;
+    world.projectiles = [
+      {id:1, owner:1, kind:'missile', target:0, wx:80, wz:65, heading:Math.PI, speed:70, life:4, height:2, trail:[]},
+      {id:2, owner:0, kind:'hedgehog', wx:65, wz:50, heading:0, speed:20, life:4, height:2, trail:[]},
+    ];
+    const server = mode === 'multiplayer' ? new ArenaCore(world) : null;
+    function step() {
+      if (server) { server.step(1 / 60); return server.snapshot(); }
+      tickBattle(world, new Set(), 1 / 60);
+      return world;
+    }
+    let state = step();
+    assert.ok(state.projectiles.find(p => p.id === 1).wx < 79.8);
+    for (let frame = 1; frame < 30; frame++) state = step();
+    assert.deepEqual(state.projectiles.map(p => p.id), [2]);
+    assert.equal(state.projectiles[0].wx, 65);
+    assert.equal(state.health, 3);
+    assert.equal(state.effects.some(effect => effect.type === 'explosion'), false);
+  });
+}
