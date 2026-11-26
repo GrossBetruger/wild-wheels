@@ -332,6 +332,7 @@ impl Notices {
                         3.2,
                     ),
                 };
+                let detail = format!("{} · {detail}", graphics.racers()[15].card.1);
                 used = Some((
                     karma.caster == view.you,
                     Notice {

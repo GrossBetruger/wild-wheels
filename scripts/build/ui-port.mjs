@@ -93,7 +93,7 @@ export function cardCatalog() {
       color: '#8ef0c8',
       icon: '☯',
       title: 'KARMIC RACCOONING · SCORES SWAPPED!',
-      placeholder: 'PLAYER KO’D RIVAL & SWAPPED KILLS · 10 ⇄ 4',
+      placeholder: `${abilityCards[15].detail} · PLAYER KO’D RIVAL & SWAPPED KILLS · 10 ⇄ 4`,
     },
     {
       key: 'reward:intelligence',

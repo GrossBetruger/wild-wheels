@@ -10,7 +10,7 @@ export const abilityCards={
   12:{title:'SIX-HEART RECOVERY',icon:'♥',color:'#ffb5c6',theme:'heartbeat',detail:'EVERY HEARTBEAT COUNTS'},
   13:{title:'TAX-AUDIT',icon:'Ⓕ',color:'#ffd1ba',theme:'audit',detail:'YOUR ITEMS HAVE BEEN ACCOUNTED FOR'},
   14:{title:'DARK HUMOR',icon:'◉',color:'#d6a8ff',theme:'darkness',detail:'SOME JOKES ARE BETTER IN THE DARK'},
-  15:{title:'KARMIC RACCOONING',icon:'☯',color:'#8ef0c8',theme:'karma',detail:'BALANCE RESTORED FROM TYROL'},
+  15:{title:'KARMIC RACCOONING',icon:'☯',color:'#8ef0c8',theme:'karma',detail:'karma is a Waschbitch'},
 };
 export class AbilityUsage {
   previous=new Map();identity=null;elapsed=0;sequence=0;lastKarmaId=null;
@@ -38,7 +38,7 @@ export class AbilityUsage {
           id:`karma:${identity}:${karma.id}`,
           owner:karma.caster,
           title,
-          detail,
+          detail:`${abilityCards[15].detail} · ${detail}`,
           ...(karma.swapped?{from:karma.casterBefore,to:karma.casterAfter}:{}),
           duration:karma.swapped?3.8:3.2,
         });

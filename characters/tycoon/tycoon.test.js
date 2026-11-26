@@ -190,6 +190,7 @@ test('Karmic Raccooning produces a crystal-clear animated announcement with scor
   assert.equal(events.length, 1);
   assert.equal(events[0].theme, 'karma');
   assert.match(events[0].title, /SCORES SWAPPED/i);
+  assert.ok(events[0].detail.startsWith('karma is a Waschbitch · '));
   assert.match(events[0].detail, /ROCCO/i);
   assert.match(events[0].detail, /7.*2/);
   assert.equal(events[0].from, 1);
