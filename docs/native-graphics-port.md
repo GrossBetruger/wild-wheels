@@ -26,6 +26,7 @@ Run the port by hand with `npm run port:graphics -- /tmp/graphics.wwgp`.
 | Clip name | Source |
 | --- | --- |
 | `driver:<n>:idle` | Each racer for an eight-second loop at 24 frames per second, after a three-second warm-up that settles eased animation |
+| `driver:8:wormhole` | Avita’s fast propeller and swept blade tips while the Wormhole is open |
 | `driver:<n>:boost` | The same loop while boosting, recorded with the racer driving so that trails stream behind |
 | `driver:<n>:celebrate` | The celebration after a kill, played by its timer |
 | `driver:<n>:boost:in`, `driver:<n>:boost:out` | One second after a boost starts or ends, through the renderer's own easing: Pearococo's tail folds, KnowItOwl takes off and drops the bicycle, rotors tilt |

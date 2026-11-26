@@ -53,3 +53,11 @@ test('Houston has a native full-burn loop and a one-second flame ending',()=>{
   assert.equal(ending.frames.length,61);
   assert.ok(ending.frames[0].sprites[0]>0);
 });
+
+test('Avita’s native Wormhole clip animates the plane without baking the world vortex into it', () => {
+  const {names} = read(buildGraphicsPack({only:[8]}));
+  const casting = names.get('driver:8:wormhole');
+  assert.equal(casting.once, false);
+  assert.ok(casting.frames.every(frame => frame.parts.length > 0 && frame.sprites.every(count => count === 0)));
+  assert.notDeepEqual(casting.frames[0].parts, casting.frames[1].parts);
+});

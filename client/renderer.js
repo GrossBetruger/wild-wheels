@@ -526,8 +526,9 @@ export class Renderer {
     this.model(`avita:worm:${phase}`,p.x,(jump?.height??0)+(gesture?.bounce??0),p.z,angle+Math.PI*turn+(gesture?.yaw??0),mesh=>{mesh.at(0,.13,0);drawPilotWorm(mesh,0,0,Math.sin(phase*Math.PI/4));},(jump?.pitch??0)+(gesture?.lean??0));
   }
   planePropeller(p,angle,clock,jump=null,boost=false){
-    const phase=Math.floor(clock*(boost||jump?50:20))%8;
-    this.model(`cessna:propeller:${phase}`,p.x,jump?.height??0,p.z,angle,mesh=>{mesh.at(0,.13,0);drawCessnaPropeller(mesh,phase);},jump?.pitch??0);
+    const generating=p.nightmareActive>0;
+    const phase=Math.floor(clock*(generating?624:boost||jump?50:20))%8;
+    this.model(`cessna:propeller:${generating?'wormhole:':''}${phase}`,p.x,jump?.height??0,p.z,angle,mesh=>{mesh.at(0,.13,0);drawCessnaPropeller(mesh,phase,generating);},jump?.pitch??0);
   }
   afterburner(p,angle,clock,jump=null,driver=0){
     if(driver===10){
@@ -885,7 +886,7 @@ export class Renderer {
     for(const actor of [r,...r.bots]){
       if(actor.destroyed||actor.bomber||actor.inactive||actor.afk)this.batSummons.delete(actor.id);
       if(actor.bomber||actor.inactive||actor.afk)continue;
-      const pose={...combatPose(actor),id:actor.id,vulcan:actor.vulcan,specialActive:actor.specialActive,nightmareActive:actor.nightmareActive,bikeRoll:this.yudaDrift.roll(actor.id)};if(actor.destroyed){
+      const pose={...combatPose(actor),id:actor.id,vulcan:actor.vulcan,specialActive:actor.specialActive,nightmareActive:r.specialAbilities===false?0:actor.nightmareActive,bikeRoll:this.yudaDrift.roll(actor.id)};if(actor.destroyed){
         if (captures.some(effect => effect.owner === actor.id)) continue;
         const ash=r.effects.find(f=>f.type==='ash'&&Math.hypot(f.wx-pose.x,f.wz-pose.z)<.1),key=`${pose.x}:${pose.z}`;
         if(ash&&(!this.ashBodies.has(key)||ash.age<this.ashBodies.get(key).age)){

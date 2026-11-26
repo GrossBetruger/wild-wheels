@@ -526,6 +526,7 @@ fn racers(stage: &mut Stage, view: &ClientView, bats: &Bats, dt: f32, now: f32, 
         // Recorded transitions carry the browser's easing between idle and boost.
         let mut play = match (wrecked, boosting, a.celebrate > 0.0) {
             (true, ..) => stage.clip("wreck"),
+            (false, ..) if a.driver == 8 && view.special_abilities && a.nightmare_active > 0.0 => stage.clip(&racer("wormhole")),
             (false, ..) if a.nightmare_active > 0.0 => stage.clip(&racer("idle")),
             (false, true, _) if shifting => {
                 stage.transition(&racer("boost:in"), &racer("boost"), changed)

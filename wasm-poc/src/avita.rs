@@ -59,6 +59,8 @@ struct AvitaAssets {
     moves: Option<WormMoves>,
     prop_blur_mesh: Handle<Mesh>,
     prop_blur_mat: Handle<StandardMaterial>,
+    wormhole_rim_mesh: Handle<Mesh>,
+    wormhole_rim_mat: Handle<StandardMaterial>,
     contrail_mesh: Handle<Mesh>,
     contrail_mat: Handle<StandardMaterial>,
 }
@@ -73,6 +75,7 @@ struct AvitaRig {
     id: usize,
     prop: Entity,
     prop_blur: Entity,
+    wormhole_rim: Entity,
     worm_root: Entity,
     skeleton: Option<WormSkeleton>,
     prop_angle: f32,
@@ -118,6 +121,13 @@ fn load(
             unlit: true,
             alpha_mode: AlphaMode::Add,
             cull_mode: None,
+            ..default()
+        }),
+        wormhole_rim_mesh: meshes.add(Torus::new(1.30, 1.43).mesh().major_resolution(32).minor_resolution(6)),
+        wormhole_rim_mat: materials.add(StandardMaterial {
+            base_color: Color::srgb(0.62, 0.28, 1.0),
+            emissive: LinearRgba::rgb(1.4, 0.32, 2.8),
+            unlit: true,
             ..default()
         }),
         contrail_mesh: meshes.add(Sphere::new(0.45).mesh().uv(8, 6)),
@@ -373,13 +383,22 @@ fn fly_avita(
                 }
             }
 
-            // 3. Spinning propeller & boost blur disc
-            rig.prop_angle = (rig.prop_angle + dt * if boosting { 54.0 } else { 22.0 }) % TAU;
+            // The continuous exposure disc keeps the faster blades readable at low FPS.
+            let generating = view.special_abilities && a.nightmare_active > 0.0;
+            let angular_speed = match (generating, boosting) {
+                (true, _) => 245.0,
+                (_, true) => 54.0,
+                _ => 22.0,
+            };
+            rig.prop_angle = (rig.prop_angle + dt * angular_speed) % TAU;
+            if let Ok((_, mut visibility)) = parts.get_mut(rig.wormhole_rim) {
+                *visibility = if generating { Visibility::Inherited } else { Visibility::Hidden };
+            }
             if let Ok((mut ptf, _)) = parts.get_mut(rig.prop) {
                 ptf.rotation = Quat::from_rotation_z(rig.prop_angle);
             }
             if let Ok((_, mut bvis)) = parts.get_mut(rig.prop_blur) {
-                *bvis = if boosting {
+                *bvis = if boosting || generating {
                     Visibility::Inherited
                 } else {
                     Visibility::Hidden
@@ -416,6 +435,7 @@ fn fly_avita(
             );
             let mut prop_ent = Entity::PLACEHOLDER;
             let mut blur_ent = Entity::PLACEHOLDER;
+            let mut rim_ent = Entity::PLACEHOLDER;
             let mut worm_ent = Entity::PLACEHOLDER;
             let plane_ent = commands
                 .spawn((WorldAssetRoot(assets.plane.clone()), tf))
@@ -435,6 +455,13 @@ fn fly_avita(
                             Visibility::Hidden,
                         ))
                         .id();
+                    rim_ent = plane.spawn((
+                        Mesh3d(assets.wormhole_rim_mesh.clone()),
+                        MeshMaterial3d(assets.wormhole_rim_mat.clone()),
+                        Transform::from_xyz(0.0, 1.78, 3.19)
+                            .with_rotation(Quat::from_rotation_x(std::f32::consts::FRAC_PI_2)),
+                        Visibility::Hidden,
+                    )).id();
                     worm_ent = plane
                         .spawn((WorldAssetRoot(assets.worm.clone()), Transform::IDENTITY))
                         .id();
@@ -444,6 +471,7 @@ fn fly_avita(
                 id: a.id,
                 prop: prop_ent,
                 prop_blur: blur_ent,
+                wormhole_rim: rim_ent,
                 worm_root: worm_ent,
                 skeleton: None,
                 prop_angle: 0.0,

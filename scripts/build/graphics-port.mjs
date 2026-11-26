@@ -199,14 +199,14 @@ class Pack {
 
 // Draws one subject for `frames` frames. `setup` prepares the world once and
 // `each(r,seconds)` updates it per frame; a negative warm-up settles eased state.
-function capture({driver=0,frames=1,fps=FPS,warmup=0,speed=0,setup,each}){
+function capture({driver=0,frames=1,fps=FPS,warmup=0,speed=0,modelsOnly=false,setup,each}){
   const view=renderer(),r=world(driver),start=LOOP*2,shots=[];
   setup?.(r);
   for(let i=-Math.round(warmup*fps);i<frames;i++){
     const seconds=i/fps;if(speed)r.wz=HOME[1]+speed*(seconds+warmup);
     each?.(r,seconds);
     const shot=draw(view,r,start+seconds,[r.wx,r.wz]);
-    if(i>=0)shots.push(shot);
+    if(i>=0)shots.push(modelsOnly ? {...shot,dynamic:[],glow:[],sparks:[],smoke:[]} : shot);
   }
   return shots;
 }
@@ -259,6 +259,8 @@ export function buildGraphicsPack({only=[...drivers.keys()],web=false}={}){
     const idleBase=blenderWeb?capture({driver,fps,frames:overlayLoop*fps,warmup:WARMUP}):idle;
     const steps=Math.round(TRANSITION*fps)+1;
     if(!blenderWeb){
+      // Only the plane belongs in the racer clip. The vortex is world-space geometry.
+      if(driver===8) tinted('driver:8:wormhole',base,{driver,frames:fps,modelsOnly:true,mark,setup:r=>{r.nightmareActive=7;}});
       // Boosting racers are recorded while driving so that trails stream behind them.
       tinted(`driver:${driver}:boost`,base,{driver,frames:loop*fps,warmup:WARMUP,speed:BOOST_SPEED,mark,setup:r=>{r.boost=1;}});
       // Boosting in and out, through whatever easing the renderer keeps between

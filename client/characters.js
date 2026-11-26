@@ -123,8 +123,23 @@ export function drawPilotWorm(m,turn,progress,wiggle=0){
   for(let i=0;i<7;i++)m.ball(x-.55-i*.09,4.03-i*.09,.05-i*.17,.18-i*.014,.08,.16,'#f4d473',7,4);
 }
 
-export function drawCessnaPropeller(m,phase){
+export function drawCessnaPropeller(m,phase,generating=false){
   const angle=phase*Math.PI/8;
+  if(generating){
+    // Integrate the blade tips into a continuous rim. A pair of swept arcs
+    // still indicates the spin direction when a frame samples the same blade twice.
+    const tip=(a,r,z)=>[Math.sin(a)*r,1.65+Math.cos(a)*r,z];
+    for(let i=0;i<32;i++){
+      const a=i*Math.PI/16,b=(i+1)*Math.PI/16;
+      m.quad(tip(a,1.30,3.26),tip(a,1.43,3.26),tip(b,1.43,3.26),tip(b,1.30,3.26),'#b283ff');
+    }
+    for(const offset of [0,Math.PI]){
+      for(let i=0;i<10;i++){
+        const t=i/10,u=(i+1)/10,a=angle+offset-t*2.3,b=angle+offset-u*2.3;
+        m.quad(tip(a,.30+t*.8,3.25),tip(a,1.28,3.25),tip(b,1.28,3.25),tip(b,.30+u*.8,3.25),i<3?'#bcfaff':'#739bc9');
+      }
+    }
+  }
   for(const side of [-1,1]){
     const x=Math.sin(angle)*side,y=Math.cos(angle)*side,nx=Math.cos(angle)*.12,ny=-Math.sin(angle)*.12;
     m.quad([x*.2+nx,1.65+y*.2+ny,3.24],[x*1.38+nx,1.65+y*1.38+ny,3.24],[x*1.38-nx,1.65+y*1.38-ny,3.24],[x*.2-nx,1.65+y*.2-ny,3.24],'#364855');

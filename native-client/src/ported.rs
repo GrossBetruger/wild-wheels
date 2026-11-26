@@ -1027,6 +1027,7 @@ mod tests {
             "skid:0",
             "skid:1",
             "overlay:7:special",
+            "driver:8:wormhole",
             "overlay:7:nightmare",
             "overlay:7:nightmare:end",
             "overlay:11:special",
