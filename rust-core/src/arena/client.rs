@@ -8,7 +8,7 @@ pub use native::*;
 pub struct Client{
     viewer:usize,pred:Game,display:Game,frames:VecDeque<Received>,history:Vec<Move>,
     next_sequence:i64,last_sent:i64,accumulator:f64,received:f64,
-    error:[f64;4],offset:f64,presented:f64,last_now:f64,packet_sequence:u64,last_boost_press:Option<f64>,
+    error:[f64;4],offset:f64,presented:f64,last_now:f64,packet_sequence:u64,last_boost_press:Option<f64>,pending_wormhole_press:Option<f64>,
     ops:Vec<feedback::Op>,local_shots:Vec<feedback::LocalShot>,next_action:u32,last_sent_action:i64,fire_tick:i64,chaff_tick:i64,
     rejected:BTreeSet<String>,pending_sounds:Vec<feedback::PendingSound>,seen:BTreeSet<String>,seen_order:VecDeque<String>,cue_times:BTreeMap<String,f64>,audio:Vec<serde_json::Value>,voice_output:Vec<serde_json::Value>,
     local_drift:Globals,emitter:Option<Actor>,emitter_level:u32,drift_last:Option<f64>,drift_previous:Option<(f64,f64,f64)>,
@@ -24,7 +24,7 @@ fn move_one(game:&mut Game,id:usize,command:&Move){
 impl Client{
     fn new(game:Game,viewer:usize,now:f64)->Self{
         let sequence=game.movement_ack[viewer];let time=game.network_time;let action=game.action_ack[viewer];
-        let mut client=Self{viewer,pred:game.clone(),display:game.clone(),frames:VecDeque::from([Received{time,offset:now-time,game:game.clone()}]),history:Vec::new(),next_sequence:sequence+1,last_sent:sequence,accumulator:0.0,received:now,error:[0.0;4],offset:now-time,presented:time-0.1,last_now:now,packet_sequence:0,last_boost_press:None,
+        let mut client=Self{viewer,pred:game.clone(),display:game.clone(),frames:VecDeque::from([Received{time,offset:now-time,game:game.clone()}]),history:Vec::new(),next_sequence:sequence+1,last_sent:sequence,accumulator:0.0,received:now,error:[0.0;4],offset:now-time,presented:time-0.1,last_now:now,packet_sequence:0,last_boost_press:None,pending_wormhole_press:None,
             ops:Vec::new(),local_shots:Vec::new(),next_action:(action+1)as u32,last_sent_action:action,fire_tick:sequence,chaff_tick:sequence,rejected:BTreeSet::new(),pending_sounds:Vec::new(),seen:BTreeSet::new(),seen_order:VecDeque::new(),cue_times:BTreeMap::new(),audio:Vec::new(),voice_output:Vec::new(),local_drift:Globals::default(),emitter:None,emitter_level:0,drift_last:None,drift_previous:None};
         client.feedback_accept(&game,now,true);client
     }
@@ -36,6 +36,9 @@ impl Client{
         let freeze_changed=game.frozen(viewer)!=self.pred.frozen(viewer);
         let old=&self.pred.actors[viewer];let old_pose=[old.wx+self.error[0],old.wz+self.error[1],old.heading+self.error[2],old.camera_heading+self.error[3]];
         let acknowledged=game.movement_ack[viewer];self.history.retain(|command|command.sequence>acknowledged);
+        if reset || freeze_changed || old.driver != game.actors[viewer].driver || game.actors[viewer].afk {
+            self.pending_wormhole_press = None;
+        }
         self.feedback_accept(&game,now,reset);
         self.pred=game.clone();self.pred.actors[viewer].drift_trail=None;self.pred.actors[viewer].drift_emit=0.0;
         self.replay_maneuvers(acknowledged,true);
@@ -49,6 +52,7 @@ impl Client{
         self.frames.push_back(Received{time,offset:now-time,game});while self.frames.len()>32{self.frames.pop_front();}
     }
     fn frame(&mut self,dt:f64,keys:u32,steer:Option<f64>,now:f64){
+        self.resolve_wormhole_press(now);
         let fresh=now-self.received<0.5;
         if fresh&&self.pred.global.phase=="racing"&&self.history.len()<120&&!self.pred.actors[self.viewer].bomber&&!self.pred.actors[self.viewer].afk{
             self.accumulator+=dt.clamp(0.0,0.05);

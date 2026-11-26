@@ -6,12 +6,16 @@ const fn bake() -> [[f64; 3]; FRAMES] {
     let mut frames = [[0.0; 3]; FRAMES];
     let (mut front, mut back) = (6.0_f64, 7.0_f64);
     let (mut front_speed, mut back_speed) = (0.0, 0.0);
+    let mut peak_length = 1.0_f64;
     let mut i = 0;
     while i < FRAMES {
         let length = back - front;
         // The tidal strain thins the body as it stretches. Once the front
         // disappears, the visible cross-section also tapers into the horizon.
-        let width = (1.0 / (1.0 + 1.8 * (length - 1.0).max(0.0))) * back.min(1.0);
+        // Past the horizon, visible length decreases because material has
+        // disappeared. The remaining strand still carries its peak strain.
+        peak_length = peak_length.max(length);
+        let width = back.min(1.0) / (1.0 + 1.8 * (peak_length - 1.0));
         frames[i] = [(front + back) / 13.0, length, width];
         let tension = 1.2 * (length - 1.0);
         front_speed += (-250.0 / (1.0 + front * front) + tension) / HZ as f64;

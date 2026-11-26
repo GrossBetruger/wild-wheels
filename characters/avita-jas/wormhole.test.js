@@ -16,6 +16,9 @@ test('the offline capture stretches and thins the racer, then swallows both ends
   assert.deepEqual(pose(0), [1,1,1]);
   const [distance, length, width] = pose(1.05);
   assert.ok(distance < .35 && length > 2.8 && width < .25);
+  for (let frame = 1; frame <= 160; frame++) {
+    assert.ok(wormholeSample(frame/120, 2) <= wormholeSample((frame-1)/120, 2));
+  }
   assert.deepEqual(pose(1.32), [0,0,0]);
 });
 
@@ -46,4 +49,45 @@ test('Avita double-taps turbo and the server credits a Wormhole knockout through
   const effects = peer.present().effects;
   assert.ok(effects.some(fx => fx.type === 'wormholeCapture' && fx.owner === 1));
   assert.equal(effects.some(fx => fx.type === 'explosion'), false);
+});
+
+for (const mode of ['solo', 'multiplayer']) {
+  test(`${mode}: Avita spends a turbo only on the third X after opening a Wormhole`, () => {
+    const world = Object.assign(createBattle(8), {phase:'racing', turbos:1, human:true});
+    const server = new ArenaCore(world);
+    const client = new ArenaClient();
+    client.accept(server.packet(0), 0);
+    const press = at => {
+      world.elapsed = at;
+      return mode === 'solo' ? useBattleTurbo(world) : client.action('turbo', null, at);
+    };
+    const read = () => mode === 'solo' ? world : client.snapshot();
+    press(.05);
+    assert.equal(read().boost, 0);
+    press(.2);
+    assert.equal(read().nightmareActive, 8);
+    assert.equal(read().turbos, 1);
+    assert.equal(read().boost, 0);
+    press(.25);
+    assert.equal(read().turbos, 0);
+    assert.equal(read().boost, 3.6);
+    if (mode === 'multiplayer') {
+      const input = client.outbound([]);
+      assert.deepEqual(input.actions.map(action => action.type), ['nightmare','turbo']);
+      server.step(0,[{...input,actor:0}]);
+      assert.equal(server.snapshot().boost, 3.6);
+    }
+  });
+}
+
+test('a single multiplayer X becomes one turbo once the double-tap window expires', () => {
+  const world = Object.assign(createBattle(8), {phase:'racing', turbos:1, human:true});
+  const server = new ArenaCore(world), client = new ArenaClient();
+  client.accept(server.packet(0),0);
+  client.action('turbo',null,.02);
+  client.frame(0,[],.35);
+  assert.equal(client.snapshot().turbos,1);
+  client.frame(0,[],.38);
+  assert.equal(client.snapshot().turbos,0);
+  assert.deepEqual(client.outbound([]).actions.map(action=>action.type),['turbo']);
 });

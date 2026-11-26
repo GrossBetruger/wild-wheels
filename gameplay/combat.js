@@ -1,5 +1,5 @@
 import {placeSupply,tickSupplySpawns} from './supply-spawns.js';
-import {tapNightmare,tickNightmare} from '../characters/houston/nightmare-fuel.js';
+import {activateNightmare,tapNightmare,tickNightmare} from '../characters/houston/nightmare-fuel.js';
 import { tickBicycles } from './bicycle-pickup.js';
 import {tickLocusts} from './locusts.js';
 import { tickFireRings, fireRingBlocks } from '../characters/master-yuda/fire-ring.js';
@@ -124,7 +124,29 @@ export function targetAhead(world, actor = world, cone = .65) {
 export function commandKeys(command) { const keys = new Set(command.keys); if (Number.isFinite(command.steer)) keys.steer = command.steer; return keys; }
 export function useBattleTurbo(r, actor = r, actionId) {
   if (!canAct(r, actor)) return false;
-  if (tapNightmare(r, actor)) return true;
+  if (actor.driver === 8 && r.specialAbilities !== false && r.finishCountdown === null && !(actor.nightmareCooldown > 1e-8)) {
+    resolveWormholeTap(r, actor);
+    if (actor.wormholeTap !== undefined) {
+      delete actor.wormholeTap;
+      return activateNightmare(r, actor);
+    }
+    actor.wormholeTap = r.elapsed;
+    return true;
+  }
+  if (actor.driver === 7 && tapNightmare(r, actor)) return true;
+  return boostBattleActor(r, actor, actionId);
+}
+function resolveWormholeTap(world, actor) {
+  if (actor.wormholeTap === undefined) return;
+  if (!canAct(world, actor) || actor.driver !== 8 || actor.afk || world.elapsed < actor.wormholeTap) {
+    delete actor.wormholeTap;
+    return;
+  }
+  if (world.elapsed - actor.wormholeTap <= .35) return;
+  delete actor.wormholeTap;
+  boostBattleActor(world, actor);
+}
+function boostBattleActor(r, actor, actionId) {
   if (actor.turbos <= 0 || actor.boost > 0) return false;
   actor.turbos--; actor.boost = boostDuration(actor.driver); fx(r, 'boost', actor, actionId == null ? undefined : `action:${actionId}`); return true;
 }
@@ -342,6 +364,7 @@ export function tickBattle(r, keys, dt, inputs = null) {
   tickSpecials(r, dt);tickNightmare(r, dt);tickLocusts(r,dt); const worldDt = r.timeStop > 0 ? 0 : dt;
   const ending = r.finishCountdown !== null; if (ending) dt = Math.min(dt, r.finishCountdown);
   r.elapsed += dt; r.noticeTime = Math.max(0, r.noticeTime - dt); r.shake = Math.max(0, r.shake - dt * 2);
+  for (const actor of [r,...r.bots]) resolveWormholeTap(r, actor);
   tickSupplySpawns(r,arenas[r.arena],worldDt);
   for (const effect of r.effects) effect.age += worldDt; r.effects = r.effects.filter(f => f.age < f.life);
   for (const cloud of r.chaffClouds) cloud.age += worldDt;

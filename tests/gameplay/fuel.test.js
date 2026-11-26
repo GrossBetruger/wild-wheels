@@ -19,7 +19,11 @@ for(const engine of ['Grand Prix','solo arena','Rust multiplayer']){
       const seed=createBattle(driver);Object.assign(seed,{phase:'racing',human:true,wx:-65,wz:0,heading:0,speed:0,turbos:1,supplies:[]});for(const bot of seed.bots)Object.assign(bot,{inactive:true,destroyed:1e9});
       const core=engine==='Rust multiplayer'?new ArenaCore(seed):null;
       if(core)core.step(1/60,[{actor:0,actions:[{type:'turbo',id:0,afterMove:-1}]}]);
-      if(!core){assert.equal(useBattleTurbo(seed),true);tickBattle(seed,new Set(),1/60);}
+      if(!core){
+        assert.equal(useBattleTurbo(seed),true);
+        if(driver===8)for(let i=0;i<7;i++)tickBattle(seed,new Set(),.05);
+        tickBattle(seed,new Set(),1/60);
+      }
       const after=core?core.snapshot():seed;assert.ok(Math.abs(after.boost-(seconds-1/60))<1e-6);assert.equal(after.turbos,0);
     }
   });

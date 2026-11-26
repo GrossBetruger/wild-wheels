@@ -63,7 +63,18 @@ impl Client{
             }
         }}actor
     }
-    pub(super) fn do_action(&mut self,mut action:Action,now:f64)->bool{
+    pub(super) fn resolve_wormhole_press(&mut self, now: f64) {
+        if self.pending_wormhole_press.is_some_and(|at| now-at > 0.35) {
+            self.pending_wormhole_press = None;
+            let turbo = Action { kind: "turbo".into(), ..Action::default() };
+            self.submit_action(turbo, now, false);
+        }
+    }
+    pub(super) fn do_action(&mut self, action: Action, now: f64) -> bool {
+        self.resolve_wormhole_press(now);
+        self.submit_action(action, now, true)
+    }
+    fn submit_action(&mut self,mut action:Action,now:f64,interpret_tap:bool)->bool{
         if self.pred.frozen(self.viewer){return false;}
         if self.ops.len()>=64||self.pred.actors[self.viewer].afk{return false;}let mut actor=self.inventory();let id=self.next_action;action.id=Some(id);let sequence=self.next_sequence-1;
         let after=self.ops.iter().filter_map(|op|match op{Op::Pickup{after,..}=>Some(*after),_=>None}).fold(sequence,i64::max);action.after_move=after;
@@ -78,7 +89,17 @@ impl Client{
             action.kind="select".into();action.item=actor.item;self.next_action+=1;self.ops.push(Op::Action{action,kind:String::new(),resource:String::new(),ready:0,born:now});return true;
         }
         if !self.pred.combat_active()||actor.destroyed>0.0||now-self.received>0.5{return false;}
-        if action.kind=="turbo"&&matches!(actor.driver,7|8)&&self.pred.global.special_abilities {let double=self.last_boost_press.take().is_some_and(|at|now>=at&&now-at<=0.35);if double&&actor.nightmare_cooldown<=1e-8{action.kind="nightmare".into();}if !double{self.last_boost_press=Some(now);}}
+        if interpret_tap && action.kind == "turbo" && actor.driver == 8
+            && self.pred.global.special_abilities && self.pred.global.finish_countdown.is_none()
+            && actor.nightmare_cooldown <= 1e-8
+        {
+            if self.pending_wormhole_press.take().is_none() {
+                self.pending_wormhole_press = Some(now);
+                return true;
+            }
+            action.kind = "nightmare".into();
+        }
+        if action.kind=="turbo"&&actor.driver==7&&self.pred.global.special_abilities {let double=self.last_boost_press.take().is_some_and(|at|now>=at&&now-at<=0.35);if double&&actor.nightmare_cooldown<=1e-8{action.kind="nightmare".into();}if !double{self.last_boost_press=Some(now);}}
         let pending=|kind:&str|self.ops.iter().any(|op|matches!(op,Op::Action{action,..}if action.kind==kind));
         let (kind,resource,ready)=match action.kind.as_str(){
             "nightmare"=>{if !self.pred.global.special_abilities||!matches!(actor.driver,7|8)||actor.nightmare_cooldown>1e-8||pending("nightmare"){return false;}let driver=actor.driver;let a=&mut self.pred.actors[self.viewer];if driver==8{a.nightmare_active=super::super::nightmare::WORMHOLE_DURATION;a.nightmare_cooldown=super::super::nightmare::WORMHOLE_COOLDOWN;self.emit("teleportOut",now,None,false);}else{a.boost=super::super::nightmare::NIGHTMARE_DURATION;a.nightmare_active=super::super::nightmare::NIGHTMARE_DURATION;a.nightmare_cooldown=30.0;self.emit("boost",now,None,false);}(String::new(),String::new(),0)},
