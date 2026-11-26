@@ -7,7 +7,6 @@ project_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 cd -- "$project_dir"
 output=${1:?Pass an output directory for the Bevy WASM files}
 target_dir=${2:-$project_dir/wasm-poc/target}
-jobs=${CARGO_BUILD_JOBS:-1}
 toolchain=1.97.1
 target=wasm32-unknown-unknown
 export PATH="$PATH:${CARGO_HOME:-$HOME/.cargo}/bin"
@@ -88,11 +87,11 @@ if (( need_wasm )); then
     bindgen_root="$target_dir/tools/$bindgen_version"
     bindgen="$bindgen_root/bin/wasm-bindgen"
     if [[ ! -x $bindgen ]]; then
-      rustup run "$toolchain" cargo install --locked --jobs "$jobs" --root "$bindgen_root" --version "$bindgen_version" wasm-bindgen-cli
+      rustup run "$toolchain" cargo install --locked --root "$bindgen_root" --version "$bindgen_version" wasm-bindgen-cli
     fi
   fi
 
-  run_cargo_build wasm rustup run "$toolchain" cargo build --locked --release --jobs "$jobs" --manifest-path wasm-poc/Cargo.toml --target "$target" --target-dir "$target_dir"
+  run_cargo_build wasm rustup run "$toolchain" cargo build --locked --release --manifest-path wasm-poc/Cargo.toml --target "$target" --target-dir "$target_dir"
   build_status packaging-wasm
   stage_started=$SECONDS
   "$bindgen" --target web --no-typescript --remove-name-section --out-dir "$staging" "$target_dir/$target/release/wild_wheels_wasm_poc.wasm"

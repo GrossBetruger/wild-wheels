@@ -18,7 +18,7 @@ Build and run from the repository root (the launcher finds Rust even before you 
 ./run_server.sh
 ```
 
-Use `PORT=5174 ./run_server.sh` to choose another port. The launcher bundles the default Bevy arena renderer. Choose **Classic Graphics** to switch back. Existing `/experimental/` links still work. Its first build installs the pinned Bevy Rust toolchain and matching `wasm-bindgen` CLI as needed. The launcher uses one compiler job by default for small VMs. It returns after starting the server detached, so closing SSH keeps the game running. Logs append to `.wild-wheels/server.log`. It prevents duplicate managed starts.
+Use `PORT=5174 ./run_server.sh` to choose another port. The launcher bundles the default Bevy arena renderer. Choose **Classic Graphics** to switch back. Existing `/experimental/` links still work. Its first build installs the pinned Bevy Rust toolchain and matching `wasm-bindgen` CLI as needed. Cargo uses the available logical CPU count for both the WASM and server builds. Set `CARGO_BUILD_JOBS=2` to limit parallelism on a small VM. It returns after starting the server detached, so closing SSH keeps the game running. Logs append to `.wild-wheels/server.log`. It prevents duplicate managed starts.
 
 ```sh
 ./kill_server.sh
