@@ -63,7 +63,7 @@ export class AbilityUsage {
       if(a.id===world.id && state.bridges!==before.bridges){
         const count=state.bridges.toString(2).replace(/0/g,'').length;
         if(count>0 && count<6){
-          events.push({id:`bridge:${identity}:${++this.sequence}`,owner:a.id,title:`${count}/7 BRIDGES`,icon:'🌉',color:'#9fd8f5',theme:'euler',detail:'Distinct bridges crossed on this path',duration:1.8});
+          events.push({id:`bridge:${identity}:${++this.sequence}`,owner:a.id,title:`${count}/7 BRIDGES`,icon:'🌉',color:'#9fd8f5',theme:'euler',compact:true,detail:'Distinct bridges crossed on this path',duration:1.8});
           continue;
         }
       }

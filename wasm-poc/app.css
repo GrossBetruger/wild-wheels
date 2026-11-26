@@ -112,6 +112,8 @@ button:disabled { opacity: 0.55; cursor: wait; }
   color: #fff3b0; border-color: rgba(255, 224, 112, 0.45);
 }
 
+#notice.bridge-progress { padding: 3px 8px; font-size: 11px; }
+
 #top-right {
   position: fixed; top: 12px; right: 12px;
   display: flex; flex-direction: column; align-items: flex-end; gap: 8px;

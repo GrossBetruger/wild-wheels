@@ -76,6 +76,7 @@ pub enum Id {
     Whack,
     Ring,
     Ability,
+    BridgeProgress,
     Reward,
     Intelligence,
     Tehilim,
@@ -848,7 +849,10 @@ fn readings(
         out.insert(
             id,
             Reading {
-                text: format!("{}\n{}", card.title, card.detail),
+                text: match id {
+                    Id::BridgeProgress => card.title.clone(),
+                    _ => format!("{}\n{}", card.title, card.detail),
+                },
                 color: card.color.map(|[r, g, b]| Color::srgb_u8(r, g, b)),
                 ..default()
             },
@@ -858,7 +862,11 @@ fn readings(
         card(Id::Whack, whack);
     }
     if let Some(ability) = &notices.ability {
-        card(Id::Ability, ability);
+        let id = match ability.card_key.as_deref() {
+            Some("euler:progress") => Id::BridgeProgress,
+            _ => Id::Ability,
+        };
+        card(id, ability);
     }
     if let Some(reward) = &notices.reward {
         card(Id::Reward, reward);
@@ -1546,6 +1554,11 @@ pub fn setup(mut commands: Commands, mut fonts: ResMut<Assets<Font>>) {
             shadow: true,
             ..Style::new(14.0, white)
         },
+    );
+    ui.banner(
+        root, Id::BridgeProgress, percent(23),
+        (boxed(pad(9.0, 4.0), 1.0, 8.0), hex(0x163047ec), hex(0x9fd8f5ff)),
+        Style::new(12.0, white),
     );
     for id in [Id::Ability, Id::Reward] {
         ui.banner(

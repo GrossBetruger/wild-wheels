@@ -37,6 +37,7 @@ export class RewardNotice extends RewardQueue {
     if(this.rendered===event.id)return;
     this.rendered=event.id;this.node.dataset.theme=event.theme??'';this.node.style.setProperty('--reward-color',event.color??'#d5b4ff');
     const card=document.createElement('div');card.className='reward-card';
+    if(event.compact)card.classList.add('compact');
     const icon=document.createElement('span'),title=document.createElement('strong'),detail=document.createElement('small');
     icon.className='reward-icon';icon.textContent=event.icon??'✦';title.textContent=event.title;detail.textContent=event.detail??'';
     card.append(icon,title);

@@ -719,6 +719,7 @@ playBtn.onclick = async () => {
             bridgeNoticeUntil = now + 1800;
           }
           previousBridgeMask = bridgeMask;
+          noticeEl.classList.toggle('bridge-progress', now < bridgeNoticeUntil);
           if (now < bridgeNoticeUntil) {
             noticeEl.classList.remove('hidden');
             noticeEl.textContent = `${s.bridgesCrossed}/${s.bridgeCount} BRIDGES`;

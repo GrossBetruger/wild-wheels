@@ -4648,6 +4648,21 @@ body.mobile-playing {
   filter: drop-shadow(0 0 12px #f5d77f)
 }
 
+.ability-announcement[data-theme=euler] .reward-card.compact {
+  min-width: 0;
+  display: flex;
+  gap: 5px;
+  padding: 4px 9px;
+  border: 1px solid var(--reward-color);
+  border-radius: 8px;
+  background: #163047ec;
+  box-shadow: none;
+  animation: none
+}
+.ability-announcement .reward-card.compact>strong { font-size: 12px; letter-spacing: .5px }
+.ability-announcement[data-theme=euler] .compact .reward-icon { font-size: 15px; filter: none; animation: none }
+.ability-announcement .compact>small, .ability-announcement .compact>.reward-spark { display: none }
+
 @keyframes ability-karma-spin {
   0% {
     transform: rotate(0deg) scale(.85)
