@@ -417,23 +417,80 @@ def build_plane():
     m_cat_ink = make_mat("CatInkDark", "#141820", roughness=0.45)
     m_cat_nose = make_mat("CatNosePink", "#e8768c", roughness=0.38)
 
-    # --- LEFT WING (+X = pilot's left / chase-camera left): Technion Logo ---
-    # In right-handed (+Z forward, +Y up), looking from behind: +X is screen-left, -X is screen-right!
+    # --- LEFT WING (+X = pilot's left / chase-camera left): Authentic Technion Emblem ---
+    # Imported directly from the official vector SVG (shield + white border + inverted-triangle ט + cogwheel + flame).
     lx, lz = 1.92, -0.80
-    add_wing_poly("Tech_Ring", disc_pts(0.56, 0.56, 32), lx, lz, 0.004, m_tech_white)
-    add_wing_poly("Tech_Disc", disc_pts(0.50, 0.50, 32), lx, lz, 0.011, m_tech_navy)
-    # Half-cog gear teeth along the lower/outer arc
-    for k in range(7):
-        ang = math.radians(150 + k * 25)
-        tx, tz = math.cos(ang) * 0.39, math.sin(ang) * 0.39
-        add_wing_poly(f"Tech_Tooth_{k}", rect_pts(tx, tz, 0.09, 0.11, ang), lx, lz, 0.018, m_tech_blue)
-    # Stylized Technion Hebrew letter ט (Tet) upright from behind (+X = left, -X = right)
-    add_wing_poly("Tech_Tet_L", rect_pts(0.18, 0.02, 0.085, 0.46), lx, lz, 0.024, m_tech_white)
-    add_wing_poly("Tech_Tet_LSerif", rect_pts(0.22, 0.22, 0.14, 0.075), lx, lz, 0.024, m_tech_white)
-    add_wing_poly("Tech_Tet_Bot", rect_pts(0.00, -0.18, 0.44, 0.085), lx, lz, 0.024, m_tech_white)
-    add_wing_poly("Tech_Tet_R", rect_pts(-0.18, 0.00, 0.085, 0.42), lx, lz, 0.024, m_tech_white)
-    add_wing_poly("Tech_Tet_TopHook", rect_pts(-0.09, 0.19, 0.22, 0.08, -0.12), lx, lz, 0.024, m_tech_white)
-    add_wing_poly("Tech_Tet_Inner", rect_pts(-0.02, 0.06, 0.075, 0.19, 0.45), lx, lz, 0.024, m_tech_blue)
+    svg_path = os.path.join(HERE, "technion_logo.svg")
+    before_objs = set(bpy.data.objects)
+    bpy.ops.import_curve.svg(filepath=svg_path)
+    svg_objs = list(set(bpy.data.objects) - before_objs)
+
+    # Compute combined 2D bounding box of the imported SVG curves in XY
+    min_x = min(v.x for o in svg_objs for sp in o.data.splines for p in sp.bezier_points for v in (o.matrix_world @ p.co,))
+    max_x = max(v.x for o in svg_objs for sp in o.data.splines for p in sp.bezier_points for v in (o.matrix_world @ p.co,))
+    min_y = min(v.y for o in svg_objs for sp in o.data.splines for p in sp.bezier_points for v in (o.matrix_world @ p.co,))
+    max_y = max(v.y for o in svg_objs for sp in o.data.splines for p in sp.bezier_points for v in (o.matrix_world @ p.co,))
+    svg_cx, svg_cy = (min_x + max_x) * 0.5, (min_y + max_y) * 0.5
+    svg_h = max(1e-5, max_y - min_y)
+    target_h = 1.16  # Fits cleanly across the 1.52-chord wing!
+    svg_scale = target_h / svg_h
+    wing_crown_y = wing_top_y(lx, -0.45)
+
+    # Layer ordering & materials matching the official Technion emblem:
+    #   path4271 = outer navy shield (#002d62)
+    #   rect4251 = inner white shield border (rendered as slightly larger white silhouette + inner navy fill,
+    #              or crisp white outline frame)
+    #   path4216, path4228, path4232 = white ט/triangle, cogwheel, and flame!
+    m_tech_navy = make_mat("TechnionOfficialNavy", "#002d62", roughness=0.62, metallic=0.04)
+    bpy.ops.object.select_all(action="DESELECT")
+    for o in svg_objs:
+        # In Blender XY: SVG +X is right, +Y is up.
+        # On the Cessna wing viewed from behind (chase camera):
+        #   screen-right = -X (Blender -X), screen-up = +Z (Blender -Y)!
+        # So rotating 180 deg around Blender Z maps SVG (+X, +Y) -> Blender (-X, -Y) = upright from behind!
+        o.data.dimensions = "2D"
+        o.data.fill_mode = "BOTH"
+        o.data.resolution_u = 8
+        is_outer_shield = "path4271" in o.name
+        is_inner_border = "rect4251" in o.name
+        if is_outer_shield:
+            o.data.extrude = 0.010 / svg_scale
+            lift = 0.006
+            mat = m_tech_navy
+        elif is_inner_border:
+            # Make the white inner shield border by extruding the white outline stroke
+            o.data.fill_mode = "NONE"
+            o.data.bevel_depth = 0.00075
+            o.data.extrude = 0.006 / svg_scale
+            lift = 0.016
+            mat = m_tech_white
+        else:
+            o.data.extrude = 0.008 / svg_scale
+            lift = 0.022
+            mat = m_tech_white
+
+        # Convert curve to mesh, center, scale, rotate 180 deg for chase-camera upright, and place on wing!
+        bpy.ops.object.select_all(action="DESELECT")
+        o.select_set(True)
+        bpy.context.view_layer.objects.active = o
+        bpy.ops.object.convert(target="MESH")
+        m_obj = bpy.context.active_object
+        m_obj.name = f"Tech_{o.name}"
+        # Transform vertices directly into wing-top coordinates
+        dihedral_slope = 0.032  # +X wing rises by +0.032 per +X
+        for v in m_obj.data.vertices:
+            wp = m_obj.matrix_world @ v.co
+            # SVG (dx, dy) centered & scaled; rotate 180 deg so +X_svg -> -X_world, +Y_svg -> +Z_world
+            sx = -(wp.x - svg_cx) * svg_scale
+            sz = (wp.y - svg_cy) * svg_scale
+            wx = lx + sx
+            wz = lz + sz
+            wy = wing_crown_y + (wx - lx) * dihedral_slope + lift + wp.z * svg_scale
+            v.co = Vector(loc(wx, wy, wz))
+        m_obj.matrix_world = Euler((0, 0, 0)).to_matrix().to_4x4()
+        m_obj.data.materials.clear()
+        m_obj.data.materials.append(mat)
+        m_obj.data.update()
 
     # --- RIGHT WING (-X = pilot's right / chase-camera right): Schrödinger's Cat ---
     rx, rz = -1.92, -0.80
