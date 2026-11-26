@@ -80,3 +80,14 @@ test('joining a match does not replay old kills and a new round can reuse kill I
   assert.equal(feedback.sample(next,.2).name,'New kill');
   assert.equal(feedback.sample({...next,phase:'finished'},.3),null);
 });
+
+test('Avita’s wormhole celebrates the captured rival by name',()=>{
+  const world=Object.assign(createBattle(8),{phase:'racing'});
+  const victim=Object.assign(world.bots[0],{name:'Sam',health:3,shield:0});
+  const feedback=new KillCelebration();
+  feedback.sample(world,0);
+  damageBattle(world,victim,world.id,3,'wormhole');
+  const message=feedback.sample(world,.1);
+  assert.equal(message.title,'You Spaghetti-whacked');
+  assert.equal(message.name,'Sam');
+});

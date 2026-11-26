@@ -225,6 +225,7 @@ impl Notices {
                 title: match (kill.assist, kill.radiation) {
                     (true, _) => "\u{2726} CO-WHACKED \u{2726}",
                     (false, true) => "YOU CHERNOWHACKED",
+                    (false, false) if kill.kind == "wormhole" => "You Spaghetti-whacked",
                     _ => "\u{2726} YOU WHACKED \u{2726}",
                 }
                 .into(),
