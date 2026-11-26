@@ -112,8 +112,10 @@ fi
 
 if (( need_graphics )); then
   build_status packing-graphics
+  printf 'Building graphics pack (graphics.wwgp)…\n'
   stage_started=$SECONDS
   node scripts/build/port-graphics.mjs --web "$staging/graphics.wwgp"
+  printf 'Compressing graphics pack…\n'
   gzip -n -c -- "$staging/graphics.wwgp" > "$staging/graphics.wwgp.gz"
   mv -f -- "$staging/graphics.wwgp" "$staging/graphics.wwgp.gz" "$output/"
   printf '%s\n' "$graphics_hash" > "$output/.graphics.sha256"
@@ -124,6 +126,7 @@ fi
 
 if (( need_sounds )); then
   build_status packing-sounds
+  printf 'Building sound pack (sounds.wwsp)…\n'
   stage_started=$SECONDS
   node scripts/build/port-sounds.mjs "$staging/sounds.wwsp"
   mv -f -- "$staging/sounds.wwsp" "$output/"

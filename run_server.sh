@@ -41,6 +41,7 @@ finish_build() {
 trap finish_build EXIT
 bash "$project_dir/scripts/build/build-experimental.sh" "$experimental_dir" "$wasm_target_dir"
 build_status checking-server
+printf 'Checking native game server build…\n'
 WILD_WHEELS_EXPERIMENTAL_DIR="$experimental_dir" run_cargo_build server "$cargo_bin" build --release --locked --manifest-path "$project_dir/dedicated-server/Cargo.toml" --target-dir "$server_target_dir"
 build_status starting-server
 if [[ ${1:-} == --restart ]]; then server_stop; fi
