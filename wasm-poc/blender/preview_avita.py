@@ -52,7 +52,7 @@ for obj in plane + prop + [rig]:
 
 SHOTS = [
     ("cruise: S-curve ripple + woven scarf breeze", "cruise", 2),
-    ("boost: aero tuck + high-speed scarf whip", "boost", 3),
+    ("boost: flag flutter over wing + scarf whip", "boost", 3),
     ("accordion: earthworm scrunch + spring rebound", "accordion", 2),
     ("wing_waggle: Cessna wing-waggle ace salute", "wing_waggle", 2),
 ]

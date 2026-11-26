@@ -605,15 +605,36 @@ def build_scarf(m_gold, m_cream, m_rust):
         "idle":  ((-0.30, -0.25, -4.5), 1.25),
         "boost": ((-0.20,  0.15, -11.0), 2.15),
     }
+
+    def as_the_neck_sees(direction, clip_name):
+        """Transform a world-space wind/gravity vector into the neck bone's
+        frame during `clip_name` so the scarf streams straight back in world
+        space even when Avita's body is whipped horizontal over the wing!"""
+        pose_fn = pose_boost if clip_name == "boost" else pose_cruise
+        bones = worm_bones()
+        seen = Vector()
+        for step in range(8):
+            neck_mat = rigging.placements(bones, pose_fn(step / 8.0))["neck"].to_3x3()
+            seen += neck_mat.inverted() @ Vector(direction)
+        return seen / 8.0
+
     for prefix, frames, rate in SCARF_PASSES:
         flow, gust = winds[prefix]
         sim = ScarfSimulation(
-            locks, flow, gust, frames / rate,
-            spring=20.0, drag=3.0, weight=4.5, balls=balls,
+            locks,
+            as_the_neck_sees(flow, prefix),
+            gust,
+            frames / rate,
+            wing_y=-99.0 if prefix == "boost" else 3.42 + Y0,
+            spring=20.0,
+            drag=3.0,
+            weight=4.5,
+            balls=balls,
+            down=as_the_neck_sees((0, -1, 0), prefix),
         )
         poses = sim.loop(frames, rate, warm_up=3)
         tip = poses[0][0][-1]
-        print(f"[avita] scarf {prefix} main tip: ({tip.x:.2f}, {tip.y:.2f}, {tip.z:.2f})")
+        print(f"[avita] scarf {prefix} main tip (neck-local): ({tip.x:.2f}, {tip.y:.2f}, {tip.z:.2f})")
         _bake_scarf_keys(scarf, specs, poses, prefix)
 
     # Settled centrifugal throw poses for banking turns & wing-waggle
@@ -648,21 +669,137 @@ def pose_cruise(cycle):
     }
 
 
+# ---------------------------------------------------------------------------
+# Offline Flag-Flutter Physics for Avita's Worm Body During Boost
+# ---------------------------------------------------------------------------
+class BoostFlagSimulation(strands.Simulation):
+    """Offline physics for Avita's earthworm spine whipping backward over the
+    Cessna's high wing like a cartoonish flag / rag in roaring propwash."""
+
+    def __init__(self, lock, flow, gust, period, wing_y=3.62 + Y0, **kwargs):
+        self.wing_y = wing_y
+        super().__init__([lock], flow, gust, period, **kwargs)
+
+    def step(self):
+        dt = 1.0 / strands.RATE
+        lock = self.locks[0]
+        now = self.now[0]
+        before = self.before[0]
+        last = len(now) - 1
+        for i in range(1, last + 1):
+            point, along = now[i], i / last
+            speed = (point - before[i]) / dt
+            # Lower tail (i=1,2) clings firmly to cockpit & wing strut; upper
+            # body (i=3..7) catches full roaring slipstream and flaps like a flag!
+            if i <= 2:
+                wind_scale = 0.15 * i
+                spring_k = 85.0
+            else:
+                wind_scale = 0.75 + 1.15 * ((i - 2) / (last - 2))
+                spring_k = 2.5 * (1.0 - along)
+            pull = (self.wind(point) - speed) * self.drag * wind_scale
+            hold = (lock.rest[i] - point) * spring_k
+            # Cartoonish traveling flag-whip wave propagating from seg3 -> head
+            beat = math.tau * self.time / self.period
+            flag_amp = max(0.0, (i - 2) / (last - 2))
+            whip = Vector((
+                math.sin(beat - i * 0.95) * 12.0 * flag_amp,
+                math.cos(2.0 * beat - i * 1.15) * 17.0 * flag_amp,
+                0.0,
+            ))
+            force = pull + hold + whip + self.weight
+            before[i], now[i] = point.copy(), point + (point - before[i]) * 0.982 + force * dt * dt
+        for _ in range(strands.PASSES):
+            for i in range(1, last + 1):
+                span = now[i] - now[i - 1]
+                reach = (lock.rest[i] - lock.rest[i - 1]).length
+                now[i] = now[i - 1] + span.normalized() * reach
+                # Keep upper worm body skimming cleanly OVER the Cessna high wing
+                if i >= 3 and now[i].y < self.wing_y:
+                    now[i].y = self.wing_y
+                # Keep lower tail clear of fuselage center
+                if i == 2 and now[i].x > -0.95:
+                    now[i].x = -0.95
+        self.time += dt
+
+
+_BOOST_FLAG_CACHE = None
+
+
+def _boost_flag_poses():
+    """Simulate 24 looping frames (0.8s @ 30fps) of Avita fluttering backward
+    over the high wing like a flag, converted into exact skeleton bone poses."""
+    global _BOOST_FLAG_CACHE
+    if _BOOST_FLAG_CACHE is not None:
+        return _BOOST_FLAG_CACHE
+
+    bones = worm_bones()
+    spine_names = ("root", "seg1", "seg2", "seg3", "seg4", "seg5", "neck", "head")
+    hinges = [Vector(dict((n, h) for n, _, h in bones)[name]) for name in spine_names]
+
+    lock = strands.Lock(hinges[0], (0, 1, 0), 1.0, girth=0.34, points=len(hinges))
+    lock.rest = [h.copy() for h in hinges]
+
+    frames, rate = 24, 30
+    sim = BoostFlagSimulation(
+        lock,
+        flow=(0.15, 0.9, -14.5),
+        gust=3.6,
+        period=frames / rate,
+        drag=3.1,
+        weight=3.2,
+    )
+    chains = [frame_pose[0] for frame_pose in sim.loop(frames, rate, warm_up=4)]
+
+    # Diagnostic range check
+    heads = [c[-1] for c in chains]
+    print(
+        f"[avita] boost flag head range: "
+        f"x=[{min(p.x for p in heads):.2f}, {max(p.x for p in heads):.2f}] "
+        f"y=[{min(p.y for p in heads):.2f}, {max(p.y for p in heads):.2f}] "
+        f"z=[{min(p.z for p in heads):.2f}, {max(p.z for p in heads):.2f}]"
+    )
+
+    poses = []
+    for f_idx, pts in enumerate(chains):
+        cycle = f_idx / frames
+        world_rot = {}
+        pose = {}
+        parent_rot = RX(0.0)
+        for k in range(len(spine_names) - 1):
+            name = spine_names[k]
+            rest_dir = (hinges[k + 1] - hinges[k]).normalized()
+            sim_dir = (pts[k + 1] - pts[k]).normalized()
+            cur_dir = parent_rot @ rest_dir
+            delta = cur_dir.rotation_difference(sim_dir)
+            new_world = delta @ parent_rot
+            local_turn = parent_rot.inverted() @ new_world
+            world_rot[name] = new_world
+            pose[name] = local_turn
+            parent_rot = new_world
+
+        # Head trails with the whipping tip + frantic cartoonish slipstream flutter
+        head_lag = wave(cycle, 1, 2.2)
+        head_vibe = wave(cycle, 2, 0.6)
+        pose["head"] = RX(0.28 + 0.14 * head_vibe) @ RZ(0.22 * head_lag) @ RY(0.16 * head_lag)
+        # Ear flaps whip straight back rapidly in the roaring airflow
+        flap_v = wave(cycle, 3, 0.0)
+        flap_v2 = wave(cycle, 3, 1.1)
+        pose["flap_l"] = RX(-0.85 + 0.24 * flap_v) @ RZ(-0.35 - 0.16 * flap_v2)
+        pose["flap_r"] = RX(-0.85 + 0.24 * flap_v2) @ RZ(0.35 + 0.16 * flap_v)
+        poses.append(pose)
+
+    _BOOST_FLAG_CACHE = poses
+    return poses
+
+
 def pose_boost(cycle):
-    """Aero tuck: hunkered forward behind the windscreen with rapid slipstream vibration."""
-    v = lambda lag: wave(cycle, 2, lag)
-    v3 = lambda lag: wave(cycle, 3, lag)
-    return {
-        "seg1":   (RX(0.10) @ RZ(0.04), (0.0, -0.06, 0.04)),
-        "seg2":   RX(0.12) @ RZ(0.05 * v(0.0)),
-        "seg3":   (RX(0.14) @ RZ(0.05 * v(0.7)), (0.0, -0.08, 0.06)),
-        "seg4":   RX(0.12) @ RZ(0.04 * v(1.4)),
-        "seg5":   RX(0.10) @ RZ(0.04 * v(2.1)),
-        "neck":   (RX(0.08), (0.0, -0.06, 0.05)),
-        "head":   RX(-0.34 + 0.03 * v3(0.2)) @ RZ(0.03 * v(2.6)),
-        "flap_l": RX(-0.58 + 0.14 * v3(0.0)) @ RZ(-0.26 - 0.10 * v3(0.5)),
-        "flap_r": RX(-0.58 + 0.14 * v3(0.4)) @ RZ(0.26 + 0.10 * v3(0.9)),
-    }
+    """Offline-simulated flag-flutter boost: Avita streams backward over the
+    high wing like a flapping rag/windsock in the roaring propwash!"""
+    poses = _boost_flag_poses()
+    n = len(poses)
+    idx = int(round(cycle * n)) % n
+    return poses[idx]
 
 
 def pose_accordion(cycle):
