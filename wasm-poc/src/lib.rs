@@ -13,6 +13,7 @@ mod ryeah;
 mod scene;
 mod sound;
 mod sprite;
+mod wormhole;
 mod xray;
 mod yuda;
 
@@ -479,6 +480,7 @@ fn presentation_app(pack: Vec<u8>, canvas: &str, interactive: bool, mobile: bool
             preview::PreviewPlugin,
             relativity::RelativityPlugin,
             ryeah::RYeahPlugin,
+            wormhole::WormholePlugin,
             yuda::YudaPlugin,
         ))
         .add_systems(Startup, (load_blender_models, spawn_shader_warmup))

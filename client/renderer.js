@@ -67,6 +67,7 @@ export class Renderer {
       attribute vec3 position;attribute vec3 normal;attribute vec3 color;
       uniform mat4 matrix;uniform vec3 eye;uniform vec3 origin;
       uniform vec2 rotation;uniform vec2 pitch;uniform vec2 roll;uniform vec4 plumage;
+      uniform vec4 wormhole;uniform float wormholeTime;
       uniform float emission;uniform float fogScale;uniform float xray;
       varying vec3 shade;varying float distanceToEye;varying vec3 worldPosition;
       vec3 tilt(vec3 v){return vec3(v.x,v.y*pitch.x-v.z*pitch.y,v.y*pitch.y+v.z*pitch.x);}
@@ -98,6 +99,23 @@ export class Renderer {
         vec3 a=tilt(local-vec3(0.,2.,0.))+vec3(0.,2.,0.),b=tilt(localNormal);
         vec3 p=vec3(a.x*rotation.x+a.z*rotation.y,a.y,-a.x*rotation.y+a.z*rotation.x)+origin;
         vec3 n=normalize(vec3(b.x*rotation.x+b.z*rotation.y,b.y,-b.x*rotation.y+b.z*rotation.x));
+        if(wormhole.w>0.){
+          vec3 toHole=wormhole.xyz-p;
+          float r=length(toHole);
+          float w=smoothstep(wormhole.w,0.,r);w*=w;
+          if(w>0.001){
+            vec3 dir=toHole/max(r,.001);
+            // Tidal stretch along radial pull + transverse spaghetti squash + vortex swirl
+            vec3 rel=p-wormhole.xyz;
+            float along=dot(rel,dir);
+            vec3 perp=rel-dir*along;
+            float spin=w*w*5.2+wormholeTime*6.0*w;
+            float cs=cos(spin),sn=sin(spin);
+            perp.xz=vec2(perp.x*cs-perp.z*sn,perp.x*sn+perp.z*cs);
+            p=wormhole.xyz+dir*(along*(1.-.68*w))+perp*(1.-.82*w);
+            tint=mix(tint,vec3(.75,.28,1.),w*.65);
+          }
+        }
         vec3 lamp=normalize(vec3(-.5,1.,.3));
         float light=.62+.38*max(0.,dot(n,lamp));
         if(plumage.x>.5&&color.b>color.r*.85&&color.g>color.r*1.1){
@@ -124,6 +142,8 @@ export class Renderer {
     this.fogScale=gl.getUniformLocation(this.program,'fogScale');this.darknessUniform=gl.getUniformLocation(this.program,'darkness');this.bombLightsUniform=gl.getUniformLocation(this.program,'bombLights[0]');
     this.opacityUniform=gl.getUniformLocation(this.program,"opacity");gl.uniform1f(this.opacityUniform,1);
     this.plumageUniform=gl.getUniformLocation(this.program,'plumage');gl.uniform4f(this.plumageUniform,0,0,0,0);
+    this.wormholeUniform=gl.getUniformLocation(this.program,'wormhole');gl.uniform4f(this.wormholeUniform,0,0,0,0);
+    this.wormholeTimeUniform=gl.getUniformLocation(this.program,'wormholeTime');gl.uniform1f(this.wormholeTimeUniform,0);
     this.particleProgram=gl.createProgram();
     gl.attachShader(this.particleProgram,shader(gl,gl.VERTEX_SHADER,`attribute vec3 position;attribute float size;attribute vec3 color;uniform mat4 matrix;uniform float height;varying vec3 tint;void main(){gl_Position=matrix*vec4(position,1.);gl_PointSize=clamp(size*height/max(.1,gl_Position.w),1.,180.);tint=color;}`));
     gl.attachShader(this.particleProgram,shader(gl,gl.FRAGMENT_SHADER,`precision mediump float;varying vec3 tint;uniform float smoke;void main(){vec2 p=gl_PointCoord*2.-1.;float r=length(p);float glow=exp(-r*r*3.5)*(1.-smoothstep(.65,1.,r));gl_FragColor=smoke>.5?vec4(tint,glow*.5):vec4(tint*glow,1.);}`));
@@ -454,7 +474,7 @@ export class Renderer {
     for(const side of [-1,1]){m.box(side*.57,1.65,1.45,.25,.23,1.5,'#273a43');m.ball(side*.57,1.77,2.22,.12,.12,.04,'#8dfff0',8,4);if(actor.item==='hedgehog'&&actor.fireCooldown>.035)this.glow.particle(side*.57,1.77,2.4,.9,[.15,.8,.65]);}
   }
   starshipEngines(p,angle,clock,jump=null,boost=false){
-    if(p.nightmareActive>0){drawNightmareFuel(this.glow,this.smoke,p,angle,clock,jump);return;}
+    if(p.driver===7&&p.nightmareActive>0){drawNightmareFuel(this.glow,this.smoke,p,angle,clock,jump);return;}
     drawStarshipThrust(this.glow,this.smoke,p,angle,clock,jump,boost);
   }
   houstonHelmet(p,actor,time,jump){
@@ -818,6 +838,18 @@ export class Renderer {
       for(let i=0;i<80;i++){const a=i*2.399+phase*.3,rad=6+(i%20)*2;this.glow.particle(Math.cos(a)*rad,1+(i%9)*1.4,Math.sin(a)*rad,.28,[.18,.6,.8]);}
     }
     const ashKeys=new Set(r.effects.filter(f=>f.type==='ash').map(f=>`${f.wx}:${f.wz}`));for(const key of this.ashBodies.keys())if(!ashKeys.has(key))this.ashBodies.delete(key);
+    this.activeWormholes=[];this.wormholeClock=time;
+    if(r.specialAbilities!==false){
+      for(const a of [r,...r.bots]){
+        if(a.driver!==8||!(a.nightmareActive>0)||a.destroyed>0||a.inactive||a.afk||a.bomber)continue;
+        const wx=a.wx+Math.sin(a.heading)*14,wz=a.wz+Math.cos(a.heading)*14,s=Math.min(1,(8-a.nightmareActive)/.25,a.nightmareActive/.45);
+        this.activeWormholes.push({x:wx,z:wz,ownerX:a.wx,ownerZ:a.wz,radius:20*s});
+        m.at(wx,2.6,wz);m.ball(0,0,0,2.2*s,2.2*s,2.2*s,'#04020c',12,8);
+        this.glow.at(wx,2.6,wz);
+        for(let arm=0;arm<5;arm++)for(let i=0;i<24;i++){const t=i/24,u=(i+1)/24,rr=(2.4+t*9.5)*s,r2=(2.4+u*9.5)*s,ang=arm*Math.PI*2/5+t*6.5-time*4.5,b=arm*Math.PI*2/5+u*6.5-time*4.5,w=(.18+t*.32)*s;this.glow.quad([Math.cos(ang)*rr,0,Math.sin(ang)*rr],[Math.cos(b)*r2,0,Math.sin(b)*r2],[Math.cos(b)*(r2+w),.08,Math.sin(b)*(r2+w)],[Math.cos(ang)*(rr+w),.08,Math.sin(ang)*(rr+w)],arm%2?[.22,.88,1]:[.68,.2,1]);}
+        for(let i=0;i<28;i++){const f=(1-((time*1.4+i/28)%1)),rr=(2.2+f*17.5)*s,ang=i*2.399-time*5-f*4;this.glow.particle(Math.cos(ang)*rr,(Math.sin(i*1.7)*.8)*f,Math.sin(ang)*rr,(.18+f*.22)*s,i%3?[.24,.86,1]:[.95,.75,.3]);}
+      }
+    }
     for(const actor of [r,...r.bots]){
       if(actor.destroyed||actor.bomber||actor.inactive||actor.afk)this.batSummons.delete(actor.id);
       if(actor.bomber||actor.inactive||actor.afk)continue;
@@ -1163,9 +1195,17 @@ export class Renderer {
   }
   flush(m,view,height){
     const gl=this.gl;
-    const drawInstance=instance=>{gl.uniform1f(this.opacityUniform,instance.opacity??1);gl.uniform3f(this.originUniform,instance.x,instance.y,instance.z);gl.uniform2f(this.rotationUniform,Math.cos(instance.angle),Math.sin(instance.angle));gl.uniform2f(this.pitchUniform,Math.cos(instance.pitch),Math.sin(instance.pitch));gl.uniform2f(this.rollUniform,Math.cos(instance.roll),Math.sin(instance.roll));gl.uniform4f(this.plumageUniform,instance.plumage===null?0:1,instance.plumage?.clock??0,instance.plumage?.fold??0,instance.plumage?.angle??0);this.drawBuffer(instance.buffer,instance.count);};
+    const holes=this.activeWormholes??[];
+    gl.uniform1f(this.wormholeTimeUniform,this.wormholeClock??0);
+    const drawInstance=instance=>{
+      let wh=null;
+      for(const h of holes){if(Math.hypot(instance.x-h.ownerX,instance.z-h.ownerZ)>4.5&&Math.hypot(instance.x-h.x,instance.z-h.z)<h.radius){wh=h;break;}}
+      if(wh)gl.uniform4f(this.wormholeUniform,wh.x,2.6,wh.z,wh.radius);else gl.uniform4f(this.wormholeUniform,0,0,0,0);
+      gl.uniform1f(this.opacityUniform,instance.opacity??1);gl.uniform3f(this.originUniform,instance.x,instance.y,instance.z);gl.uniform2f(this.rotationUniform,Math.cos(instance.angle),Math.sin(instance.angle));gl.uniform2f(this.pitchUniform,Math.cos(instance.pitch),Math.sin(instance.pitch));gl.uniform2f(this.rollUniform,Math.cos(instance.roll),Math.sin(instance.roll));gl.uniform4f(this.plumageUniform,instance.plumage===null?0:1,instance.plumage?.clock??0,instance.plumage?.fold??0,instance.plumage?.angle??0);this.drawBuffer(instance.buffer,instance.count);
+    };
     const faded=this.instances.filter(instance=>(instance.opacity??1)<1);
     for(const instance of this.instances)if((instance.opacity??1)>=1)drawInstance(instance);
+    gl.uniform4f(this.wormholeUniform,0,0,0,0);
     gl.uniform3f(this.originUniform,0,0,0);gl.uniform2f(this.rotationUniform,1,0);gl.uniform2f(this.pitchUniform,1,0);gl.uniform2f(this.rollUniform,1,0);gl.uniform4f(this.plumageUniform,0,0,0,0);
     gl.bindBuffer(gl.ARRAY_BUFFER,this.dynamicBuffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(m.data),gl.DYNAMIC_DRAW);this.drawBuffer(this.dynamicBuffer,m.data.length/9);
     gl.enable(gl.BLEND);gl.depthMask(false);

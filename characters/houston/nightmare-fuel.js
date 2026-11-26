@@ -1,6 +1,7 @@
 import {damageBattle,arenas,blocked} from '../../gameplay/combat.js';
 import {frozen} from '../../gameplay/special-abilities.js';
 export const NIGHTMARE_DURATION=13,NIGHTMARE_COOLDOWN=30,NIGHTMARE_LENGTH=29,NIGHTMARE_FADE=1;
+export const WORMHOLE_DURATION=8,WORMHOLE_COOLDOWN=24,WORMHOLE_OFFSET=14,WORMHOLE_RADIUS=20,WORMHOLE_KILL_RADIUS=4.6;
 export const nightmareStrength=remaining=>Math.max(0,Math.min(1,remaining/NIGHTMARE_FADE));
 // Return to the close camera faster than the plume shrinks, so its last embers
 // can be seen up close before they disappear.
@@ -10,12 +11,16 @@ export function nightmareCameraZoom(remaining,current,dt){
   return current+(target-current)*(1-Math.exp(-dt*5));
 }
 export function activateNightmare(world,actor=world){
-  if(world.specialAbilities===false||world.phase!=='racing'||world.finishCountdown!==null||actor.driver!==7||actor.destroyed>0||actor.inactive||actor.afk||actor.bomber||frozen(world,actor.id)||(actor.nightmareCooldown??0)>1e-8)return false;
+  if(world.specialAbilities===false||world.phase!=='racing'||world.finishCountdown!==null||(actor.driver!==7&&actor.driver!==8)||actor.destroyed>0||actor.inactive||actor.afk||actor.bomber||frozen(world,actor.id)||(actor.nightmareCooldown??0)>1e-8)return false;
+  if(actor.driver===8){
+    actor.nightmareActive=WORMHOLE_DURATION;actor.nightmareCooldown=WORMHOLE_COOLDOWN;
+    actor.notice='WORMHOLE';actor.noticeTime=2.4;return true;
+  }
   actor.nightmareActive=NIGHTMARE_DURATION;actor.nightmareCooldown=NIGHTMARE_COOLDOWN;actor.boost=NIGHTMARE_DURATION;
   actor.notice='NIGHTMARE FUEL';actor.noticeTime=2.4;return true;
 }
 export function tapNightmare(world,actor=world){
-  if(actor.driver!==7||world.specialAbilities===false)return false;
+  if((actor.driver!==7&&actor.driver!==8)||world.specialAbilities===false)return false;
   const previous=actor.nightmareTap;delete actor.nightmareTap;
   const double=previous!==undefined&&world.elapsed>=previous&&world.elapsed-previous<=.35;
   if(!double)actor.nightmareTap=world.elapsed;
@@ -23,24 +28,40 @@ export function tapNightmare(world,actor=world){
 }
 export function tickNightmare(world,dt){
   const actors=[world,...world.bots];
-  if(world.specialAbilities===false){for(const actor of actors){if(actor.nightmareActive>0)actor.boost=0;actor.nightmareActive=0;}return;}
+  if(world.specialAbilities===false){for(const actor of actors){if(actor.driver===7&&actor.nightmareActive>0)actor.boost=0;actor.nightmareActive=0;}return;}
   const hits=[];
   for(const source of actors){
-    if(source.driver!==7||!(source.nightmareActive>0)||source.boost<=0||source.destroyed>0||source.inactive||source.afk||frozen(world,source.id))continue;
-    for(const target of actors){
-      if(target.id===source.id||target.destroyed>0||target.inactive||target.afk||target.bomber)continue;
-      const dx=target.wx-source.wx,dz=target.wz-source.wz,behind=-dx*Math.sin(source.heading)-dz*Math.cos(source.heading),side=Math.abs(dx*Math.cos(source.heading)-dz*Math.sin(source.heading));
-      if(behind<3.5||behind>3.5+NIGHTMARE_LENGTH*nightmareStrength(source.nightmareActive)||side>3*Math.sqrt(nightmareStrength(source.nightmareActive)))continue;
-      const distance=Math.hypot(dx,dz);let clear=true;
-      for(let along=3;along<distance;along+=3){if(blocked(arenas[world.arena],source.wx+dx*along/distance,source.wz+dz*along/distance,.4)){clear=false;break;}}
-      if(clear)hits.push([target,source.id,Math.max(target.health,1)]);
+    if(!(source.nightmareActive>0)||source.destroyed>0||source.inactive||source.afk||frozen(world,source.id))continue;
+    if(source.driver===7&&source.boost>0){
+      for(const target of actors){
+        if(target.id===source.id||target.destroyed>0||target.inactive||target.afk||target.bomber)continue;
+        const dx=target.wx-source.wx,dz=target.wz-source.wz,behind=-dx*Math.sin(source.heading)-dz*Math.cos(source.heading),side=Math.abs(dx*Math.cos(source.heading)-dz*Math.sin(source.heading));
+        if(behind<3.5||behind>3.5+NIGHTMARE_LENGTH*nightmareStrength(source.nightmareActive)||side>3*Math.sqrt(nightmareStrength(source.nightmareActive)))continue;
+        const distance=Math.hypot(dx,dz);let clear=true;
+        for(let along=3;along<distance;along+=3){if(blocked(arenas[world.arena],source.wx+dx*along/distance,source.wz+dz*along/distance,.4)){clear=false;break;}}
+        if(clear)hits.push([target,source.id,Math.max(target.health,1),'nightmare']);
+      }
+    }else if(source.driver===8){
+      const wx=source.wx+Math.sin(source.heading)*WORMHOLE_OFFSET,wz=source.wz+Math.cos(source.heading)*WORMHOLE_OFFSET;
+      for(const target of actors){
+        if(target.id===source.id||target.destroyed>0||target.inactive||target.afk||target.bomber)continue;
+        const dx=wx-target.wx,dz=wz-target.wz,dist=Math.hypot(dx,dz);
+        if(dist>=WORMHOLE_RADIUS)continue;
+        if(dist<=WORMHOLE_KILL_RADIUS){hits.push([target,source.id,Math.max(target.health,1),'wormhole']);}
+        else{
+          const t=1-dist/WORMHOLE_RADIUS,step=Math.min((16+48*t*t)*dt,dist-WORMHOLE_KILL_RADIUS*.5);
+          const nx=target.wx+dx/dist*step,nz=target.wz+dz/dist*step;
+          if(!blocked(arenas[world.arena],nx,nz,1.8)){target.wx=nx;target.wz=nz;}
+        }
+      }
     }
   }
-  for(const [target,owner,health]of hits)damageBattle(world,target,owner,health,'nightmare');
+  for(const [target,owner,health,kind]of hits)damageBattle(world,target,owner,health,kind);
   for(const actor of actors){
     if(frozen(world,actor.id))continue;
     actor.nightmareCooldown=Math.max(0,(actor.nightmareCooldown??0)-dt);
-    actor.nightmareActive=actor.destroyed>0||actor.inactive||actor.afk||actor.boost<=0?0:Math.max(0,(actor.nightmareActive??0)-dt);
+    const ended=actor.destroyed>0||actor.inactive||actor.afk||(actor.driver===7&&actor.boost<=0);
+    actor.nightmareActive=ended?0:Math.max(0,(actor.nightmareActive??0)-dt);
   }
 }
 
