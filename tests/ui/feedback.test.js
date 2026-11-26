@@ -44,7 +44,7 @@ test('an empty turbo inventory cannot trigger a boost or a local cue',()=>{
 });
 
 test('firing shows one projectile and spends one displayed round before a server reply',()=>{
-  const world=createBattle();Object.assign(world,{phase:'racing',wx:0,wz:60,heading:0,fireCooldown:0,ammo:5});
+  const world=createBattle();Object.assign(world,{phase:'racing',wx:0,wz:60,heading:0,fireCooldown:0,ammo:5,supplies:[]});
   const heard=[],feedback=new LocalFeedback(type=>heard.push(type));feedback.accept({world,movementSequence:-1,actionSequence:-1},0);
   feedback.action('fire',undefined,world,0,-1);
   const view=feedback.render(world,world,0,-1);
@@ -55,7 +55,7 @@ test('firing shows one projectile and spends one displayed round before a server
 });
 
 test('a delayed shot confirmation neither duplicates nor rewinds the visible shot',()=>{
-  const world=createBattle();Object.assign(world,{phase:'racing',wx:0,wz:60,heading:Math.PI/2,fireCooldown:0});
+  const world=createBattle();Object.assign(world,{phase:'racing',wx:0,wz:60,heading:Math.PI/2,fireCooldown:0,supplies:[]});
   const feedback=new LocalFeedback(()=>{});feedback.accept({world,movementSequence:-1,actionSequence:-1},0);feedback.action('fire',undefined,world,0,-1);
   const before=feedback.render(world,world,.16,9);
   const shot={...makeProjectile(world,world),id:10,actionId:0};advanceProjectile(world,shot,.08);
