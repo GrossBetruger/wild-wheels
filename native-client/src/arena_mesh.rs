@@ -116,7 +116,7 @@ impl Builder {
     }
 }
 
-pub fn scenery_mesh(def: &ArenaDef) -> Mesh {
+pub fn scenery_mesh(def: &ArenaDef, has_landscape: bool) -> Mesh {
     let mut m = Builder::default();
     let r = def.size as f32;
     let ground = hex_linear(&def.ground);
@@ -395,12 +395,14 @@ pub fn scenery_mesh(def: &ArenaDef) -> Mesh {
                 i += 15.0;
             }
         }
-        for i in 0..16 {
-            let a = i as f32 / 16.0 * std::f32::consts::TAU;
-            m.at(a.sin() * (r + 22.0), 0.0, a.cos() * (r + 22.0), 0.0);
-            m.box_part(0.0, 0.0, 0.0, 1.0, 16.0, 1.0, tower);
-            m.box_part(0.0, 15.0, 0.0, 8.0, 1.0, 1.0, lamp);
-            m.cone(0.0, 16.0, 0.0, 2.0, 3.0, wall, 4);
+        if !has_landscape {
+            for i in 0..16 {
+                let a = i as f32 / 16.0 * std::f32::consts::TAU;
+                m.at(a.sin() * (r + 22.0), 0.0, a.cos() * (r + 22.0), 0.0);
+                m.box_part(0.0, 0.0, 0.0, 1.0, 16.0, 1.0, tower);
+                m.box_part(0.0, 15.0, 0.0, 8.0, 1.0, 1.0, lamp);
+                m.cone(0.0, 16.0, 0.0, 2.0, 3.0, wall, 4);
+            }
         }
     }
 
@@ -501,9 +503,15 @@ pub fn xray_mesh(def: &ArenaDef) -> Mesh {
     m.finish()
 }
 
-pub fn build(def: &ArenaDef, meshes: &mut Assets<Mesh>) -> (Handle<Mesh>, Handle<Mesh>, Color) {
+pub fn build(def: &ArenaDef, landscape: Option<Mesh>, meshes: &mut Assets<Mesh>) -> (Handle<Mesh>, Handle<Mesh>, Color) {
+    let mut scenery = scenery_mesh(def, landscape.is_some());
+    if let Some(mut city) = landscape {
+        let scale = def.size as f32 / 96.0;
+        city.scale_by(Vec3::new(scale, 1.0, scale));
+        scenery.merge(&city).expect("arena and landscape use solid vertex-colored triangles");
+    }
     (
-        meshes.add(scenery_mesh(def)),
+        meshes.add(scenery),
         meshes.add(xray_mesh(def)),
         sky_color(&def.sky),
     )
@@ -530,7 +538,7 @@ mod tests {
                 bridges: vec![],
                 spawns: vec![],
             };
-            let solid = scenery_mesh(&def);
+            let solid = scenery_mesh(&def, false);
             let xray = xray_mesh(&def);
             assert!(solid.count_vertices() > 100);
             assert!(xray.count_vertices() > 50);
@@ -555,7 +563,7 @@ mod tests {
             bridges: vec![[0.0, 0.0, 16.0, 12.0, 0.0]],
             spawns: vec![],
         };
-        let solid = scenery_mesh(&def);
+        let solid = scenery_mesh(&def, false);
         let xray = xray_mesh(&def);
         assert!(solid.count_vertices() > 500);
         assert!(xray.count_vertices() > 100);

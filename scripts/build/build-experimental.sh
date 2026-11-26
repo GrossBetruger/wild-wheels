@@ -56,6 +56,7 @@ graphics_hash=$(hash_inputs \
   scripts/build/port-graphics.mjs \
   scripts/build/graphics-port.mjs \
   client/renderer.js \
+  client/konigsberg.js \
   client/characters.js \
   characters \
   gameplay \

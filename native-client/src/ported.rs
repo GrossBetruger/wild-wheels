@@ -313,6 +313,11 @@ impl Graphics {
     pub fn clip(&self, name: &str) -> Option<usize> {
         self.names.get(name).copied()
     }
+    pub fn landscape(&self, arena_name: &str) -> Option<Mesh> {
+        let clip = self.clip(&format!("landscape:{arena_name}"))?;
+        let part = self.clips[clip].frames.first()?.parts.first()?;
+        Some(geometry(&self.source, (part.mesh, [0; 3], Look::Solid)))
+    }
     pub fn arena(&self, index: usize) -> Option<&Arena> {
         self.arenas.get(index)
     }

@@ -921,7 +921,7 @@ pub fn sync(
                     color,
                 )
             } else {
-                crate::arena_mesh::build(view.arena_def, &mut meshes)
+                crate::arena_mesh::build(view.arena_def, graphics.landscape(&view.arena_def.name), &mut meshes)
             };
         sky.0 = color;
         let scenery = commands

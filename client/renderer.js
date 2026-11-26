@@ -1,3 +1,4 @@
+import {drawKonigsberg} from "./konigsberg.js";
 import {wormholeSample} from '../gameplay/arena-core.js';
 import {drawReverseShockwave,drawCricketPuppet} from '../characters/tammy/reverse-psychology.js';
 import {drawNightmareFuel,nightmareCameraZoom} from '../characters/houston/nightmare-fuel.js';
@@ -28,7 +29,7 @@ const sub=(a,b)=>a.map((v,i)=>v-b[i]);
 const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
 const norm=a=>{const l=Math.hypot(...a)||1;return a.map(v=>v/l);};
 const dot=(a,b)=>a.reduce((sum,v,i)=>sum+v*b[i],0);
-class Mesh {
+export class Mesh {
   data=[];sprites=[];origin=[0,0,0];angle=0;pitch=0;pivot=0;roll=0;
   at(x,y,z,angle=0){this.origin=[x,y,z];this.angle=angle;this.pitch=0;this.pivot=0;this.roll=0;return this;}
   point(p){
@@ -795,7 +796,8 @@ export class Renderer {
       }
       for(const side of [-1,1]){m.box(side*edge,0,0,4,5,full,arena.wall);m.box(0,0,side*edge,full,5,4,arena.wall);for(let i=-R+6;i<R;i+=15){m.box(side*edge,5,i,4,.5,5,'#eadfb9');m.box(i,5,side*edge,5,.5,4,'#eadfb9');}}
       for(const [x,z,w,d] of arena.blocks){m.box(x,0,z,w,6,d,arena.wall);m.box(x,6,z,w+.3,.35,d+.3,'#c9bfaa');for(let i=-w/2+2;i<w/2;i+=3)m.box(x+i,.2,z-d/2-.05,.25,5.6,.15,'#4c465b');}
-      for(let i=0;i<16;i++){const a=i/16*Math.PI*2;m.at(Math.sin(a)*(R+22),0,Math.cos(a)*(R+22));m.box(0,0,0,1,16,1,'#666377');m.box(0,15,0,8,1,1,'#eee1b1');m.cone(0,16,0,2,3,arena.wall,4);}
+      if(arena.name==='Bridges of Königsberg') drawKonigsberg(m,R);
+      else for(let i=0;i<16;i++){const a=i/16*Math.PI*2;m.at(Math.sin(a)*(R+22),0,Math.cos(a)*(R+22));m.box(0,0,0,1,16,1,'#666377');m.box(0,15,0,8,1,1,'#eee1b1');m.cone(0,16,0,2,3,arena.wall,4);}
     }
     m.at(0,0,0);this.gl.bindBuffer(this.gl.ARRAY_BUFFER,this.staticBuffer);this.gl.bufferData(this.gl.ARRAY_BUFFER,new Float32Array(m.data),this.gl.STATIC_DRAW);this.staticCount=m.data.length/9;this.track=`arena-${index}`;
   }

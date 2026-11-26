@@ -35,6 +35,7 @@
   "client/build-refresh.js",
   "client/keyboard.js",
   "gameplay/engine.js",
+  "client/konigsberg.js",
   "client/renderer.js",
   "audio/audio.js",
   "audio/recorded-laughter.js",

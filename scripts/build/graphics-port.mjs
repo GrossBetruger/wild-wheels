@@ -6,7 +6,8 @@
 // See docs/native-graphics-port.md for the format and its limits.
 import {createHash} from 'node:crypto';
 import {deflateSync} from 'node:zlib';
-import {Renderer} from '../../client/renderer.js';
+import {Mesh,Renderer} from '../../client/renderer.js';
+import {drawKonigsberg} from '../../client/konigsberg.js';
 import {createBattle,arenas,BOMB_FALL_TIME,RADIATION_DURATION} from '../../gameplay/combat.js';
 import {drivers} from '../../gameplay/engine.js';
 import {abilityNames} from '../../gameplay/special-abilities.js';
@@ -235,6 +236,10 @@ export function buildGraphicsPack({only=[...drivers.keys()],web=false}={}){
 
   // Bake only the 3 original pack arenas; newer server-defined maps render dynamically
   // from `/api/info` and inline packet `arenaDef` so adding maps stays server-side only.
+  const city = new Mesh();
+  drawKonigsberg(city,96);
+  pack.clip("landscape:Bridges of Königsberg",1,[pack.frame({instances:[],dynamic:Float32Array.from(city.data),glow:[],sparks:[],smoke:[]})]);
+
   const baseArenas=Math.min(3,arenas.length);
   for(let index=0;index<baseArenas;index++){
     const view=renderer(),scenery=draw(view,Object.assign(world(0,index),{afk:true}),0).scenery;
