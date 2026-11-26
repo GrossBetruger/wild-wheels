@@ -1,9 +1,11 @@
+import { RaceAudio } from '/audio/audio.js';
 import { Renderer } from '/client/renderer.js';
 import { createBattle, tickBattle } from '/gameplay/combat.js';
 import { activateNightmare } from '/characters/houston/nightmare-fuel.js';
 
 const renderer = new Renderer(document.querySelector('canvas'));
 const keys = new Set();
+const audio = new RaceAudio();
 const output = document.querySelector('output');
 let world, simTime, accumulator, previous, rate = 1;
 function reset() {
@@ -22,12 +24,18 @@ function frame(now) {
     accumulator -= 1/120;
     simTime += 1/120;
   }
+  for (const cue of world.events) {
+    if (cue === 'wormholeShrink') audio.wormholeShrink(rate);
+  }
+  world.events.length = 0;
   renderer.draw(world,simTime);
   output.textContent = world.kills ? 'Captured' : world.nightmareActive > 0 ? 'Gravitational pull' : 'Approach';
   if (simTime >= 3.7) reset();
   requestAnimationFrame(frame);
 }
-document.querySelector('#replay').onclick = reset;
+document.querySelector('#replay').onclick = async () => {
+  try { await audio.unlock(); } finally { reset(); }
+};
 document.querySelector('#speed').onclick = event => {
   rate = rate === 1 ? .25 : 1;
   event.target.textContent = rate === 1 ? 'Slow motion' : 'Normal speed';

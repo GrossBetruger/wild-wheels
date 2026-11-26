@@ -21,7 +21,7 @@ test('the browser audio engine ports to a native sound pack',async()=>{
   // Noise is seeded for reproducible packs, and the game's own randomness is restored.
   assert.equal(Math.random,random);
   // Every case of the browser's event switch is rendered, and none is silent.
-  for(const name of ['event:fire','event:explosion','event:pickup','event:playerJoin','event:bridgePlankA','event:bridgePlankB','event:bridgePlankC','event:victory','voice:0:win','cue:countdown:3','cue:go','cue:xylophone:7','cue:heartbeat','cue:timeWarp','loop:engine','loop:skid','loop:jet','loop:vulcan','loop:vulcan:firing']){
+  for(const name of ['event:fire','event:explosion','event:wormholeShrink','event:pickup','event:playerJoin','event:bridgePlankA','event:bridgePlankB','event:bridgePlankC','event:victory','voice:0:win','cue:countdown:3','cue:go','cue:xylophone:7','cue:heartbeat','cue:timeWarp','loop:engine','loop:skid','loop:jet','loop:vulcan','loop:vulcan:firing']){
     assert.ok(sounds.has(name),name);assert.ok(peak(sounds.get(name))>.01,name);
   }
   // Dark Humor's recorded laughter is mixed where the system can decode it.

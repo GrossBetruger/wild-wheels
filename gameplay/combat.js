@@ -265,6 +265,7 @@ export function damageBattle(r, victim, owner, amount, kind = 'hedgehog') {
   victim.destroyed = 3; victim.reverseControls = 0; victim.nightmareActive = 0; victim.speed = 0; victim.boost = 0; if (r.finishCountdown === null) { victim.deaths++; if (attacker && attacker.id !== victim.id) victim.lastKiller = attacker.id; }
   if (kind === 'wormhole' && attacker) {
     const { wx, wz, heading } = attacker;
+    sound(r, 'wormholeShrink', victim);
     r.effects.push({type:'wormholeCapture', owner:victim.id, wx:wx+14*Math.sin(heading), wz:wz+14*Math.cos(heading), heading, age:0, life:victim.destroyed});
   } else {
     fx(r, ['abomb', 'radiation', 'nightmare'].includes(kind) ? 'ash' : 'explosion', victim);

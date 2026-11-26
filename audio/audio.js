@@ -106,7 +106,18 @@ export class RaceAudio {
     }
     return true;
   }
+  wormholeShrink(rate=1){
+    const beat = 1/rate;
+    // Two detuned tones converge as the strand narrows. A short, low pluck
+    // marks the instant the last of the victim crosses the horizon.
+    this.note(760,1.06*beat,{type:'triangle',end:146,volume:.23});
+    this.note(816,1.06*beat,{type:'sine',end:146,volume:.18});
+    this.burst(.72*beat,3200,.16,.24*beat,230);
+    this.note(280,.48*beat,{type:'sine',end:56,delay:.76*beat,volume:.2});
+    this.note(130,.09*beat,{type:'sine',end:42,delay:1.22*beat,volume:.24});
+  }
   event(type){switch(type){
+    case 'wormholeShrink':this.wormholeShrink();break;
     case 'karmaRaccoon':for(const [i,f]of [432,540,648,864].entries())this.note(f,.95,{type:'sine',delay:i*.08,volume:.16});this.burst(.35,1600,.14,.05,3600);break;
     case 'teleportOut':this.burst(.25,900,.2,0,4200);this.note(220,.28,{type:'sine',end:880,volume:.14});break;
     case 'locustSwarm':this.burst(.4,2800,.12);this.note(880,.18,{volume:.08});break;case 'locustPop':this.burst(.12,1800,.15);this.note(440,.1,{end:100,volume:.1});break;case 'teleportIn':this.burst(.22,3600,.13,0,800);for(const [i,f]of [880,1174.66,1567.98].entries())this.note(f,.18,{type:'sine',delay:i*.045,volume:.06});break;

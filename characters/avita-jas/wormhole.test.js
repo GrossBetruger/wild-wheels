@@ -12,6 +12,7 @@ test('the offline capture stretches and thins the racer, then swallows both ends
   tickBattle(world, new Set(), 0);
   assert.ok(world.effects.some(fx => fx.type === 'wormholeCapture' && fx.owner === world.bots[0].id));
   assert.equal(world.effects.some(fx => fx.type === 'explosion'), false);
+  assert.equal(world.events.filter(cue => cue === 'wormholeShrink').length, 1);
   const pose = age => [0,1,2].map(component => wormholeSample(age,component));
   assert.deepEqual(pose(0), [1,1,1]);
   const [distance, length, width] = pose(1.05);
@@ -24,7 +25,7 @@ test('the offline capture stretches and thins the racer, then swallows both ends
 
 test('Avita double-taps turbo and the server credits a Wormhole knockout through shields', () => {
   const world = Object.assign(createBattle(8), {
-    phase: 'racing', human: true, wx: 65, wz: 40, heading: 0, supplies: []
+    phase: 'racing', multiplayer: true, human: true, wx: 65, wz: 40, heading: 0, supplies: []
   });
   for (const bot of world.bots) bot.inactive = true;
   Object.assign(world.bots[0], { inactive: false, human: true, wx: 65, wz: 54, health: 6, shield: 10 });
@@ -44,6 +45,10 @@ test('Avita double-taps turbo and the server credits a Wormhole knockout through
   assert.equal(after.kills, 1);
   assert.equal(after.bots[0].health, 0);
   assert.equal(after.killFeed[0].kind, 'wormhole');
+  for (const viewer of [0,1]) {
+    const cues = server.packetRecord(viewer).events;
+    assert.equal(cues.filter(cue => cue.type === 'wormholeShrink').length, 1);
+  }
   const peer = new ArenaClient();
   peer.accept(server.packet(1), 0);
   const effects = peer.present().effects;

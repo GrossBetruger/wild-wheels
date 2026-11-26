@@ -74,6 +74,7 @@ impl Game{
         if kind == "wormhole" {
             let caster = &self.actors[owner];
             let offset = super::nightmare::WORMHOLE_OFFSET;
+            sound(g, "wormholeShrink", victim, a.wx, a.wz, None);
             g.effects.push(Effect { kind: "wormholeCapture".into(), owner: Some(victim),
                 wx: caster.wx + caster.heading.sin()*offset, wz: caster.wz + caster.heading.cos()*offset,
                 heading: Some(caster.heading), life: 3.0, ..Effect::default() });
