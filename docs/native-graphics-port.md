@@ -211,3 +211,13 @@ node --test wasm-poc/blender/specialist-animation.test.mjs
 bash scripts/build/build-experimental.sh wasm-poc
 npm run test:browser-netcode -- --wingbeats
 ```
+
+A skinned rider can share a vehicle with **recorded effects**. Preserve each
+vehicle's boost entry, sustained loop and exit when splitting the rider from
+the chassis. During a somersault the classic renderer also fires the printer
+or exhaust. Test the vehicle and rider separately: Fourmidable's leg movement
+cannot establish that the calculator feeds paper. The graphics-pack test
+measures the farthest cream paper triangle behind the slot as the roll extends
+and retracts. For Tammy check the green haze and her turn toward the camera.
+For Catheterpillar check the ambulance exhaust, both wings and the raised
+right hand. Houston has separate engine, pilot and Nightmare Fuel playback.

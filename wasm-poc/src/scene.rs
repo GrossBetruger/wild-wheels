@@ -573,8 +573,16 @@ fn racers(stage: &mut Stage, view: &ClientView, bats: &Bats, dt: f32, now: f32, 
             stage.show(Role::Ghost, a.id, ghost, body);
         }
         if crate::specialist::separate_vehicle(a.driver) && !wrecked {
-            let state = if boosting { "boost" } else { "idle" };
-            let mut vehicle = stage.clip(&format!("vehicle:{}:{state}", a.driver));
+            // The same paper feed or exhaust fires while the racer flips.
+            let firing = boosting || a.somersault > 0.;
+            let age = stage.cache.since(a.id, 4, firing, now);
+            let vehicle_clip = |state| format!("vehicle:{}:{state}", a.driver);
+            let mut vehicle = match (firing, age < TRANSITION) {
+                (true, true) => stage.transition(&vehicle_clip("boost:in"), &vehicle_clip("boost"), age),
+                (false, true) => stage.transition(&vehicle_clip("boost:out"), &vehicle_clip("idle"), age),
+                (true, false) => stage.clip(&vehicle_clip("boost")),
+                _ => stage.clip(&vehicle_clip("idle")),
+            };
             vehicle.tint = play.tint;
             stage.show(Role::Racer, a.id, vehicle, body);
         } else if !crate::has_blender_model(a.driver) || wrecked {

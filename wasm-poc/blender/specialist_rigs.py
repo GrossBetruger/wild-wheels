@@ -2,6 +2,7 @@
 import math
 from pathlib import Path
 import bpy
+import taicoon_motion
 from rigging import RX, RY, RZ, wave, build_armature, skin, join, author_clips, export_rig
 
 # In the browser's model coordinates, positive Z points toward the steering wheel.
@@ -34,20 +35,21 @@ def bones_for(rider):
         if rider == 'taicoon':
             pair('ear', 'head', (.59, 3.85, .06))
     if rider == 'taicoon':
-        bones.extend([('tail', 'spine', (0,1.65,-.58)), ('tail_mid', 'tail', (.05,2.15,-.94)),
-                      ('tail_tip', 'tail_mid', (.09,2.47,-1.27))])
+        bones.extend(taicoon_motion.bones())
     if rider == 'houston':
         bones.append(('aerial', 'head', (-.45, 4.56, .03)))
     return bones
 
 
 def pose(rider, mode, cycle):
+    if rider == 'taicoon':
+        return taicoon_motion.pose(mode, cycle)
     special = mode == 'special'
     boost = mode == 'boost'
     # Keep the nurse's body timing independent of her continuous flight stroke.
     body_cycle = cycle
     if rider == 'catheterpillar':
-        body_cycle *= {'cruise': 2, 'boost': 3, 'special': 1}[mode]
+        body_cycle *= {'cruise': 2, 'boost': 3, 'special': 1, 'wave': 2}[mode]
     beat = wave(body_cycle)
     motion = {'spine': RX((.12 if boost else .028)*beat), 'head': RY((.22 if special else .07)*beat)}
     for side, suffix in [(-1, '_l'), (1, '_r')]:
@@ -62,9 +64,9 @@ def pose(rider, mode, cycle):
         motion['middle'+suffix] = RX((.55 if special else .13)*sway)
         motion['leg'+suffix] = RZ(side*.1*sway)
         motion['ear'+suffix] = RZ(side*.14*sway)
-    if rider == 'taicoon':
-        for index, name in enumerate(('tail','tail_mid','tail_tip')):
-            motion[name] = RY((.32 if boost or special else .2)*wave(cycle,lag=index*.42)) @ RX(.06*beat)
+    if mode == 'wave':
+        # Both classic racers lift only the right hand while the left stays on the wheel.
+        motion['arm_r'] = RZ(2.45+.17*wave(cycle,turns=2)) @ RX(-.22)
     if rider == 'houston':
         for side,suffix in [(-1,'_l'),(1,'_r')]:
             motion['arm'+suffix] = RX((-1.15 if special else -.08) + .13*beat) @ RZ(side*.13*beat)
@@ -81,6 +83,12 @@ def finish(rider, meshes, path):
     periods = (30, 30, 30) if rider == 'catheterpillar' else (48, 24, 36)
     clips = [(mode, frames, lambda t, mode=mode: pose(rider, mode, t))
              for mode, frames in zip(('cruise', 'boost', 'special'), periods)]
+    if rider in ('catheterpillar','fourmidable'):
+        clips.append(('wave',30,lambda t: pose(rider,'wave',t)))
+    if rider == 'taicoon':
+        clips = [(mode,frames,lambda t,mode=mode: pose(rider,mode,t))
+                 for mode,frames in [('cruise',96),('boost',42),('special',36),
+                                     ('turn_l',96),('turn_r',96),('bow',48)]]
     author_clips(rig, bones, clips)
     export_rig(str(Path(path).resolve()), clips)
     return rig

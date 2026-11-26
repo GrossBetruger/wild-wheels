@@ -13,7 +13,9 @@ pub struct Rider {
     id: usize,
     driver: usize,
     player: Option<Entity>,
-    blend: [f32; 3],
+    blend: [f32; 6],
+    boosting: bool,
+    hat_age: f32,
 }
 
 impl Rider {
@@ -22,7 +24,9 @@ impl Rider {
             id,
             driver,
             player: None,
-            blend: [1., 0., 0.],
+            blend: [1., 0., 0., 0., 0., 0.],
+            boosting: false,
+            hat_age: f32::INFINITY,
         }
     }
 }
@@ -30,7 +34,7 @@ impl Rider {
 #[derive(Default)]
 pub struct RigAssets {
     models: HashMap<usize, Handle<Gltf>>,
-    graphs: HashMap<usize, (Handle<AnimationGraph>, [AnimationNodeIndex; 3])>,
+    graphs: HashMap<usize, (Handle<AnimationGraph>, Vec<AnimationNodeIndex>)>,
 }
 
 pub fn animate(
@@ -82,13 +86,15 @@ pub fn animate(
                 continue;
             };
             let mut graph = AnimationGraph::new();
-            let [Some(cruise), Some(boost), Some(special)] =
-                ["cruise", "boost", "special"].map(|name| model.named_animations.get(name))
-            else {
-                continue;
+            let names: &[&str] = match driver {
+                12 | 13 => &["cruise","boost","special","wave"],
+                15 => &["cruise", "boost", "special", "turn_l", "turn_r", "bow"],
+                _ => &["cruise", "boost", "special"],
             };
-            let nodes =
-                [cruise, boost, special].map(|clip| graph.add_clip(clip.clone(), 1., graph.root));
+            let Some(nodes) = names.iter().map(|name| {
+                let clip = model.named_animations.get(*name)?;
+                Some(graph.add_clip(clip.clone(), 1., graph.root))
+            }).collect::<Option<Vec<_>>>() else { continue };
             cache.graphs.insert(driver, (graphs.add(graph), nodes));
         }
         let (graph, nodes) = &cache.graphs[&driver];
@@ -118,15 +124,54 @@ pub fn animate(
             ability || actor.celebrate > 0.,
             actor.boost > 0. || actor.nightmare_active > 0.,
         ) {
+            _ if matches!(driver, 12 | 13) && actor.celebrate > 0. => 3,
             (true, _) => 2,
             (_, true) => 1,
             _ => 0,
         };
+        let mut weights = [0.; 6];
+        weights[active] = 1.;
+        let mut bow_age = None;
+        if driver == 15 {
+            let boosting = actor.boost > 0.;
+            if boosting && !rider.boosting {
+                rider.hat_age = 0.;
+            }
+            rider.boosting = boosting;
+            // A hit also sets celebrate. Only a full KO by this racer earns the bow.
+            bow_age = view.kill_feed.iter()
+                .filter(|k| k.attacker == rider.id && !k.assist)
+                .map(|k| (view.elapsed - k.time) as f32)
+                .filter(|age| (0.0..1.6).contains(age))
+                .min_by(f32::total_cmp);
+            if rider.id == crate::preview::ID && actor.celebrate > 0. {
+                bow_age = Some((1.6 - actor.celebrate as f32).clamp(0., 1.6));
+            }
+            weights = [0.; 6];
+            match (bow_age, rider.hat_age < 1.4, ability) {
+                (Some(_), _, _) => weights[5] = 1.,
+                (_, true, _) => weights[1] = 1.,
+                (_, _, true) => weights[2] = 1.,
+                _ => {
+                    let turn = (actor.yaw as f32 / 0.12).clamp(-1., 1.);
+                    weights[0] = 1. - turn.abs();
+                    weights[3] = (-turn).max(0.);
+                    weights[4] = turn.max(0.);
+                }
+            }
+        }
         let ease = 1. - (-15. * time.delta_secs()).exp();
         for (i, node) in nodes.iter().enumerate() {
-            let target = if i == active { 1. } else { 0. };
-            rider.blend[i] += (target - rider.blend[i]) * ease;
-            player.play(*node).repeat().set_weight(rider.blend[i]);
+            rider.blend[i] += (weights[i] - rider.blend[i]) * ease;
+            let animation = player.play(*node).repeat().set_weight(rider.blend[i]);
+            if driver == 15 {
+                match i {
+                    1 => { animation.pause().seek_to(rider.hat_age.min(1.4)); }
+                    5 => { animation.pause().seek_to(bow_age.unwrap_or(1.6)); }
+                    _ => {}
+                }
+            }
         }
+        rider.hat_age += time.delta_secs();
     }
 }

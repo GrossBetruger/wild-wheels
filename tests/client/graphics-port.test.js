@@ -6,8 +6,14 @@ import {buildGraphicsPack,PACK_VERSION} from '../../scripts/build/graphics-port.
 // Minimal reader for the layout documented in docs/native-graphics-port.md.
 function read(pack){
   let at=8;const u32=()=>{const value=pack.readUInt32LE(at);at+=4;return value;};
-  const palette=u32();at+=palette*3;
-  const meshes=[];for(let i=u32();i>0;i--){at+=4;const triangles=u32(),size=u32(),raw=inflateSync(pack.subarray(at,at+size));assert.equal(raw.length,triangles*20);let tinted=0;for(let t=0;t<triangles;t++)tinted+=raw.readUInt16LE(t*20+18)===0;meshes.push({triangles,tinted});at+=size;}
+  const palette=u32();
+  const paper=Array.from({length:palette},(_,i)=>pack.readUIntBE(at+i*3,3)).indexOf(0xfff5d8);
+  at+=palette*3;
+  const meshes=[];for(let i=u32();i>0;i--){const scale=pack.readFloatLE(at);at+=4;const triangles=u32(),size=u32(),raw=inflateSync(pack.subarray(at,at+size));assert.equal(raw.length,triangles*20);let tinted=0;for(let t=0;t<triangles;t++)tinted+=raw.readUInt16LE(t*20+18)===0;let paperReach=0;
+    for(let t=0;t<triangles;t++)if(raw.readUInt16LE(t*20+18)===paper){
+      for(const z of [4,10,16])paperReach=Math.max(paperReach,-raw.readInt16LE(t*20+z)*scale);
+    }
+    meshes.push({triangles,tinted,paperReach});at+=size;}
   // Clips are one compressed block.
   const rawSize=u32(),packedSize=u32(),block=inflateSync(pack.subarray(at,at+packedSize));at+=packedSize;assert.equal(block.length,rawSize);
   let c=0;const word=()=>{const value=block.readUInt32LE(c);c+=4;return value;};
@@ -60,4 +66,18 @@ test('Avita’s native Wormhole clip animates the plane without baking the world
   assert.equal(casting.once, false);
   assert.ok(casting.frames.every(frame => frame.parts.length > 0 && frame.sprites.every(count => count === 0)));
   assert.notDeepEqual(casting.frames[0].parts, casting.frames[1].parts);
+});
+
+
+test('Fourmidable feeds and retracts printed paper behind the rigged calculator during boost',()=>{
+  const {names,meshes}=read(buildGraphicsPack({only:[13],web:true}));
+  const reach=frame=>Math.max(0,...frame.parts.map(part=>meshes[part.mesh].paperReach));
+  const distances=clip=>names.get('vehicle:13:'+clip).frames.map(reach);
+  const start=distances('boost:in'), running=distances('boost'), end=distances('boost:out');
+  assert.equal(distances('idle')[0],0);
+  assert.ok(start[0]>2.5 && start[0]<3.1);
+  assert.ok(start[1]>2.5 && start[1]<start.at(-1), 'emerges from the rear printer slot');
+  assert.ok(running.every(z=>z>5), 'fully unrolled behind the calculator throughout boost');
+  assert.ok(end[0]>5 && end[2]<end[0] && end[2]>2.5, 'winds back between full length and the slot');
+  assert.equal(end.at(-1),0);
 });

@@ -13,6 +13,7 @@ from mathutils import Vector, Euler
 sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.dirname(__file__))
 from specialist_rigs import finish_existing
+from taicoon_motion import TAIL, PETAL, rest_point
 
 # Parse output path after "--"
 argv = sys.argv
@@ -289,7 +290,7 @@ for i in range(11):
     )
 add_lotus(0, 2.48, 0.58, 0.18)
 
-# Tail is exported separately as taicoon_tail.glb so Bevy can wiggle it continuously!
+
 
 # Serene arms & paws holding the steering wheel
 for side in (-1.0, 1.0):
@@ -334,6 +335,7 @@ for i in range(7):
     add_sphere(sx, hy - 0.31 + sx * sx * 1.4, 1.11, 0.04, 0.026, 0.026, M_DARK, segs=10, rings=6)
 
 # Adorable sculpted Tyrolean alpine hat (Seppelhut) with braided gold/red band, edelweiss & feather
+before_hat = set(scene.objects)
 hat_y = hy + 0.84
 add_sphere(0.04, hat_y, 0.06, 0.95, 0.14, 0.90, M_HAT, segs=28, rings=14)
 add_cone(0.05, hat_y + 0.44, 0.05, 0.66, 0.22, 0.82, M_HAT, verts=28)
@@ -347,6 +349,9 @@ for i in range(18):
     )
 # White edelweiss flower on front-left of hatband
 add_flower(-0.38, hat_y + 0.25, 0.48, 0.13, M_WHITE, M_GOLD)
+for piece in set(scene.objects)-before_hat:
+    piece['joint'] = 'hat'
+before_feather = set(scene.objects)
 # Jaunty curved alpine feather on right side of hatband
 for i in range(7):
     f = i / 6.0
@@ -355,15 +360,16 @@ for i in range(7):
         0.095 - f * 0.03, 0.14, 0.05, M_FEATHER_TIP if f > 0.55 else M_FEATHER, segs=12, rings=8,
     )
 
-for i in range(8):
-    t = i / 7.0
-    tx = math.sin(t * 1.4) * 0.10
-    ty = t * 0.88 + math.sin(t * math.pi) * 0.24
-    tz = -t * 0.86
-    r = 0.24 + math.sin(t * math.pi) * 0.19
-    tm = M_MASK if i % 2 else (M_BELLY if i == 7 else M_FUR)
-    piece = add_sphere(tx, 1.65 + ty, -.58 + tz, r, r * 0.96, r, tm, segs=20, rings=14)
-    piece['joint'] = ('tail', 'tail_mid', 'tail_tip')[min(2, i // 3)]
+for piece in set(scene.objects)-before_feather:
+    piece['joint'] = 'feather'
+add_sphere(*PETAL,.12,.08,.032,M_WHITE,segs=12,rings=8)['joint'] = 'petal'
+
+for i,name in enumerate(TAIL):
+    t = i/7
+    r = .23+.10*math.sin(t*math.pi)-.10*t
+    mat = M_BELLY if i==7 else (M_MASK if i%2 else M_FUR)
+    piece = add_sphere(*rest_point(t),r,r*.96,r,mat,segs=20,rings=14)
+    piece['joint'] = name
 
 finish_existing("taicoon", out_path, chassis=chassis, torso=torso)
 

@@ -36,7 +36,11 @@ function model(path) {
     // Quaternions q and -q describe the same orientation.
     assert.ok(frames.some(q=>Math.abs(q.reduce((sum,v,i)=>sum+v*first[i],0))<.99999),
       clip+' must change the orientation of '+joint);
-    return {rotations:[first,...frames], times:samples(sampler.input).flat()};
+    const values = path=>{
+      const c = anim.channels.find(({target})=>target.node===channel.target.node && target.path===path);
+      return samples(anim.samplers[c.sampler].output);
+    };
+    return {rotations:[first,...frames], times:samples(sampler.input).flat(), values};
   };
 }
 
@@ -65,5 +69,47 @@ test('both butterfly wings complete three full strokes per second while cruising
       assert.ok(Math.min(...angles)<-.85,clip+' must sweep '+wing+' back through its resting pose');
       assert.equal(strokes/(times.at(-1)-times[0]),expectedHz,clip+' '+wing+' wingbeats per second');
     }
+  }
+});
+
+
+test('Tai-Coon catches and reseats her hat and sheds one petal on boost',()=>{
+  const moves=model('taicoon.glb');
+  const hat=moves('boost','hat').values('translation');
+  const petal=moves('boost','petal');
+  const distance=(a,b)=>Math.hypot(...a.map((x,i)=>x-b[i]));
+  assert.ok(hat.some(p=>distance(p,hat[0])>1), 'brim clears her head');
+  assert.ok(distance(hat.at(-1),hat[0])<.01, 'hat lands back on her head');
+  const scale=petal.values('scale').map(s=>s[0]);
+  assert.ok(scale[0]<.01 && Math.max(...scale)>.9 && scale.at(-1)<.01);
+  const flight=petal.values('translation');
+  assert.ok(distance(flight[0],flight.at(-1))>10, 'petal travels past the chase camera');
+  moves('boost','tail_tip');
+});
+
+test('Tai-Coon breathes and counterbalances in both turns, then bows before her victory wiggle',()=>{
+  const moves=model('taicoon.glb');
+  for (const clip of ['cruise','turn_l','turn_r']) {
+    for (const joint of ['spine','head','feather','tail_tip']) moves(clip,joint);
+  }
+  const head=moves('bow','head').rotations;
+  const paw=moves('bow','arm_r').rotations;
+  const tail=moves('bow','tail_tip').values('translation');
+  const angle=(a,b)=>2*Math.acos(Math.min(1,Math.abs(a.reduce((n,x,i)=>n+x*b[i],0))));
+  assert.ok(angle(head[9],head[0])>1.3, 'looks back first');
+  assert.ok(angle(paw[23],paw[0])>.4, 'paws follow the seated bow');
+  assert.ok(angle(paw[35],paw[0])<.01, 'paws return to the wheel before the wiggle ends');
+  const excursion=tail.slice(33,46).map(p=>Math.hypot(...p.map((v,i)=>v-tail[0][i])));
+  assert.ok(Math.max(...excursion)>.05, 'tail keeps moving after the bow');
+});
+
+test('the nurse and accountant wave their right hands while the nurse keeps flying',()=>{
+  for(const racer of ['catheterpillar','fourmidable']){
+    const moves=model('models/'+racer+'.glb');
+    const wave=moves('wave','arm_r').rotations;
+    const rest=moves('cruise','arm_r').rotations[0];
+    const dot=Math.abs(wave[0].reduce((sum,x,i)=>sum+x*rest[i],0));
+    assert.ok(2*Math.acos(Math.min(1,dot))>2,'right hand lifts clear of the wheel');
+    if(racer==='catheterpillar')for(const wing of ['wing_l','wing_r'])moves('wave',wing);
   }
 });

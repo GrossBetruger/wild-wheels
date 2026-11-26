@@ -290,11 +290,15 @@ export function buildGraphicsPack({only=[...drivers.keys()],web=false}={}){
       if(driver===8) tinted('driver:8:wormhole',base,{driver,frames:fps,modelsOnly:true,mark,setup:r=>{r.nightmareActive=7;}});
       // Boosting racers are recorded while driving so that trails stream behind them.
       tinted(`driver:${driver}:boost`,base,{driver,frames:loop*fps,warmup:WARMUP,speed:BOOST_SPEED,mark,setup:r=>{r.boost=1;}});
+      tinted(`driver:${driver}:celebrate`,base,{driver,fps:slowFps,frames:Math.ceil(1.6*slowFps),mark,each:(r,t)=>{r.celebrate=Math.max(.001,1.6-t);}},ONCE);
+    }
+    const vehicleOnly=web && WEB_RIGGED_RIDERS.has(driver);
+    if(!blenderWeb || vehicleOnly){
+      const subject=vehicleOnly?'vehicle':'driver';
       // Boosting in and out, through whatever easing the renderer keeps between
       // frames: Pearococo's tail folds, KnowItOwl takes off, rotors tilt.
-      tinted(`driver:${driver}:boost:in`,base,{driver,frames:steps,warmup:WARMUP,mark,each:(r,t)=>{r.boost=t>=0?1:0;r.wz=HOME[1]+Math.max(0,t)*BOOST_SPEED;}},ONCE);
-      tinted(`driver:${driver}:boost:out`,base,{driver,frames:steps,warmup:WARMUP,mark,each:(r,t)=>{r.boost=t<0?1:0;r.wz=HOME[1]+Math.min(0,t)*BOOST_SPEED;}},ONCE);
-      tinted(`driver:${driver}:celebrate`,base,{driver,fps:slowFps,frames:Math.ceil(1.6*slowFps),mark,each:(r,t)=>{r.celebrate=Math.max(.001,1.6-t);}},ONCE);
+      tinted(`${subject}:${driver}:boost:in`,base,{driver,vehicleOnly,frames:steps,warmup:WARMUP,mark,each:(r,t)=>{r.boost=t>=0?1:0;r.wz=HOME[1]+Math.max(0,t)*BOOST_SPEED;}},ONCE);
+      tinted(`${subject}:${driver}:boost:out`,base,{driver,vehicleOnly,frames:steps,warmup:WARMUP,mark,each:(r,t)=>{r.boost=t<0?1:0;r.wz=HOME[1]+Math.min(0,t)*BOOST_SPEED;}},ONCE);
     }
     // One trail puff of this racer's rapid fire: the shot drawn with and without it.
     const rapid=trail=>capture({driver,setup:r=>{hidden(r);r.projectiles=[{id:1,owner:r.id,kind:'hedgehog',vulcan:true,wx:0,wz:0,heading:0,height:0,age:1,trail}];}})[0];

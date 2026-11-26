@@ -1115,7 +1115,13 @@ fn sync_blender_models(
             let seat = match a.driver {
                 // The nurse hovers above her ambulance, tilted around the browser's seat pivot.
                 12 => ported::placement(Vec3::Y * (1.83 + (t*3.0).sin()*0.06), 0.0, 0.78, 0.0),
-                5 => Transform::from_xyz(0.0, 0.13, 0.0),
+                5 => {
+                    let progress = 1.6 - a.celebrate as f32;
+                    let envelope = (progress / 0.25).min(a.celebrate as f32 / 0.4).clamp(0., 1.);
+                    let turn = envelope * envelope * (3. - 2. * envelope);
+                    Transform::from_xyz(0., 0.13 + turn * (progress * 15.).sin() * 0.1, 0.)
+                        .with_rotation(Quat::from_rotation_y(std::f32::consts::PI * turn))
+                },
                 _ => Transform::IDENTITY,
             };
             body * seat
