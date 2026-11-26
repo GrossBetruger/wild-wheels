@@ -150,7 +150,7 @@ mod tests {
         }
         // When Chrome ported the cards at build time, confirm all key themes exist.
         if !cards.is_empty() {
-            for required in ["ability:5", "ability:15", "ability:15:swap", "reward:intelligence"] {
+            for required in ["ability:5", "ability:15", "reward:intelligence"] {
                 assert!(
                     cards.iter().any(|c| c.key == required),
                     "missing ported HTML card {required}"

@@ -1,5 +1,4 @@
 import {RewardNotice} from './reward-notice.js';
-const formatScore=n=>Number.isInteger(n)?String(n):Number(n).toFixed(1);
 export const abilityCards={
   5:{title:'REVERSE PSYCHOLOGY',icon:'⇄',color:'#b7f35b',theme:'locust',detail:'LEFT IS RIGHT · FORWARD IS BACK'},
   7:{title:'REINE DE LA PARESSE',icon:'✺',color:'#ccb5ff',theme:'gravity',detail:'EVERYTHING GRAVITATES TO HER'},
@@ -27,20 +26,11 @@ export class AbilityUsage {
       this.lastKarmaId=karma.id;
       if(world.phase==='racing'&&world.specialAbilities!==false&&world.elapsed-karma.time<3){
         karmaCaster=karma.caster;
-        const caster=karma.caster===world.id?'YOU':(karma.casterName||'TAI-COON').toUpperCase();
-        const victim=karma.victim===world.id?'YOU':(karma.victimName||'RIVAL').toUpperCase();
-        const title=karma.swapped?'KARMIC RACCOONING · SCORES SWAPPED!':'KARMIC RACCOONING';
-        const detail=karma.swapped
-          ?`${caster} KO’D ${victim} & SWAPPED KILLS · ${caster} ${formatScore(karma.casterAfter)} ⇄ ${victim} ${formatScore(karma.victimAfter)}`
-          :`${caster} KO’D ${victim} · KARMA BALANCED (NO SWAP)`;
         events.push({
           ...abilityCards[15],
           id:`karma:${identity}:${karma.id}`,
           owner:karma.caster,
-          title,
-          detail:`${abilityCards[15].detail} · ${detail}`,
-          ...(karma.swapped?{from:karma.casterBefore,to:karma.casterAfter}:{}),
-          duration:karma.swapped?3.8:3.2,
+          duration:2.4,
         });
       }
     }
@@ -79,7 +69,7 @@ export class AbilityUsage {
       if(!card)continue;
       if(a.driver===13&&a.specialActive>0)card={title:'XYLOPHONE-ATTACK',icon:'♫',color:'#fff29b',theme:'xylophone',detail:'A VERY TAXING PERFORMANCE'};
       if(a.driver===8&&a.id!==world.id)card={...card,title:'TIME DILATION'};
-      events.push({...card,id:`ability:${identity}:${++this.sequence}`,owner:a.id,detail:`${a.id===world.id?'YOU':a.name??'RIVAL'} · ${card.detail}`,duration:2.4});
+      events.push({...card,id:`ability:${identity}:${++this.sequence}`,owner:a.id,detail:a.driver===15?card.detail:`${a.id===world.id?'YOU':a.name??'RIVAL'} · ${card.detail}`,duration:2.4});
     }
     return events;
   }

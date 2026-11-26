@@ -172,7 +172,7 @@ for (const engine of ['JavaScript', 'Rust']) {
   });
 }
 
-test('Karmic Raccooning produces a crystal-clear animated announcement with score swap details', () => {
+test('Karmic Raccooning displays only the title and catchphrase even when scores swap', () => {
   const tracker = new AbilityUsage();
   const queue = new RewardQueue();
   const world = {
@@ -189,12 +189,10 @@ test('Karmic Raccooning produces a crystal-clear animated announcement with scor
   const events = tracker.sample(world);
   assert.equal(events.length, 1);
   assert.equal(events[0].theme, 'karma');
-  assert.match(events[0].title, /SCORES SWAPPED/i);
-  assert.ok(events[0].detail.startsWith('karma is a Waschbitch · '));
-  assert.match(events[0].detail, /ROCCO/i);
-  assert.match(events[0].detail, /7.*2/);
-  assert.equal(events[0].from, 1);
-  assert.equal(events[0].to, 7);
+  assert.equal(events[0].title,'KARMIC RACCOONING');
+  assert.equal(events[0].detail,'karma is a Waschbitch');
+  assert.equal(events[0].from,undefined);
+  assert.equal(events[0].to,undefined);
   queue.show(events[0]);
   assert.equal(queue.sample(0).theme, 'karma');
   assert.equal(queue.sample(3.8), null);

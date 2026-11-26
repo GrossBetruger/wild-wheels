@@ -300,54 +300,14 @@ impl Notices {
             self.last_karma_id = karma.id;
             if racing && view.special_abilities && view.elapsed - karma.time < 3.0 {
                 karma_caster = Some(karma.caster);
-                let fmt = |v: f64| match (v - v.round()).abs() < 1e-6 {
-                    true => format!("{}", v.round() as i64),
-                    false => format!("{v:.1}"),
-                };
-                let caster = match karma.caster == view.you {
-                    true => "YOU".to_owned(),
-                    false => karma.caster_name.to_uppercase(),
-                };
-                let victim = match karma.victim == view.you {
-                    true => "YOU".to_owned(),
-                    false => karma.victim_name.to_uppercase(),
-                };
-                let (title, detail, duration) = match karma.swapped {
-                    true => (
-                        format!(
-                            "KARMIC RACCOONING · SCORES SWAPPED! ({} -> {})",
-                            fmt(karma.caster_before),
-                            fmt(karma.caster_after)
-                        ),
-                        format!(
-                            "{caster} KO'D {victim} & SWAPPED KILLS · {caster} {} <-> {victim} {}",
-                            fmt(karma.caster_after),
-                            fmt(karma.victim_after)
-                        ),
-                        3.8,
-                    ),
-                    false => (
-                        "KARMIC RACCOONING".to_owned(),
-                        format!("{caster} KO'D {victim} · KARMA BALANCED (NO SWAP)"),
-                        3.2,
-                    ),
-                };
-                let detail = format!("{} · {detail}", graphics.racers()[15].card.1);
+                let (title, detail, color) = graphics.racers()[15].card.clone();
                 used = Some((
                     karma.caster == view.you,
                     Notice {
-                        title,
-                        detail,
-                        color: Some([0x8e, 0xf0, 0xc8]),
-                        card_key: Some(
-                            match karma.swapped {
-                                true => "ability:15:swap",
-                                false => "ability:15",
-                            }
-                            .into(),
-                        ),
+                        title, detail, color: Some(color),
+                        card_key: Some("ability:15".into()),
                         started: now,
-                        until: now + duration,
+                        until: now + 2.4,
                     },
                 ));
             }
@@ -467,7 +427,7 @@ impl Notices {
             };
             let event = Notice {
                 title,
-                detail: format!("{who} · {detail}"),
+                detail: match a.driver { 15 => detail, _ => format!("{who} · {detail}") },
                 color: Some(color),
                 card_key,
                 started: now,
@@ -2269,6 +2229,8 @@ pub fn update(
                 None => ("", None),
             },
             Label::CardDetail(id) => match notice_for(&notices, id) {
+                // The fixed two-line Karma card includes its large caption in the HTML artwork.
+                Some(notice) if notice.card_key.as_deref() == Some("ability:15") => ("", None),
                 Some(notice) => {
                     let (_, alpha) = card_motion(notice, now);
                     (

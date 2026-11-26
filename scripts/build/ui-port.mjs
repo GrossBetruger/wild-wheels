@@ -46,7 +46,7 @@ export function cardCatalog() {
       color: c.color,
       icon: c.icon,
       title: c.title,
-      placeholder: `PLAYER · ${c.detail}`,
+      placeholder: id===15 ? c.detail : `PLAYER · ${c.detail}`,
     });
   }
   cards.push(
@@ -85,15 +85,6 @@ export function cardCatalog() {
       icon: '♫',
       title: 'XYLOPHONE-ATTACK',
       placeholder: 'PLAYER · A VERY TAXING PERFORMANCE',
-    },
-    {
-      key: 'ability:15:swap',
-      kind: 'ability',
-      theme: 'karma',
-      color: '#8ef0c8',
-      icon: '☯',
-      title: 'KARMIC RACCOONING · SCORES SWAPPED!',
-      placeholder: `${abilityCards[15].detail} · PLAYER KO’D RIVAL & SWAPPED KILLS · 10 ⇄ 4`,
     },
     {
       key: 'reward:intelligence',
@@ -307,7 +298,7 @@ export async function buildUiPack({optional = false} = {}) {
         opacity: 1 !important;
       }
       .reward-spark { display: none !important; }
-      .reward-card > small { color: transparent !important; text-shadow: none !important; }
+       .reward-notice:not([data-theme="karma"]) .reward-card > small { color: transparent !important; text-shadow: none !important; }
     </style></head><body><div class="viewport"><div id="host"></div></div></body></html>`;
 
     const {frameTree} = await call('Page.getFrameTree', {}, sessionId);
