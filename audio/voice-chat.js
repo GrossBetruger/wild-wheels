@@ -83,6 +83,17 @@ export class VoiceChat {
     socket.onopen = () => {
       if (this.token !== token || this.socket !== socket) return;
       socket.send(JSON.stringify({ type: 'authenticate', token }));
+    };
+    socket.onmessage = event => {
+      if (this.token !== token || this.socket !== socket) return;
+      if (event.data instanceof ArrayBuffer) {
+        if (this.connected) this.handleIncoming(event.data);
+        return;
+      }
+      if (this.connected || typeof event.data !== 'string') return;
+      let reply;
+      try { reply = JSON.parse(event.data); } catch { return; }
+      if (reply?.type !== 'ready') return;
       this.connected = true;
       clearInterval(this.pingTimer);
       this.pingTimer = setInterval(() => {
@@ -104,17 +115,13 @@ export class VoiceChat {
       }, 160);
       this.onChange();
     };
-    socket.onmessage = event => {
-      if (this.token !== token || this.socket !== socket) return;
-      if (!(event.data instanceof ArrayBuffer)) return;
-      this.handleIncoming(event.data);
-    };
     socket.onerror = () => {};
     socket.onclose = event => {
       if (this.socket !== socket) return;
       this.socket = null;
       this.connected = false;
       clearInterval(this.pingTimer); this.pingTimer = null;
+      clearInterval(this.activityTimer); this.activityTimer = null;
       if (event.code !== 1000) this.log('warn', 'voice-closed', { code: event.code, reason: event.reason });
       this.onChange();
       if (this.token === token && ![4001, 4003, 4004, 1008].includes(event.code)) {

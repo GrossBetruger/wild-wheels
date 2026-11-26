@@ -37,3 +37,7 @@ console_error_panic_hook = "0.1"
 opt-level = "z"
 lto = "thin"
 strip = true
+
+# wasm-bindgen reads target_features from the linked module before generating bindings.
+[profile.release.package.wild-wheels-wasm-poc]
+strip = "debuginfo"

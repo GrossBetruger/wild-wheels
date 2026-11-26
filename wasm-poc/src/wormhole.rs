@@ -35,7 +35,7 @@ pub struct WormholePlugin;
 
 impl Plugin for WormholePlugin {
     fn build(&self, app: &mut App) {
-        embedded_asset!(app, "wormhole_vortex.wgsl");
+        embedded_asset!(app, "wormhole_vortex.wesl");
         app.add_plugins(MaterialPlugin::<WormholeVortexMaterial>::default())
             .init_resource::<ActiveWormholes>()
             .add_systems(Startup, setup)
@@ -54,7 +54,7 @@ impl Plugin for WormholePlugin {
 }
 
 fn embedded_vortex() -> ShaderRef {
-    ShaderRef::Path(AssetPath::from_path_buf(embedded_path!("wormhole_vortex.wgsl")).with_source("embedded"))
+    ShaderRef::Path(AssetPath::from_path_buf(embedded_path!("wormhole_vortex.wesl")).with_source("embedded"))
 }
 
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone, Default)]

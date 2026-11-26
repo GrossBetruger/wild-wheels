@@ -145,8 +145,6 @@ pub struct Racer {
     /// The special ability's name; empty for racers without one.
     pub ability: String,
     pub intelligence: u8,
-    /// Title, line and color of the announcement when the ability is used.
-    pub card: (String, String, Tint),
 }
 /// How a mesh is colored and shaded.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
@@ -292,8 +290,11 @@ impl Graphics {
                 color: r.take(3)?.try_into().ok()?,
                 ability: r.text()?,
                 intelligence: r.take(1)?[0],
-                card: (r.text()?, r.text()?, r.take(3)?.try_into().ok()?),
             });
+            // The browser HUD owns the ability announcement. Consume its packed title, line and tint.
+            r.text()?;
+            r.text()?;
+            r.take(3)?;
         }
         Some(Self {
             source: Arc::new(Source { palette, meshes }),
@@ -960,7 +961,6 @@ mod tests {
         };
         assert_eq!((feathers(9), feathers(0), feathers(14)), (11, 0, 0));
         assert!(graphics.racers()[0].ability.is_empty());
-        assert_eq!(graphics.racers()[14].card.0, "DARK HUMOR");
         assert_eq!(graphics.racers()[0].intelligence, 3);
         for driver in 0..16 {
             for state in ["idle", "boost", "celebrate"] {

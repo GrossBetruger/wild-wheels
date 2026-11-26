@@ -122,6 +122,7 @@ export class GameChat {
     this.updateBadges(); this.render(true); this.updateControls();
   }
   roomScope() { return this.network.token ? `${this.network.token}:${this.network.state?.code ?? ''}` : ''; }
+  expiredToken = null;
   scrollToLatest(behavior = 'auto') {
     this.log.scrollTo({ top: this.log.scrollHeight, behavior });
     this.updateScrollButton();
@@ -131,7 +132,7 @@ export class GameChat {
     this.scrollDown.classList.toggle('hidden', distance <= 8);
   }
   updateControls() {
-    const active = Boolean(this.network.token);
+    const active = Boolean(this.network.token) && this.network.token !== this.expiredToken;
     this.emojiButton.disabled = !active;
     if (!active) {
       this.emojiPicker.classList.add('hidden');
@@ -144,6 +145,7 @@ export class GameChat {
   update() {
     const scope = this.roomScope();
     if (scope !== this.scope) {
+      this.expiredToken = null;
       for (const id of this.gameNoticeEntries.keys()) this.removeGameNotice(id);
       this.unread.clear(); this.replies.clear(); this.initialized = false; this.notice.classList.add('hidden'); clearTimeout(this.toastTimer); this.scope = scope; this.token = this.network.token; this.cursor = 0; this.messages = []; this.you = null; this.drafts.clear(); this.conversation = ''; this.rosterKey = ''; this.input.value = ''; this.recipient.replaceChildren(new Option('Everyone', '')); this.nextPoll = 0; this.render(true);
     }
@@ -151,6 +153,7 @@ export class GameChat {
     this.updateControls();
     this.updateBadges();
     if (!this.network.token) { this.status.textContent = 'Join a multiplayer room to chat.'; return; }
+    if (this.expiredToken && this.network.token === this.expiredToken) return;
     if (!this.busy && !this.sending && !this.deleting && Date.now() >= this.nextPoll) this.exchange(false);
   }
   isVisible() { const rect = this.log.getBoundingClientRect(); return !document.hidden && rect.bottom > 0 && rect.top < innerHeight; }
@@ -315,6 +318,7 @@ export class GameChat {
   }
   async performExchange(sending, deleteId, action) {
     const { scope, text, to, replyTarget } = action ?? { scope: this.scope, text: this.input.value, to: this.conversation, replyTarget: this.replies.get(this.conversation) };
+    if (this.expiredToken && this.network.token === this.expiredToken) return;
     this.busy = true; this.updateControls();
     try {
       const reply = await this.network.request('/api/chat', { after: this.cursor, ...(deleteId !== undefined ? { deleteId } : {}), ...(sending ? { text, to: to === '' ? null : Number(to), replyTo: replyTarget?.id ?? null } : {}) });
@@ -350,7 +354,11 @@ export class GameChat {
       this.cursor = rosterChanged ? 0 : reply.cursor;
       if (sending) { if (this.replies.get(to) === replyTarget) this.replies.delete(to); this.renderReply(); if (this.drafts.get(to) === text) this.drafts.delete(to); if (this.conversation === to && this.input.value === text) this.input.value = ''; }
       this.status.textContent = 'Connected';
-    } catch (error) { if (scope === this.roomScope()) this.status.textContent = error.message; }
+    } catch (error) {
+      if (scope !== this.roomScope()) return;
+      if (error.status === 401) this.expiredToken = this.network.token;
+      this.status.textContent = error.message;
+    }
     finally { this.busy = false; this.nextPoll = Date.now() + 1000; this.updateControls(); }
   }
 }

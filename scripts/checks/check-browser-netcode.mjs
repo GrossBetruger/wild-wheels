@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import WebSocket from 'ws';
 import { pathToFileURL } from 'node:url';
+import { checkAvitaShaders } from '../scenarios/check-avita-shaders.mjs';
 import { checkFeedback } from '../scenarios/check-feedback-scenario.mjs';
 import { checkDrift } from '../scenarios/check-drift-scenario.mjs';
 import { checkControls } from '../scenarios/check-controls-scenario.mjs';
@@ -25,6 +26,7 @@ const quantile=(values,p)=>[...values].sort((a,b)=>a-b)[Math.min(values.length-1
 const chrome=process.env.CHROME_PATH??'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const outputIndex=process.argv.indexOf('--output');
 const output=outputIndex>=0?process.argv[outputIndex+1]:join(tmpdir(),'wild-wheels-browser.json');
+const avitaShaders = process.argv.includes('--avita-shaders');
 const functional=process.argv.includes('--functional');
 const sourceIndex=process.argv.indexOf('--source');
 const source=sourceIndex>=0?pathToFileURL(process.argv[sourceIndex+1]+'/'):new URL('../../',import.meta.url);
@@ -69,14 +71,19 @@ const debug=await Promise.race([
 ]);
 const ws=new WebSocket(debug);await new Promise(resolve=>ws.once('open',resolve));
 let id=0;const pending=new Map(),errors=[];
-ws.on('message',data=>{const msg=JSON.parse(data);if(msg.id){const task=pending.get(msg.id);if(!task)return;pending.delete(msg.id);clearTimeout(task.timeout);if(msg.error)task.reject(new Error(JSON.stringify(msg.error)));else task.resolve(msg.result);return;}if(msg.method==='Runtime.exceptionThrown')errors.push(msg.params.exceptionDetails.text+': '+msg.params.exceptionDetails.exception?.description);});
+ws.on('message',data=>{const msg=JSON.parse(data);if(msg.id){const task=pending.get(msg.id);if(!task)return;pending.delete(msg.id);clearTimeout(task.timeout);if(msg.error)task.reject(new Error(JSON.stringify(msg.error)));else task.resolve(msg.result);return;}if(avitaShaders && msg.method==='Runtime.consoleAPICalled'){
+    const message=msg.params.args.map(arg=>arg.value??arg.description).join(' ');
+    const error = msg.params.type==='error' || message.includes('%cERROR');
+    if(error && /shader|pipeline|wesl|validation error/i.test(message)) errors.push(message);
+  }
+  if(msg.method==='Runtime.exceptionThrown')errors.push(msg.params.exceptionDetails.text+': '+msg.params.exceptionDetails.exception?.description);});
 function call(method,params={},sessionId){return new Promise((resolve,reject)=>{const number=++id,timeout=setTimeout(()=>{pending.delete(number);reject(new Error('Browser command timed out: '+method));},15000);pending.set(number,{resolve,reject,timeout});ws.send(JSON.stringify({id:number,method,params,...(sessionId?{sessionId}:{})}));});}
 let session;
 async function evaluate(expression,userGesture=false){const result=await call('Runtime.evaluate',{expression,userGesture,awaitPromise:true,returnByValue:true},session);if(result.exceptionDetails)throw new Error(result.exceptionDetails.exception?.description??result.exceptionDetails.text);return result.result.value;}
 const results=[];
 try{
   const profiles=process.argv.includes('--profile')||encodingLab?[{name:'cpu-profile',delay:0,jitter:0}]:[{name:'local-host',delay:0,jitter:0},{name:'local-guest',delay:0,jitter:0,guest:true},{name:'160ms-guest',delay:80,jitter:0,guest:true},{name:'160ms-jitter-guest',delay:80,jitter:30,guest:true}];
-  for(const profile of Array.from({length:repeat},(_,run)=>profiles.map(profile=>({...profile,run:run+1}))).flat()){
+  for(const profile of Array.from({length:repeat},(_,run)=>(avitaShaders ? profiles.slice(0,1) : profiles).map(profile=>({...profile,run:run+1}))).flat()){
     activeProfile=`${profile.run}:${profile.name}`;
     const {targetId}=await call('Target.createTarget',{url:'about:blank'});({sessionId:session}=await call('Target.attachToTarget',{targetId,flatten:true}));
     await call('Page.enable',{},session);await call('Runtime.enable',{},session);
@@ -115,11 +122,16 @@ try{
     }`},session);
     // Character model probes instrument the classic renderer's WebGL draw calls.
     let page = '/';
-    if (process.argv.includes('--beta')) page = '/experimental/';
+    if (avitaShaders || process.argv.includes('--beta')) page = '/experimental/';
     if (process.argv.includes('--characters')) page = '/?renderer=classic';
     if (encodingLab) page = '/encoding-lab/';
     await call('Page.navigate',{url:origin+page},session);
     for(let attempt=0;attempt<100;attempt++){if(await evaluate(encodingLab?"location.pathname==='/encoding-lab/'&&document.readyState==='complete'":'Boolean(globalThis.__game)'))break;await sleep(50);}
+    if(avitaShaders){
+      const result=await checkAvitaShaders(evaluate,sleep);
+      results.push(result);console.log(JSON.stringify(result));
+      await call('Target.closeTarget',{targetId});continue;
+    }
     if(encodingLab){
       const result={run:profile.run,...await (ownedStateLab?compareOwnedStateBrowser(evaluate):compareEncodingBrowser(evaluate))};results.push(result);console.log(JSON.stringify(result));
       await call('Target.closeTarget',{targetId});continue;

@@ -771,26 +771,33 @@ async fn run_socket(
         );
         return true;
     }
-    socket_ready.store(true, Ordering::Relaxed);
-    {
-        let mut slot = error_slot.lock().unwrap();
-        if slot.as_deref() == Some("Voice channel disconnected") {
-            *slot = None;
-        }
-    }
-    crate::reports::limited("voice-open", 30.0, "info", "voice-open", || json!({}));
     let mut tick = tokio::time::interval(Duration::from_millis(5));
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut ping_at = tokio::time::Instant::now() + Duration::from_secs(15);
     loop {
         tokio::select! {
             message = socket.next() => match message {
+                Some(Ok(Message::Text(text))) if !socket_ready.load(Ordering::Relaxed) => {
+                    if serde_json::from_str::<serde_json::Value>(&text).is_ok_and(|msg| msg["type"] == "ready") {
+                        socket_ready.store(true, Ordering::Relaxed);
+                        {
+                            let mut slot = error_slot.lock().unwrap();
+                            if slot.as_deref() == Some("Voice channel disconnected") {
+                                *slot = None;
+                            }
+                        }
+                        crate::reports::limited("voice-open", 30.0, "info", "voice-open", || json!({}));
+                    }
+                }
                 Some(Ok(Message::Binary(bytes))) => {
                     if let Some((speaker, _seq, samples)) = unpack_server_frame(&bytes) {
                         mixer.lock().unwrap().push(speaker, &samples, Instant::now());
                     }
                 }
                 Some(Ok(Message::Close(frame))) => {
+                    if frame.as_ref().is_some_and(|f| matches!(u16::from(f.code), 1008 | 4001 | 4003 | 4004)) {
+                        *target = None;
+                    }
                     crate::reports::limited(
                         "voice-closed",
                         30.0,

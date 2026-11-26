@@ -189,3 +189,23 @@ for (const {name,conversation,message,existing=[],sending=false,to=conversation,
   await chat.performExchange(sending,undefined,{scope:'room-a',text:'Public',to});
   assert.equal(chat.status.textContent,'Connected');assert.equal(chat.didScroll,expected);
 });
+
+test('chat stops requesting an expired session and can poll with the replacement token',async()=>{
+  const requests=[];
+  const network={token:'expired',async request(){
+    requests.push(this.token);
+    if(this.token==='expired') throw Object.assign(new Error('Rejoin the room'),{status:401});
+    return {you:0,players:[],messages:[],cursor:0};
+  }};
+  const chat=Object.assign(Object.create(GameChat.prototype),{
+    network,conversation:'',recipient:{selectedOptions:[]},log:{},messages:[],status:{},
+    rosterKey:'[]',renderedRoster:'[]',updateControls(){}, updateBadges(){},
+  });
+  const poll=()=>chat.performExchange(false,undefined,{scope:chat.roomScope()});
+  await poll();await poll();
+  assert.deepEqual(requests,['expired']);
+  network.token='new-session';
+  await poll();
+  assert.deepEqual(requests,['expired','new-session']);
+  assert.equal(chat.status.textContent,'Connected');
+});

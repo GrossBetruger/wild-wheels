@@ -76,6 +76,7 @@ async fn run(origin: url::Url, token: String, commands: Receiver<Value>, events:
         let mutation = action.is_some();
         let mut request = action.unwrap_or_else(|| json!({}));
         request["after"] = json!(cursor);
+        let mut unauthorized = false;
         let result = async {
             let reply = client
                 .post(url.clone())
@@ -85,6 +86,7 @@ async fn run(origin: url::Url, token: String, commands: Receiver<Value>, events:
                 .send()
                 .await
                 .map_err(|e| e.to_string())?;
+            unauthorized = reply.status() == reqwest::StatusCode::UNAUTHORIZED;
             let value = crate::transport::body(reply)
                 .await
                 .map_err(|e| e.to_string())?;
@@ -121,6 +123,9 @@ async fn run(origin: url::Url, token: String, commands: Receiver<Value>, events:
                     return;
                 }
             }
+        }
+        if unauthorized {
+            return;
         }
         next = tokio::time::Instant::now()
             + Duration::from_millis(match succeeded {

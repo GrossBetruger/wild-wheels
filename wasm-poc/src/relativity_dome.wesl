@@ -2,17 +2,17 @@
 // Bursts outward from the caster with iridescent cyan-gold-violet rim glow
 // and animated Minkowski harmonic bands.
 
-#import bevy_pbr::{
+import bevy_pbr::render::{
     mesh_functions,
     mesh_view_bindings::{view, globals},
     view_transformations::position_world_to_clip,
-}
+};
 
 // params.x = strength (0..1)
 // params.y = age since cast
 // params.z = rim_boost (higher during initial burst & release collapse)
 // params.w = unused
-@group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> params: vec4<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(0) var<uniform> params: vec4<f32>;
 
 struct Vertex {
     @builtin(instance_index) instance_index: u32,

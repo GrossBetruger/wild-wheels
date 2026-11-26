@@ -1,8 +1,8 @@
 //! Special Relativity (Avita-Jas's time-stop special ability) uplifted with
 //! custom WebGL2 WESL/WGSL shaders & procedural Bevy VFX:
-//! 1. Einstein "rubber-sheet" spacetime grid (`relativity_grid.wgsl`) warped
+//! 1. Einstein "rubber-sheet" spacetime grid (`relativity_grid.wesl`) warped
 //!    into a gravity well beneath the caster with expanding light-cone ripples.
-//! 2. Expanding Fresnel Doppler light-cone dome (`relativity_dome.wgsl`).
+//! 2. Expanding Fresnel Doppler light-cone dome (`relativity_dome.wesl`).
 //! 3. Screen-space relativistic time-freeze overlay (`relativity_screen.wesl`)
 //!    with activation/thaw chromatic shockwave rings & clock-dial ticks.
 //! 4. Lorentz cyan-gold motion-echo rings trailing the caster through frozen time.
@@ -29,8 +29,8 @@ pub struct RelativityPlugin;
 
 impl Plugin for RelativityPlugin {
     fn build(&self, app: &mut App) {
-        embedded_asset!(app, "relativity_grid.wgsl");
-        embedded_asset!(app, "relativity_dome.wgsl");
+        embedded_asset!(app, "relativity_grid.wesl");
+        embedded_asset!(app, "relativity_dome.wesl");
         embedded_asset!(app, "relativity_screen.wesl");
         app.add_plugins((
             MaterialPlugin::<SpacetimeGridMaterial>::default(),
@@ -50,8 +50,8 @@ impl Plugin for RelativityPlugin {
 
 fn embedded(file: &str) -> ShaderRef {
     let path = match file {
-        "relativity_grid.wgsl" => embedded_path!("relativity_grid.wgsl"),
-        "relativity_dome.wgsl" => embedded_path!("relativity_dome.wgsl"),
+        "relativity_grid.wesl" => embedded_path!("relativity_grid.wesl"),
+        "relativity_dome.wesl" => embedded_path!("relativity_dome.wesl"),
         _ => embedded_path!("relativity_screen.wesl"),
     };
     ShaderRef::Path(AssetPath::from_path_buf(path).with_source("embedded"))
@@ -65,10 +65,10 @@ pub struct SpacetimeGridMaterial {
 
 impl Material for SpacetimeGridMaterial {
     fn vertex_shader() -> ShaderRef {
-        embedded("relativity_grid.wgsl")
+        embedded("relativity_grid.wesl")
     }
     fn fragment_shader() -> ShaderRef {
-        embedded("relativity_grid.wgsl")
+        embedded("relativity_grid.wesl")
     }
     fn alpha_mode(&self) -> AlphaMode {
         AlphaMode::Add
@@ -105,10 +105,10 @@ pub struct RelativityDomeMaterial {
 
 impl Material for RelativityDomeMaterial {
     fn vertex_shader() -> ShaderRef {
-        embedded("relativity_dome.wgsl")
+        embedded("relativity_dome.wesl")
     }
     fn fragment_shader() -> ShaderRef {
-        embedded("relativity_dome.wgsl")
+        embedded("relativity_dome.wesl")
     }
     fn alpha_mode(&self) -> AlphaMode {
         AlphaMode::Add

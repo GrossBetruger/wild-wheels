@@ -19,13 +19,9 @@ impl Plugin for ArenaPresentationPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<SceneCache>()
             .add_systems(Last, audit_xray)
-            .add_systems(Startup, setup)
-            .add_systems(Update, capture);
+            .add_systems(Startup, setup);
     }
 }
-#[derive(Resource)]
-pub struct Capture(pub Option<String>);
-fn capture(_capture: Res<Capture>) {}
 /// What a ported clip stands for; with a number it names one entity on screen.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 enum Role {

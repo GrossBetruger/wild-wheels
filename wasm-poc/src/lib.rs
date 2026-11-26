@@ -475,7 +475,6 @@ fn presentation_app(pack: Vec<u8>, canvas: &str, interactive: bool, mobile: bool
     bevy_app
         .insert_resource(MobileGraphics { mobile, level: 1 })
         .insert_resource(app::GameSession::default())
-        .insert_resource(scene::Capture(None))
         .add_plugins((
             ported::PortedGraphicsPlugin,
             scene::ArenaPresentationPlugin,

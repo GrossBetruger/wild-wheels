@@ -2,7 +2,7 @@ use crate::{error, limit, security::same_origin, App};
 use axum::{
     body::Bytes,
     extract::{
-        ws::{Message, WebSocket},
+        ws::{CloseFrame, Message, WebSocket},
         ConnectInfo, State, WebSocketUpgrade,
     },
     http::{header, HeaderMap},
@@ -146,13 +146,17 @@ async fn connection(app: App, mut socket: WebSocket) {
         app.logs.note("warn", "voice-refused", json!({"reason":"auth-token"}));
         return;
     };
-    let (id, who) = {
+    let player = {
         let room = app.room.lock().unwrap();
-        let Some(id) = room.find(token) else {
-            app.logs.note("warn", "voice-refused", json!({"reason":"unknown-session"}));
-            return;
-        };
-        (id, room.who(id))
+        room.find(token).map(|id| (id, room.who(id)))
+    };
+    let Some((id, who)) = player else {
+        app.logs.note("warn", "voice-refused", json!({"reason":"unknown-session"}));
+        let _ = socket.send(Message::Close(Some(CloseFrame {
+            code: 1008,
+            reason: "Invalid voice session".into(),
+        }))).await;
+        return;
     };
     let (tx, mut rx) = mpsc::channel::<Bytes>(QUEUE_DEPTH);
     let (generation, peers) = {

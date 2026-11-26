@@ -53,6 +53,13 @@ try{
   peers[0].socket.close();await wait(()=>peers[1].state.players.find(p=>p.id===0)?.afk,'Disconnected player did not become AFK');assert.ok(peers.every(p=>p.state.host===null));const epoch=peers[1].state.epoch;const old=peers[0].token;
   const refreshed=await request('/api/session',{},old);assert.equal(refreshed.status,200);assert.equal(refreshed.value.you,0);assert.equal(refreshed.value.world.name,'Friend 0');assert.equal(refreshed.value.world.soundEpoch,epoch);assert.ok(refreshed.value.movementSequence>0);peers[0].token=refreshed.value.token;peers[0].state=null;await connect(peers[0]);
   assert.equal((await request('/api/session',{},old)).status,401);
+  const expiredVoice = new WebSocket(origin.replace('http','ws')+'/api/voice', {origin});
+  const voiceCloseCode = new Promise((resolve,reject) => {
+    expiredVoice.once('error',reject);
+    expiredVoice.once('close',resolve);
+    expiredVoice.once('open',()=>expiredVoice.send(JSON.stringify({type:'authenticate',token:old})));
+  });
+  assert.equal(await voiceCloseCode,1008,'Expired voice credentials must stop reconnect attempts');
   const health=(await request('/healthz')).value;
   for(const peer of peers)peer.socket.terminate();await stop(child);child=start();
   await wait(async()=>{try{return(await request('/healthz')).status===200;}catch{return false;}},'Rust server failed to restart');

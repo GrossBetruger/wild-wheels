@@ -3,17 +3,17 @@
 // relativistic shockwave ripples outward; fragment shader draws crisp
 // glowing coordinate lines and Minkowski light-cone rings.
 
-#import bevy_pbr::{
+import bevy_pbr::render::{
     mesh_functions,
     mesh_view_bindings::globals,
     view_transformations::position_world_to_clip,
-}
+};
 
 // params.x = strength (0..1)
 // params.y = elapsed age since cast (0..2.5)
 // params.z = remaining time_stop (2.5..0)
 // params.w = wave_radius (expanding shockwave radius in world units)
-@group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> params: vec4<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(0) var<uniform> params: vec4<f32>;
 
 struct Vertex {
     @builtin(instance_index) instance_index: u32,
