@@ -10,7 +10,7 @@ function model(path) {
   const binary = bytes.subarray(end + 8);
   function samples(index) {
     const a = gltf.accessors[index], view = gltf.bufferViews[a.bufferView];
-    const width = {VEC3:3,VEC4:4}[a.type];
+    const width = {SCALAR:1,VEC3:3,VEC4:4}[a.type];
     const size = {5121:1,5123:2,5126:4}[a.componentType];
     const read = {5121:'readUInt8',5123:'readUInt16LE',5126:'readFloatLE'}[a.componentType];
     const start = (view.byteOffset ?? 0) + (a.byteOffset ?? 0);
@@ -31,10 +31,12 @@ function model(path) {
     const channel = anim?.channels.find(({target})=>target.path==='rotation' &&
       gltf.nodes[target.node].name===joint && weighted.has(target.node));
     assert.ok(channel, clip+' must animate vertices attached to '+joint);
-    const [first,...frames] = samples(anim.samplers[channel.sampler].output);
+    const sampler = anim.samplers[channel.sampler];
+    const [first,...frames] = samples(sampler.output);
     // Quaternions q and -q describe the same orientation.
     assert.ok(frames.some(q=>Math.abs(q.reduce((sum,v,i)=>sum+v*first[i],0))<.99999),
       clip+' must change the orientation of '+joint);
+    return {rotations:[first,...frames], times:samples(sampler.input).flat()};
   };
 }
 
@@ -50,3 +52,18 @@ for(const [rider,path,joints] of [
     ['cruise','boost','special'].forEach((clip,i)=>moves(clip,joints[i]));
   });
 }
+
+
+test('both butterfly wings complete three full strokes per second while cruising or healing and four during boost',()=>{
+  const moves=model('models/catheterpillar.glb');
+  for (const [clip,expectedHz] of [['cruise',3],['boost',4],['special',3]]) {
+    for (const wing of ['wing_l','wing_r']) {
+      const {rotations,times}=moves(clip,wing);
+      // Signed angle around the hinge in the exported joint's local coordinates.
+      const angles=rotations.map(([,,z,w])=>2*Math.atan2(z,w));
+      const strokes=angles.filter((v,i)=>v>.85 && v>angles[i-1] && v>=angles[i+1]).length;
+      assert.ok(Math.min(...angles)<-.85,clip+' must sweep '+wing+' back through its resting pose');
+      assert.equal(strokes/(times.at(-1)-times[0]),expectedHz,clip+' '+wing+' wingbeats per second');
+    }
+  }
+});

@@ -42,17 +42,23 @@ def bones_for(rider):
 
 
 def pose(rider, mode, cycle):
-    beat = wave(cycle)
     special = mode == 'special'
     boost = mode == 'boost'
+    # Keep the nurse's body timing independent of her continuous flight stroke.
+    body_cycle = cycle
+    if rider == 'catheterpillar':
+        body_cycle *= {'cruise': 2, 'boost': 3, 'special': 1}[mode]
+    beat = wave(body_cycle)
     motion = {'spine': RX((.12 if boost else .028)*beat), 'head': RY((.22 if special else .07)*beat)}
     for side, suffix in [(-1, '_l'), (1, '_r')]:
-        sway = wave(cycle, lag=side*.4)
+        sway = wave(body_cycle, lag=side*.4)
         motion['arm'+suffix] = RZ(side*(.12*sway + (.5 if special else .03)))
         motion['feeler'+suffix] = RX(.14*sway - (.3 if boost else 0)) @ RZ(side*.12*sway)
         motion['thigh'+suffix] = RX((.55 if special else .12)*sway)
         motion['shin'+suffix] = RX(-(.8 if special else .17)*sway)
-        motion['wing'+suffix] = RY(side*(.2+(.91 if boost else .76)*beat))
+        if rider == 'catheterpillar':
+            # rider-parts captures the classic wings with the resting .2 radian yaw baked in.
+            motion['wing'+suffix] = RY(side*.95*wave(cycle, turns=4 if boost else 3))
         motion['middle'+suffix] = RX((.55 if special else .13)*sway)
         motion['leg'+suffix] = RZ(side*.1*sway)
         motion['ear'+suffix] = RZ(side*.14*sway)
@@ -72,7 +78,7 @@ def finish(rider, meshes, path):
     bones = bones_for(rider)
     rig = build_armature(rider.title()+'Rig', bones)
     skin(rig, *meshes)
-    periods = (15, 10, 30) if rider == 'catheterpillar' else (48, 24, 36)
+    periods = (30, 30, 30) if rider == 'catheterpillar' else (48, 24, 36)
     clips = [(mode, frames, lambda t, mode=mode: pose(rider, mode, t))
              for mode, frames in zip(('cruise', 'boost', 'special'), periods)]
     author_clips(rig, bones, clips)

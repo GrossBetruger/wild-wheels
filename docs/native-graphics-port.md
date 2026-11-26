@@ -175,3 +175,39 @@ Differences from the browser HUD:
   disappear without motion.
 - The page chrome around the game (status line, controls panel, chat,
   photography) and the bomber and mobile controls are not present.
+
+## Keeping signature motion through a rig migration
+
+KnowItOwl and Catheterpillar exposed two different failure modes. In commit
+`763019c`, KnowItOwl's playback setup waited for optional eyelids. The fix let
+the skeleton start without the morph and repaired animation targets bound to
+the wrong player. Catheterpillar already had that binding repair. Her first
+Blender export reduced the classic wingbeat from 3 Hz to 2 Hz in cruise, from
+4 Hz to 3 Hz in boost, and to 1 Hz during healing. A still image and a test
+that found two different bone rotations both passed with the wrong cadence.
+
+When replacing a moving racer with a skinned model:
+
+1. Record the signature motion in the original renderer. Write down its hinge,
+   stroke, beats per second and which actions can interrupt it. Check the
+   rear race camera as well as the character preview.
+2. Test both sides of the **exported** rig. Check that the moving joints carry
+   vertices and measure full strokes per second from the glTF sample times.
+   Count strokes in cruise, boost and special independently.
+3. Start skeletal playback as soon as its required player and targets exist.
+   Bind targets to the player in that racer's own scene instance. An optional
+   morph or accessory can finish loading separately.
+4. Test the **rendered race** over multiple frames with the racer stationary.
+   Measure movement of the named body part. Body bob, camera motion or exhaust
+   alone must never satisfy the check. For bugs specific to remote racers or
+   the picker, repeat the check on that render path.
+
+For Catheterpillar, these commands check the exported asset and the visible wing
+span in the local Bevy race. The browser check needs built web assets and Chrome.
+It also runs in the multiplayer regression workflow.
+
+```sh
+node --test wasm-poc/blender/specialist-animation.test.mjs
+bash scripts/build/build-experimental.sh wasm-poc
+npm run test:browser-netcode -- --wingbeats
+```

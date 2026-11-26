@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import WebSocket from 'ws';
 import { pathToFileURL } from 'node:url';
+import { checkCatheterpillarWings } from '../scenarios/check-catheterpillar-wings.mjs';
 import { checkAvitaShaders } from '../scenarios/check-avita-shaders.mjs';
 import { checkFeedback } from '../scenarios/check-feedback-scenario.mjs';
 import { checkDrift } from '../scenarios/check-drift-scenario.mjs';
@@ -26,6 +27,7 @@ const quantile=(values,p)=>[...values].sort((a,b)=>a-b)[Math.min(values.length-1
 const chrome=process.env.CHROME_PATH??'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const outputIndex=process.argv.indexOf('--output');
 const output=outputIndex>=0?process.argv[outputIndex+1]:join(tmpdir(),'wild-wheels-browser.json');
+const wingbeats = process.argv.includes('--wingbeats');
 const avitaShaders = process.argv.includes('--avita-shaders');
 const functional=process.argv.includes('--functional');
 const sourceIndex=process.argv.indexOf('--source');
@@ -83,7 +85,7 @@ async function evaluate(expression,userGesture=false){const result=await call('R
 const results=[];
 try{
   const profiles=process.argv.includes('--profile')||encodingLab?[{name:'cpu-profile',delay:0,jitter:0}]:[{name:'local-host',delay:0,jitter:0},{name:'local-guest',delay:0,jitter:0,guest:true},{name:'160ms-guest',delay:80,jitter:0,guest:true},{name:'160ms-jitter-guest',delay:80,jitter:30,guest:true}];
-  for(const profile of Array.from({length:repeat},(_,run)=>(avitaShaders ? profiles.slice(0,1) : profiles).map(profile=>({...profile,run:run+1}))).flat()){
+  for(const profile of Array.from({length:repeat},(_,run)=>(avitaShaders || wingbeats ? profiles.slice(0,1) : profiles).map(profile=>({...profile,run:run+1}))).flat()){
     activeProfile=`${profile.run}:${profile.name}`;
     const {targetId}=await call('Target.createTarget',{url:'about:blank'});({sessionId:session}=await call('Target.attachToTarget',{targetId,flatten:true}));
     await call('Page.enable',{},session);await call('Runtime.enable',{},session);
@@ -122,11 +124,17 @@ try{
     }`},session);
     // Character model probes instrument the classic renderer's WebGL draw calls.
     let page = '/';
-    if (avitaShaders || process.argv.includes('--beta')) page = '/experimental/';
+    if (wingbeats || avitaShaders || process.argv.includes('--beta')) page = '/experimental/';
     if (process.argv.includes('--characters')) page = '/?renderer=classic';
     if (encodingLab) page = '/encoding-lab/';
     await call('Page.navigate',{url:origin+page},session);
     for(let attempt=0;attempt<100;attempt++){if(await evaluate(encodingLab?"location.pathname==='/encoding-lab/'&&document.readyState==='complete'":'Boolean(globalThis.__game)'))break;await sleep(50);}
+    if(wingbeats){
+      const capture=async clip=>(await call('Page.captureScreenshot',{format:'png',clip},session)).data;
+      const result=await checkCatheterpillarWings(evaluate,capture,sleep);
+      results.push(result);console.log(JSON.stringify(result));
+      await call('Target.closeTarget',{targetId});continue;
+    }
     if(avitaShaders){
       const result=await checkAvitaShaders(evaluate,sleep);
       results.push(result);console.log(JSON.stringify(result));
