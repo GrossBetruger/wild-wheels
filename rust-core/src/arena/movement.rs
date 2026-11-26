@@ -35,6 +35,7 @@ pub fn navigate(arena:usize,a:&Actor,b:&Actor)->Vec<Point>{
 }
 impl Game{
     pub(super) fn move_cart(&mut self,id:usize,steer:f64,keys:u32,dt:f64,advance:bool,lethal:bool){
+        if self.pulled_by_wormhole(id) { self.stop_wormhole_victim(id); return; }
         let dt=dt*match self.frozen(id){true=>0.025,false=>1.0};
         if self.actors[id].destroyed>0.0||self.actors[id].prediction_crash{return;}
         let g=&mut self.global;let a=&mut self.actors[id];let wx=a.wx;let wz=a.wz;

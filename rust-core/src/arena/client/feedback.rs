@@ -64,6 +64,7 @@ impl Client{
         }}actor
     }
     pub(super) fn resolve_wormhole_press(&mut self, now: f64) {
+        if self.pred.pulled_by_wormhole(self.viewer) { self.pending_wormhole_press = None; return; }
         if self.pending_wormhole_press.is_some_and(|at| now-at > 0.35) {
             self.pending_wormhole_press = None;
             let turbo = Action { kind: "turbo".into(), ..Action::default() };
@@ -75,7 +76,7 @@ impl Client{
         self.submit_action(action, now, true)
     }
     fn submit_action(&mut self,mut action:Action,now:f64,interpret_tap:bool)->bool{
-        if self.pred.frozen(self.viewer){return false;}
+        if self.pred.frozen(self.viewer)||self.pred.pulled_by_wormhole(self.viewer){return false;}
         if self.ops.len()>=64||self.pred.actors[self.viewer].afk{return false;}let mut actor=self.inventory();let id=self.next_action;action.id=Some(id);let sequence=self.next_sequence-1;
         let after=self.ops.iter().filter_map(|op|match op{Op::Pickup{after,..}=>Some(*after),_=>None}).fold(sequence,i64::max);action.after_move=after;
         if actor.bomber{

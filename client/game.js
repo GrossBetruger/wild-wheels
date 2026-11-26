@@ -1,3 +1,4 @@
+import { pulledByWormhole } from '../characters/houston/nightmare-fuel.js';
 import { MatchLayout } from '../ui/match-layout.js';
 import { gameKey, returnsToGame } from './keyboard.js';
 import { AbilityAnnouncements } from '../ui/ability-announcements.js';
@@ -135,7 +136,12 @@ globalThis.__syncBuildLabel?.();
 const soloLimits = {targetScore: 10, matchMinutes: 3};
 const newGame = () => { if (mobile) bomberWeapon = 'abomb'; return applyPlayerColors(mode === 'combat' ? (mobile ? equipBomber(createBattle(selected, track, Math.random, soloLimits)) : createBattle(selected, track, Math.random, soloLimits)) : createRace(selected, track), network.preferredColor); };
 const useWeapon = () => network.active ? network.action('fire') : mode === 'combat' ? fireBattle(race) : useItem(race);
-const switchWeapon = () => network.active ? network.action('cycle') : cycleItem(race);
+function chooseWeapon(item) {
+  if (network.active) return item ? network.action('select',item) : network.action('cycle');
+  if (mode === 'combat' && pulledByWormhole(race, race)) return;
+  return item ? selectItem(race,item) : cycleItem(race);
+}
+const switchWeapon = () => chooseWeapon();
 const chaff = () => network.active ? network.action('chaff') : mode === 'combat' ? releaseChaff(race) : false;
 const turbo = () => network.active ? network.action('turbo') : mode === 'combat' ? useBattleTurbo(race) : useTurbo(race);
 const special = () => {
@@ -388,7 +394,7 @@ for(const [type,icon,label] of [['hedgehog','🦔','HEDGEHOGS'],['missile','🚀
   const button=document.createElement('button');button.className='ammo-card';button.id=`ammo-${type}`;button.type='button';
   const symbol=document.createElement('span');symbol.className='ammo-icon';symbol.textContent=icon;
   const count=document.createElement('b');count.id=`${type}-count`;const name=document.createElement('span');name.className='ammo-label';name.textContent=label;
-  button.append(symbol,count,name);button.onclick=()=>type==='boost'?turbo():network.active?network.action('select',type):selectItem(race,type);ammoRack.append(button);ammoCards.set(type,{button,count,label,name});
+  button.append(symbol,count,name);button.onclick=()=>type==='boost'?turbo():chooseWeapon(type);ammoRack.append(button);ammoCards.set(type,{button,count,label,name});
 }
 document.querySelector('.item-box').prepend(ammoRack); document.querySelector('.item-box small').textContent = 'SPACE TO FIRE · TAB / Q / ⌘ WEAPONS · X TURBO';
 const vulcanStatus = document.createElement('div'); vulcanStatus.className = 'vulcan-status hidden'; const vulcanTitle = document.createElement('strong'), vulcanTime = document.createElement('progress'); vulcanTime.max = VULCAN_DURATION; vulcanTime.setAttribute('aria-label', 'Hedgehog Vulcan seconds remaining'); vulcanStatus.append(vulcanTitle, vulcanTime); document.querySelector('.item-box').prepend(vulcanStatus);

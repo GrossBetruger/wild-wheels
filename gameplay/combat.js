@@ -1,5 +1,5 @@
 import {placeSupply,tickSupplySpawns} from './supply-spawns.js';
-import {activateNightmare,tapNightmare,tickNightmare,WORMHOLE_OFFSET,WORMHOLE_KILL_RADIUS} from '../characters/houston/nightmare-fuel.js';
+import {activateNightmare,tapNightmare,tickNightmare,pulledByWormhole,WORMHOLE_OFFSET,WORMHOLE_KILL_RADIUS} from '../characters/houston/nightmare-fuel.js';
 import { tickBicycles } from './bicycle-pickup.js';
 import {tickLocusts} from './locusts.js';
 import { tickFireRings, fireRingBlocks } from '../characters/master-yuda/fire-ring.js';
@@ -72,7 +72,7 @@ export function createBattle(driver = 0, arena = 0, random = Math.random, {targe
 }
 export function battleActive(world) { return world.mode === 'combat' && world.phase === 'racing'; }
 function humanControlled(world, actor) { return actor.human || actor === world && !world.multiplayer; }
-function canAct(world, actor) { return !frozen(world, actor.id) && battleActive(world) && !actor.inactive && !actor.bomber && actor.destroyed <= 0 && (world.finishCountdown === null || humanControlled(world, actor)); }
+function canAct(world, actor) { return !frozen(world, actor.id) && !pulledByWormhole(world, actor) && battleActive(world) && !actor.inactive && !actor.bomber && actor.destroyed <= 0 && (world.finishCountdown === null || humanControlled(world, actor)); }
 export function standings(r) {
   const actors = [r, ...r.bots].filter(actor => !actor.inactive), top = Math.max(...actors.map(actor => actor.kills)), host = r.multiplayer ? actors.find(actor => actor.id === r.host && actor.kills === top) : null;
   return actors.sort((a, b) => b.kills - a.kills || Number(b === host) - Number(a === host) || a.deaths - b.deaths || a.id - b.id);
@@ -367,7 +367,13 @@ function moveActor(r, actor, steer, gas, brake, dt, handbrake = false) {
   }
   actor.speed *= .3; actor.drift = 0; actor.wasDrifting = false; actor.driftTrail = null; actor.motionHeading = actor.heading; if (actor === r && actor.wallCooldown <= 0) { fx(r, 'crash', actor); actor.wallCooldown = .7; r.shake = .3; voice(r, actor, 'hurt'); }
 }
+function stopWormholeVictim(actor) {
+  actor.speed = actor.boost = actor.drift = actor.somersault = actor.yaw = 0;
+  actor.wasDrifting = false;
+  actor.driftTrail = null;
+}
 export function predictKartMovement(world, actor, keys, dt) {
+  if (pulledByWormhole(world, actor)) { stopWormholeVictim(actor); return; }
   if (frozen(world, actor.id)) return;
   if (actor.bomber || !battleActive(world) || actor.destroyed > 0) return;
   // Reuse movement and wall collisions, without running weapons, damage or AI.
@@ -399,7 +405,8 @@ export function tickBattle(r, keys, dt, inputs = null) {
   ageDriftEffects(r, worldDt);
   const actors = [r, ...r.bots], arena = arenas[r.arena];
   for (const actor of actors) {
-    if (frozen(r, actor.id)) { const human = actor.human; const control = inputs?.get(actor.id) ?? (actor === r ? keys : new Set()); advanceKartMovement(r, actor, control.keys instanceof Set ? control.keys : control, dt * .025); actor.human = human; continue; }
+    const pulled = pulledByWormhole(r, actor);
+    if (frozen(r, actor.id) && !pulled) { const human = actor.human; const control = inputs?.get(actor.id) ?? (actor === r ? keys : new Set()); advanceKartMovement(r, actor, control.keys instanceof Set ? control.keys : control, dt * .025); actor.human = human; continue; }
     const recoveryHealth = RECOVERY_HEALTH;
     if (actor !== r) actor.noticeTime = Math.max(0, (actor.noticeTime ?? 0) - dt);
     for (const key of ['batCooldown', 'fireCooldown', 'shield', 'hedgeShield', 'tehilim', 'celebrate', 'voiceCooldown', 'wallCooldown', 'vulcan', 'chaffCooldown']) { if (inputs?.get(actor.id)?.actionClock && ['fireCooldown', 'chaffCooldown'].includes(key)) continue; actor[key] = Math.max(0, (actor[key] ?? 0) - dt); }
@@ -418,6 +425,12 @@ export function tickBattle(r, keys, dt, inputs = null) {
     }
     if (actor.health >= recoveryHealth) actor.healTimer = 0;
     actor.reload += dt; const reloadInterval = hedgehogRecoveryInterval(actor.driver); if (actor.reload >= reloadInterval - 1e-8) { actor.ammo = Math.min(itemCapacity(actor, 'hedgehog'), actor.ammo + 1); actor.reload = Math.max(0, actor.reload - reloadInterval); }
+    if (pulled) {
+      stopWormholeVictim(actor);
+      const control = inputs?.get(actor.id);
+      for (const move of control?.moves ?? []) control.afterMove?.(move.sequence);
+      continue;
+    }
     if ((actor === r && !r.multiplayer) || actor.human) {
       const control = inputs?.get(actor.id) ?? (actor === r ? keys : new Set());
       const held = control.keys instanceof Set ? control.keys : control;

@@ -1,6 +1,6 @@
 use super::*;
 impl Game{
-    pub(super) fn active(&self,id:usize)->bool{let a=&self.actors[id];!self.frozen(id)&&self.combat_active()&&a.destroyed<=0.0&&!a.bomber&&!a.inactive&&!a.afk&&(self.global.finish_countdown.is_none()||self.human_controlled(id))}
+    pub(super) fn active(&self,id:usize)->bool{let a=&self.actors[id];!self.frozen(id)&&!self.pulled_by_wormhole(id)&&self.combat_active()&&a.destroyed<=0.0&&!a.bomber&&!a.inactive&&!a.afk&&(self.global.finish_countdown.is_none()||self.human_controlled(id))}
     pub(super) fn target(&self,id:usize)->Option<usize>{
         let a=&self.actors[id];self.actors.iter().filter(|b|b.id!=id&&!b.bomber&&!b.inactive&&!b.afk&&b.destroyed<=0.0&&b.shield<=0.0&&distance(a.wx,a.wz,b.wx,b.wz)<100.0&&angle((b.wx-a.wx).atan2(b.wz-a.wz),a.heading).abs()<0.65&&clear(self.global.arena,a.wx,a.wz,b.wx,b.wz)).map(|a|a.id).min_by(|&x,&y|distance(a.wx,a.wz,self.actors[x].wx,self.actors[x].wz).total_cmp(&distance(a.wx,a.wz,self.actors[y].wx,self.actors[y].wz)).then(x.cmp(&y)))
     }

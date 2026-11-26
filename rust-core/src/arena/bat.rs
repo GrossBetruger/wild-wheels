@@ -14,7 +14,7 @@ impl Game{
         Some((x,z,heading,Some(target.id)))
     }
     pub(super) fn bat_fire(&mut self,id:usize){
-        let a=&self.actors[id];if a.driver!=14||!ability_on(id,1)||a.vulcan<=0.0||a.bat_cooldown>0.0||self.frozen(id)||!self.combat_active()||a.destroyed>0.0||a.bomber||a.inactive||a.afk||self.global.finish_countdown.is_some()&&!self.human_controlled(id){return;}
+        let a=&self.actors[id];if a.driver!=14||!ability_on(id,1)||a.vulcan<=0.0||a.bat_cooldown>0.0||self.frozen(id)||self.pulled_by_wormhole(id)||!self.combat_active()||a.destroyed>0.0||a.bomber||a.inactive||a.afk||self.global.finish_countdown.is_some()&&!self.human_controlled(id){return;}
         let Some((x,z,heading,Some(target)))=self.bat_aim(id) else{return;};
         let(wx,wz)=(x+heading.sin()*1.4,z+heading.cos()*1.4);if wall_blocked(self.global.arena,wx,wz,0.3){return;}
         let a=&self.actors[id];let target=Some(target);let jump=match a.somersault>0.0{true=>(1.0-a.somersault/0.55).clamp(0.0,1.0).mul_add(std::f64::consts::PI,0.0).sin()*match a.driver==10{true=>2.8,false=>5.0},false=>0.0};

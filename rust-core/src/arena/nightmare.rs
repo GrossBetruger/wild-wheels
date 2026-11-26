@@ -12,6 +12,32 @@ pub(super) const WORMHOLE_RADIUS: f64 = 20.0;
 pub(super) const WORMHOLE_KILL_RADIUS: f64 = 4.6;
 
 impl Game {
+    pub(super) fn pulled_by_wormhole(&self, id: usize) -> bool {
+        let target = &self.actors[id];
+        if !self.global.special_abilities || target.inactive || target.afk || target.bomber || target.destroyed > 0.0 {
+            return false;
+        }
+        self.actors.iter().any(|source| {
+            if source.driver != 8 || source.id == id || source.nightmare_active <= 0.0 || source.destroyed > 0.0 || source.afk || source.inactive || self.frozen(source.id) {
+                return false;
+            }
+            let dx = source.wx + source.heading.sin() * WORMHOLE_OFFSET - target.wx;
+            let dz = source.wz + source.heading.cos() * WORMHOLE_OFFSET - target.wz;
+            dx * dx + dz * dz < WORMHOLE_RADIUS * WORMHOLE_RADIUS
+        })
+    }
+
+    pub(super) fn stop_wormhole_victim(&mut self, id: usize) {
+        let a = &mut self.actors[id];
+        a.speed = 0.0;
+        a.boost = 0.0;
+        a.drift = 0.0;
+        a.somersault = 0.0;
+        a.yaw = 0.0;
+        a.was_drifting = false;
+        a.drift_trail = None;
+    }
+
     pub(super) fn nightmare(&mut self, id: usize) {
         let a = &self.actors[id];
         if !self.global.special_abilities
@@ -105,8 +131,6 @@ impl Game {
                     if dist <= WORMHOLE_KILL_RADIUS {
                         hits.push((target.id, source.id, target.health, "wormhole"));
                     } else {
-                        // Tidal gravity pull: gentle enough at the outer rim to escape with turbo,
-                        // rapidly accelerating into inescapable spaghettification near the center!
                         let t = 1.0 - dist / WORMHOLE_RADIUS;
                         let pull = (16.0 + 48.0 * t * t) * dt;
                         let step = pull.min(dist - WORMHOLE_KILL_RADIUS * 0.5);

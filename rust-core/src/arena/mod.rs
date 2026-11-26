@@ -132,7 +132,7 @@ impl Game {
     }
     pub fn action(&mut self,id:usize,action:&Action){
         if id>=self.actors.len(){return;}
-        if self.frozen(id){return;}
+        if self.frozen(id)||self.pulled_by_wormhole(id){return;}
         match action.kind.as_str(){
             "special"=>{self.special(id);},"nightmare"=>{self.nightmare(id);},
             "fire"=>{self.fire(id,action.id);},"bomb"=>{self.bomb(id,action);},"turbo"=>{self.turbo(id,action.id);},

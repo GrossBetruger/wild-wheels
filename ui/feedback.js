@@ -1,3 +1,4 @@
+import { pulledByWormhole } from '../characters/houston/nightmare-fuel.js';
 import { applySupply, makeProjectile, advanceProjectile, MOVEMENT_DT, MAX_HEALTH, validBombTarget } from '../gameplay/combat.js';
 import { selectItem, cycleItem } from '../gameplay/engine.js';
 
@@ -73,6 +74,7 @@ export class LocalFeedback {
   action(type,item,pose,now,sequence){
     if(!this.world||this.operations.length>=64)return false;
     const actor=this.inventory(pose);
+    if(pulledByWormhole(this.world,actor))return false;
     if(actor.bomber){
       const kind=item?.kind??'abomb',resource=kind==='stink'?'stinkAmmo':'bombAmmo';
       if(type!=='bomb'||!['abomb','stink'].includes(kind)||actor.phase!=='racing'||actor.finishCountdown!==null||now-this.received>.5||!(actor[resource]>=1)||!validBombTarget(actor,item))return false;

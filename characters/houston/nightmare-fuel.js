@@ -11,7 +11,7 @@ export function nightmareCameraZoom(remaining,current,dt){
   return current+(target-current)*(1-Math.exp(-dt*5));
 }
 export function activateNightmare(world,actor=world){
-  if(world.specialAbilities===false||world.phase!=='racing'||world.finishCountdown!==null||(actor.driver!==7&&actor.driver!==8)||actor.destroyed>0||actor.inactive||actor.afk||actor.bomber||frozen(world,actor.id)||(actor.nightmareCooldown??0)>1e-8)return false;
+  if(world.specialAbilities===false||world.phase!=='racing'||world.finishCountdown!==null||(actor.driver!==7&&actor.driver!==8)||actor.destroyed>0||actor.inactive||actor.afk||actor.bomber||frozen(world,actor.id)||pulledByWormhole(world,actor)||(actor.nightmareCooldown??0)>1e-8)return false;
   if(actor.driver===8){
     actor.nightmareActive=WORMHOLE_DURATION;actor.nightmareCooldown=WORMHOLE_COOLDOWN;
     actor.notice='WORMHOLE';actor.noticeTime=2.4;return true;
@@ -25,6 +25,16 @@ export function tapNightmare(world,actor=world){
   const double=previous!==undefined&&world.elapsed>=previous&&world.elapsed-previous<=.35;
   if(!double)actor.nightmareTap=world.elapsed;
   return double&&activateNightmare(world,actor);
+}
+export function pulledByWormhole(world, target) {
+  if (world.specialAbilities === false || target.bomber || target.inactive || target.afk || target.destroyed > 0) return false;
+  const pulls = source => {
+    if (source.driver !== 8 || !(source.nightmareActive > 0) || source.id === target.id || source.destroyed > 0 || source.inactive || source.afk || frozen(world, source.id)) return false;
+    const dx = source.wx + Math.sin(source.heading) * WORMHOLE_OFFSET - target.wx;
+    const dz = source.wz + Math.cos(source.heading) * WORMHOLE_OFFSET - target.wz;
+    return dx * dx + dz * dz < WORMHOLE_RADIUS * WORMHOLE_RADIUS;
+  };
+  return pulls(world) || Boolean(world.bots?.some(pulls));
 }
 export function tickNightmare(world,dt){
   const actors=[world,...world.bots];

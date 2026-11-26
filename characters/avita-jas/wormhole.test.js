@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ArenaClient, ArenaCore, wormholeSample } from '../../gameplay/arena-core.js';
-import { createBattle, useBattleTurbo, tickBattle } from '../../gameplay/combat.js';
+import { createBattle, fireBattle, releaseChaff, somersaultBattle, useBattleTurbo, tickBattle } from '../../gameplay/combat.js';
+import { useSpecial } from '../../gameplay/special-abilities.js';
 
 test('the offline capture stretches and thins the racer, then swallows both ends', () => {
   const world = Object.assign(createBattle(8), {phase:'racing', human:true, wx:65, wz:40, heading:0});
@@ -118,5 +119,49 @@ for (const mode of ['solo', 'multiplayer']) {
     assert.equal(state.projectiles[0].wx, 65);
     assert.equal(state.health, 3);
     assert.equal(state.effects.some(effect => effect.type === 'explosion'), false);
+  });
+}
+
+for (const mode of ['solo', 'multiplayer']) {
+  test(`${mode}: a pulled racer loses driving and combat controls until the field expires`, () => {
+    const world = Object.assign(createBattle(5), {
+      phase: 'racing', human: true, wx: 65, wz: 70, heading: Math.PI / 2,
+      speed: 450, boost: 1, ammo: 3, turbos: 1, fireCooldown: 0, supplies: []
+    });
+    for (const bot of world.bots) bot.inactive = true;
+    Object.assign(world.bots[0], {
+      inactive: false, human: true, driver: 8, wx: 65, wz: 40, heading: 0, nightmareActive: .05
+    });
+    const held = ['w', 'arrowright', 'shift', ' '];
+    const server = mode === 'multiplayer' ? new ArenaCore(world) : null;
+    const step = (keys, actions = []) => {
+      if (!server) { tickBattle(world, new Set(keys), 1 / 60); return world; }
+      server.step(1 / 60, [{actor: 0, keys, actions}]);
+      return server.snapshot();
+    };
+    const actions = ['fire', 'turbo', 'chaff', 'somersault', 'special'].map(type => ({type}));
+    if (server) {
+      const client = new ArenaClient();
+      client.accept(server.packet(0), 0);
+      for (const {type} of actions) assert.equal(client.action(type, null, .01), false);
+      assert.deepEqual(client.outbound(held).actions, []);
+    } else {
+      for (const act of [fireBattle, useBattleTurbo, releaseChaff, somersaultBattle, useSpecial]) act(world);
+    }
+    const caught = step(held, actions);
+    assert.equal(caught.wx, 65);
+    assert.ok(caught.wz < 70);
+    assert.equal(caught.heading, Math.PI / 2);
+    assert.equal(caught.speed, 0);
+    assert.equal(caught.boost, 0);
+    assert.equal(caught.turbos, 1);
+    assert.equal(caught.ammo, 3);
+    assert.equal(caught.specialCooldown, 0);
+    assert.equal(caught.projectiles.length, 0);
+    for (let i = 0; i < 4; i++) step([]);
+    if (!server) fireBattle(world);
+    const free = step(['w'], [{type: 'fire'}]);
+    assert.equal(free.ammo, 2);
+    assert.ok(free.speed > 0);
   });
 }
