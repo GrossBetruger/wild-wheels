@@ -551,8 +551,12 @@ function drawRadar(radar) {
     for (const [x, z, bw, bd] of radar.water) ctx.fillRect(sx(x - bw / 2), sy(z - bd / 2), sw(bw), sw(bd));
   }
   if (radar.bridges?.length) {
-    ctx.fillStyle = 'rgba(222, 184, 120, 0.85)';
-    for (const [x, z, bw, bd] of radar.bridges) ctx.fillRect(sx(x - bw / 2), sy(z - bd / 2), sw(bw), sw(bd));
+    const mask = radar.eulerBridges || 0;
+    for (let i = 0; i < radar.bridges.length; i++) {
+      const [x, z, bw, bd] = radar.bridges[i];
+      ctx.fillStyle = (mask & (1 << i)) ? '#5ce4c0' : 'rgba(222, 184, 120, 0.85)';
+      ctx.fillRect(sx(x - bw / 2), sy(z - bd / 2), sw(bw), sw(bd));
+    }
   }
   if (radar.blocks?.length) {
     ctx.fillStyle = 'rgba(148, 164, 194, 0.5)';

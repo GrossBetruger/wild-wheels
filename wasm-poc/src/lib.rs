@@ -1441,6 +1441,7 @@ fn publish_hud(client: &NativeClient) {
             "blocks": view.blocks,
             "water": view.arena_def.water,
             "bridges": view.arena_def.bridges,
+            "eulerBridges": p.euler_bridges,
             "actors": radar_actors,
             "supplies": radar_supplies,
             "missiles": radar_missiles,

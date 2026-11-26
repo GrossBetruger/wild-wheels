@@ -2989,6 +2989,18 @@ body.mobile-playing {
   letter-spacing: .3px
 }
 
+.item-box>.bridges-status {
+  max-width: 280px;
+  padding: 0 0 7px !important;
+  color: #f5d77f;
+  font: bold 9px/1.4 monospace;
+  letter-spacing: .3px
+}
+
+.item-box>.bridges-status.near {
+  color: #9fd8f5
+}
+
 .bicycle-results {
   width: 100%;
   max-width: 370px;

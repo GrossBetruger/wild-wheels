@@ -358,6 +358,7 @@ function showResults() {
 const hedgeguardStatus=document.createElement('div');hedgeguardStatus.className='hedgeguard-status hidden';hedgeguardStatus.setAttribute('role','status');document.querySelector('.item-box').prepend(hedgeguardStatus);
 const tehilimStatus=document.createElement('div');tehilimStatus.className='tehilim-status hidden';tehilimStatus.setAttribute('role','status');document.querySelector('.item-box').prepend(tehilimStatus);
 const intelligenceStatus=document.createElement('div');intelligenceStatus.className='intelligence-status hidden';intelligenceStatus.setAttribute('role','status');document.querySelector('.item-box').prepend(intelligenceStatus);
+const bridgesStatus=document.createElement('div');bridgesStatus.className='bridges-status hidden';bridgesStatus.setAttribute('role','status');document.querySelector('.item-box').prepend(bridgesStatus);
 const rewardNotice=new RewardNotice(document.querySelector('.viewport')),permanentGains=new PermanentStatGains();
 let rewardEpoch='',rewardElapsed=0,rewardRound=0;
 const routeHint=document.createElement('div');routeHint.className='route-hint';document.querySelector('.viewport').append(routeHint);
@@ -551,6 +552,10 @@ function hud() {
   tehilimStatus.classList.toggle('hidden',!books);tehilimStatus.textContent=books?`TEHILIM VS TILIM · ${race.tehilim.toFixed(1)}s · MISSILE REPULSION`:'';
   const smarter=mode==='combat'&&race.intelligenceBonus>0&&race.phase==='racing'&&!race.bomber;
   intelligenceStatus.classList.toggle('hidden',!smarter);intelligenceStatus.textContent=smarter?`🚲 INTELLIGENCE ${actorIntelligence(race)} · +${race.intelligenceBonus}`:'';
+  const bridgeTotal=arenas[race.arena]?.bridges?.length??0;
+  const showBridges=mode==='combat'&&bridgeTotal===7&&race.phase==='racing'&&!race.bomber&&race.destroyed<=0;
+  bridgesStatus.classList.toggle('hidden',!showBridges);
+  if(showBridges){let bits=race.eulerBridges??0,crossed=0;while(bits){crossed+=bits&1;bits>>>=1;}bridgesStatus.classList.toggle('near',crossed===6);bridgesStatus.textContent=`🌉 BRIDGES ${crossed}/${bridgeTotal}`;}
   routeHint.textContent='';
   driftMeter.classList.toggle('hidden',mode!=='combat'||!race.wasDrifting||race.phase!=='racing');driftCharge.value=race.drift;driftLabel.textContent=race.drift>=.85?'SUPER BOOST READY':race.drift>=.45?'BOOST READY':'DRIFT CHARGING';driftMeter.classList.toggle('charged',race.drift>=.45);driftMeter.classList.toggle('super',race.drift>=.85);
   if(mode==='combat'){
