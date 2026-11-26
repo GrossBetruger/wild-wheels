@@ -56,7 +56,6 @@ enum Role {
     Stink,
     Particle,
     Locust,
-    TimeStop,
 }
 /// Racer states the browser layers over the racer's own model.
 const OVERLAYS: [&str; 6] = ["shield", "hedge", "tehilim", "dizzy", "vulcan", "special"];
@@ -836,14 +835,7 @@ fn effects(stage: &mut Stage, view: &ClientView, xray: bool, elapsed: f32, drift
             at(bug.wx, buried, bug.wz, bug.heading),
         );
     }
-    if view.time_stop > 0.0 {
-        let caster = view
-            .time_owner
-            .and_then(|id| view.actors.get(id))
-            .unwrap_or(view.player);
-        let play = stage.aged("timestop", 2.5 - view.time_stop);
-        stage.show(Role::TimeStop, 0, play, at(caster.wx, 0.0, caster.wz, 0.0));
-    }
+    // Special Relativity (time_stop) visuals are rendered by `relativity::RelativityPlugin`.
 }
 
 pub fn sync(

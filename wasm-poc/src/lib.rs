@@ -8,6 +8,7 @@ mod pearococo;
 mod plumage;
 mod ported;
 mod preview;
+mod relativity;
 mod ryeah;
 mod scene;
 mod sound;
@@ -476,6 +477,7 @@ fn presentation_app(pack: Vec<u8>, canvas: &str, interactive: bool, mobile: bool
             knowitowl::KnowItOwlPlugin,
             pearococo::PearococoPlugin,
             preview::PreviewPlugin,
+            relativity::RelativityPlugin,
             ryeah::RYeahPlugin,
             yuda::YudaPlugin,
         ))
