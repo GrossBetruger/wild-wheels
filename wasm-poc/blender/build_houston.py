@@ -18,7 +18,11 @@ import os
 import sys
 import bpy
 import bmesh
-from mathutils import Euler
+from mathutils import Euler, Vector
+
+sys.dont_write_bytecode = True
+sys.path.insert(0, os.path.dirname(__file__))
+from specialist_rigs import finish_existing
 
 argv = sys.argv
 out_dir = argv[argv.index("--") + 1] if "--" in argv else "assets"
@@ -368,6 +372,8 @@ def build_pilot():
         sphere(side * 0.53, 1.90, -1.07, 0.24, 0.18, 0.24, m_dust, segs=18, rings=10)
         sphere(side * 0.53, 3.12, -1.07, 0.09, 0.09, 0.09, m_steel, segs=12, rings=8)
 
+    torso = set(bpy.context.scene.objects)
+
     # Slightly weathered helmet + ear pods + scuff band + antenna
     sphere(0, 3.71, 0.03, 1.08, 1.09, 0.99, m_helmet, segs=36, rings=24)
     torus(0, 3.18, 0.03, 0.96, 0.055, m_strap)
@@ -389,14 +395,19 @@ def build_pilot():
     sphere(0, 3.57, 1.43, 0.15, 0.10, 0.09, m_eye, segs=16, rings=10)
     box(0, 3.35, 1.34, 0.30, 0.042, 0.028, m_mask, bevel=0.01)
 
-    export_part("houston_pilot.glb", "HoustonPilot")
+    for side in (-1, 1):
+        before = set(bpy.context.scene.objects)
+        sculpt_arm()
+        for obj in set(bpy.context.scene.objects) - before:
+            obj['joint'] = ('wrist' if -obj.location.y >= .56 else 'arm') + ('_l' if side < 0 else '_r')
+            obj.location += Vector(loc(side * .85, 2.25, .28))
+    finish_existing("houston", os.path.join(out_dir, "houston_pilot.glb"), torso=torso)
 
 
 # =============================================================================
 # PART 3: WEATHERED SPACESUIT ARM + 3-CLAWED GLOVE
 # =============================================================================
-def build_arm(side, filename, name):
-    reset_scene()
+def sculpt_arm():
     m_suit = mat("suit_dusty", "#dfd9cc", roughness=0.58, metallic=0.03)
     m_glove = mat("glove_worn", "#cfc7b4", roughness=0.68)
     m_claw = mat("claw", "#998a70", roughness=0.45)
@@ -407,10 +418,15 @@ def build_arm(side, filename, name):
     sphere(0, 0, 0.72, 0.29, 0.29, 0.29, m_glove, segs=20, rings=14)
     for claw in (-1, 0, 1):
         sphere(claw * 0.12, -0.08, 0.98, 0.055, 0.08, 0.16, m_claw, segs=12, rings=8)
+
+
+def build_arm(filename, name):
+    reset_scene()
+    sculpt_arm()
     export_part(filename, name)
 
 
 build_ship()
 build_pilot()
-build_arm(-1.0, "houston_arm_l.glb", "HoustonArmL")
-build_arm(1.0, "houston_arm_r.glb", "HoustonArmR")
+build_arm("houston_arm_l.glb", "HoustonArmL")
+build_arm("houston_arm_r.glb", "HoustonArmR")

@@ -7,6 +7,7 @@
 import {createHash} from 'node:crypto';
 import {deflateSync} from 'node:zlib';
 import {Mesh,Renderer} from '../../client/renderer.js';
+import {drawNewDriver} from '../../client/characters.js';
 import {drawKonigsberg} from '../../client/konigsberg.js';
 import {createBattle,arenas,BOMB_FALL_TIME,RADIATION_DURATION} from '../../gameplay/combat.js';
 import {drivers} from '../../gameplay/engine.js';
@@ -90,7 +91,7 @@ function draw(view,r,time,shift=[0,0]){
   view.draw(r,time);
   const sprites=smoke=>moved(join(view.particleBuffer.uploads.filter(u=>u.smoke===smoke).map(u=>u.data)),SPRITE,shift);
   return {
-    instances:view.instances.filter(i=>(i.opacity??1)>0).map(i=>({data:i.buffer.data,matrix:placement(i,shift),plumage:Boolean(i.plumage)})),
+    instances:view.instances.filter(i=>(i.opacity??1)>0).map(i=>({key:i.key,data:i.buffer.data,matrix:placement(i,shift),plumage:Boolean(i.plumage)})),
     dynamic:moved(view.dynamicBuffer.data,9,shift),glow:moved(view.glowBuffer.data,9,shift),
     sparks:sprites(false),smoke:sprites(true),scenery:view.staticBuffer.data,
   };
@@ -199,13 +200,34 @@ class Pack {
 
 // Draws one subject for `frames` frames. `setup` prepares the world once and
 // `each(r,seconds)` updates it per frame; a negative warm-up settles eased state.
-function capture({driver=0,frames=1,fps=FPS,warmup=0,speed=0,modelsOnly=false,setup,each}){
+function capture({driver=0,frames=1,fps=FPS,warmup=0,speed=0,modelsOnly=false,vehicleOnly=false,setup,each}){
   const view=renderer(),r=world(driver),start=LOOP*2,shots=[];
+  const chassis=new WeakMap();
+  let cricket;
+  if(vehicleOnly && driver===5){
+    const mesh=new Mesh();
+    mesh.at(0,.13,0);
+    drawNewDriver(mesh,5,0,1.6);
+    cricket=Float32Array.from(mesh.data);
+  }
   setup?.(r);
   for(let i=-Math.round(warmup*fps);i<frames;i++){
     const seconds=i/fps;if(speed)r.wz=HOME[1]+speed*(seconds+warmup);
     each?.(r,seconds);
     const shot=draw(view,r,start+seconds,[r.wx,r.wz]);
+    if(vehicleOnly){
+      shot.instances=shot.instances.filter(part=>part.key.startsWith('kart:'));
+      // Tammy shares a single browser mesh with her buggy. Keep the exact
+      // tinted chassis triangles and leave the rider to the skinned scene.
+      if(cricket)for(const part of shot.instances){
+        if(!chassis.has(part.data)){
+          const vehicle=added(cricket,part.data,VERTICES);
+          if(vehicle.length+cricket.length!==part.data.length)throw Error('Cricket geometry differs from the buggy recording');
+          chassis.set(part.data,vehicle);
+        }
+        part.data=chassis.get(part.data);
+      }
+    }
     if(i>=0)shots.push(modelsOnly ? {...shot,dynamic:[],glow:[],sparks:[],smoke:[]} : shot);
   }
   return shots;
@@ -215,7 +237,8 @@ const hidden=r=>{r.afk=true;r.wx=0;r.wz=0;};
 
 // Drivers rendered with Blender PBR .glb models in Bevy WASM only need a
 // 1-frame idle silhouette in the web pack (for KnowItOwl's Dark Humor X-ray).
-const WEB_BLENDER_DRIVERS=new Set([7,8,9,10,11,14,15]);
+const WEB_RIGGED_RIDERS=new Set([5,12,13]);
+const WEB_BLENDER_DRIVERS=new Set([...WEB_RIGGED_RIDERS,7,8,9,10,11,14,15]);
 
 export function buildGraphicsPack({only=[...drivers.keys()],web=false}={}){
   const fps=web?12:FPS,slowFps=web?6:SLOW_FPS,smoothFps=web?24:SMOOTH_FPS;
@@ -255,6 +278,10 @@ export function buildGraphicsPack({only=[...drivers.keys()],web=false}={}){
     const blenderWeb=web&&WEB_BLENDER_DRIVERS.has(driver);
     const idleFrames=blenderWeb?1:loop*fps;
     const idle=tinted(`driver:${driver}:idle`,base,{driver,frames:idleFrames,warmup:WARMUP,mark});
+    if(web && WEB_RIGGED_RIDERS.has(driver)){
+      tinted(`vehicle:${driver}:idle`,base,{driver,frames:1,mark,vehicleOnly:true});
+      tinted(`vehicle:${driver}:boost`,base,{driver,frames:loop*fps,warmup:1,speed:BOOST_SPEED,mark,vehicleOnly:true,setup:r=>{r.boost=1;}});
+    }
     // Overlay diffs need a matching baseline frame for each overlay frame.
     const idleBase=blenderWeb?capture({driver,fps,frames:overlayLoop*fps,warmup:WARMUP}):idle;
     const steps=Math.round(TRANSITION*fps)+1;

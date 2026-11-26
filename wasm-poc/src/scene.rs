@@ -572,7 +572,12 @@ fn racers(stage: &mut Stage, view: &ClientView, bats: &Bats, dt: f32, now: f32, 
             };
             stage.show(Role::Ghost, a.id, ghost, body);
         }
-        if !crate::has_blender_model(a.driver) || wrecked {
+        if crate::specialist::separate_vehicle(a.driver) && !wrecked {
+            let state = if boosting { "boost" } else { "idle" };
+            let mut vehicle = stage.clip(&format!("vehicle:{}:{state}", a.driver));
+            vehicle.tint = play.tint;
+            stage.show(Role::Racer, a.id, vehicle, body);
+        } else if !crate::has_blender_model(a.driver) || wrecked {
             stage.show(Role::Racer, a.id, play, body);
         }
         if wrecked {

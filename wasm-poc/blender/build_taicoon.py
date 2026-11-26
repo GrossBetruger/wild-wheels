@@ -4,10 +4,15 @@ Build a sculpted, smooth-shaded PBR glTF (.glb) model of Tai-Coon
 using headless Blender:
     blender --background --python build_taicoon.py -- output.glb
 """
+import os
 import math
 import sys
 import bpy
 from mathutils import Vector, Euler
+
+sys.dont_write_bytecode = True
+sys.path.insert(0, os.path.dirname(__file__))
+from specialist_rigs import finish_existing
 
 # Parse output path after "--"
 argv = sys.argv
@@ -269,6 +274,8 @@ for side in (-1.0, 1.0):
 # 2. TAI-COON — SUPER CUTE SCULPTED TYROLEAN SHE-RACCOON
 # =============================================================================
 
+chassis = set(bpy.context.scene.objects)
+
 # Cozy alpine sage tunic torso + soft cream belly
 add_sphere(0, 2.16, 0.02, 0.74, 0.84, 0.64, M_TUNIC, segs=26, rings=18)
 add_sphere(0, 2.12, 0.34, 0.48, 0.62, 0.34, M_BELLY, segs=22, rings=14)
@@ -288,6 +295,8 @@ add_lotus(0, 2.48, 0.58, 0.18)
 for side in (-1.0, 1.0):
     add_sphere(side * 0.64, 2.22, 0.28, 0.22, 0.28, 0.24, M_FUR, segs=16, rings=12)
     add_sphere(side * 0.52, 2.08, 0.56, 0.20, 0.19, 0.20, M_MASK, segs=16, rings=12)
+
+torso = set(bpy.context.scene.objects) - chassis
 
 # Super cute smooth-sculpted round raccoon head
 hy = 3.34
@@ -346,25 +355,17 @@ for i in range(7):
         0.095 - f * 0.03, 0.14, 0.05, M_FEATHER_TIP if f > 0.55 else M_FEATHER, segs=12, rings=8,
     )
 
-# Apply all modifiers and join into one clean multi-material mesh (1 entity in Bevy!)
-bpy.ops.object.select_all(action="SELECT")
-bpy.context.view_layer.objects.active = bpy.context.selected_objects[0]
-bpy.ops.object.convert(target="MESH")
-bpy.ops.object.join()
-obj = bpy.context.active_object
-obj.name = "TaiCoon"
-obj.data.polygons.foreach_set("use_smooth", [True] * len(obj.data.polygons))
-obj.data.update()
+for i in range(8):
+    t = i / 7.0
+    tx = math.sin(t * 1.4) * 0.10
+    ty = t * 0.88 + math.sin(t * math.pi) * 0.24
+    tz = -t * 0.86
+    r = 0.24 + math.sin(t * math.pi) * 0.19
+    tm = M_MASK if i % 2 else (M_BELLY if i == 7 else M_FUR)
+    piece = add_sphere(tx, 1.65 + ty, -.58 + tz, r, r * 0.96, r, tm, segs=20, rings=14)
+    piece['joint'] = ('tail', 'tail_mid', 'tail_tip')[min(2, i // 3)]
 
-# Export single clean binary glTF 2.0 (.glb) with Y-up and PBR materials
-bpy.ops.export_scene.gltf(
-    filepath=out_path,
-    export_format="GLB",
-    export_yup=True,
-    export_apply=True,
-    export_materials="EXPORT",
-)
-print(f"Exported Blender PBR Tai-Coon to {out_path}")
+finish_existing("taicoon", out_path, chassis=chassis, torso=torso)
 
 # Export Tai-Coon's fluffy ringed raccoon tail as a separate GLB pivoted at its root (0,0,0)!
 import os

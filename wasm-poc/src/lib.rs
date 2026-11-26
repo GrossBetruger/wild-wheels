@@ -13,6 +13,7 @@ mod ryeah;
 mod scene;
 mod sound;
 mod sprite;
+mod specialist;
 mod wormhole;
 mod xray;
 mod yuda;
@@ -203,7 +204,8 @@ pub(crate) fn sound_pack_bytes() -> &'static [u8] {
     SOUND_BYTES.get().copied().unwrap_or(&[])
 }
 
-const BLENDER_MODELS: &[(usize, &str)] = &[(15, "taicoon.glb")];
+const BLENDER_MODELS: &[(usize, &str)] = &[(5, "models/tammy.glb"), (12, "models/catheterpillar.glb"),
+    (13, "models/fourmidable.glb"), (15, "taicoon.glb")];
 
 const RAPTOR_ENGINES: [(f32, f32, f32); 6] = [
     (0.0, 0.64, 0.28),
@@ -229,9 +231,6 @@ struct BlenderModels {
     static_models: std::collections::HashMap<usize, Handle<WorldAsset>>,
     houston_ship: Handle<WorldAsset>,
     houston_pilot: Handle<WorldAsset>,
-    houston_arm_l: Handle<WorldAsset>,
-    houston_arm_r: Handle<WorldAsset>,
-    taicoon_tail: Handle<WorldAsset>,
     flame_mesh: Handle<Mesh>,
     diamond_mesh: Handle<Mesh>,
     flame_outer_mat: Handle<StandardMaterial>,
@@ -257,15 +256,12 @@ struct ExhaustParticle {
 struct BlenderRacer {
     id: usize,
     driver: usize,
-    tail: Option<Entity>,
 }
 
 #[derive(Component)]
 struct HoustonRig {
     id: usize,
     pilot: Entity,
-    arm_l: Entity,
-    arm_r: Entity,
     flames: Vec<(Entity, Entity, f32, f32, f32)>,
     diamonds: Vec<(Entity, f32, f32, f32, usize)>, // (entity, ex, ey, er, diamond_idx)
     rcs: [Entity; 2],
@@ -495,6 +491,7 @@ fn presentation_app(pack: Vec<u8>, canvas: &str, interactive: bool, mobile: bool
                 retire_shader_warmup,
                 scene::sync,
                 sync_blender_models,
+                specialist::animate,
                 tick_exhaust_particles,
                 ported::animate,
             )
@@ -583,9 +580,6 @@ fn load_blender_models(
         static_models,
         houston_ship: assets.load(GltfAssetLabel::Scene(0).from_asset("houston_ship.glb")),
         houston_pilot: assets.load(GltfAssetLabel::Scene(0).from_asset("houston_pilot.glb")),
-        houston_arm_l: assets.load(GltfAssetLabel::Scene(0).from_asset("houston_arm_l.glb")),
-        houston_arm_r: assets.load(GltfAssetLabel::Scene(0).from_asset("houston_arm_r.glb")),
-        taicoon_tail: assets.load(GltfAssetLabel::Scene(0).from_asset("taicoon_tail.glb")),
         flame_mesh,
         diamond_mesh,
         flame_outer_mat,
@@ -808,18 +802,6 @@ fn sync_blender_models(
                     p_tf.translation = Vec3::new(0.0, cel_bounce, 0.0);
                     p_tf.rotation = Quat::from_rotation_y(turn * std::f32::consts::PI);
                 }
-                for &(arm_ent, side) in &[(rig.arm_l, -1.0f32), (rig.arm_r, 1.0f32)] {
-                    if let Ok((mut a_tf, _, _)) = parts.get_mut(arm_ent) {
-                        let wave = turn * (progress * 18.0 + side).sin() * 0.35;
-                        a_tf.translation = Vec3::new(side * 0.85, 2.25, 0.28);
-                        a_tf.rotation = Quat::from_euler(
-                            EulerRot::XYZ,
-                            -turn * 1.55 + wave,
-                            0.0,
-                            side * turn * 0.52,
-                        );
-                    }
-                }
                 let cruise_scale = (a.speed.abs() as f32 / 520.0).clamp(0.35, 1.0);
                 for (idx, &(outer, inner, ex, ey, er)) in rig.flames.iter().enumerate() {
                     let f1 = (t * 58.0 + idx as f32 * 2.3).sin();
@@ -1005,8 +987,6 @@ fn sync_blender_models(
             } else {
                 // Spawn full animated Houston rig!
                 let mut pilot_ent = Entity::PLACEHOLDER;
-                let mut arm_l_ent = Entity::PLACEHOLDER;
-                let mut arm_r_ent = Entity::PLACEHOLDER;
                 let mut flames = Vec::with_capacity(6);
                 let mut diamonds = Vec::with_capacity(12);
                 let mut rcs_ents = [Entity::PLACEHOLDER; 2];
@@ -1018,22 +998,9 @@ fn sync_blender_models(
                         pilot_ent = ship
                             .spawn((
                                 WorldAssetRoot(models.houston_pilot.clone()),
+                                specialist::Rider::new(a.id, 7),
                                 Transform::IDENTITY,
                             ))
-                            .with_children(|pilot| {
-                                arm_l_ent = pilot
-                                    .spawn((
-                                        WorldAssetRoot(models.houston_arm_l.clone()),
-                                        Transform::from_xyz(-0.85, 2.25, 0.28),
-                                    ))
-                                    .id();
-                                arm_r_ent = pilot
-                                    .spawn((
-                                        WorldAssetRoot(models.houston_arm_r.clone()),
-                                        Transform::from_xyz(0.85, 2.25, 0.28),
-                                    ))
-                                    .id();
-                            })
                             .id();
 
                         let back_rot = Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2);
@@ -1116,8 +1083,6 @@ fn sync_blender_models(
                 commands.entity(ship_ent).insert(HoustonRig {
                     id: a.id,
                     pilot: pilot_ent,
-                    arm_l: arm_l_ent,
-                    arm_r: arm_r_ent,
                     flames,
                     diamonds,
                     rcs: rcs_ents,
@@ -1130,7 +1095,7 @@ fn sync_blender_models(
         let Some(handle) = models.static_models.get(&a.driver) else {
             continue;
         };
-        alive_static.insert(a.id);
+        alive_static.insert((a.id, a.driver));
         let bounce = if a.celebrate > 0.0 {
             (t * 14.0).sin().abs() * 0.65
         } else {
@@ -1143,47 +1108,33 @@ fn sync_blender_models(
             pitch,
             0.0,
         );
-        if let Some((_, br, mut cur_tf, mut vis)) =
+        let tf = if specialist::separate_vehicle(a.driver) {
+            let (height, pitch, roll, yaw) = scene::somersault(a.driver, a.somersault);
+            let body = ported::placement(Vec3::new(a.wx as f32, height, a.wz as f32),
+                a.heading as f32 + yaw, pitch, roll);
+            let seat = match a.driver {
+                // The nurse hovers above her ambulance, tilted around the browser's seat pivot.
+                12 => ported::placement(Vec3::Y * (1.83 + (t*3.0).sin()*0.06), 0.0, 0.78, 0.0),
+                5 => Transform::from_xyz(0.0, 0.13, 0.0),
+                _ => Transform::IDENTITY,
+            };
+            body * seat
+        } else { tf };
+        if let Some((_, _, mut cur_tf, mut vis)) =
             existing.iter_mut().find(|(_, r, _, _)| r.id == a.id && r.driver == a.driver)
         {
             *cur_tf = tf;
             *vis = Visibility::Visible;
-            if let Some(tail_ent) = br.tail
-                && let Ok((mut ttf, mut tvis, _)) = parts.get_mut(tail_ent)
-            {
-                *tvis = Visibility::Inherited;
-                let freq = if a.celebrate > 0.0 || a.boost > 0.0 { 5.5 } else { 3.0 };
-                let amp = if a.celebrate > 0.0 { 0.55 } else { 0.36 };
-                let yaw = (t * freq + a.id as f32).sin() * amp;
-                let bob = (t * freq * 2.0 + a.id as f32).cos() * 0.10;
-                ttf.rotation = Quat::from_euler(EulerRot::YXZ, yaw, bob, yaw * 0.25);
-            }
         } else {
-            let mut tail_ent = None;
-            let ent = commands
-                .spawn((WorldAssetRoot(handle.clone()), tf))
-                .with_children(|parent| {
-                    if a.driver == 15 {
-                        tail_ent = Some(
-                            parent
-                                .spawn((
-                                    WorldAssetRoot(models.taicoon_tail.clone()),
-                                    Transform::from_xyz(0.0, 1.65, -0.58),
-                                ))
-                                .id(),
-                        );
-                    }
-                })
-                .id();
-            commands.entity(ent).insert(BlenderRacer {
-                id: a.id,
-                driver: a.driver,
-                tail: tail_ent,
-            });
+            commands.spawn((
+                WorldAssetRoot(handle.clone()), tf,
+                specialist::Rider::new(a.id, a.driver),
+                BlenderRacer { id: a.id, driver: a.driver },
+            ));
         }
     }
     for (_, r, _, mut vis) in &mut existing {
-        if !alive_static.contains(&r.id) {
+        if !alive_static.contains(&(r.id, r.driver)) {
             *vis = Visibility::Hidden;
         }
     }
