@@ -125,7 +125,7 @@ if (( need_wasm )); then
   fi
 
   rustup run "$toolchain" cargo build --locked --release --jobs "$jobs" --manifest-path wasm-poc/Cargo.toml --target "$target" --target-dir "$target_dir"
-  "$bindgen" --target web --no-typescript --out-dir "$staging" "$target_dir/$target/release/wild_wheels_wasm_poc.wasm"
+  "$bindgen" --target web --no-typescript --remove-name-section --out-dir "$staging" "$target_dir/$target/release/wild_wheels_wasm_poc.wasm"
   for artifact in wild_wheels_wasm_poc.js wild_wheels_wasm_poc_bg.wasm; do
     gzip -n -c -- "$staging/$artifact" > "$staging/$artifact.gz"
   done
