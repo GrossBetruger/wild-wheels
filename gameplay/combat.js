@@ -240,7 +240,13 @@ export function damageBattle(r, victim, owner, amount, kind = 'hedgehog') {
     if (bomber && bomber !== victim) credited.add(bomber);
   }
   victim.stinkContributors = new Map();
-  victim.destroyed = 3; victim.reverseControls = 0; victim.nightmareActive = 0; victim.speed = 0; victim.boost = 0; if (r.finishCountdown === null) { victim.deaths++; if (attacker && attacker.id !== victim.id) victim.lastKiller = attacker.id; } fx(r, ['abomb', 'radiation', 'nightmare'].includes(kind) ? 'ash' : 'explosion', victim);
+  victim.destroyed = 3; victim.reverseControls = 0; victim.nightmareActive = 0; victim.speed = 0; victim.boost = 0; if (r.finishCountdown === null) { victim.deaths++; if (attacker && attacker.id !== victim.id) victim.lastKiller = attacker.id; }
+  if (kind === 'wormhole' && attacker) {
+    const { wx, wz, heading } = attacker;
+    r.effects.push({type:'wormholeCapture', owner:victim.id, wx:wx+14*Math.sin(heading), wz:wz+14*Math.cos(heading), heading, age:0, life:victim.destroyed});
+  } else {
+    fx(r, ['abomb', 'radiation', 'nightmare'].includes(kind) ? 'ash' : 'explosion', victim);
+  }
   victim.owlBoosting = false; victim.drift = 0; victim.wasDrifting = false; victim.driftTrail = null; victim.killStreak = 0; victim.batCooldown = 0; victim.vulcan = 0; victim.hedgeShield = 0; victim.tehilim = 0; victim.specialActive = 0; victim.somersault = 0; victim.dizzy = 0;
   if (r.finishCountdown !== null) return true;
   for (const scorer of credited) { const full = kind === 'wall' || scorer === attacker; scorer.kills += full ? 1 : .5; scorer.celebrate = 1.6; voice(r, scorer, 'cheer'); r.killFeed.unshift({ id: r.killSequence = (r.killSequence ?? 0) + 1, attacker: scorer.id, kind, assist: !full, radiation: kind === 'radiation' && scorer === attacker, victim: victim.id, victimName: victim.name ?? drivers[victim.driver].name, victimColor: victim.color ?? drivers[victim.driver].color, text: `${scorer === r ? 'YOU' : scorer.name ?? drivers[scorer.driver].name.split(' ')[0]} → ${victim === r ? 'YOU' : victim.name ?? drivers[victim.driver].name.split(' ')[0]}`, time: r.elapsed }); r.killFeed = r.killFeed.slice(0, 16); }

@@ -508,6 +508,17 @@ fn racers(stage: &mut Stage, view: &ClientView, bats: &Bats, dt: f32, now: f32, 
         .filter(|a| !a.inactive && !a.bomber && !a.afk)
     {
         let wrecked = a.destroyed > 0.0;
+        if wrecked && let Some((position, yaw, scale)) = wild_wheels_core::wormhole_transform(view, a) {
+            if scale[2] > 0.001 {
+                let mut body = stage.clip(&format!("driver:{}:idle", a.driver));
+                body.tint = tint(&a.color).unwrap_or([255; 3]);
+                let transform = Transform::from_translation(Vec3::from_array(position))
+                    .with_rotation(Quat::from_rotation_y(yaw))
+                    .with_scale(Vec3::from_array(scale));
+                stage.show(Role::Racer, a.id, body, transform);
+            }
+            continue;
+        }
         let boosting = a.boost > 0.0;
         let changed = stage.cache.since(a.id, 0, boosting, now);
         let shifting = changed < TRANSITION;
@@ -708,6 +719,7 @@ fn effects(stage: &mut Stage, view: &ClientView, xray: bool, elapsed: f32) {
     for (index, fx) in view.effects.iter().enumerate() {
         let mut transform = at(fx.wx, 0.0, fx.wz, 0.0);
         let play = match fx.kind.as_str() {
+            "wormholeCapture" => continue,
             // The browser draws Master-Yuda's exhaust from his own position instead.
             "yudaSmoke" => continue,
             "ash" => {

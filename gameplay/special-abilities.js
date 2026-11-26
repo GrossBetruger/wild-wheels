@@ -12,7 +12,7 @@ export const abilityDetails={
   7:{control:'F · Activate',description:'Reine de la paresse creates a gravity well that draws available power-ups toward Houston from up to 80 units away.',timing:'14 seconds · 25-second recharge',additional:[{title:'NIGHTMARE FUEL',control:'X twice quickly · Activate',description:'Double-tap boost within 0.35 seconds for 12 seconds of full Nightmare Fuel followed by a one-second wind-down at a controllable 180 km/h. Houston’s bright ultraviolet exhaust stretches five times farther and instantly destroys racers it touches. Independent of her gravity well.',timing:'12 seconds + 1-second wind-down · 30-second recharge from activation'}]},
   8:{control:'F · Activate',description:'Special relativity slows other racers and their projectiles to 2.5% speed. Avita-Jas and his projectiles keep their normal speed.',timing:'2.5 seconds · 30-second recharge',additional:[{
     title:'WORMHOLE',control:'Double-tap X within 0.35 seconds',
-    description:'Avita-Jas opens a wormhole 14 units ahead of his plane. It follows him, pulls in rivals within 20 units, and knocks them out when they reach its center, even through shields.',
+    description:'Avita-Jas opens a wormhole 14 units ahead of his plane. It follows him and pulls in rivals within 20 units. At the center, each racer stretches into a thin strand and disappears, even through shields.',
     timing:'8 seconds · 24-second recharge from activation'
   }]},
   9:{control:'F · Activate',description:'Fashion-Statement snaps above every other racer: 2 damage, or 1 damage to characters with cuteness 5.',timing:'Arena-wide · 30-second recharge'},

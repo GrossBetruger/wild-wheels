@@ -24,6 +24,7 @@ export class ArenaCore{
   present(viewer=0){const view=this.view.refresh(this.core.game_present(viewer));this.drainEvents();return view;}
 }
 const merger=new WebAssembly.Instance(module,{}).exports;
+export const wormholeSample = merger.wormhole_sample;
 export function mergeArenaPacket(packet,events,voices){const cues=encoder.encode(JSON.stringify({events,voices}));if(packet.length+cues.length>512*1024)throw new Error('Snapshot cues exceed capacity');const input=new Uint8Array(merger.memory.buffer,merger.game_io_ptr(),packet.length+cues.length);input.set(packet);input.set(cues,packet.length);const size=merger.packet_merge(packet.length,cues.length);if(!size)throw new Error('Invalid merged snapshot');return new Uint8Array(merger.memory.buffer,merger.game_output_ptr(),size).slice();}
 export class ArenaClient{
   constructor(){this.core=new WebAssembly.Instance(module,{}).exports;this.view=new CoreView(this.core);}

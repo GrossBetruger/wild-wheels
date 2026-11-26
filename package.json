@@ -20,6 +20,7 @@
     "profile:network": "node scripts/profiling/profile-network.mjs",
     "profile:effects": "node scripts/profiling/profile-effects.mjs",
     "test:regression": "node scripts/checks/check-regressions.mjs",
+    "preview:wormhole": "node scripts/scenarios/preview-wormhole.mjs --open",
     "scenario:missile-stress": "node scripts/scenarios/missile-stress.mjs",
     "scenario:lethality": "node scripts/scenarios/lethality.mjs",
     "scenario:ability-importance": "node scripts/scenarios/ability-importance.mjs",

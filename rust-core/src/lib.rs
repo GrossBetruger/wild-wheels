@@ -3,6 +3,8 @@ include!(concat!(env!("OUT_DIR"), "/player_colors.rs"));
 include!(concat!(env!("OUT_DIR"), "/special_abilities.rs"));
 const SLOTS: usize = 128;
 mod arena;
+mod wormhole_motion;
+pub use wormhole_motion::{wormhole_sample, wormhole_transform};
 pub use arena::native::{NativeArena, Told};
 pub use arena::{NativeClient, ClientInput, ClientAction, ClientError, ClientView};
 pub use arena::{

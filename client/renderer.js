@@ -1,3 +1,4 @@
+import {wormholeSample} from '../gameplay/arena-core.js';
 import {drawReverseShockwave,drawCricketPuppet} from '../characters/tammy/reverse-psychology.js';
 import {drawNightmareFuel,nightmareCameraZoom} from '../characters/houston/nightmare-fuel.js';
 import {darkBombLights,lightUniforms} from '../characters/knowitowl/dark-bomb-light.js';
@@ -798,6 +799,29 @@ export class Renderer {
     }
     m.at(0,0,0);this.gl.bindBuffer(this.gl.ARRAY_BUFFER,this.staticBuffer);this.gl.bufferData(this.gl.ARRAY_BUFFER,new Float32Array(m.data),this.gl.STATIC_DRAW);this.staticCount=m.data.length/9;this.track=`arena-${index}`;
   }
+  drawCapturedRacer(world, victim, effect, view, height, time) {
+    const length = wormholeSample(effect.age, 1);
+    if (length <= .001) return;
+    const caster = [world, ...world.bots].find(a => a.id === victim.lastKiller && a.driver === 8 && a.nightmareActive > 0);
+    const x = caster ? caster.wx + 14*Math.sin(caster.heading) : effect.wx;
+    const z = caster ? caster.wz + 14*Math.cos(caster.heading) : effect.wz;
+    const dx = x-victim.wx, dz = z-victim.wz;
+    const toward = Math.hypot(dx,dz) < .01 ? effect.heading : Math.atan2(dx,dz);
+    const turn = toward-victim.heading;
+    const yaw = victim.heading+Math.atan2(Math.sin(turn),Math.cos(turn))*Math.min(1,effect.age*3);
+    const s = Math.sin(yaw), c = Math.cos(yaw);
+    const remaining = wormholeSample(effect.age,0), width = wormholeSample(effect.age,2);
+    const transform = [c*width,0,-s*width,0, 0,width,0,0, s*length,0,c*length,0,
+      x-dx*remaining,2.6*(1-remaining),z-dz*remaining,1];
+    const projected = multiply(view,transform);
+    const mesh = new Mesh();
+    this.glow = new Mesh(); this.smoke = new Mesh();
+    this.kart(mesh,{x:0,z:0,tx:0,tz:1,id:victim.id},victim.color??drivers[victim.driver].color,victim.driver,0,0,false,time);
+    this.gl.uniformMatrix4fv(this.matrix,false,projected);
+    this.flush(mesh,projected,height);
+    this.instances.length = 0;
+    this.gl.uniformMatrix4fv(this.matrix,false,view);
+  }
   drawBattle(r,time){
     this.activeArena=r.arena;this.arenaExhaust=true;this.yudaExhaust.update(`${r.arena}:${r.soundEpoch}:${r.id}`,time);
     this.yudaDrift.update(r,time);
@@ -825,6 +849,12 @@ export class Renderer {
     gl.uniform1f(this.fogScale,overview?.fogScale??1);const dark=darkHumorState(r),bombLights=darkBombLights(r,dark.strength);gl.uniform1f(this.darknessUniform,dark.strength);gl.uniform4fv(this.bombLightsUniform,lightUniforms(bombLights));
     this.nameplates=kartNameplates(r,view,eye);
     gl.uniformMatrix4fv(this.matrix,false,view);gl.uniform3fv(this.eyeUniform,eye);gl.uniform3fv(this.fog,sky);gl.uniform1f(this.emission,0);this.drawBuffer(this.staticBuffer,this.staticCount);
+    this.activeWormholes=[];
+    const captures = r.effects.filter(effect => effect.type === 'wormholeCapture');
+    for (const effect of captures) {
+      const victim = [r,...r.bots].find(actor => actor.id === effect.owner && actor.destroyed > 0);
+      if (victim) this.drawCapturedRacer(r,victim,effect,view,height,time);
+    }
     const m=new Mesh();this.glow=new Mesh();this.smoke=new Mesh();
     for(const skid of r.skids){
       const dx=skid.bx-skid.ax,dz=skid.bz-skid.az,length=Math.hypot(dx,dz);if(length<.01)continue;
@@ -854,6 +884,7 @@ export class Renderer {
       if(actor.destroyed||actor.bomber||actor.inactive||actor.afk)this.batSummons.delete(actor.id);
       if(actor.bomber||actor.inactive||actor.afk)continue;
       const pose={...combatPose(actor),id:actor.id,vulcan:actor.vulcan,specialActive:actor.specialActive,nightmareActive:actor.nightmareActive,bikeRoll:this.yudaDrift.roll(actor.id)};if(actor.destroyed){
+        if (captures.some(effect => effect.owner === actor.id)) continue;
         const ash=r.effects.find(f=>f.type==='ash'&&Math.hypot(f.wx-pose.x,f.wz-pose.z)<.1),key=`${pose.x}:${pose.z}`;
         if(ash&&(!this.ashBodies.has(key)||ash.age<this.ashBodies.get(key).age)){
           if(!this.lastBodies.has(actor.id)){
@@ -938,7 +969,7 @@ export class Renderer {
       m.at(bomb.wx,height,bomb.wz,bomb.age*3);m.ball(0,0,0,2.2*scale,3.4*scale,2.2*scale,'#39334e',10,6);m.box(0,2.3*scale,0,5*scale,.5,.7*scale,'#ffdb69');m.box(0,2.3*scale,0,.7*scale,.5,5*scale,'#ffdb69');
       this.glow.at(bomb.wx,height+3,bomb.wz);this.glow.particle(0,0,0,3,[.8,.35,.03]);
     }
-    for(const effect of r.effects){if(effect.type==='reverseShockwave'){drawReverseShockwave(this.glow,this.smoke,effect);continue;}if(effect.type==='locustSpawn'||effect.type==='locustBurst')continue;if(effect.type==='teleportOut'||effect.type==='teleportIn'){
+    for(const effect of r.effects){if(effect.type==='wormholeCapture')continue;if(effect.type==='reverseShockwave'){drawReverseShockwave(this.glow,this.smoke,effect);continue;}if(effect.type==='locustSpawn'||effect.type==='locustBurst')continue;if(effect.type==='teleportOut'||effect.type==='teleportIn'){
       if(effect.type==='teleportOut'){const pose=departurePose(effect.age);this.teleportKart({x:effect.wx,z:effect.wz},effect.color??drivers[5].color,effect.heading??0,pose.scale,pose.height,pose.pitch);}
       drawTeleportHaze(this,effect,time);continue;
     }if(effect.type==='eulerGhost'){this.eulerGhost(m,effect,time);continue;}if(effect.type==='karmaRaccoon'){drawKarmaRaccoon(m,this.glow,effect,r.cameraHeading);continue;}if(effect.type==='taxAudit'){drawTaxAudit(m,effect,r.cameraHeading);continue;}if(effect.type==='heartbeat'){const actor=[r,...r.bots].find(a=>a.id===effect.owner),x=actor?.wx??effect.wx,z=actor?.wz??effect.wz,t=effect.age,fade=1-t/effect.life,size=(1+.35*Math.exp(-t*18)+.3*Math.exp(-(((t-.18)*20)**2)))*fade;m.at(x,7+t*.6,z,r.cameraHeading);m.ball(-.28*size,.18*size,0,.38*size,.38*size,.24*size,'#ff779d',10,6);m.ball(.28*size,.18*size,0,.38*size,.38*size,.24*size,'#ff779d',10,6);m.cone(0,.1*size,0,.6*size,-.85*size,'#e94c7f',12);this.glow.at(x,7,z);this.glow.particle(0,0,0,size*1.4,[.5*fade,.08*fade,.17*fade]);continue;}if(effect.type==='fashionSnap'){this.fashionSnap(m,effect,time);continue;}if(effect.type==='fireRingOut'){drawFireRingOut(m,this.glow,this.smoke,effect,time);continue;}if(effect.type==='fireRing'){drawFireRing(m,this.glow,this.smoke,effect,time);continue;}if(effect.type==='yudaSmoke')continue;if(effect.type==='radiation'){this.radiationZone(m,effect,time);continue;}if(effect.type==='ash'){this.ashRemains(m,effect);continue;}if(effect.type==='abomb'){this.atomicExplosion(m,effect);continue;}if(effect.type==='explosion'){this.explosion(m,effect);continue;}for(let i=0;i<10;i++){const a=i*2.4,t=effect.age;m.at(effect.wx+Math.cos(a)*t*8,1+t*4,effect.wz+Math.sin(a)*t*8);m.ball(0,0,0,.12,.12,.12,'#f4dc8b',5,3);}}
