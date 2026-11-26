@@ -8,7 +8,7 @@ import { LENGTH, drivers, tracks, createRace, tick, useItem, useTurbo, selectIte
 import { Renderer } from './renderer.js';
 import { RaceAudio } from '../audio/audio.js';
 import { sampleTrack, branches } from '../gameplay/track.js';
-import { useSpecial, abilityNames, frozen, auditTarget, karmaTarget } from '../gameplay/special-abilities.js';
+import { useSpecial, abilityNames, abilityDetails, frozen, auditTarget, karmaTarget } from '../gameplay/special-abilities.js';
 import { createBattle, battleActive, tickBattle, fireBattle, releaseChaff, useBattleTurbo, somersaultBattle, arenas, inArenaBounds, standings, incomingMissiles, VULCAN_DURATION, MAX_HEALTH, equipBomber, dropBomb, BOMB_RECHARGE, recoveryInterval, hedgehogRecoveryInterval } from '../gameplay/combat.js';
 import { NetworkGame } from '../networking/network.js';
 import { ordinal, matchResults, battleTieNotice, bicycleResults } from '../ui/results.js';
@@ -373,7 +373,7 @@ const incomingTitle=document.createElement('strong'),incomingHelp=document.creat
 const killCelebration=new KillCelebration(),whackBanner=document.createElement('div');whackBanner.id='whack-banner';whackBanner.className='whack-banner hidden';whackBanner.setAttribute('role','status');whackBanner.setAttribute('aria-atomic','true');document.querySelector('.viewport').append(whackBanner);let whackKey=null;
 const specialButton=document.createElement('button');specialButton.id='special-ability';specialButton.className='chaff-button special-button hidden';specialButton.type='button';specialButton.onclick=special;document.querySelector('.viewport').append(specialButton);
 const nightmareButton=document.createElement('button');nightmareButton.id='nightmare-fuel';nightmareButton.className='chaff-button nightmare-button hidden';nightmareButton.type='button';nightmareButton.onclick=turbo;
-const nightmareTitle=document.createElement('strong'),nightmareState=document.createElement('span');nightmareTitle.textContent='NIGHTMARE FUEL';nightmareButton.append(nightmareTitle,nightmareState);nightmareButton.title='Double-press X or double-click to ignite a lethal ultraviolet flame for 12 seconds, then watch it shrink away over one second. Recharges 30 seconds after activation.';document.querySelector('.viewport').append(nightmareButton);
+const nightmareTitle=document.createElement('strong'),nightmareState=document.createElement('span');nightmareTitle.textContent='NIGHTMARE FUEL';nightmareButton.append(nightmareTitle,nightmareState);document.querySelector('.viewport').append(nightmareButton);
 const abilityAnnouncements=new AbilityAnnouncements(document.querySelector('.viewport'));
 const ringNotice=new RingOfFireNotice(),ringBanner=document.createElement('div');ringBanner.id='ring-of-fire-announcement';ringBanner.className='ring-of-fire-announcement hidden';ringBanner.setAttribute('role','status');ringBanner.setAttribute('aria-atomic','true');const ringTitle=document.createElement('strong'),ringHelp=document.createElement('span');ringTitle.textContent='RING OF FIRE';ringHelp.textContent='KEEP TURNING · LET IT BURN';ringBanner.append(ringTitle,ringHelp);document.querySelector('.viewport').append(ringBanner);
 const chaffNotice=new ChaffNotice(),avertedBanner=document.createElement('div');avertedBanner.id='averted-notice';avertedBanner.className='incoming-warning averted-notice hidden';avertedBanner.setAttribute('role','status');avertedBanner.setAttribute('aria-atomic','true');const avertedTitle=document.createElement('strong'),avertedHelp=document.createElement('span');avertedTitle.textContent='✓ MISSILE AVERTED';avertedHelp.textContent='CHAFF BROKE THE LOCK';avertedBanner.append(avertedTitle,avertedHelp);document.querySelector('.viewport').append(avertedBanner);
@@ -542,7 +542,11 @@ function hud() {
   const hasDoubleX=race.driver===7||race.driver===8;
   nightmareButton.classList.toggle('hidden',mode!=='combat'||!hasDoubleX||race.bomber||race.specialAbilities===false);
   const nightmareActive=race.nightmareActive??0,nightmareCooldown=race.nightmareCooldown??0;
-  nightmareTitle.textContent=race.driver===8?'WORMHOLE':'NIGHTMARE FUEL';
+  if (hasDoubleX) {
+    const ability = abilityDetails[race.driver].additional[0];
+    nightmareTitle.textContent = ability.title;
+    nightmareButton.title = [ability.control, ability.description, ability.timing].join(" · ");
+  }
   nightmareState.textContent=nightmareActive>0?`${race.driver===8?'OPEN':'BURNING'} · ${nightmareActive.toFixed(1)}s`:nightmareCooldown>0?`RECHARGE · ${nightmareCooldown.toFixed(1)}s`:'DOUBLE X · READY';
   nightmareButton.classList.toggle('active',nightmareActive>0);nightmareButton.disabled=!battleActive(race)||race.destroyed>0||nightmareCooldown>0||frozen(race,race.id);
   abilityAnnouncements.update(race,performance.now()/1000);
