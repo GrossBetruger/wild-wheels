@@ -23,7 +23,8 @@ cd -- "$HOME/wild-wheels"
 project_dir=$(pwd -P)
 [[ $(git rev-parse --show-toplevel) == "$project_dir" && -f dedicated-server/Cargo.toml && -f run_server.sh ]] || { echo 'Game checkout not found.' >&2; exit 1; }
 
-df -h .
+free_bytes() { df -B1 --output=avail . | awk 'NR == 2 {print $1}'; }
+format_bytes() { numfmt --to=iec-i --suffix=B "$1"; }
 printf '\nLargest game directories (some totals overlap)\n'
 du -xh --max-depth=2 . | sort -hr | sed -n '1,20p'
 
@@ -50,11 +51,19 @@ for target in wasm-poc/target dedicated-server/target/bevy-wasm; do
     done
   done
 done
+available=$(free_bytes)
+printf '\nFree disk space now: %s\n' "$(format_bytes "$available")"
 if (( ${#candidates[@]} == 0 )); then echo 'No eligible build caches found.'; exit 0; fi
 printf '\nRebuildable Cargo caches selected\n'
-du -xshc -- "${candidates[@]}"
-if [[ $mode == preview ]]; then echo 'Preview complete. Run ./cleanup_gcp.sh --apply to remove these caches.'; exit 0; fi
+usage=$(du -xsc -B1 -- "${candidates[@]}")
+printf '%s\n' "$usage" | numfmt --field=1 --to=iec-i --suffix=B
+if [[ $mode == preview ]]; then
+  reclaimable=$(awk 'END {print $1}' <<< "$usage")
+  printf 'Estimated free disk space after cleanup: %s\n' "$(format_bytes "$((available + reclaimable))")"
+  echo 'Preview complete. Run ./cleanup_gcp.sh --apply to remove these caches.'
+  exit 0
+fi
 rm -rf --one-file-system -- "${candidates[@]}"
-printf '\nCleanup complete. Current disk usage\n'
-df -h .
+remaining=$(free_bytes)
+printf '\nCleanup complete. Free disk space remaining: %s\n' "$(format_bytes "$remaining")"
 REMOTE
