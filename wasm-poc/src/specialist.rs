@@ -13,7 +13,7 @@ pub struct Rider {
     id: usize,
     driver: usize,
     player: Option<Entity>,
-    blend: [f32; 6],
+    blend: [f32; 7],
     boosting: bool,
     hat_age: f32,
 }
@@ -24,7 +24,7 @@ impl Rider {
             id,
             driver,
             player: None,
-            blend: [1., 0., 0., 0., 0., 0.],
+            blend: [1., 0., 0., 0., 0., 0., 0.],
             boosting: false,
             hat_age: f32::INFINITY,
         }
@@ -88,7 +88,7 @@ pub fn animate(
             let mut graph = AnimationGraph::new();
             let names: &[&str] = match driver {
                 12 | 13 => &["cruise","boost","special","wave"],
-                15 => &["cruise", "boost", "special", "turn_l", "turn_r", "bow"],
+                15 => &["cruise", "boost", "special", "turn_l", "turn_r", "bow", "drift"],
                 _ => &["cruise", "boost", "special"],
             };
             let Some(nodes) = names.iter().map(|name| {
@@ -129,7 +129,7 @@ pub fn animate(
             (_, true) => 1,
             _ => 0,
         };
-        let mut weights = [0.; 6];
+        let mut weights = [0.; 7];
         weights[active] = 1.;
         let mut bow_age = None;
         if driver == 15 {
@@ -147,11 +147,12 @@ pub fn animate(
             if rider.id == crate::preview::ID && actor.celebrate > 0. {
                 bow_age = Some((1.6 - actor.celebrate as f32).clamp(0., 1.6));
             }
-            weights = [0.; 6];
+            weights = [0.; 7];
             match (bow_age, rider.hat_age < 1.4, ability) {
                 (Some(_), _, _) => weights[5] = 1.,
                 (_, true, _) => weights[1] = 1.,
                 (_, _, true) => weights[2] = 1.,
+                _ if actor.was_drifting && actor.somersault <= 0. => weights[6] = 1.,
                 _ => {
                     let turn = (actor.yaw as f32 / 0.12).clamp(-1., 1.);
                     weights[0] = 1. - turn.abs();

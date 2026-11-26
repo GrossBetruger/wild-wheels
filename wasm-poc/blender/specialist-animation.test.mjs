@@ -113,3 +113,27 @@ test('the nurse and accountant wave their right hands while the nurse keeps flyi
     if(racer==='catheterpillar')for(const wing of ['wing_l','wing_r'])moves('wave',wing);
   }
 });
+
+test('Tai-Coon throws three blossoms above the pickup and they fall away during her KO bow',()=>{
+  const moves=model('taicoon.glb');
+  const finalX=[];
+  for(const name of ['blossom_left','blossom_high','blossom_right']){
+    const bloom=moves('bow',name);
+    const flight=bloom.values('translation'), scale=bloom.values('scale');
+    // In the seat joint's local frame +Z is up.
+    assert.ok(flight[30][2]>flight[11][2]+2,'flower rises above its release point');
+    assert.ok(flight.at(-1)[2]<flight[30][2]-1,'flower falls after the apex');
+    assert.ok(scale[11][0]>.95 && scale.at(-1)[0]<.01,'visible at release and gone at the end');
+    finalX.push(flight.at(-1)[0]);
+  }
+  assert.ok(finalX[0]+2<finalX[1] && finalX[1]+2<finalX[2],'blossoms fan out');
+});
+
+test('Tai-Coon circles her right paw with a visible rotating jade seal during a drift',()=>{
+  const moves=model('taicoon.glb');
+  const loop=moves('drift','arm_r').rotations;
+  const dot=(a,b)=>Math.abs(a.reduce((sum,v,i)=>sum+v*b[i],0));
+  for(const frame of [13,27,40])assert.ok(dot(loop[0],loop[frame])<.998);
+  assert.ok(dot(loop[0],loop.at(-1))>.9999,'paw returns smoothly to its starting pose');
+  assert.ok(moves('drift','palm_seal').values('scale').every(s=>s[0]>.99));
+});

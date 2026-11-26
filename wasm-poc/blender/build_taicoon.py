@@ -13,7 +13,7 @@ from mathutils import Vector, Euler
 sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.dirname(__file__))
 from specialist_rigs import finish_existing
-from taicoon_motion import TAIL, PETAL, rest_point
+from taicoon_motion import TAIL, PETAL, PAW, FLOWERS, rest_point
 
 # Parse output path after "--"
 argv = sys.argv
@@ -363,6 +363,23 @@ for i in range(7):
 for piece in set(scene.objects)-before_feather:
     piece['joint'] = 'feather'
 add_sphere(*PETAL,.12,.08,.032,M_WHITE,segs=12,rings=8)['joint'] = 'petal'
+
+for name,material in zip(FLOWERS,(M_LOTUS,M_WHITE,M_LAVENDER)):
+    before = set(scene.objects)
+    add_flower(*PAW,.20,material,M_LOTUS_IN)
+    for piece in set(scene.objects)-before:
+        piece['joint'] = name
+
+jade = make_mat('palm_jade','#74ffe1',emission=2.6)
+before = set(scene.objects)
+add_torus(*PAW,.43,.027,jade,rot=(math.pi/2,0,0))
+for i in range(6):
+    angle = math.tau*i/6
+    x,y,z = PAW
+    add_sphere(x+.51*math.cos(angle),y+.51*math.sin(angle),z,.057,.057,.035,
+               M_GOLD if i%2 else jade,segs=8,rings=4)
+for piece in set(scene.objects)-before:
+    piece['joint'] = 'palm_seal'
 
 for i,name in enumerate(TAIL):
     t = i/7

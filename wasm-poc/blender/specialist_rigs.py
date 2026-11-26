@@ -88,7 +88,7 @@ def finish(rider, meshes, path):
     if rider == 'taicoon':
         clips = [(mode,frames,lambda t,mode=mode: pose(rider,mode,t))
                  for mode,frames in [('cruise',96),('boost',42),('special',36),
-                                     ('turn_l',96),('turn_r',96),('bow',48)]]
+                                     ('turn_l',96),('turn_r',96),('bow',48),('drift',54)]]
     author_clips(rig, bones, clips)
     export_rig(str(Path(path).resolve()), clips)
     return rig
