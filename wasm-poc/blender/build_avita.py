@@ -347,6 +347,125 @@ def build_plane():
     add_box("FinCap", 0, 2.79 + Y0, -3.02, 0.15, 0.12, 0.64, m_white, bevel=0.03)
     add_ellipsoid("TailBeacon", 0, 2.91 + Y0, -3.04, 0.065, 0.075, 0.065, m_beacon, segs=10, rings=6)
 
+    # -----------------------------------------------------------------------
+    # Wingtop Emblems: Left wing = Technion logo, Right wing = Schrödinger's Cat
+    # Conformed cleanly to the exact cambered upper airfoil surface!
+    # -----------------------------------------------------------------------
+    def wing_top_y(wx, wz):
+        # Upper airfoil points ordered from trailing (-0.76) to leading (+0.76)
+        upper = [(-0.76, -0.01), (-0.40, 0.06), (0.00, 0.11), (0.35, 0.13), (0.62, 0.09), (0.76, 0.00)]
+        az = max(-0.76, min(0.76, wz + 0.80))
+        ay = upper[-1][1]
+        for (z0, y0), (z1, y1) in zip(upper, upper[1:]):
+            if z0 <= az <= z1:
+                t = (az - z0) / max(1e-5, z1 - z0)
+                ay = y0 + (y1 - y0) * t
+                break
+        taper = 0.86 if abs(wx) > 3.2 else 1.0
+        dihedral = abs(wx) * 0.032
+        return 3.12 + Y0 + dihedral + ay * taper
+
+    def add_wing_poly(name, pts_xz, cx, cz, lift, mat, thickness=0.006):
+        """Extrude a crisp 2D decal polygon on one shared medallion plane resting
+        cleanly on the wing's upper airfoil crown (with bottom skirt tucked in)."""
+        # Shared crown height across the entire badge at cx (tilted gently with wing dihedral)
+        bm_d = bmesh.new()
+        top_v, bot_v = [], []
+        for dx, dz in pts_xz:
+            wx, wz = cx + dx, cz + dz
+            wy_top = wing_top_y(wx, -0.45) + lift
+            wy_bot = wing_top_y(wx, wz) - 0.015
+            top_v.append(bm_d.verts.new(loc(wx, wy_top + thickness, wz)))
+            bot_v.append(bm_d.verts.new(loc(wx, wy_bot, wz)))
+        n = len(top_v)
+        bm_d.faces.new(top_v)
+        bm_d.faces.new(bot_v[::-1])
+        for i in range(n):
+            inext = (i + 1) % n
+            bm_d.faces.new((bot_v[i], bot_v[inext], top_v[inext], top_v[i]))
+        bmesh.ops.recalc_face_normals(bm_d, faces=bm_d.faces[:])
+        dmesh = bpy.data.meshes.new(name)
+        bm_d.to_mesh(dmesh)
+        bm_d.free()
+        dobj = bpy.data.objects.new(name, dmesh)
+        bpy.context.collection.objects.link(dobj)
+        dobj.data.materials.append(mat)
+        return dobj
+
+    def disc_pts(rx, rz, segs=28, ox=0.0, oz=0.0, a0=0.0, a1=math.tau):
+        return [
+            (ox + math.cos(a0 + (a1 - a0) * i / segs) * rx, oz + math.sin(a0 + (a1 - a0) * i / segs) * rz)
+            for i in range(segs)
+        ]
+
+    def rect_pts(ox, oz, w, h, angle=0.0):
+        ca, sa = math.cos(angle), math.sin(angle)
+        hw, hh = w * 0.5, h * 0.5
+        return [
+            (ox + x * ca - z * sa, oz + x * sa + z * ca)
+            for (x, z) in ((-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh))
+        ]
+
+    # Materials for the wing emblems
+    m_tech_navy = make_mat("TechnionNavy", "#0c2b5e", roughness=0.30, metallic=0.18)
+    m_tech_white = make_mat("TechnionWhite", "#f4f7fc", roughness=0.26, metallic=0.10)
+    m_tech_blue = make_mat("TechnionCyan", "#2b7de9", roughness=0.28, metallic=0.15)
+    m_cat_bg = make_mat("CatBadgeDark", "#1d2430", roughness=0.36, metallic=0.15)
+    m_cat_alive = make_mat("CatAliveCream", "#f7ebd2", roughness=0.40)
+    m_cat_dead = make_mat("CatDeadSlate", "#9fb8cc", roughness=0.45)
+    m_cat_eye = make_mat("CatAliveGreen", "#2be876", roughness=0.15, emission=1.1, emission_color="#28f078")
+    m_cat_ink = make_mat("CatInkDark", "#141820", roughness=0.45)
+    m_cat_nose = make_mat("CatNosePink", "#e8768c", roughness=0.38)
+
+    # --- LEFT WING (+X = pilot's left / chase-camera left): Technion Logo ---
+    # In right-handed (+Z forward, +Y up), looking from behind: +X is screen-left, -X is screen-right!
+    lx, lz = 1.92, -0.80
+    add_wing_poly("Tech_Ring", disc_pts(0.56, 0.56, 32), lx, lz, 0.004, m_tech_white)
+    add_wing_poly("Tech_Disc", disc_pts(0.50, 0.50, 32), lx, lz, 0.011, m_tech_navy)
+    # Half-cog gear teeth along the lower/outer arc
+    for k in range(7):
+        ang = math.radians(150 + k * 25)
+        tx, tz = math.cos(ang) * 0.39, math.sin(ang) * 0.39
+        add_wing_poly(f"Tech_Tooth_{k}", rect_pts(tx, tz, 0.09, 0.11, ang), lx, lz, 0.018, m_tech_blue)
+    # Stylized Technion Hebrew letter ט (Tet) upright from behind (+X = left, -X = right)
+    add_wing_poly("Tech_Tet_L", rect_pts(0.18, 0.02, 0.085, 0.46), lx, lz, 0.024, m_tech_white)
+    add_wing_poly("Tech_Tet_LSerif", rect_pts(0.22, 0.22, 0.14, 0.075), lx, lz, 0.024, m_tech_white)
+    add_wing_poly("Tech_Tet_Bot", rect_pts(0.00, -0.18, 0.44, 0.085), lx, lz, 0.024, m_tech_white)
+    add_wing_poly("Tech_Tet_R", rect_pts(-0.18, 0.00, 0.085, 0.42), lx, lz, 0.024, m_tech_white)
+    add_wing_poly("Tech_Tet_TopHook", rect_pts(-0.09, 0.19, 0.22, 0.08, -0.12), lx, lz, 0.024, m_tech_white)
+    add_wing_poly("Tech_Tet_Inner", rect_pts(-0.02, 0.06, 0.075, 0.19, 0.45), lx, lz, 0.024, m_tech_blue)
+
+    # --- RIGHT WING (-X = pilot's right / chase-camera right): Schrödinger's Cat ---
+    rx, rz = -1.92, -0.80
+    add_wing_poly("Cat_Rim", disc_pts(0.56, 0.56, 32), rx, rz, 0.004, m_amber)
+    add_wing_poly("Cat_Bg", disc_pts(0.50, 0.50, 32), rx, rz, 0.011, m_cat_bg)
+    # Pointed cat ears (screen-left = alive cream [+X], screen-right = dead slate [-X])
+    add_wing_poly("Cat_EarL", [(0.34, 0.12), (0.30, 0.42), (0.08, 0.24)], rx, rz, 0.018, m_cat_alive)
+    add_wing_poly("Cat_EarL_In", [(0.29, 0.17), (0.27, 0.34), (0.14, 0.24)], rx, rz, 0.024, m_cat_nose)
+    add_wing_poly("Cat_EarR", [(-0.34, 0.12), (-0.30, 0.42), (-0.08, 0.24)], rx, rz, 0.018, m_cat_dead)
+    add_wing_poly("Cat_EarR_In", [(-0.29, 0.17), (-0.27, 0.34), (-0.14, 0.24)], rx, rz, 0.024, m_cat_bg)
+    # Split-tone round cat head
+    alive_half = [(0.0, -0.33)] + disc_pts(0.36, 0.31, 16, 0.0, -0.02, -math.pi * 0.5, math.pi * 0.5) + [(0.0, 0.28)]
+    dead_half = [(0.0, 0.28)] + disc_pts(0.36, 0.31, 16, 0.0, -0.02, math.pi * 0.5, math.pi * 1.5) + [(0.0, -0.33)]
+    add_wing_poly("Cat_FaceAlive", alive_half, rx, rz, 0.018, m_cat_alive)
+    add_wing_poly("Cat_FaceDead", dead_half, rx, rz, 0.018, m_cat_dead)
+    add_wing_poly("Cat_Split", rect_pts(0.0, -0.02, 0.018, 0.58), rx, rz, 0.023, m_cat_ink)
+    # Screen-left eye (ALIVE): wide-open bright green cat eye + vertical slit pupil + white glint
+    add_wing_poly("Cat_EyeAliveRing", disc_pts(0.115, 0.115, 18, 0.15, 0.06), rx, rz, 0.024, m_cat_ink)
+    add_wing_poly("Cat_EyeAlive", disc_pts(0.095, 0.095, 18, 0.15, 0.06), rx, rz, 0.027, m_cat_eye)
+    add_wing_poly("Cat_Pupil", disc_pts(0.028, 0.072, 12, 0.15, 0.06), rx, rz, 0.030, m_cat_ink)
+    add_wing_poly("Cat_Glint", disc_pts(0.026, 0.026, 10, 0.18, 0.10), rx, rz, 0.033, m_tech_white)
+    # Screen-right eye (DEAD): bold comic-style X
+    add_wing_poly("Cat_EyeDead_1", rect_pts(-0.15, 0.06, 0.19, 0.045, math.pi * 0.25), rx, rz, 0.027, m_cat_ink)
+    add_wing_poly("Cat_EyeDead_2", rect_pts(-0.15, 0.06, 0.19, 0.045, -math.pi * 0.25), rx, rz, 0.027, m_cat_ink)
+    # Nose + asymmetric mouth + whiskers
+    add_wing_poly("Cat_Nose", [(-0.055, -0.04), (0.055, -0.04), (0.0, -0.10)], rx, rz, 0.028, m_cat_nose)
+    add_wing_poly("Cat_MouthL", rect_pts(0.06, -0.15, 0.11, 0.024, -0.35), rx, rz, 0.027, m_cat_ink)
+    add_wing_poly("Cat_MouthR", rect_pts(-0.065, -0.16, 0.12, 0.024, 0.10), rx, rz, 0.027, m_cat_ink)
+    for side in (-1, 1):
+        for w_i, (dz, ang) in enumerate(((0.02, 0.14), (-0.04, 0.0), (-0.10, -0.16))):
+            add_wing_poly(f"Cat_Whisker_{side}_{w_i}", rect_pts(side * 0.33, -0.08 + dz, 0.18, 0.018, side * ang), rx, rz, 0.025, m_cat_ink)
+
     export_glb("avita_plane.glb")
 
 
@@ -1018,6 +1137,10 @@ if __name__ == "__main__":
     if "--all" in extra:
         build_plane()
         build_propeller()
-    out = next((a for a in extra if a.endswith(".glb")), None)
-    build_worm_rig(out)
+        build_worm_rig(next((a for a in extra if a.endswith(".glb")), None))
+    elif "--plane" in extra:
+        build_plane()
+    else:
+        out = next((a for a in extra if a.endswith(".glb")), None)
+        build_worm_rig(out)
     print("[avita] ALL DONE!")
