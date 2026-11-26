@@ -73,7 +73,7 @@ export function cardCatalog() {
       kind: 'ability',
       ...wormholeCard,
       placeholder: wormholeCard.detail,
-      morphTime: 350 + frame * 150,
+      morphTime: 240 + frame * 110,
     })),
     {
       key: 'ability:8:rival',

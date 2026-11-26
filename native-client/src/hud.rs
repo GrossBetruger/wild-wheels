@@ -1979,6 +1979,12 @@ fn notice_for(notices: &Notices, id: Id) -> Option<&Notice> {
     }
 }
 
+/// Replay the nine ported silhouettes forward and backward before the card fades.
+fn wormhole_morph_frame(elapsed: f64) -> usize {
+    let step = ((elapsed - 0.24) / 0.11).round().clamp(0., 16.) as usize;
+    step.min(16 - step)
+}
+
 /// Evaluates the browser's `@keyframes reward-arrive` vertical offset and opacity.
 fn card_motion(notice: &Notice, now: f64) -> (f32, f32) {
     let span = (notice.until - notice.started).max(0.01);
@@ -2301,7 +2307,7 @@ pub fn update(
         let active_card = notice_for(&notices, art.0).and_then(|n| {
             let key = n.card_key.as_deref()?;
             if key == "ability:8:wormhole" {
-                let frame = ((now - n.started - 0.35) / 0.15).round().clamp(0., 8.) as usize;
+                let frame = wormhole_morph_frame(now - n.started);
                 if frame > 0 {
                     return ui_cards.get(&format!("{key}:{frame}")).map(|c| (n, c));
                 }
@@ -2351,6 +2357,16 @@ pub fn update(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wormhole_morph_returns_to_the_cup_before_fadeout() {
+        assert_eq!(wormhole_morph_frame(0.), 0);
+        assert_eq!(wormhole_morph_frame(0.68), 4);
+        assert_eq!(wormhole_morph_frame(1.12), 8);
+        assert_eq!(wormhole_morph_frame(1.56), 4);
+        assert_eq!(wormhole_morph_frame(2.0), 0);
+        assert_eq!(wormhole_morph_frame(2.4), 0);
+    }
 
     #[test]
     fn emoji_are_dropped_and_symbols_kept() {

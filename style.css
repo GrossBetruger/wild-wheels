@@ -5287,7 +5287,7 @@ body.match-active .lobby-column>.map-switch {
   width: 38px;
   height: 38px;
   background: linear-gradient(145deg, #efffff 16%, #7ce2ef 45%, #4183b8 76%, #193f6f);
-  animation: topology-handle 1.2s ease-in-out .35s both;
+  animation: topology-handle .88s ease-in-out .24s 2 alternate both;
 }
 @keyframes topology-handle {
   from {
@@ -5298,5 +5298,5 @@ body.match-active .lobby-column>.map-switch {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ability-announcement[data-theme=wormhole] .reward-icon::before { animation-delay: -1.2s }
+  .ability-announcement[data-theme=wormhole] .reward-icon::before { animation-delay: -.88s; animation-iteration-count: 1 }
 }
