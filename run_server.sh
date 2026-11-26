@@ -19,6 +19,7 @@ export WILD_WHEELS_STATS_FILE="${WILD_WHEELS_STATS_FILE:-$server_state_dir/stats
 export WILD_WHEELS_LOG_DIR="${WILD_WHEELS_LOG_DIR:-$server_state_dir/logs}"
 export WILD_WHEELS_LEADERBOARD_FILE="${WILD_WHEELS_LEADERBOARD_FILE:-$server_state_dir/leaderboard.json}"
 export WILD_WHEELS_MANAGED=1
+export TRUST_PROXY="${TRUST_PROXY:-1}"
 server_lock
 if [[ ${1:-} != --restart ]] && server_running; then printf 'Server already running (PID %s). Log: %s\n' "$server_pid" "$server_log_file"; exit 0; fi
 cargo_bin=$(command -v cargo || true)

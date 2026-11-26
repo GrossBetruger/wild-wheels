@@ -1,4 +1,9 @@
+use std::sync::atomic::{AtomicBool, Ordering};
 use super::*;
+
+static WARNED_UNTRUSTED_PEER: AtomicBool = AtomicBool::new(false);
+static WARNED_PROXY_DISABLED: AtomicBool = AtomicBool::new(false);
+static WARNED_DIRECT_WITH_PROXY_FLAG: AtomicBool = AtomicBool::new(false);
 
 fn valid_host(host:&str)->bool{
     let Ok(uri)=format!("http://{host}").parse::<Uri>() else{return false;};
@@ -19,11 +24,37 @@ fn trusted_proxy_peer(peer: IpAddr) -> bool {
 }
 
 pub fn trusted_https(app: &App, h: &HeaderMap, peer: IpAddr) -> bool {
-    app.trust_proxy
-        && trusted_proxy_peer(peer)
-        && h.get("x-forwarded-proto")
-            .and_then(|v| v.to_str().ok())
-            .is_some_and(|v| v.split(',').next().is_some_and(|s| s.trim() == "https"))
+    let forwarded_https = h
+        .get("x-forwarded-proto")
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| v.split(',').next().is_some_and(|s| s.trim() == "https"));
+    let trusted_peer = trusted_proxy_peer(peer);
+
+    if forwarded_https && !app.trust_proxy && trusted_peer {
+        if !WARNED_PROXY_DISABLED.swap(true, Ordering::Relaxed) {
+            let msg = format!("HTTPS proxy traffic arrived from {peer} with TRUST_PROXY off; set TRUST_PROXY=1.");
+            eprintln!("Warning: {msg}");
+            app.logs.note("warn", "proxy-flag-mismatch", json!({"reason":"trust_proxy_disabled","peer":peer.to_string(),"message":msg}));
+        }
+        return false;
+    }
+    if forwarded_https && app.trust_proxy && !trusted_peer {
+        if !WARNED_UNTRUSTED_PEER.swap(true, Ordering::Relaxed) {
+            let msg = format!("Ignored x-forwarded-proto: https from untrusted peer {peer}; set TRUST_PROXY=0 if not behind a proxy, or add this proxy range.");
+            eprintln!("Warning: {msg}");
+            app.logs.note("warn", "proxy-flag-mismatch", json!({"reason":"untrusted_proxy_peer","peer":peer.to_string(),"message":msg}));
+        }
+        return false;
+    }
+    if !forwarded_https && app.trust_proxy && !trusted_peer && !h.contains_key("x-forwarded-proto") && !h.contains_key(header::VIA) {
+        if !WARNED_DIRECT_WITH_PROXY_FLAG.swap(true, Ordering::Relaxed) {
+            let msg = format!("TRUST_PROXY=1 is enabled, but traffic from {peer} arrived directly without proxy headers; set TRUST_PROXY=0 if not behind a reverse proxy.");
+            eprintln!("Warning: {msg}");
+            app.logs.note("warn", "proxy-flag-mismatch", json!({"reason":"direct_traffic_with_trust_proxy","peer":peer.to_string(),"message":msg}));
+        }
+    }
+
+    app.trust_proxy && trusted_peer && forwarded_https
 }
 
 pub fn same_origin(app: &App, h: &HeaderMap, peer: IpAddr) -> bool {
