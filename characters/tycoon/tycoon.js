@@ -127,6 +127,11 @@ export function drawPickupTruck(m, color) {
     // Warm round tail lights.
     m.ball(side * 1.14, 1.16, -2.56, .18, .18, .07, '#ff7868', 8, 4);
   }
+  // Battered muffler, clamp and soot-black tailpipe just under the rear bed.
+  m.ball(-1.22,.57,-2.28,.23,.21,.53,'#89644e',10,6);
+  m.ball(-1.22,.57,-2.42,.25,.23,.07,chrome,10,6);
+  m.ball(-1.22,.57,-2.76,.17,.16,.39,'#68635d',10,6);
+  m.ball(-1.22,.57,-3.12,.14,.13,.035,'#221f1d',10,6);
   // Friendly tiny smile under the grille.
   for (let i = 0; i < 7; i++) {
     const x = (i - 3) * .09;
@@ -223,6 +228,50 @@ export function drawTycoon(m, phase, wave) {
   for (let i = 0; i < 6; i++) {
     const f = i / 5;
     m.ball(.52 + f * .34, hatY + .24 + f * .62, .1 - f * .16, .09 - f * .03, .13, .05, f > .55 ? '#fff8e5' : '#e08956', 7, 4);
+  }
+}
+
+// Repeatable firing cycles let both the live renderer and the graphics pack
+// show the same uneven sputter. Vary the phase per pickup in a shared race.
+export const EXHAUST_LOOP_SECONDS = 6;
+function exhaustNoise(stroke, salt) {
+  const value = Math.sin(stroke*127.1 + salt*311.7)*43758.5453;
+  return value - Math.floor(value);
+}
+
+export function drawTycoonExhaust(glow, smoke, p, angle, clock, jump, boosting) {
+  const time = clock + (p.id ?? 0)*.73;
+  const rate = boosting ? 9 : 2;
+  const life = boosting ? 1.05 : .83;
+  const current = Math.floor(time*rate);
+  for (const layer of [glow,smoke]) {
+    layer.at(p.x,jump?.height ?? 0,p.z,angle);
+    layer.pitch = jump?.pitch ?? 0;
+  }
+  for (let n=current-Math.ceil(rate*life); n<=current; n++) {
+    const count = rate*EXHAUST_LOOP_SECONDS;
+    const stroke = ((n%count)+count)%count;
+    const seed = exhaustNoise(stroke,1);
+    const age = time-(n+.53*seed)/rate;
+    if (age<0 || age>=life || (!boosting && seed<.20)) continue;
+    const t = age/life;
+    const x = -1.22 - age*(.35+seed) + age*.32*Math.sin(stroke+t*4);
+    const y = .57 + age*(.58+seed) + .55*age*age;
+    const z = -3.14 - age*(boosting ? 8+seed*2 : 2.3+seed);
+    const size = (.55+1.35*t)*(1-t*t)*(boosting ? 2.1 : 1);
+    const grey = .17+.26*t;
+    smoke.particle(x,y,z,size,[grey,grey*.91,grey*.83]);
+    smoke.particle(x+.27*size,y+.14*size,z+.06,size*.76,[grey+.09,grey+.08,grey+.07]);
+    // Unburnt fuel flashes just outside the pipe and kicks out hot embers.
+    if (age>.23 || exhaustNoise(stroke,2)>(boosting ? .76 : .22)) continue;
+    const flash = 1-age/.23, power = boosting ? 2.6 : 1.1;
+    glow.particle(x,y,z,power*flash,[1,.29,.045]);
+    glow.particle(x,y,z+.05,power*.55*flash,[1,.88,.39]);
+    for (let k=0;k<3;k++) {
+      const a = stroke + k*Math.PI*2/3;
+      glow.particle(x+Math.cos(a)*age*power,y+Math.sin(a)*age*power,z-age,
+                    .28*power*flash,[1,.55,.09]);
+    }
   }
 }
 

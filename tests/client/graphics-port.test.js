@@ -81,3 +81,12 @@ test('Fourmidable feeds and retracts printed paper behind the rigged calculator 
   assert.ok(end[0]>5 && end[2]<end[0] && end[2]>2.5, 'winds back between full length and the slot');
   assert.equal(end.at(-1),0);
 });
+
+test('the Bevy pickup has separate idle and boost exhaust without a second truck mesh',()=>{
+  const {names}=read(buildGraphicsPack({only:[15],web:true}));
+  const idle=names.get('exhaust:15:idle'),boost=names.get('exhaust:15:boost');
+  assert.ok(idle.frames.some(f=>f.sprites[1]>0) && idle.frames.some(f=>f.sprites[1]===0));
+  assert.ok(idle.frames.some(f=>f.sprites[0]>0),'idle misfires are visible');
+  assert.ok(boost.frames.every(f=>f.sprites[1]>10),'boost makes a continuous plume');
+  assert.ok([...idle.frames,...boost.frames].every(f=>f.parts.length===0));
+});

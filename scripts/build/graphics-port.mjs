@@ -8,6 +8,7 @@ import {createHash} from 'node:crypto';
 import {deflateSync} from 'node:zlib';
 import {Mesh,Renderer} from '../../client/renderer.js';
 import {drawNewDriver} from '../../client/characters.js';
+import {drawTycoonExhaust,drawTycoonBoost,EXHAUST_LOOP_SECONDS} from '../../characters/tycoon/tycoon.js';
 import {drawKonigsberg} from '../../client/konigsberg.js';
 import {createBattle,arenas,BOMB_FALL_TIME,RADIATION_DURATION} from '../../gameplay/combat.js';
 import {drivers} from '../../gameplay/engine.js';
@@ -299,6 +300,17 @@ export function buildGraphicsPack({only=[...drivers.keys()],web=false}={}){
       // frames: Pearococo's tail folds, KnowItOwl takes off, rotors tilt.
       tinted(`${subject}:${driver}:boost:in`,base,{driver,vehicleOnly,frames:steps,warmup:WARMUP,mark,each:(r,t)=>{r.boost=t>=0?1:0;r.wz=HOME[1]+Math.max(0,t)*BOOST_SPEED;}},ONCE);
       tinted(`${subject}:${driver}:boost:out`,base,{driver,vehicleOnly,frames:steps,warmup:WARMUP,mark,each:(r,t)=>{r.boost=t<0?1:0;r.wz=HOME[1]+Math.min(0,t)*BOOST_SPEED;}},ONCE);
+    }
+    if(web && driver===15){
+      for(const boosting of [false,true]){
+        const frames=Array.from({length:EXHAUST_LOOP_SECONDS*smoothFps},(_,i)=>{
+          const glow=new Mesh(),smoke=new Mesh(),p={x:0,z:0};
+          drawTycoonExhaust(glow,smoke,p,0,i/smoothFps,null,boosting);
+          if(boosting)drawTycoonBoost(glow,smoke,p,0,i/smoothFps,null);
+          return {parts:[],sparks:glow.sprites,smoke:smoke.sprites};
+        });
+        pack.clip('exhaust:15:'+(boosting?'boost':'idle'),smoothFps,frames);
+      }
     }
     // One trail puff of this racer's rapid fire: the shot drawn with and without it.
     const rapid=trail=>capture({driver,setup:r=>{hidden(r);r.projectiles=[{id:1,owner:r.id,kind:'hedgehog',vulcan:true,wx:0,wz:0,heading:0,height:0,age:1,trail}];}})[0];

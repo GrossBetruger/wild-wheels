@@ -29,6 +29,7 @@ enum Role {
     Health,
     Overlay(usize),
     Nightmare,
+    PickupExhaust,
     CricketPuppet,
     Xylophone,
     /// A racer's silhouette seen through Dark Humor.
@@ -590,6 +591,11 @@ fn racers(stage: &mut Stage, view: &ClientView, bats: &Bats, dt: f32, now: f32, 
         }
         if wrecked {
             continue;
+        }
+        if a.driver == 15 {
+            let name = if boosting { "exhaust:15:boost" } else { "exhaust:15:idle" };
+            let smoke = stage.aged(name, f64::from(now) + a.id as f64 * 0.73);
+            stage.show(Role::PickupExhaust, a.id, smoke, body);
         }
         if view.special_abilities && a.driver == 7 && a.nightmare_active > 0.0 {
             let nightmare = match a.nightmare_active <= 1.0 {

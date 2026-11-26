@@ -11,6 +11,7 @@ import {
   drawKarmaAura,
   drawKarmaRaccoon,
   drawTycoonBoost,
+  drawTycoonExhaust,
 } from './tycoon.js';
 
 function recorder() {
@@ -209,4 +210,24 @@ test('a Karma KO without a swap shows the original two-line notice',()=>{
   assert.equal(event.title,'KARMIC RACCOONING');
   assert.equal(event.detail,'karma is a Waschbitch');
   assert.equal(event.scoreSwap,undefined);
+});
+
+
+test('the pickup sputters between backfires at idle and blows a denser, longer soot trail on boost',()=>{
+  const cycle=boosting=>{
+    let puffs=0,flashes=0,quiet=0,reach=0;
+    for(let frame=0;frame<144;frame++){
+      const {glow,smoke}=recorder();
+      drawTycoonExhaust(glow,smoke,{x:0,z:0,id:0},0,frame/24,null,boosting);
+      puffs+=smoke.particles.length;
+      if(glow.particles.length)flashes++;
+      if(!smoke.particles.length)quiet++;
+      for(const puff of smoke.particles)reach=Math.max(reach,-puff.z);
+    }
+    return {puffs,flashes,quiet,reach};
+  };
+  const idle=cycle(false),boost=cycle(true);
+  assert.ok(idle.puffs>0 && idle.quiet>0 && idle.flashes>0);
+  assert.ok(boost.puffs>idle.puffs*4 && boost.flashes>idle.flashes*3);
+  assert.ok(idle.reach<7 && boost.reach>10);
 });

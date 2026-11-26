@@ -17,7 +17,7 @@ import { arenas, combatPose, somersaultPose, BOMB_FALL_TIME, BOMB_RADIUS, BOMB_O
 import { kartNameplates } from '../ui/nameplates.js';
 import { bomberCamera } from '../ui/mobile.js';
 import {drawAmbulance,drawNurseButterfly,drawButterflyWings} from '../characters/catheterpillar/catheterpillar.js';
-import {drawPickupTruck,drawTycoon,drawKarmaAura,drawKarmaRaccoon,drawTycoonBoost} from '../characters/tycoon/tycoon.js';
+import {drawPickupTruck,drawTycoon,drawKarmaAura,drawKarmaRaccoon,drawTycoonBoost,drawTycoonExhaust} from '../characters/tycoon/tycoon.js';
 import {drawNewDriver,drawRoadster,drawRoadsterJets,drawCricketHaze,drawCricketProjectile,drawHoustonHelmet,drawDollarBundle,drawCessna,drawCessnaPropeller,drawCessnaBoost,drawElectron,drawPilotWorm,drawStarship,drawStarshipThrust} from './characters.js';
 import {previewPose} from './preview-pose.js';
 import {drawRococoChariot,drawPearococo,drawPeacockFeather,drawRoyalWing,drawBalletPump,drawFairyStar,drawFairyBoost} from '../characters/pearococo/pearococo.js';
@@ -281,7 +281,7 @@ export class Renderer {
     m.at(0,0,0);this.gl.bindBuffer(this.gl.ARRAY_BUFFER,this.staticBuffer);this.gl.bufferData(this.gl.ARRAY_BUFFER,new Float32Array(m.data),this.gl.STATIC_DRAW);this.staticCount=m.data.length/9;this.track=track;
   }
   kart(m,p,color,driver,yaw=0,spin=0,boost=false,clock=0,celebrate=0,jump=null,helmet=true,gesture=null){
-    if(driver===15){const angle=Math.atan2(p.tx,p.tz)-yaw+spin,height=jump?.height??0,pitch=jump?.pitch??0,phase=Math.floor(clock*8)%8,wave=celebrate>0||(gesture?.right??0)>0;this.model('kart:15:'+color,p.x,height,p.z,angle,mesh=>drawPickupTruck(mesh,color),pitch);this.model('tycoon:'+phase+':'+wave,p.x,height+(gesture?.bounce??0),p.z,angle+(gesture?.yaw??0),mesh=>drawTycoon(mesh,phase,wave),pitch);if(boost||jump)drawTycoonBoost(this.glow,this.smoke,p,angle,clock,jump);return;}
+    if(driver===15){const angle=Math.atan2(p.tx,p.tz)-yaw+spin,height=jump?.height??0,pitch=jump?.pitch??0,phase=Math.floor(clock*8)%8,wave=celebrate>0||(gesture?.right??0)>0;this.model('kart:15:'+color,p.x,height,p.z,angle,mesh=>drawPickupTruck(mesh,color),pitch);this.model('tycoon:'+phase+':'+wave,p.x,height+(gesture?.bounce??0),p.z,angle+(gesture?.yaw??0),mesh=>drawTycoon(mesh,phase,wave),pitch);drawTycoonExhaust(this.glow,this.smoke,p,angle,clock,jump,boost);if(boost||jump)drawTycoonBoost(this.glow,this.smoke,p,angle,clock,jump);return;}
     if(driver===14){this.owlFlight.draw(this,m,p,color,yaw,spin,boost,clock,celebrate,jump,gesture);return;}
     if(driver===13){const angle=Math.atan2(p.tx,p.tz)-yaw+spin,height=jump?.height??0,pitch=jump?.pitch??0,phase=Math.floor(clock*8)%8,wave=celebrate>0||(gesture?.right??0)>0;this.model('kart:13:'+color,p.x,height,p.z,angle,mesh=>drawCalculator(mesh,color),pitch);this.model('fourmidable:'+phase+':'+wave,p.x,height+(gesture?.bounce??0),p.z,angle+(gesture?.yaw??0),mesh=>drawAnt(mesh,phase,wave),pitch);this.receiptRolls.draw(m,p,angle,clock,jump,boost||Boolean(jump));return;}
     if(driver===12){this.nurseAmbulance(m,p,color,yaw,spin,boost,clock,celebrate,jump,gesture);return;}

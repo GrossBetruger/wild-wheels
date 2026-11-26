@@ -258,6 +258,13 @@ add_sphere(0, 1.50, -1.52, 0.40, 0.24, 0.40, M_GOLD, segs=24, rings=14)
 add_torus(0, 1.66, -1.52, 0.34, 0.045, M_GOLD)
 add_lotus(0, 1.68, -1.52, 0.30)
 
+# Dented steel can and band clamp, terminating below the rear-left tail light.
+exhaust_iron = make_mat("oxidized_iron", "#89644e", roughness=.78, metallic=.55)
+add_sphere(-1.22,.57,-2.28,.23,.21,.53,exhaust_iron,segs=14,rings=8)
+for z,r,depth,material in [(-2.42,.23,.09,M_CHROME),(-2.76,.16,.72,exhaust_iron),
+                           (-3.10,.17,.08,M_CHROME),(-3.15,.133,.021,M_DARK)]:
+    add_cyl(-1.22,.57,z,r,depth,material,verts=14,rot=(math.pi/2,0,0))
+
 # Chrome bumper, friendly smiling grille, glowing round headlights & rosy cheeks
 add_box(0, 0.54, 2.48, 2.86, 0.22, 0.24, M_CHROME, bevel=0.05)
 add_box(0, 0.92, 2.42, 1.48, 0.44, 0.12, M_CREAM, bevel=0.04)
