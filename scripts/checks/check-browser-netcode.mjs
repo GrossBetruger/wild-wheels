@@ -113,7 +113,12 @@ try{
         send(data){this.delay('up',()=>{if(this.readyState===Original.OPEN)super.send(data);});}
       };
     }`},session);
-    await call('Page.navigate',{url:origin+(encodingLab?'/encoding-lab/':process.argv.includes('--beta')?'/experimental/':'')},session);
+    // Character model probes instrument the classic renderer's WebGL draw calls.
+    let page = '/';
+    if (process.argv.includes('--beta')) page = '/experimental/';
+    if (process.argv.includes('--characters')) page = '/?renderer=classic';
+    if (encodingLab) page = '/encoding-lab/';
+    await call('Page.navigate',{url:origin+page},session);
     for(let attempt=0;attempt<100;attempt++){if(await evaluate(encodingLab?"location.pathname==='/encoding-lab/'&&document.readyState==='complete'":'Boolean(globalThis.__game)'))break;await sleep(50);}
     if(encodingLab){
       const result={run:profile.run,...await (ownedStateLab?compareOwnedStateBrowser(evaluate):compareEncodingBrowser(evaluate))};results.push(result);console.log(JSON.stringify(result));

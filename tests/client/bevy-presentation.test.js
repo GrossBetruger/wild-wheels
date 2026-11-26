@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { MobileBevyQuality, versionAssetUrl } from '../../client/bevy-presentation.js';
+import { usesBevyRenderer } from '../../client/build-refresh.js';
+
+test('home and existing arena invitations use Bevy unless the player selects classic graphics', () => {
+  assert.equal(usesBevyRenderer('/', '?room=07'), true);
+  assert.equal(usesBevyRenderer('/experimental/', '?solo=1'), true);
+  assert.equal(usesBevyRenderer('/', '?room=07&renderer=classic'), false);
+});
 
 test('a phone that misses the frame budget drops resolution, then caps rendering at 20 FPS', () => {
   const quality = new MobileBevyQuality();
