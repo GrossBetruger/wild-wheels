@@ -12,7 +12,7 @@ import {tmpdir} from 'node:os';
 import {join, resolve} from 'node:path';
 import {deflateSync, inflateSync} from 'node:zlib';
 import WebSocket from 'ws';
-import {abilityCards} from '../../ui/ability-announcements.js';
+import {abilityCards,wormholeCard} from '../../ui/ability-announcements.js';
 
 export const UI_PACK_VERSION = 1;
 const ROOT = resolve(import.meta.dirname, '../..');
@@ -68,6 +68,13 @@ export function cardCatalog() {
       title: 'NIGHTMARE FUEL',
       placeholder: 'PLAYER · HOUSTON, WE HAVE A PROBLEM',
     },
+    ...Array.from({length: 9}, (_, frame) => ({
+      key: frame ? `ability:8:wormhole:${frame}` : 'ability:8:wormhole',
+      kind: 'ability',
+      ...wormholeCard,
+      placeholder: wormholeCard.detail,
+      morphTime: 350 + frame * 150,
+    })),
     {
       key: 'ability:8:rival',
       kind: 'ability',
@@ -325,6 +332,12 @@ export async function buildUiPack({optional = false} = {}) {
         card.append(icon, title, detail);
         wrap.append(card);
         host.replaceChildren(wrap);
+        for (const animation of icon.getAnimations({subtree: true})) {
+          if (animation.animationName === 'topology-handle') {
+            animation.pause();
+            animation.currentTime = ${spec.morphTime ?? 0};
+          }
+        }
         const r = card.getBoundingClientRect();
         const d = detail.getBoundingClientRect();
         return {

@@ -34,6 +34,11 @@ test('HTML announcement cards port from style.css into transparent RGBA textures
   const cards = readUiPack(pack);
   const catalog = cardCatalog();
   assert.equal(cards.size, catalog.length);
+  const mug = cards.get('ability:8:wormhole').rgba;
+  const halfway = cards.get('ability:8:wormhole:4').rgba;
+  const torus = cards.get('ability:8:wormhole:8').rgba;
+  assert.ok(!mug.equals(halfway) && !halfway.equals(torus) && !mug.equals(torus),
+    'the wormhole HUD shows distinct mug, intermediate, and torus silhouettes');
   for (const spec of catalog) {
     const card = cards.get(spec.key);
     assert.ok(card, `missing card ${spec.key}`);

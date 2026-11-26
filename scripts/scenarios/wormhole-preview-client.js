@@ -3,6 +3,8 @@ import { Renderer } from '/client/renderer.js';
 import { createBattle, tickBattle } from '/gameplay/combat.js';
 import { activateNightmare } from '/characters/houston/nightmare-fuel.js';
 
+import { AbilityAnnouncements } from "/ui/ability-announcements.js";
+const announcements = new AbilityAnnouncements(document.querySelector(".viewport"));
 const renderer = new Renderer(document.querySelector('canvas'));
 const keys = new Set();
 const audio = new RaceAudio();
@@ -29,6 +31,7 @@ function frame(now) {
   }
   world.events.length = 0;
   renderer.draw(world,simTime);
+  announcements.update(world, now / 1000);
   output.textContent = world.kills ? 'Captured' : world.nightmareActive > 0 ? 'Gravitational pull' : 'Approach';
   if (simTime >= 3.7) reset();
   requestAnimationFrame(frame);

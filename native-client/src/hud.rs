@@ -393,7 +393,7 @@ impl Notices {
             };
             let mut card = None;
             let mut card_key: Option<String> = None;
-            if state.4 > before.4 + 1.0 {
+            if a.driver == 7 && state.4 > before.4 + 1.0 {
                 card = own(
                     "NIGHTMARE FUEL",
                     "HOUSTON, WE HAVE A PROBLEM",
@@ -422,10 +422,15 @@ impl Notices {
                 );
                 card_key = Some("ability:13:xylophone".into());
             }
+            let wormhole = a.driver == 8 && state.4 > before.4 + 1.0;
+            if wormhole {
+                card = own("WORMHOLE", "Can you handle the topology", [0x9f, 0xfa, 0xff]);
+                card_key = Some("ability:8:wormhole".into());
+            }
             let Some((mut title, detail, color)) = card else {
                 continue;
             };
-            if a.driver == 8 && a.id != view.you {
+            if a.driver == 8 && a.id != view.you && !wormhole {
                 title = "TIME DILATION".into();
                 card_key = Some("ability:8:rival".into());
             }
@@ -435,7 +440,7 @@ impl Notices {
             };
             let event = Notice {
                 title,
-                detail: match a.driver { 15 => detail, _ => format!("{who} · {detail}") },
+                detail: if a.driver == 15 || wormhole { detail } else { format!("{who} · {detail}") },
                 color: Some(color),
                 card_key,
                 score_swap: None,
@@ -2293,10 +2298,14 @@ pub fn update(
     }
     for (art, mut image, mut node, children) in &mut html_art {
         let active_card = notice_for(&notices, art.0).and_then(|n| {
-            n.card_key
-                .as_deref()
-                .and_then(|k| ui_cards.get(k))
-                .map(|c| (n, c))
+            let key = n.card_key.as_deref()?;
+            if key == "ability:8:wormhole" {
+                let frame = ((now - n.started - 0.35) / 0.15).round().clamp(0., 8.) as usize;
+                if frame > 0 {
+                    return ui_cards.get(&format!("{key}:{frame}")).map(|c| (n, c));
+                }
+            }
+            ui_cards.get(key).map(|c| (n, c))
         });
         if let Some((notice, ported)) = active_card {
             let scale = K * 0.82;

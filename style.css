@@ -5273,3 +5273,30 @@ body.match-active .lobby-column>.map-switch {
   background: #ffe4e3;
   border: 1px solid #dfaba7;
 }
+
+/* The handle opening moves to the center as the mug becomes a torus. */
+.ability-announcement[data-theme=wormhole] .reward-icon {
+  display: block;
+  width: 38px;
+  height: 38px;
+  animation: none;
+}
+.ability-announcement[data-theme=wormhole] .reward-icon::before {
+  content: "";
+  display: block;
+  width: 38px;
+  height: 38px;
+  background: linear-gradient(145deg, #efffff 16%, #7ce2ef 45%, #4183b8 76%, #193f6f);
+  animation: topology-handle 1.2s ease-in-out .35s both;
+}
+@keyframes topology-handle {
+  from {
+    clip-path: path(evenodd, "M 3 6 C 7 4 17 4 25 6 C 25 7 25 9 25 10 C 37 7 39 24 25 26 C 24 32 21 33 15 33 C 7 33 4 31 4 26 C 4 19 3 11 3 6 Z M 25 14 C 33 11 34 21 25 22 C 25 20 25 16 25 14 Z");
+  }
+  to {
+    clip-path: path(evenodd, "M 4 11 C 8 5 17 3 24 5 C 29 6 33 9 35 14 C 40 24 32 33 23 34 C 17 36 11 34 7 31 C 2 28 0 22 1 18 C 1 15 2 13 4 11 Z M 12 19 C 13 11 29 10 27 18 C 25 25 11 27 12 19 Z");
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ability-announcement[data-theme=wormhole] .reward-icon::before { animation-delay: -1.2s }
+}

@@ -51,3 +51,21 @@ test('driving across two Königsberg bridges announces 1/7 then 2/7 on the multi
   assert.equal(crossed,9,'both bridge bits reach the local HUD');
   assert.deepEqual(titles,['1/7 BRIDGES','2/7 BRIDGES']);
 });
+
+
+test('Avita opening a wormhole shows the topology line to the caster and rivals',()=>{
+  for(const viewer of [0,1]){
+    const tracker=new AbilityUsage();
+    const avita={id:0,driver:8,nightmareCooldown:0,specialCooldown:0};
+    const rival={id:1,driver:5};
+    const world={mode:'combat',phase:'racing',elapsed:1,...(viewer===0?avita:rival),bots:[viewer===0?rival:avita]};
+    const caster=viewer===0?world:avita;
+    tracker.sample(world);
+    caster.nightmareCooldown=30;
+    const [notice]=tracker.sample(world);
+    assert.equal(notice.title,'WORMHOLE');
+    assert.equal(notice.detail,'Can you handle the topology');
+    caster.specialCooldown=30;
+    assert.equal(tracker.sample(world)[0].title,viewer===0?'SPECIAL RELATIVITY':'TIME DILATION');
+  }
+});

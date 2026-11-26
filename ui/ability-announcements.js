@@ -11,6 +11,7 @@ export const abilityCards={
   14:{title:'DARK HUMOR',icon:'◉',color:'#d6a8ff',theme:'darkness',detail:'SOME JOKES ARE BETTER IN THE DARK'},
   15:{title:'KARMIC RACCOONING',icon:'☯',color:'#8ef0c8',theme:'karma',detail:'karma is a Waschbitch'},
 };
+export const wormholeCard={title:'WORMHOLE',icon:'',color:'#9ffaff',theme:'wormhole',detail:'Can you handle the topology'};
 export class AbilityUsage {
   previous=new Map();identity=null;elapsed=0;sequence=0;lastKarmaId=null;
   sample(world){
@@ -68,10 +69,11 @@ export class AbilityUsage {
       if(a.driver===10&&state.boost>before.boost+.3)card=abilityCards[10];
       if(a.driver===5&&state.flip>before.flip+.3)card={title:'CRICKET’S JUMP',icon:'🦗',color:'#b7f35b',theme:'locust',detail:'NOW YOU SEE HER…'};
       if(a.driver===7&&state.nightmare>(before.nightmare??0)+1)card={title:'NIGHTMARE FUEL',icon:'✺',color:'#d068ff',theme:'gravity',detail:'HOUSTON, WE HAVE A PROBLEM'};
+      if(a.driver===8&&state.nightmare>before.nightmare+1)card=wormholeCard;
       if(!card)continue;
       if(a.driver===13&&a.specialActive>0)card={title:'XYLOPHONE-ATTACK',icon:'♫',color:'#fff29b',theme:'xylophone',detail:'A VERY TAXING PERFORMANCE'};
-      if(a.driver===8&&a.id!==world.id)card={...card,title:'TIME DILATION'};
-      events.push({...card,id:`ability:${identity}:${++this.sequence}`,owner:a.id,detail:a.driver===15?card.detail:`${a.id===world.id?'YOU':a.name??'RIVAL'} · ${card.detail}`,duration:2.4});
+      if(card===abilityCards[8]&&a.id!==world.id)card={...card,title:'TIME DILATION'};
+      events.push({...card,id:`ability:${identity}:${++this.sequence}`,owner:a.id,detail:a.driver===15||card===wormholeCard?card.detail:`${a.id===world.id?'YOU':a.name??'RIVAL'} · ${card.detail}`,duration:2.4});
     }
     return events;
   }
