@@ -12,26 +12,8 @@ toolchain=1.97.1
 target=wasm32-unknown-unknown
 export PATH="$PATH:${CARGO_HOME:-$HOME/.cargo}/bin"
 
-hash_stream() {
-  if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum | awk '{print $1}'
-  else
-    shasum -a 256 | awk '{print $1}'
-  fi
-}
-
-hash_inputs() {
-  local files
-  files=$(find "$@" -type f 2>/dev/null | LC_ALL=C sort)
-  {
-    printf '%s\n' "$files"
-    while IFS= read -r f; do
-      [[ -n $f ]] || continue
-      printf '=== %s ===\n' "$f"
-      cat -- "$f"
-    done <<< "$files"
-  } | hash_stream
-}
+# shellcheck source=scripts/build/build-status.sh
+source "$project_dir/scripts/build/build-status.sh"
 
 cache_hit() {
   local stamp=$1 expected=$2
@@ -45,27 +27,11 @@ cache_hit() {
 
 mkdir -p -- "$output/pkg"
 
-wasm_hash=$(hash_inputs \
-  scripts/build/build-experimental.sh \
-  wasm-poc/Cargo.toml \
-  wasm-poc/Cargo.lock \
-  wasm-poc/src \
-  rust-core/Cargo.toml \
-  rust-core/src)
-graphics_hash=$(hash_inputs \
-  scripts/build/port-graphics.mjs \
-  scripts/build/graphics-port.mjs \
-  client/renderer.js \
-  client/konigsberg.js \
-  client/characters.js \
-  characters \
-  gameplay \
-  ui/ability-announcements.js)
-sounds_hash=$(hash_inputs \
-  scripts/build/port-sounds.mjs \
-  scripts/build/sound-port.mjs \
-  audio \
-  gameplay)
+build_status checking-assets
+cache_started=$SECONDS
+keys=$(node --no-warnings --experimental-vm-modules scripts/build/experimental-cache-keys.mjs "$toolchain" "$target")
+{ read -r wasm_hash; read -r graphics_hash; read -r sounds_hash; } <<< "$keys"
+printf 'Checked asset cache in %ss.\n' "$((SECONDS-cache_started))"
 
 need_wasm=1
 need_graphics=1
@@ -106,6 +72,7 @@ staging=$(mktemp -d "$output/.build.XXXXXXXX")
 trap 'rm -rf -- "$staging"' EXIT
 
 if (( need_wasm )); then
+  build_status preparing-wasm
   command -v rustup >/dev/null || { printf '%s\n' 'rustup is required to build the experimental client.' >&2; exit 1; }
   if ! rustup run "$toolchain" rustc --version >/dev/null 2>&1; then
     rustup toolchain install "$toolchain" --profile minimal
@@ -125,30 +92,39 @@ if (( need_wasm )); then
     fi
   fi
 
-  rustup run "$toolchain" cargo build --locked --release --jobs "$jobs" --manifest-path wasm-poc/Cargo.toml --target "$target" --target-dir "$target_dir"
+  run_cargo_build wasm rustup run "$toolchain" cargo build --locked --release --jobs "$jobs" --manifest-path wasm-poc/Cargo.toml --target "$target" --target-dir "$target_dir"
+  build_status packaging-wasm
+  stage_started=$SECONDS
   "$bindgen" --target web --no-typescript --remove-name-section --out-dir "$staging" "$target_dir/$target/release/wild_wheels_wasm_poc.wasm"
   for artifact in wild_wheels_wasm_poc.js wild_wheels_wasm_poc_bg.wasm; do
     gzip -n -c -- "$staging/$artifact" > "$staging/$artifact.gz"
   done
   mv -f -- "$staging/wild_wheels_wasm_poc.js" "$staging/wild_wheels_wasm_poc.js.gz" "$staging/wild_wheels_wasm_poc_bg.wasm" "$staging/wild_wheels_wasm_poc_bg.wasm.gz" "$output/pkg/"
   printf '%s\n' "$wasm_hash" > "$output/.wasm.sha256"
+  printf 'WASM bindings and compression took %ss.\n' "$((SECONDS-stage_started))"
 else
   printf 'Skipping WASM rebuild (unchanged).\n'
 fi
 
 if (( need_graphics )); then
+  build_status packing-graphics
+  stage_started=$SECONDS
   node scripts/build/port-graphics.mjs --web "$staging/graphics.wwgp"
   gzip -n -c -- "$staging/graphics.wwgp" > "$staging/graphics.wwgp.gz"
   mv -f -- "$staging/graphics.wwgp" "$staging/graphics.wwgp.gz" "$output/"
   printf '%s\n' "$graphics_hash" > "$output/.graphics.sha256"
+  printf 'Graphics pack took %ss.\n' "$((SECONDS-stage_started))"
 else
   printf 'Skipping graphics.wwgp rebuild (unchanged).\n'
 fi
 
 if (( need_sounds )); then
+  build_status packing-sounds
+  stage_started=$SECONDS
   node scripts/build/port-sounds.mjs "$staging/sounds.wwsp"
   mv -f -- "$staging/sounds.wwsp" "$output/"
   printf '%s\n' "$sounds_hash" > "$output/.sounds.sha256"
+  printf 'Sound pack took %ss.\n' "$((SECONDS-stage_started))"
 else
   printf 'Skipping sounds.wwsp rebuild (unchanged).\n'
 fi

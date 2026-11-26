@@ -7,7 +7,7 @@ import {createServer} from 'node:net';
 const i=process.argv.indexOf('--binary'),binary=resolve(i<0?'dedicated-server/target/release/wild-wheels-server':process.argv[i+1]);
 const root=await mkdtemp(join(tmpdir(),'wild-wheels-commands-')),repo=join(root,'repo'),target=join(root,'target'),tools=join(root,'tools'),state=join(root,'state');
 await Promise.all([mkdir(join(repo,'scripts/server'),{recursive:true}),mkdir(join(repo,'scripts/build'),{recursive:true}),mkdir(join(target,'release'),{recursive:true}),mkdir(tools)]);
-for(const name of ['run_server.sh','kill_server.sh','update_server.sh','scripts/server/server-process.sh'])await copyFile(new URL('../../'+name,import.meta.url),join(repo,name));
+for(const name of ['run_server.sh','kill_server.sh','update_server.sh','scripts/server/server-process.sh','scripts/build/build-status.sh'])await copyFile(new URL('../../'+name,import.meta.url),join(repo,name));
 await copyFile(binary,join(target,'release/wild-wheels-server'));
 // Exercise lifecycle with the real bundled executable; compilation is tested separately.
 await writeFile(join(repo,'scripts/build/build-experimental.sh'),'#!/usr/bin/env bash\nset -eu\nmkdir -p "$1"\nif [[ -f release-marker ]]; then cp release-marker "$1/release-marker"; fi\n');

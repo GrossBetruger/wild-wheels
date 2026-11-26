@@ -5204,3 +5204,9 @@ body.match-active .lobby-column>.map-switch {
   background: #36432b;
   color: #e3eeaa;
 }
+
+.wasm-build-badge.failed {
+  color: #a52f35;
+  background: #ffe4e3;
+  border: 1px solid #dfaba7;
+}

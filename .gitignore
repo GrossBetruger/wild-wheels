@@ -9,6 +9,9 @@ rust-core/target/
 dedicated-server/target/
 native-client/target/
 wasm-poc/target/
+wasm-poc/.wasm.sha256
+wasm-poc/.graphics.sha256
+wasm-poc/.sounds.sha256
 wasm-poc/pkg/
 wasm-poc/graphics.wwgp
 wasm-poc/graphics.wwgp.gz

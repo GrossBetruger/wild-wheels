@@ -27,6 +27,26 @@ export function watchServerBuild({ served = '', load, reload, onBuild, onError, 
   return Object.assign(ready, { stop });
 }
 
+const serviceStages = new Map([
+  ['checking-assets', 'Checking asset cache…'],
+  ['preparing-wasm', 'Checking WASM toolchain…'],
+  ['waiting-wasm', 'Waiting for WASM build lock…'],
+  ['compiling-wasm', 'Compiling 3D WASM…'],
+  ['packaging-wasm', 'Packaging WASM bindings…'],
+  ['packing-graphics', 'Building graphics pack…'],
+  ['packing-sounds', 'Building sound pack…'],
+  ['checking-server', 'Checking server build…'],
+  ['waiting-server', 'Waiting for server build lock…'],
+  ['compiling-server', 'Compiling game server…'],
+  ['starting-server', 'Starting game server…'],
+]);
+
+export function serviceBuildNotice(state, observed) {
+  if (state === 'failed') return 'Server update failed';
+  if (state === 'ready' && observed) return 'Game server ready';
+  return serviceStages.get(state) ?? '';
+}
+
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {
   if (usesBevyRenderer(location.pathname, location.search)) {
     document.documentElement.classList.add('bevy-beta');
@@ -37,44 +57,31 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     if (label) label.textContent = text;
   };
   let readyHideTimer = null;
-  const syncWasmBuildBadge = info => {
+  const syncBuildBadge = info => {
     const cta = document.querySelector('.experimental-button');
     if (!cta) return;
     let badge = document.getElementById('wasm-build-badge');
-    const state = info?.wasmBuild?.state ?? '';
-    const isCompiling = state === 'compiling-wasm' || state === 'compiling-server';
-    const wasCompiling = sessionStorage.getItem('ww_wasm_compiling') === '1';
-    if (isCompiling) {
-      sessionStorage.setItem('ww_wasm_compiling', '1');
-      clearTimeout(readyHideTimer);
-      if (!badge) {
-        badge = document.createElement('span');
-        badge.id = 'wasm-build-badge';
-        badge.setAttribute('role', 'status');
-        cta.after(badge);
-      }
-      badge.className = 'wasm-build-badge compiling';
-      badge.textContent = state === 'compiling-wasm' ? '⏳ COMPILING 3D WASM…' : '⏳ FINALIZING SERVER…';
+    const state = info?.wasmBuild?.state;
+    const active = serviceStages.has(state);
+    const observed = sessionStorage.getItem('ww_wasm_compiling') === '1';
+    const label = serviceBuildNotice(state, observed);
+    if (!label) {
+      if (state === 'ready' && badge?.classList.contains('failed')) badge.remove();
       return;
     }
-    if (wasCompiling && (state === 'ready' || info?.wasmReady)) {
-      sessionStorage.removeItem('ww_wasm_compiling');
-      if (!badge) {
-        badge = document.createElement('span');
-        badge.id = 'wasm-build-badge';
-        badge.setAttribute('role', 'status');
-        cta.after(badge);
-      }
-      badge.className = 'wasm-build-badge ready';
-      badge.textContent = '✓ 3D WASM READY!';
-      clearTimeout(readyHideTimer);
-      readyHideTimer = setTimeout(() => badge?.remove(), 12000);
-      return;
+    clearTimeout(readyHideTimer);
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.id = 'wasm-build-badge';
+      badge.setAttribute('role', 'status');
+      cta.after(badge);
     }
-    if (state === 'failed' && wasCompiling) {
-      sessionStorage.removeItem('ww_wasm_compiling');
-      badge?.remove();
-    }
+    const ready = state === 'ready';
+    if (badge.textContent !== label) badge.textContent = label;
+    badge.className = 'wasm-build-badge ' + (active ? 'compiling' : ready ? 'ready' : 'failed');
+    if (active) sessionStorage.setItem('ww_wasm_compiling', '1');
+    else sessionStorage.removeItem('ww_wasm_compiling');
+    if (ready) readyHideTimer = setTimeout(() => badge.remove(), 12000);
   };
   const served = document.body?.dataset.build ?? '';
   if (buildId(served)) updateLabel(`BUILD ${served}`);
@@ -90,7 +97,7 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
       const response = await fetch('/build.json', { cache: 'no-store', signal: AbortSignal.timeout(4000) });
       if (!response.ok) throw new Error();
       const info = await response.json();
-      syncWasmBuildBadge(info);
+      syncBuildBadge(info);
       return info.build;
     },
     reload: () => location.reload(),

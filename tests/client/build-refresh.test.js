@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BUILD_REFRESH_MS, watchServerBuild } from '../../client/build-refresh.js';
+import { BUILD_REFRESH_MS, serviceBuildNotice, watchServerBuild } from '../../client/build-refresh.js';
 
 function harness({ served = '', builds, hidden = () => false }) {
   const pending = [...builds];
@@ -57,4 +57,13 @@ test('the same build leaves the page in place', async () => {
   await page.watching;
   await page.timers[0]();
   assert.equal(page.reloads(), 0);
+});
+
+test('the update notice follows the active job and confirms readiness only after an observed update', () => {
+  assert.equal(serviceBuildNotice('waiting-wasm', true), 'Waiting for WASM build lock…');
+  assert.equal(serviceBuildNotice('packing-graphics', true), 'Building graphics pack…');
+  assert.equal(serviceBuildNotice('packing-sounds', true), 'Building sound pack…');
+  assert.equal(serviceBuildNotice('failed', true), 'Server update failed');
+  assert.equal(serviceBuildNotice('ready', true), 'Game server ready');
+  assert.equal(serviceBuildNotice('ready', false), '');
 });

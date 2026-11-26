@@ -30,22 +30,19 @@ mkdir -p -- "$server_target_dir"
 server_target_dir=$(cd -- "$server_target_dir" && pwd)
 experimental_dir="$server_target_dir/experimental"
 wasm_target_dir=${CARGO_TARGET_DIR:+$server_target_dir/bevy-wasm}
-build_status_file="$server_state_dir/build-status.json"
-write_build_status(){
-  local tmp="$build_status_file.tmp.$$"
-  printf '{"state":"%s","at":%s}\n' "$1" "$(date +%s)" > "$tmp" && mv -f -- "$tmp" "$build_status_file"
+export WILD_WHEELS_BUILD_STATUS_FILE="$server_state_dir/build-status.json"
+# shellcheck source=scripts/build/build-status.sh
+source "$project_dir/scripts/build/build-status.sh"
+finish_build() {
+  local result=$?
+  if (( result != 0 )); then build_status failed; fi
+  rmdir -- "$server_state_dir/lock" 2>/dev/null || true
 }
-clear_compiling_status(){
-  if [[ -f $build_status_file ]] && grep -q '"compiling-' "$build_status_file" 2>/dev/null; then
-    write_build_status failed || true
-  fi
-}
-trap 'clear_compiling_status; rmdir -- "$server_state_dir/lock" 2>/dev/null || true' EXIT
-write_build_status compiling-wasm
+trap finish_build EXIT
 bash "$project_dir/scripts/build/build-experimental.sh" "$experimental_dir" "$wasm_target_dir"
-write_build_status compiling-server
-WILD_WHEELS_EXPERIMENTAL_DIR="$experimental_dir" "$cargo_bin" build --release --locked --jobs "${CARGO_BUILD_JOBS:-1}" --manifest-path "$project_dir/dedicated-server/Cargo.toml" --target-dir "$server_target_dir"
-write_build_status ready
+build_status checking-server
+WILD_WHEELS_EXPERIMENTAL_DIR="$experimental_dir" run_cargo_build server "$cargo_bin" build --release --locked --jobs "${CARGO_BUILD_JOBS:-1}" --manifest-path "$project_dir/dedicated-server/Cargo.toml" --target-dir "$server_target_dir"
+build_status starting-server
 if [[ ${1:-} == --restart ]]; then server_stop; fi
 server_executable="$server_target_dir/release/wild-wheels-server"
 nohup "$server_executable" >> "$server_log_file" 2>&1 < /dev/null &
@@ -54,4 +51,5 @@ printf '%s\n%s\n' "$server_pid" "$server_executable" > "$server_pid_file"
 disown "$server_pid" 2>/dev/null || true
 sleep 0.3
 if ! server_running; then rm -f -- "$server_pid_file"; printf 'Server failed to start. See %s\n' "$server_log_file" >&2; tail -n 12 "$server_log_file" >&2; exit 1; fi
+build_status ready
 printf 'Server detached (PID %s), port %s. You can close SSH.\nLog: %s\nStop: ./kill_server.sh\n' "$server_pid" "${PORT:-5173}" "$server_log_file"
