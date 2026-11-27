@@ -1,5 +1,7 @@
 #![recursion_limit = "256"]
 
+mod net;
+
 use bevy::asset::AssetMetaCheck;
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
@@ -47,7 +49,7 @@ pub fn set_hud_active(active: bool) {
 #[wasm_bindgen]
 pub fn set_direct_net(enabled: bool) {
     let prev = DIRECT_NET_MODE.swap(enabled, Ordering::Relaxed);
-    if prev != enabled {
+    if prev && !enabled {
         RESET_SESSION.store(true, Ordering::Relaxed);
     }
 }
@@ -178,13 +180,47 @@ pub fn present_frame(packet: Vec<u8>) {
 }
 
 #[wasm_bindgen]
-pub fn accept_net_packet(bytes: Vec<u8>) {
+pub fn connect_socket(url: String, token: String, client_type: String) -> bool {
+    net::connect(&url, &token, &client_type)
+}
+
+#[wasm_bindgen]
+pub fn disconnect_socket() {
+    net::disconnect();
+}
+
+#[wasm_bindgen]
+pub fn take_socket_closed() -> String {
+    net::take_closed_json()
+}
+
+#[wasm_bindgen]
+pub fn socket_rtt_secs() -> f64 {
+    net::rtt_secs()
+}
+
+#[wasm_bindgen]
+pub fn socket_last_packet_ms() -> f64 {
+    net::last_packet_ms()
+}
+
+#[wasm_bindgen]
+pub fn take_latest_packet() -> Vec<u8> {
+    net::take_latest_packet()
+}
+
+pub(crate) fn enqueue_incoming_packet(bytes: Vec<u8>) {
     if let Ok(mut q) = INCOMING_PACKETS.lock() {
         if q.len() > 8 {
             q.clear();
         }
         q.push(bytes);
     }
+}
+
+#[wasm_bindgen]
+pub fn accept_net_packet(bytes: Vec<u8>) {
+    enqueue_incoming_packet(bytes);
 }
 
 #[wasm_bindgen]
@@ -437,7 +473,7 @@ fn sync_session(
         if keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight) {
             bits |= 16;
         }
-        if keys.pressed(KeyCode::Space) {
+        if bits & 32 != 0 || keys.pressed(KeyCode::Space) {
             let _ = client.action(ClientAction::Fire, now);
         }
         if let Ok(mut q) = QUEUED_ACTIONS.lock() {
@@ -458,29 +494,17 @@ fn sync_session(
                 }
             }
         }
-        if keys.just_pressed(KeyCode::KeyX) || keys.just_pressed(KeyCode::KeyE) {
-            let _ = client.action(ClientAction::Boost, now);
-        }
-        if keys.just_pressed(KeyCode::KeyF) {
-            let _ = client.action(ClientAction::Special, now);
-        }
-        if keys.just_pressed(KeyCode::KeyZ) {
-            let _ = client.action(ClientAction::Somersault, now);
-        }
-        if keys.just_pressed(KeyCode::KeyC) {
-            let _ = client.action(ClientAction::Chaff, now);
-        }
-        if keys.just_pressed(KeyCode::Tab)
-            || keys.just_pressed(KeyCode::KeyQ)
-            || keys.just_pressed(KeyCode::SuperLeft)
-            || keys.just_pressed(KeyCode::SuperRight)
-        {
-            let _ = client.action(ClientAction::CycleWeapon, now);
-        }
     }
     let input = ClientInput { keys: bits & 31, steer: None };
     let _ = client.advance(dt, input, now);
-    if let Ok(out) = client.outbound(input)
+    if net::is_connected() {
+        if net::can_send()
+            && let Ok(out) = client.outbound(input)
+            && let Ok(text) = String::from_utf8(out)
+        {
+            net::send_if_ready(&text);
+        }
+    } else if let Ok(out) = client.outbound(input)
         && let Ok(text) = String::from_utf8(out)
         && let Ok(mut slot) = OUTBOUND_TEXT.lock()
     {

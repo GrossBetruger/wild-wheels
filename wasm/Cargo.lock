@@ -5445,9 +5445,11 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "console_error_panic_hook",
+ "js-sys",
  "serde",
  "serde_json",
  "wasm-bindgen",
+ "web-sys",
  "wild-wheels-core",
  "wild-wheels-render",
 ]

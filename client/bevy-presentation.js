@@ -98,6 +98,7 @@ export class BevyPresentation {
     this.hasAudio = false;
     this.directNet = false;
     this.muted = false;
+    this.audioContexts = [];
     this.progress = { stage: 'downloading', percent: 0, loadedBytes: 0, totalBytes: 0 };
     this.progressListeners = new Set();
     this.canvas.addEventListener('webglcontextlost', () => this.fail('graphics-lost'));
@@ -244,6 +245,18 @@ export class BevyPresentation {
       }
       const soundBytes = soundPack && soundPack.byteLength > 0 ? new Uint8Array(soundPack) : new Uint8Array(0);
       this.hasAudio = soundBytes.byteLength > 0 && typeof bindings.start_client === 'function';
+      const OrigAC = globalThis.AudioContext;
+      if (this.hasAudio && typeof OrigAC === 'function' && !OrigAC.__wwWrapped) {
+        const contexts = this.audioContexts;
+        const WrappedAC = function (...args) {
+          const ctx = new OrigAC(...args);
+          contexts.push(ctx);
+          return ctx;
+        };
+        WrappedAC.prototype = OrigAC.prototype;
+        WrappedAC.__wwWrapped = true;
+        globalThis.AudioContext = WrappedAC;
+      }
       if (typeof bindings.start_client === 'function') {
         bindings.start_client(new Uint8Array(pack), soundBytes, this.mobile, false);
       } else {
@@ -286,6 +299,12 @@ export class BevyPresentation {
     this.bindings?.set_muted?.(this.muted);
   }
 
+  unlockAudio() {
+    for (const ctx of this.audioContexts) {
+      if (ctx?.state === 'suspended') ctx.resume().catch(() => {});
+    }
+  }
+
   pushAudioEvent(name) {
     if (this.hasAudio) this.bindings?.push_audio_event?.(name);
   }
@@ -314,6 +333,35 @@ export class BevyPresentation {
   pollNetOutbound() {
     if (!this.directNet || !this.bindings?.poll_net_outbound) return '';
     return this.bindings.poll_net_outbound() || '';
+  }
+
+  connectSocket(url, token, clientType) {
+    if (this.failed || this.mobile || typeof this.bindings?.connect_socket !== 'function') return false;
+    this.setDirectNet(true);
+    return Boolean(this.bindings.connect_socket(url, token, clientType));
+  }
+
+  disconnectSocket() {
+    this.bindings?.disconnect_socket?.();
+  }
+
+  takeSocketClosed() {
+    const raw = this.bindings?.take_socket_closed?.();
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch { return null; }
+  }
+
+  socketRtt() {
+    return this.bindings?.socket_rtt_secs?.() ?? 0;
+  }
+
+  socketLastPacketMs() {
+    return this.bindings?.socket_last_packet_ms?.() ?? 0;
+  }
+
+  takeLatestPacket() {
+    const bytes = this.bindings?.take_latest_packet?.();
+    return bytes && bytes.length > 0 ? bytes : null;
   }
 
   setInputBlocked(blocked) {

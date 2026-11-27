@@ -353,9 +353,9 @@ export class NetworkGame {
     this.connection.querySelector('p').textContent=error||'Connecting to the shared game.';
     this.connection.querySelector('button').classList.toggle('hidden',!error);
   }
-  accept(packet){
+  accept(packet, fromRust = false){
     if(!this.active)return;
-    this.onBinaryPacket?.(packet);
+    if(!fromRust)this.onBinaryPacket?.(packet);
     const now=performance.now()/1000;this.lastPacket=now*1000;this.client.accept(packet,now);this.client.frame(0,this.paused?0:this.keys,now);this.client.peek();
     const state=this.client.state();
     if(state.world.arenaDef&&Number.isInteger(state.world.arena)&&state.world.arena>=0&&state.world.arena<32){arenas[state.world.arena]=state.world.arenaDef;this.onArenas();}
@@ -401,6 +401,7 @@ export class NetworkGame {
     this.input();return true;
   }
   input(){
+    if(this.rustSocketActive)return;
     const now=performance.now()/1000;
     if(!this.active||!this.client||this.socket?.readyState!==WebSocket.OPEN||this.socket.bufferedAmount>16384)return;
     if(now-this.lastPing>=1){this.lastPing=now;this.socket.send(JSON.stringify({type:'ping',sent:now}));}
@@ -414,16 +415,37 @@ export class NetworkGame {
     this.socket.send(this.client.outboundText(this.paused?0:this.keys));
   }
   flushOutbound(){
-    if(!this.pollOutbound)return;
+    if(this.rustSocketActive||!this.pollOutbound)return;
     this.input();
   }
+  handleSocketClose(token, event, opened, waitingBytes = 0){
+    this.log(event.code===1000?'info':'warn','socket-closed',{code:event.code,reason:event.reason,clean:event.wasClean??event.clean,openSeconds:Math.round((performance.now()-opened)/1000),waitingBytes,sinceServerMs:Math.round(performance.now()-this.lastPacket)});
+    this.keys.clear();
+    if([4001,4003,4004].includes(event.code)){if(this.awayPending||this.connecting)return;this.leave(event.code===4003?'You were removed by the host.':event.code===4004?'The host replaced this room. Open the new invitation.':'This player resumed in another tab.',false);return;}
+    if(this.afk&&typeof document!=='undefined'&&document.hidden){this.restoreOnVisible=true;this.status.textContent='AFK · Reconnects when you return to this tab.';return;}
+    this.status.textContent='Reconnecting to the room…';setTimeout(()=>{if(this.token===token)this.restore();},500);
+  }
+  syncRustSocket(){
+    if(!this.rustSocketActive||!this.active)return;
+    const rtt=this.getRustRtt?.();if(rtt>0)this.rtt=rtt;
+    const lastMs=this.getRustLastPacketMs?.();if(lastMs>0)this.lastPacket=lastMs;
+    const pkt=this.takeRustPacket?.();
+    if(pkt)this.accept(pkt,true);
+    const closed=this.takeRustClosed?.();
+    if(closed){this.rustSocketActive=false;this.handleSocketClose(this.token,closed,this.rustSocketOpened??performance.now(),0);}
+  }
   stream(){
-    const token=this.token,url=new URL('/api/socket',location.href);url.protocol=location.protocol==='https:'?'wss:':'ws:';const socket=this.socket=new WebSocket(url);
-    socket.binaryType='arraybuffer';const opened=performance.now();
+    const token=this.token,url=new URL('/api/socket',location.href);url.protocol=location.protocol==='https:'?'wss:':'ws:';const opened=performance.now();
+    if(this.connectRustSocket?.(url.href,token,this.clientType)){
+      this.socket?.close();this.socket=null;this.rustSocketActive=true;this.rustSocketOpened=opened;return;
+    }
+    this.rustSocketActive=false;
+    const socket=this.socket=new WebSocket(url);
+    socket.binaryType='arraybuffer';
     socket.onopen=()=>{if(this.token===token){this.client.resend();socket.send(JSON.stringify({type:'authenticate',token,client:this.clientType}));}};
     socket.onmessage=event=>{try{if(this.token!==token)return;if(event.data instanceof ArrayBuffer){this.accept(event.data);return;}if(typeof event.data!=='string'||event.data.length>2048)throw new Error();const state=JSON.parse(event.data);if(state.type!=='pong')throw new Error();if(state.sent===this.lastPing)this.rtt=Math.max(0,Math.min(.3,performance.now()/1000-state.sent));}catch(error){this.log('error','socket-message-invalid',{message:error?.message,binary:event.data instanceof ArrayBuffer,size:event.data?.byteLength??event.data?.length});socket.close();}};
     socket.onerror=()=>{};
-    socket.onclose=event=>{if(this.token!==token||this.socket!==socket)return;this.log(event.code===1000?'info':'warn','socket-closed',{code:event.code,reason:event.reason,clean:event.wasClean,openSeconds:Math.round((performance.now()-opened)/1000),waitingBytes:socket.bufferedAmount,sinceServerMs:Math.round(performance.now()-this.lastPacket)});this.keys.clear();if([4001,4003,4004].includes(event.code)){if(this.awayPending||this.connecting)return;this.leave(event.code===4003?'You were removed by the host.':event.code===4004?'The host replaced this room. Open the new invitation.':'This player resumed in another tab.',false);return;}if(this.afk&&typeof document!=='undefined'&&document.hidden){this.restoreOnVisible=true;this.status.textContent='AFK · Reconnects when you return to this tab.';return;}this.status.textContent='Reconnecting to the room…';setTimeout(()=>{if(this.token===token)this.restore();},500);};
+    socket.onclose=event=>{if(this.token!==token||this.socket!==socket)return;this.handleSocketClose(token,event,opened,socket.bufferedAmount);};
   }
   async control(action,arena,bots){try{if(action==='start'&&!await this.saveName())return;await this.request('/api/control',{action,arena,bots});this.paused=false;}catch(error){this.status.textContent=error.message;}}
   async chooseDriver(driver){
@@ -443,7 +465,7 @@ export class NetworkGame {
     this.colorPending=false;this.colorError='';this.nextDriver=null;
     this.nameFeedback.textContent='';this.nameDirty=false;this.namePending=false;this.namePromise=null;
     this.restoreOnVisible=false;this.voice.disconnect();
-    if(notify)this.request('/api/leave',{}).catch(()=>{});this.token=null;this.chatColor=null;this.socket?.close();this.state=null;this.pending=null;this.actions=[];this.keys.clear();this.client=null;this.rtt=0;this.lastPing=-Infinity;this.onSessionReset?.();
+    if(notify)this.request('/api/leave',{}).catch(()=>{});this.token=null;this.chatColor=null;this.socket?.close();this.rustSocketActive=false;this.disconnectRustSocket?.();this.state=null;this.pending=null;this.actions=[];this.keys.clear();this.client=null;this.rtt=0;this.lastPing=-Infinity;this.onSessionReset?.();
     this.internetError=false;this.hostButton.disabled=false;this.name.disabled=false;this.botCount.disabled=false;for(const option of this.botCount.options)option.disabled=false;this.leaveButton.classList.add('hidden');this.micButton.classList.add('hidden');this.voiceBanner?.classList.add('hidden');this.copyButton.classList.add('hidden');this.internetButton.classList.add('hidden');this.animalChoice.classList.add('hidden');this.share.classList.add('hidden');this.help.classList.add('hidden');this.players.replaceChildren();this.status.textContent=message;this.onLeave();
     if(this.dedicated){document.body.classList.remove('arena-connected');this.connectionStatus(message);}
   }

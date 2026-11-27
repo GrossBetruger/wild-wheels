@@ -270,8 +270,14 @@ network.onBinaryPacket = packet => {
   bevy.setDirectNet(true);
   bevy.acceptNetPacket(packet);
 };
+network.connectRustSocket = (url, token, clientType) => Boolean(bevy?.ready && !bevy.failed && !mobile && !race.bomber && bevy.connectSocket(url, token, clientType));
+network.disconnectRustSocket = () => bevy?.disconnectSocket();
+network.takeRustClosed = () => bevy?.takeSocketClosed() ?? null;
+network.getRustRtt = () => bevy?.socketRtt() ?? 0;
+network.getRustLastPacketMs = () => bevy?.socketLastPacketMs() ?? 0;
+network.takeRustPacket = () => bevy?.takeLatestPacket() ?? null;
 network.pollOutbound = () => (bevy?.directNet ? bevy.pollNetOutbound() : null);
-network.onSessionReset = () => { bevy?.resetSession(); bevy?.setDirectNet(false); };
+network.onSessionReset = () => { bevy?.disconnectSocket(); bevy?.resetSession(); bevy?.setDirectNet(false); };
 const startRow = document.createElement('div'); startRow.className = 'start-row'; $('start').before(startRow); startRow.append(network.createNameField(), $('start'));
 const photography = new BomberPhotography({ canvas, viewport: document.querySelector('.viewport'), network, sound: type => audio.event(type), unlock: () => audio.unlock() });
 const gameColumn = document.createElement('div'); gameColumn.className = 'game-column'; racePanel.before(gameColumn); gameColumn.append(racePanel);
@@ -661,12 +667,12 @@ function selectDriver(index) {
   race = newGame(); lastPhase = '';
 }
 drivers.forEach((d, i) => { const b = document.createElement('button'); b.className = 'driver'; b.textContent = d.emoji; b.title = d.name; b.setAttribute('aria-label', d.name); b.onclick = () => selectDriver(i); $('drivers').append(b); });
-async function start() { if (!network.hasName) { network.focusName(); return; } if (mode === 'combat') await ensureBevyReady(); if (!network.active && network.invitation) { await network.connect('/api/join'); if (!network.active) return; } if (dedicated && !network.active) return; if (race.bomber && mobile) enterMobileFullscreen(); audio.unlock().catch(() => { $('sound').textContent = 'CLICK FOR SOUND'; }); if (network.active) { if (network.paused) { network.pause(); return; } if (network.canControl) { network.control('start'); return; } network.requestPlay(); return; } if (race.phase === 'paused') { race.phase = race.resumePhase || 'racing'; return; } if (race.phase === 'racing' || race.phase === 'countdown') return; race = newGame(); race.name = network.name.value.trim(); network.rememberName(); race.phase = 'countdown'; lastCount = -1; tone(400); }
+async function start() { bevy?.unlockAudio(); if (!network.hasName) { network.focusName(); return; } if (mode === 'combat') await ensureBevyReady(); if (!network.active && network.invitation) { await network.connect('/api/join'); if (!network.active) return; } if (dedicated && !network.active) return; if (race.bomber && mobile) enterMobileFullscreen(); audio.unlock().catch(() => { $('sound').textContent = 'CLICK FOR SOUND'; }); if (network.active) { if (network.paused) { network.pause(); return; } if (network.canControl) { network.control('start'); return; } network.requestPlay(); return; } if (race.phase === 'paused') { race.phase = race.resumePhase || 'racing'; return; } if (race.phase === 'racing' || race.phase === 'countdown') return; race = newGame(); race.name = network.name.value.trim(); network.rememberName(); race.phase = 'countdown'; lastCount = -1; tone(400); }
 function pause() { if (network.active) { network.pause(); return; } if (race.phase === 'paused') { race.phase = race.resumePhase; return; } if (!['racing', 'countdown'].includes(race.phase)) return; race.resumePhase = race.phase; race.phase = 'paused'; keys.clear(); }
 $('start').onclick = start; $('pause').onclick = pause; $('restart').onclick = () => { if (dedicated) return; if (network.active) { network.control('reset'); return; } race = newGame(); lastPhase = ''; keys.clear(); };
 $('change-track').onclick = () => chooseMap((track + 1) % mapButtons.length);
 $('sound').textContent = 'SOUND ON'; $('sound').setAttribute('aria-label', 'Mute sound');
-$('sound').onclick = () => { audio.toggle(); bevy?.setMuted(!audio.enabled); $('sound').textContent = audio.enabled ? 'SOUND ON' : 'SOUND OFF'; $('sound').setAttribute('aria-label', audio.enabled ? 'Mute sound' : 'Enable sound'); tone(660); };
+$('sound').onclick = () => { audio.toggle(); bevy?.unlockAudio(); bevy?.setMuted(!audio.enabled); $('sound').textContent = audio.enabled ? 'SOUND ON' : 'SOUND OFF'; $('sound').setAttribute('aria-label', audio.enabled ? 'Mute sound' : 'Enable sound'); tone(660); };
 $('fullscreen').onclick = async () => { try { if (document.fullscreenElement) { await document.exitFullscreen(); return; } await (useBevy && mobile ? racePanel : document.querySelector('.viewport')).requestFullscreen(); } catch { uiNotice = { text: 'Fullscreen unavailable in this browser', until: performance.now() + 3000 }; } };
 window.addEventListener('keydown', e => {
   if (e.target !== chat.input || !returnsToGame(e, race.phase)) return;
@@ -689,23 +695,23 @@ window.addEventListener('keydown', e => {
   }
   if (key === 'tab' || key === 'meta') {
     if (!playing || e.shiftKey || e.ctrlKey || e.altKey || key === 'tab' && e.metaKey) return;
-    e.preventDefault(); if (!e.repeat && !(bevy?.directNet && document.activeElement === bevy.canvas)) switchWeapon(); return;
+    e.preventDefault(); if (!e.repeat) switchWeapon(); return;
   }
   if (e.target instanceof HTMLButtonElement && [' ', 'Enter'].includes(e.key) && !playing) return;
   if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'shift'].includes(key)) e.preventDefault();
   keys.add(key); if (e.repeat) return;
   if (network.active && !bevy?.directNet) network.input();
-  const rustOwnsAction = Boolean(bevy?.directNet && playing && document.activeElement === bevy.canvas);
-  switch (key) { case 'enter': start(); break; case 'escape': case 'p': pause(); break; case ' ': if (!rustOwnsAction) useWeapon(); break; case 'q': if (!rustOwnsAction) switchWeapon(); break; case 'x': if (!e.ctrlKey && !e.metaKey && !e.altKey && !rustOwnsAction) turbo(); break; case 'f': if (!e.ctrlKey && !e.metaKey && !e.altKey && !rustOwnsAction) special(); break; case 'z': if (!e.ctrlKey && !e.metaKey && !e.altKey && !rustOwnsAction) somersault(); break; case 'c': if (!e.ctrlKey && !e.metaKey && !e.altKey && !rustOwnsAction) chaff(); break; case 'v': if (!e.ctrlKey && !e.metaKey && !e.altKey && network.active) network.setTalking(true); break; }
+  switch (key) { case 'enter': start(); break; case 'escape': case 'p': pause(); break; case ' ': useWeapon(); break; case 'q': switchWeapon(); break; case 'x': if (!e.ctrlKey && !e.metaKey && !e.altKey) turbo(); break; case 'f': if (!e.ctrlKey && !e.metaKey && !e.altKey) special(); break; case 'z': if (!e.ctrlKey && !e.metaKey && !e.altKey) somersault(); break; case 'c': if (!e.ctrlKey && !e.metaKey && !e.altKey) chaff(); break; case 'v': if (!e.ctrlKey && !e.metaKey && !e.altKey && network.active) network.setTalking(true); break; }
 });
 window.addEventListener('keyup', e => { const key = gameKey(e); keys.delete(key); if (key === 'v') network.setTalking(false); if (network.active) network.input(); });
 const stepAway = () => { network.setTalking(false); if (!['racing', 'countdown'].includes(race.phase)) return; if (network.active && network.dedicated) { if (!network.afk) network.setAway(true); return; } pause(); };
 window.addEventListener('blur', () => { keys.clear(); stepAway(); }); document.addEventListener('visibilitychange', () => { if (document.hidden) stepAway(); });
 const unlockAudio = () => {
+  bevy?.unlockAudio();
   if (!network.active) return;
   audio.unlock().then(() => {
     network.voice.unlockPlayback();
-    if (audio.context?.state === 'running') {
+    if (audio.context?.state === 'running' && (!bevy?.hasAudio || bevy.audioContexts.every(c => c.state === 'running'))) {
       for (const event of ['pointerdown', 'keydown']) window.removeEventListener(event, unlockAudio);
     }
   }).catch(() => { });
@@ -726,7 +732,10 @@ function frame(t) {
   const fps = mobileBevy ? bevy.fps : renderer.fps;
   const performanceText = `${fps || '…'} FPS · ${graphics}${network.active ? ` · ${network.rtt ? Math.round(network.rtt * 1000) : '…'} ms ping` : ''}`;
   if (fpsMeter.textContent !== performanceText) fpsMeter.textContent = performanceText;
-  if (network.active) race = network.render(dt) ?? race;
+  if (network.active) {
+    network.syncRustSocket();
+    race = network.render(dt) ?? race;
+  }
   if (!network.active && mode === 'combat') tickBattle(race, keys, dt);
   if (!network.active && mode === 'race') tick(race, keys, dt);
   if (bevy?.ready && !bevy.failed) {
@@ -737,12 +746,13 @@ function frame(t) {
       const typing = Boolean(ae && (ae instanceof HTMLInputElement || ae instanceof HTMLTextAreaElement || ae instanceof HTMLSelectElement || ae.isContentEditable));
       bevy.setInputBlocked(race.phase !== 'racing' || network.paused || typing);
       let vbits = 0;
-      if (!typing && ae !== bevy.canvas) {
+      if (!typing) {
         if (keys.has('arrowup') || keys.has('w')) vbits |= 1;
         if (keys.has('arrowdown') || keys.has('s')) vbits |= 2;
         if (keys.has('arrowright') || keys.has('d')) vbits |= 4;
         if (keys.has('arrowleft') || keys.has('a')) vbits |= 8;
         if (keys.has('shift')) vbits |= 16;
+        if (keys.has(' ')) vbits |= 32;
       }
       bevy.setVirtualKeys(vbits);
       network.flushOutbound();
