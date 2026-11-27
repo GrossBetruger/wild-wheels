@@ -409,6 +409,19 @@ function draw(refreshUi) {
   if (race.mode === 'combat' && !bevyImport && canLoadBevy) loadArenaRenderer();
   if (refreshUi) characterPreview.frame(performance.now(), selected, race.color ?? drivers[selected].color, race.phase, race.specialAbilities !== false);
   const drawnByBevy = bevy?.draw(race, network.active ? network.client : null);
+  if (drawnByBevy) {
+    for (const [kind, item] of bevy.takeHudActions()) {
+      switch (kind) {
+        case 'fire': useWeapon(); break;
+        case 'cycle': switchWeapon(); break;
+        case 'select': chooseWeapon(item); break;
+        case 'turbo': turbo(); break;
+        case 'chaff': chaff(); break;
+        case 'somersault': somersault(); break;
+        case 'special': special(); break;
+      }
+    }
+  }
   if (!drawnByBevy) renderer.draw(race, race.elapsed);
   if (refreshUi) drawMap();
   const visible = new Set();

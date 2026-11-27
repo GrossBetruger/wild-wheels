@@ -293,7 +293,11 @@ impl Notices {
                         false => "",
                     },
                 ),
-                color: None,
+                color: match (kill.assist, kill.radiation) {
+                    (false, true) => Some([0xed, 0xff, 0x91]),
+                    (true, _) => Some([0x31, 0x59, 0x50]),
+                    _ => None,
+                },
                 card_key: None,
                 score_swap: None,
                 started: now,
@@ -2281,9 +2285,30 @@ pub fn update(
                         let wave = 0.5 - 0.5 * ((elapsed / 0.65) * std::f32::consts::TAU).cos();
                         tf.translation = Val2::px(0.0, -13.0 * K * wave);
                         tf.rotation = Rot2::radians((-2.0 + 4.0 * wave).to_radians());
+                        let (fill, border) = if whack.title.contains("CHERNOWHACKED") {
+                            (hex(0x5b1f24f2), hex(0xd7f264ff))
+                        } else if whack.title.contains("CO-WHACKED") {
+                            (hex(0xdffae0ff), hex(0x9ce6b3ff))
+                        } else {
+                            (hex(0xfff0d8ff), hex(0xffdc6aff))
+                        };
+                        color.0 = fill;
+                        edge.set_if_neq(BorderColor::all(border));
                     } else {
                         *tf = UiTransform::default();
                     }
+                }
+                if id == Id::Ring
+                    && visible
+                    && let Some((blue, _)) = notices.ring
+                {
+                    let (fill, border) = if blue {
+                        (hex(0x121f3dd0), hex(0x63d6ff99))
+                    } else {
+                        (hex(0x32120dc0), hex(0xff9b3c99))
+                    };
+                    color.0 = fill;
+                    edge.set_if_neq(BorderColor::all(border));
                 }
             }
             Part::HtmlCard(id) => {
@@ -2611,7 +2636,9 @@ pub fn sync_prebaked_chrome(
                 }
             }
             Id::Turbos => {
-                let ready = live && p.turbos > 0;
+                let ready = live
+                    && (p.turbos > 0 && p.boost <= 0.0
+                        || p.driver == 7 && view.special_abilities && p.nightmare_cooldown <= 0.0);
                 if ready {
                     "chrome:ammo:base"
                 } else {
@@ -2619,27 +2646,40 @@ pub fn sync_prebaked_chrome(
                 }
             }
             Id::Flip => {
-                if live && p.somersault <= 0.0 {
+                if live && p.somersault_cooldown <= 1e-8 {
                     "chrome:btn:action"
                 } else {
                     "chrome:btn:disabled"
                 }
             }
             Id::Chaff => {
-                if live && p.chaff > 0 {
+                if live && p.chaff > 0 && p.chaff_cooldown <= 0.0 {
                     "chrome:btn:action"
                 } else {
                     "chrome:btn:disabled"
                 }
             }
             Id::Special => {
+                let karma_ready = p.last_killer.is_some_and(|v| {
+                    v != p.id
+                        && view
+                            .actors
+                            .get(v)
+                            .is_some_and(|t| !t.inactive && !t.afk && !t.bomber && t.destroyed <= 0.0)
+                });
+                let ready = live
+                    && p.special_cooldown <= 0.0
+                    && !(p.driver == 12 && p.health >= 6.0)
+                    && !(p.driver == 15 && !karma_ready);
                 if p.driver == 7 {
                     if p.nightmare_active > 0.0 {
                         "chrome:btn:nightmare_active"
-                    } else {
+                    } else if ready {
                         "chrome:btn:nightmare"
+                    } else {
+                        "chrome:btn:disabled"
                     }
-                } else if live {
+                } else if ready {
                     "chrome:btn:action"
                 } else {
                     "chrome:btn:disabled"

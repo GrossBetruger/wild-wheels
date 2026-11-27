@@ -261,6 +261,12 @@ export class BevyPresentation {
     return kartNameplates(world, camera.subarray(0, 16), camera.subarray(16));
   }
 
+  takeHudActions() {
+    const raw = this.bindings?.take_hud_actions?.();
+    if (!raw) return [];
+    try { return JSON.parse(raw); } catch { return []; }
+  }
+
   draw(world, client) {
     this.supported = world.mode === 'combat' && !world.bomber;
     if (this.mobile) this.updateMobileLevel();
