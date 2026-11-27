@@ -26,9 +26,9 @@ pub(crate) const DRIFT_CHARGE: u32 = 512;
 #[repr(C)]
 struct Kart { data: [f64; FIELDS] }
 #[derive(Clone, Copy)]
-struct Arena { size: f64, octagon: bool, count: usize, blocks: [[f64; 4]; 32] }
+struct Arena { size: f64, octagon: bool, torus: bool, count: usize, blocks: [[f64; 4]; 32] }
 static mut KARTS: [Kart; SLOTS] = [Kart { data: [0.0; FIELDS] }; SLOTS];
-static mut ARENAS: [Arena; 32] = [Arena { size: 0.0, octagon: false, count: 0, blocks: [[0.0; 4]; 32] }; 32];
+static mut ARENAS: [Arena; 32] = [Arena { size: 0.0, octagon: false, torus: false, count: 0, blocks: [[0.0; 4]; 32] }; 32];
 static mut CONFIG: [f64; 128] = [0.0; 128];
 #[no_mangle]
 pub extern "C" fn abi_version() -> u32 { 1 }
@@ -50,15 +50,24 @@ pub extern "C" fn set_arena(index: usize, size: f64, count: usize) -> u32 {
         if !block.iter().all(|n| n.is_finite()) || block[2] <= 0.0 || block[3] <= 0.0 { return 0; }
         arena.blocks[i] = block;
     }
-    arena.size = size;arena.octagon = false;arena.count = count;1
+    arena.size = size;arena.octagon = false;arena.torus = false;arena.count = count;1
 }
-pub(crate) fn set_arena_shape(index: usize, octagon: bool) {
+pub(crate) fn set_arena_shape(index: usize, octagon: bool, torus: bool) {
     if index < 32 {
         let arena = unsafe { &mut *core::ptr::addr_of_mut!(ARENAS).cast::<Arena>().add(index) };
         arena.octagon = octagon;
+        arena.torus = torus;
     }
 }
+fn wrap_coord(v: f64, size: f64) -> f64 {
+    let span = size * 2.0;
+    ((v + size).rem_euclid(span)) - size
+}
 fn blocked(arena: &Arena, x: f64, z: f64) -> bool {
+    if arena.torus {
+        let (x, z) = (wrap_coord(x, arena.size), wrap_coord(z, arena.size));
+        return arena.blocks[..arena.count].iter().any(|b| (x-b[0]).abs()<b[2]/2.0+2.0 && (z-b[1]).abs()<b[3]/2.0+2.0);
+    }
     let limit = arena.size - 2.0;
     if x.abs() > limit || z.abs() > limit || (arena.octagon && (x.abs() + z.abs()) * core::f64::consts::FRAC_1_SQRT_2 > limit) { return true; }
     arena.blocks[..arena.count].iter().any(|b| (x-b[0]).abs()<b[2]/2.0+2.0 && (z-b[1]).abs()<b[3]/2.0+2.0)
@@ -107,7 +116,8 @@ pub extern "C" fn step(slot: usize, arena_index: usize, steer: f64, dt: f64, fla
     }
     if flip<=0.0 { camera+=angle(heading,camera)*(1.0-(-match drifting { true=>5.0,false=>9.0 }*dt).exp()); }
     let travel=match drifting||use_motion { true=>motion,false=>heading };
-    let nx=x+travel.sin()*speed*0.085*dt;let nz=z+travel.cos()*speed*0.085*dt;
+    let mut nx=x+travel.sin()*speed*0.085*dt;let mut nz=z+travel.cos()*speed*0.085*dt;
+    if arena.torus { nx=wrap_coord(nx,arena.size); nz=wrap_coord(nz,arena.size); }
     let mut was_drifting=match drifting { true=>1.0,false=>0.0 };
     let collided=blocked(arena,nx,nz);
     if !collided {

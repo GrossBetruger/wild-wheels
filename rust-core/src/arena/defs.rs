@@ -57,7 +57,7 @@ impl ArenaDef {
             && self.desc.encode_utf16().count() <= 160
             && self.size.is_finite()
             && (16.0..=256.0).contains(&self.size)
-            && matches!(self.shape.as_str(), "square" | "octagon")
+            && matches!(self.shape.as_str(), "square" | "octagon" | "torus")
             && self.max_players.is_none_or(|n| (2..=64).contains(&n))
             && valid_hex(&self.ground)
             && valid_hex(&self.wall)
@@ -88,6 +88,19 @@ impl ArenaDef {
     pub fn is_octagon(&self) -> bool {
         self.shape == "octagon"
     }
+    pub fn is_torus(&self) -> bool {
+        self.shape == "torus"
+    }
+    pub fn wrap(&self, x: f64, z: f64) -> (f64, f64) {
+        if !self.is_torus() {
+            return (x, z);
+        }
+        let span = self.size * 2.0;
+        (
+            (x + self.size).rem_euclid(span) - self.size,
+            (z + self.size).rem_euclid(span) - self.size,
+        )
+    }
     pub fn spawn_radius(&self) -> f64 {
         if self.is_octagon() {
             self.size * 0.75
@@ -113,6 +126,12 @@ impl ArenaDef {
                 || (x.abs() + z.abs()) * std::f64::consts::FRAC_1_SQRT_2 <= limit)
     }
     pub fn wall_blocked(&self, x: f64, z: f64, padding: f64) -> bool {
+        if self.is_torus() {
+            let (wx, wz) = self.wrap(x, z);
+            return self.blocks.iter().any(|b| {
+                (wx - b[0]).abs() < b[2] / 2.0 + padding && (wz - b[1]).abs() < b[3] / 2.0 + padding
+            });
+        }
         !self.in_bounds(x, z, padding)
             || self.blocks.iter().any(|b| {
                 (x - b[0]).abs() < b[2] / 2.0 + padding && (z - b[1]).abs() < b[3] / 2.0 + padding
@@ -267,4 +286,7 @@ pub fn wall_blocked(arena: usize, x: f64, z: f64, padding: f64) -> bool {
 }
 pub fn blocked(arena: usize, x: f64, z: f64, padding: f64) -> bool {
     with_arena(arena, |d| d.blocked(x, z, padding))
+}
+pub fn wrap_point(arena: usize, x: f64, z: f64) -> (f64, f64) {
+    with_arena(arena, |d| d.wrap(x, z))
 }

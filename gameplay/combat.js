@@ -35,12 +35,21 @@ const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 const angleDelta = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 const distance = (a, b) => Math.hypot(a.wx - b.wx, a.wz - b.wz);
 export function combatPose(actor) { return { x: actor.wx, z: actor.wz, tx: Math.sin(actor.heading), tz: Math.cos(actor.heading) }; }
+export function wrapTorus(arena, x, z) {
+  if (arena.shape !== 'torus') return [x, z];
+  const s = arena.size, span = s * 2;
+  return [(((x + s) % span) + span) % span - s, (((z + s) % span) + span) % span - s];
+}
 export function inArenaBounds(arena, x, z, padding = 0) {
   const limit = arena.size - padding;
   if (Math.abs(x) > limit || Math.abs(z) > limit) return false;
   return arena.shape !== 'octagon' || (Math.abs(x) + Math.abs(z)) * Math.SQRT1_2 <= limit;
 }
 export function blocked(arena, x, z, padding = 2) {
+  if (arena.shape === 'torus') {
+    const [wx, wz] = wrapTorus(arena, x, z);
+    return arena.blocks.some(([bx, bz, w, d]) => Math.abs(wx - bx) < w / 2 + padding && Math.abs(wz - bz) < d / 2 + padding);
+  }
   return !inArenaBounds(arena, x, z, padding)
     || arena.blocks.some(([bx, bz, w, d]) => Math.abs(x - bx) < w / 2 + padding && Math.abs(z - bz) < d / 2 + padding)
     || (arena.water ?? []).some(([bx, bz, w, d]) => Math.abs(x - bx) < w / 2 + padding && Math.abs(z - bz) < d / 2 + padding);
@@ -259,7 +268,7 @@ export function advanceProjectile(r, shot, dt) {
       shot.heading += clamp(angleDelta(Math.atan2(dx, dz), shot.heading), -turn, turn);
     }
     const previousX = shot.wx, previousZ = shot.wz;
-    shot.wx += Math.sin(shot.heading) * shot.speed * dt / steps; shot.wz += Math.cos(shot.heading) * shot.speed * dt / steps;
+    [shot.wx, shot.wz] = wrapTorus(arena, shot.wx + Math.sin(shot.heading) * shot.speed * dt / steps, shot.wz + Math.cos(shot.heading) * shot.speed * dt / steps);
     if ((field && distance(shot, field) <= WORMHOLE_KILL_RADIUS) || fireRingBlocks(r, previousX, previousZ, shot.wx, shot.wz)) { shot.quenched = true; shot.life = 0; return { impact: true, victim: null, decoy: null }; }
     if (decoy && distance(shot, decoy) < 6) {
       shot.orbitAge = 0; shot.orbitDirection = steering < 0 ? -1 : 1; shot.orbitAngle = shot.heading - shot.orbitDirection * Math.PI / 2; shot.orbitRadius = shot.speed * .6 / (Math.PI * 2); shot.orbitHeight = shot.height;
@@ -356,8 +365,8 @@ function moveActor(r, actor, steer, gas, brake, dt, handbrake = false) {
   }
   if (!(actor.somersault > 0)) actor.cameraHeading += angleDelta(actor.heading, actor.cameraHeading) * (1 - Math.exp(-(drifting ? 5 : 9) * dt));
   const travel = drifting || actor === r || actor.human ? actor.motionHeading : actor.heading;
-  const nx = actor.wx + Math.sin(travel) * actor.speed * .085 * dt, nz = actor.wz + Math.cos(travel) * actor.speed * .085 * dt;
   const arena = arenas[r.arena];
+  const [nx, nz] = wrapTorus(arena, actor.wx + Math.sin(travel) * actor.speed * .085 * dt, actor.wz + Math.cos(travel) * actor.speed * .085 * dt);
   if (!blocked(arena, nx, nz)) { actor.wx = nx; actor.wz = nz; if (drifting) emitDriftTrail(r, actor, dt); return; }
   if (!blocked(arena, nx, actor.wz)) actor.wx = nx;
   if (!blocked(arena, actor.wx, nz)) actor.wz = nz;

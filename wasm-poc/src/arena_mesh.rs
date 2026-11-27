@@ -185,6 +185,106 @@ pub fn scenery_mesh(def: &ArenaDef, has_landscape: bool) -> Mesh {
             m.box_part(0.0, 15.0, 0.0, 8.0, 1.0, 1.0, lamp);
             m.cone(0.0, 16.0, 0.0, 2.0, 3.0, wall, 4);
         }
+    } else if def.is_torus() {
+        let floor_a = hex_linear("#0c0f24");
+        let floor_b = hex_linear("#101533");
+        let cyan = hex_linear("#00e5ff");
+        let cyan_hi = hex_linear("#7ef4ff");
+        let magenta = hex_linear("#ff4fd8");
+        let magenta_hi = hex_linear("#ffa6ec");
+        let pink_bar = hex_linear("#ffb8ff");
+        let wall_core = hex_linear("#0b143b");
+        let wall_lip = hex_linear("#5c94ff");
+        let wall_lip_inner = hex_linear("#0e1b4d");
+        let dot_col = hex_linear("#ffdf6e");
+        let pellet_col = hex_linear("#fff29c");
+        let white = hex_linear("#ffffff");
+        let pupil = hex_linear("#1b34d8");
+
+        let mut x = -r;
+        while x < r {
+            let mut z = -r;
+            while z < r {
+                let odd = (((x / 12.0).round() as i32 + (z / 12.0).round() as i32) & 1) != 0;
+                m.box_part(x + 6.0, -0.4, z + 6.0, 12.0, 0.4, 12.0, if odd { floor_a } else { floor_b });
+                z += 12.0;
+            }
+            x += 12.0;
+        }
+        // Glowing portal edges: cyan (N <-> S) and magenta (E <-> W), no outer walls!
+        for side in [-1.0_f32, 1.0] {
+            m.box_part(0.0, 0.04, side * r, r * 2.0, 0.12, 1.1, cyan);
+            m.box_part(side * r, 0.04, 0.0, 1.1, 0.12, r * 2.0, magenta);
+            let mut i = -r + 12.0;
+            while i <= r - 12.0 {
+                m.box_part(i, 0.12, side * (r - 1.4), 3.6, 0.12, 0.55, cyan_hi);
+                m.box_part(side * (r - 1.4), 0.12, i, 0.55, 0.12, 3.6, magenta_hi);
+                i += 16.0;
+            }
+        }
+        for side in [-1.0_f32, 1.0] {
+            m.box_part(0.0, 0.05, side * 11.0, 14.0, 0.1, 1.1, pink_bar);
+        }
+        // Double-walled neon-blue Pac-Man maze blocks.
+        for &[bx, bz, bw, bd] in &def.blocks {
+            let (x, z, w, d) = (bx as f32, bz as f32, bw as f32, bd as f32);
+            m.box_part(x, 0.0, z, w, 4.2, d, wall);
+            if w > 1.8 && d > 1.8 {
+                m.box_part(x, 0.2, z, w - 1.4, 4.25, d - 1.4, wall_core);
+            }
+            m.box_part(x, 4.2, z, w + 0.25, 0.35, d + 0.25, wall_lip);
+            if w > 2.2 && d > 2.2 {
+                m.box_part(x, 4.25, z, w - 1.6, 0.35, d - 1.6, wall_lip_inner);
+            }
+        }
+        // Pac-Dots along open lanes + 4 corner Power Pellets.
+        let clear = |px: f64, pz: f64, pad: f64| {
+            !def.blocks.iter().any(|b| {
+                (px - b[0]).abs() < b[2] * 0.5 + pad && (pz - b[1]).abs() < b[3] * 0.5 + pad
+            })
+        };
+        let mut gx: i32 = -84;
+        while gx <= 84 {
+            let mut gz: i32 = -84;
+            while gz <= 84 {
+                if !(gx.abs() <= 18 && gz.abs() <= 12)
+                    && !(gx.abs() == 84 && gz.abs() == 84)
+                    && clear(gx as f64, gz as f64, 4.5)
+                {
+                    m.box_part(gx as f32, 0.05, gz as f32, 1.35, 0.16, 1.35, dot_col);
+                }
+                gz += 12;
+            }
+            gx += 12;
+        }
+        for sx in [-1.0_f32, 1.0] {
+            for sz in [-1.0_f32, 1.0] {
+                m.box_part(sx * 84.0, 0.08, sz * 84.0, 3.2, 0.9, 3.2, pellet_col);
+            }
+        }
+        // Four retro pixel ghosts watching from outside the torus corners.
+        let ghosts = [
+            (-1.0_f32, -1.0_f32, hex_linear("#ff2828")),
+            (1.0, -1.0, hex_linear("#ffb8ff")),
+            (-1.0, 1.0, hex_linear("#00e8ff")),
+            (1.0, 1.0, hex_linear("#ffb84d")),
+        ];
+        for (sx, sz, col) in ghosts {
+            let (gx, gz) = (sx * (r + 16.0), sz * (r + 16.0));
+            m.at(gx, 0.0, gz, (-gx).atan2(-gz));
+            m.box_part(0.0, 1.6, 0.0, 8.2, 7.6, 8.2, col);
+            m.box_part(0.0, 9.2, 0.0, 6.8, 2.2, 6.8, col);
+            m.box_part(0.0, 11.4, 0.0, 4.6, 1.1, 4.6, col);
+            for fx in [-2.8_f32, 0.0, 2.8] {
+                m.box_part(fx, 0.4, 0.0, 2.1, 1.4, 8.0, col);
+            }
+            for ex in [-1.7_f32, 1.7] {
+                m.box_part(ex, 6.8, 4.15, 2.1, 2.6, 0.6, white);
+                m.box_part(ex, 7.2, 4.5, 1.1, 1.4, 0.4, pupil);
+            }
+        }
+        m.at(0.0, 0.0, 0.0, 0.0);
+        return m.finish();
     } else {
         let span = ((r + 4.0) / 10.0).ceil() as i32 * 10;
         let cutouts: Vec<[f32; 4]> = def
@@ -487,6 +587,19 @@ pub fn xray_mesh(def: &ArenaDef) -> Mesh {
                 m.box_part(0.0, 0.025, ring, 2.0 * ring * t, 0.025, 0.035, floor);
             }
         }
+    } else if def.is_torus() {
+        let cyan = hex_linear("#00e5ff");
+        let magenta = hex_linear("#ff4fd8");
+        for side in [-1.0_f32, 1.0] {
+            m.box_part(0.0, 0.08, side * r, r * 2.0, th, th, cyan);
+            m.box_part(side * r, 0.08, 0.0, th, th, r * 2.0, magenta);
+        }
+        let mut n = -r;
+        while n <= r {
+            m.box_part(n, 0.025, 0.0, 0.035, 0.025, r * 2.0, floor);
+            m.box_part(0.0, 0.025, n, r * 2.0, 0.025, 0.035, floor);
+            n += 16.0;
+        }
     } else {
         let full = (r + 4.0) * 2.0;
         for side in [-1.0_f32, 1.0] {
@@ -523,7 +636,7 @@ mod tests {
 
     #[test]
     fn builds_valid_meshes_for_custom_square_and_octagon_arenas() {
-        for shape in ["square", "octagon"] {
+        for shape in ["square", "octagon", "torus"] {
             let def = ArenaDef {
                 name: format!("Custom {shape}"),
                 desc: "Dynamic server map".into(),

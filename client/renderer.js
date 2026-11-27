@@ -710,6 +710,54 @@ export class Renderer {
         m.box(corner+1.1,6.2,R+1.1,5,.45,5,'#eadfb9');
       }
       for(let i=0;i<8;i++){const a=(i+.5)*Math.PI/4;m.at(Math.sin(a)*(R+20),0,Math.cos(a)*(R+20));m.box(0,0,0,1,16,1,'#666377');m.box(0,15,0,8,1,1,'#eee1b1');m.cone(0,16,0,2,3,arena.wall,4);}
+    }else if(arena.shape==='torus'){
+      const R=arena.size;
+      // Midnight arcade cabinet floor with subtle neon grid tiles.
+      for(let x=-R;x<R;x+=12)for(let z=-R;z<R;z+=12){
+        m.box(x+6,-.4,z+6,12,.4,12,((Math.round(x/12)+Math.round(z/12))&1)?'#0c0f24':'#101533');
+      }
+      // Open flat-torus portal edges: cyan for North <-> South, magenta for East <-> West.
+      for(const side of [-1,1]){
+        m.box(0,.04,side*R,R*2,.12,1.1,'#00e5ff');
+        m.box(side*R,.04,0,1.1,.12,R*2,'#ff4fd8');
+        for(let i=-R+12;i<=R-12;i+=16){
+          m.box(i,.12,side*(R-1.4),3.6,.12,.55,'#7ef4ff');
+          m.box(side*(R-1.4),.12,i,.55,.12,3.6,'#ffa6ec');
+        }
+      }
+      // Pink Pac-Man ghost-house threshold laser bars on the floor (passable!).
+      for(const side of [-1,1])m.box(0,.05,side*11,14,.1,1.1,'#ffb8ff');
+      // Glowing double-walled neon-blue Pac-Man maze blocks.
+      for(const [x,z,w,d] of arena.blocks){
+        m.box(x,0,z,w,4.2,d,'#1f47e5');
+        if(w>1.8&&d>1.8)m.box(x,.2,z,w-1.4,4.25,d-1.4,'#0b143b');
+        m.box(x,4.2,z,w+.25,.35,d+.25,'#5c94ff');
+        if(w>2.2&&d>2.2)m.box(x,4.25,z,w-1.6,.35,d-1.6,'#0e1b4d');
+      }
+      // Classic golden Pac-Dots along open corridors + 4 glowing corner Power Pellets.
+      const clear=([px,pz],pad)=>!arena.blocks.some(([bx,bz,bw,bd])=>Math.abs(px-bx)<bw/2+pad&&Math.abs(pz-bz)<bd/2+pad);
+      for(let x=-84;x<=84;x+=12)for(let z=-84;z<=84;z+=12){
+        if(Math.abs(x)<=18&&Math.abs(z)<=12)continue;
+        if(Math.abs(x)===84&&Math.abs(z)===84)continue;
+        if(clear([x,z],4.5))m.box(x,.05,z,1.35,.16,1.35,'#ffdf6e');
+      }
+      for(const sx of [-1,1])for(const sz of [-1,1]){
+        m.ball(sx*84,.55,sz*84,1.8,.55,1.8,'#fff29c',10,5);
+      }
+      // Four giant retro arcade ghosts (Blinky, Pinky, Inky, Clyde) watching from outside the torus corners.
+      const ghosts=[[-1,-1,'#ff2828'],[1,-1,'#ffb8ff'],[-1,1,'#00e8ff'],[1,1,'#ffb84d']];
+      for(const [sx,sz,col] of ghosts){
+        const gx=sx*(R+16),gz=sz*(R+16),yaw=Math.atan2(-gx,-gz);
+        m.at(gx,0,gz,yaw);
+        m.box(0,1.6,0,8.2,7.2,8.2,col);
+        m.ball(0,8.8,0,4.2,4.2,4.2,col,10,6);
+        for(const fx of [-2.8,0,2.8])m.ball(fx,1.4,0,1.5,1.6,4.0,col,7,4);
+        for(const ex of [-1.7,1.7]){
+          m.ball(ex,8.2,3.8,1.25,1.55,.8,'#ffffff',8,5);
+          m.ball(ex,8.0,4.45,.65,.85,.45,'#1b34d8',7,4);
+        }
+      }
+      m.at(0,0,0);
     }else{
       const R=arena.size,span=Math.ceil((R+4)/10)*10,edge=R+2,full=(R+4)*2;
       const alt=index===0?'#959d86':index===1?'#978ca5':rgb(arena.ground).map(c=>Math.min(1,c+11/255));

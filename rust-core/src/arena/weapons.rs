@@ -142,7 +142,8 @@ impl Game{
                 shot.heading += angle(dx.atan2(dz), shot.heading).clamp(-turn, turn);
             }
             let (previous_x,previous_z)=(shot.wx,shot.wz);
-            shot.wx+=shot.heading.sin()*shot.speed*dt/steps as f64;shot.wz+=shot.heading.cos()*shot.speed*dt/steps as f64;
+            let (wx,wz)=wrap_point(self.global.arena,shot.wx+shot.heading.sin()*shot.speed*dt/steps as f64,shot.wz+shot.heading.cos()*shot.speed*dt/steps as f64);
+            shot.wx=wx;shot.wz=wz;
             if field.is_some_and(|(x,z)| distance(x,z,shot.wx,shot.wz) <= WORMHOLE_KILL_RADIUS) || self.ring_blocks(previous_x,previous_z,shot.wx,shot.wz){shot.quenched=true;shot.life=0.0;return(true,None,None);}
             if let Some(point)=decoy{if distance(shot.wx,shot.wz,point.0,point.1)<6.0{shot.orbit_age=Some(0.0);shot.orbit_direction=match steering<0.0{true=>-1.0,false=>1.0};shot.orbit_angle=shot.heading-shot.orbit_direction*std::f64::consts::FRAC_PI_2;shot.orbit_radius=shot.speed*0.6/std::f64::consts::TAU;shot.orbit_height=shot.height;shot.orbit_center=Some(Point{wx:shot.wx-shot.orbit_angle.sin()*shot.orbit_radius,wz:shot.wz-shot.orbit_angle.cos()*shot.orbit_radius});shot.chaffed=true;shot.life=shot.life.max(3.0);return orbit(shot,point,dt*(steps-step-1)as f64/steps as f64);}}
             let victim=match decoy.is_some(){true=>None,false=>self.actors.iter().find(|a|a.id!=shot.owner&&!a.bomber&&!a.afk&&a.destroyed<=0.0&&a.shield<=0.0&&distance(a.wx,a.wz,shot.wx,shot.wz)<2.7).map(|a|a.id)};

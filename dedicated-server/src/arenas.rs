@@ -111,6 +111,56 @@ pub fn extra_arenas() -> Vec<ArenaDef> {
                 [76.0, 8.0],
             ],
         },
+        ArenaDef {
+            name: "Pac-Man".into(),
+            desc: "Flat torus arcade maze. Drive or shoot off any edge to wrap around to the opposite side.".into(),
+            size: 96.0,
+            shape: "torus".into(),
+            max_players: None,
+            ground: "#0c0f24".into(),
+            wall: "#1f47e5".into(),
+            sky: "#090b1a".into(),
+            blocks: vec![
+                // Central Ghost House (open north & south doorways for high-speed passes)
+                [-18.0, 0.0, 5.0, 22.0],
+                [18.0, 0.0, 5.0, 22.0],
+                [-11.5, -11.0, 8.0, 5.0],
+                [11.5, -11.0, 8.0, 5.0],
+                [-11.5, 11.0, 8.0, 5.0],
+                [11.5, 11.0, 8.0, 5.0],
+                // Four classic Pac-Man cardinal T-bars
+                [0.0, -34.0, 34.0, 6.0],
+                [0.0, 34.0, 34.0, 6.0],
+                [-40.0, 0.0, 6.0, 30.0],
+                [40.0, 0.0, 6.0, 30.0],
+                // Four inner corner L-walls
+                [-44.0, -44.0, 22.0, 6.0],
+                [-52.0, -32.0, 6.0, 18.0],
+                [44.0, -44.0, 22.0, 6.0],
+                [52.0, -32.0, 6.0, 18.0],
+                [-44.0, 44.0, 22.0, 6.0],
+                [-52.0, 32.0, 6.0, 18.0],
+                [44.0, 44.0, 22.0, 6.0],
+                [52.0, 32.0, 6.0, 18.0],
+                // Four outer corner arcade blocks framing the open torus wrap highways
+                [-68.0, -68.0, 22.0, 10.0],
+                [68.0, -68.0, 22.0, 10.0],
+                [-68.0, 68.0, 22.0, 10.0],
+                [68.0, 68.0, 22.0, 10.0],
+            ],
+            water: vec![],
+            bridges: vec![],
+            spawns: vec![
+                [0.0, -64.0],
+                [0.0, 64.0],
+                [-68.0, 0.0],
+                [68.0, 0.0],
+                [-26.0, -64.0],
+                [26.0, 64.0],
+                [-72.0, -32.0],
+                [72.0, 32.0],
+            ],
+        },
     ]
 }
 
@@ -478,5 +528,31 @@ mod tests {
                 1.0 / 60.0,
             )
             .unwrap();
+    }
+
+    #[test]
+    fn pacman_torus_wraps_karts_and_projectiles_and_has_clear_spawns() {
+        ensure_loaded();
+        let arenas = server_arenas();
+        let idx = arenas.iter().position(|a| a.name == "Pac-Man").expect("Pac-Man arena exists");
+        let pacman = &arenas[idx];
+        assert!(pacman.valid());
+        assert!(pacman.is_torus());
+        assert_eq!(pacman.spawns.len(), 8);
+        for &[sx, sz] in &pacman.spawns {
+            assert!(!pacman.blocked(sx, sz, 6.0), "spawn ({sx}, {sz}) must be clear of walls");
+        }
+        let (wx, wz) = pacman.wrap(100.0, -102.0);
+        assert!((wx - (-92.0)).abs() < 1e-6);
+        assert!((wz - 90.0).abs() < 1e-6);
+        assert!(!pacman.wall_blocked(0.0, 96.5, 2.0), "open torus edge must not block");
+
+        let mut room = Room::new(idx, 0);
+        room.join(&json!({"name":"Chomper","driver":0})).unwrap();
+        room.control(0, "/api/control", &json!({"action":"start"})).unwrap();
+        let packet = room.core.packet(0);
+        let client = NativeClient::from_packet(&packet, 0.0).unwrap();
+        assert_eq!(client.view().arena_def.name, "Pac-Man");
+        assert!(client.view().arena_def.is_torus());
     }
 }

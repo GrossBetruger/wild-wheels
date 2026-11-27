@@ -85,6 +85,14 @@ export function drawXrayArena(m, arena) {
     m.at(0, 0, 0);
     return;
   }
+  if (arena.shape === 'torus') {
+    for (const side of [-1, 1]) {
+      m.box(0, .08, side * arena.size, arena.size * 2, thickness, thickness, '#00e5ff');
+      m.box(side * arena.size, .08, 0, thickness, thickness, arena.size * 2, '#ff4fd8');
+    }
+    for (let n = -arena.size; n <= arena.size; n += 16) { m.box(n, .025, 0, .035, .025, arena.size * 2, floor); m.box(0, .025, n, arena.size * 2, .025, .035, floor); }
+    return;
+  }
   for (const side of [-1, 1]) { frame(side * (arena.size + 2), 0, 4, (arena.size + 4) * 2, 5); frame(0, side * (arena.size + 2), (arena.size + 4) * 2, 4, 5); }
   // A faint ground reference shows distances and open lanes without revealing the scene.
   for (let n = -arena.size; n <= arena.size; n += 16) { m.box(n, .025, 0, .035, .025, arena.size * 2, floor); m.box(0, .025, n, arena.size * 2, .025, .035, floor); }
