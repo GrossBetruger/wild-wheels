@@ -86,7 +86,7 @@ export class BevyPresentation {
     this.canvas = document.createElement('canvas');
     this.canvas.id = 'bevy-canvas';
     this.canvas.setAttribute('aria-hidden', 'true');
-    this.canvas.tabIndex = -1;
+    this.canvas.tabIndex = 0;
     this.surface.append(this.canvas);
     gameCanvas.after(this.surface);
     this.log = log;
@@ -95,6 +95,9 @@ export class BevyPresentation {
     this.encode = createBinaryEncoder();
     this.ready = false;
     this.failed = false;
+    this.hasAudio = false;
+    this.directNet = false;
+    this.muted = false;
     this.progress = { stage: 'downloading', percent: 0, loadedBytes: 0, totalBytes: 0 };
     this.progressListeners = new Set();
     this.canvas.addEventListener('webglcontextlost', () => this.fail('graphics-lost'));
@@ -104,6 +107,7 @@ export class BevyPresentation {
   }
 
   get active() { return this.viewport.classList.contains('bevy-active'); }
+  get audioActive() { return this.active && this.hasAudio; }
   get fps() { return Math.round(this.quality?.fps ?? 0); }
   get status() {
     if (this.failed) return 'BEVY UNAVAILABLE';
@@ -212,7 +216,7 @@ export class BevyPresentation {
       this.reportProgress({ stage: 'downloading', percent, loadedBytes: packLoaded, totalBytes: packTotal });
     };
     try {
-      const [{ bindings, wasmMs }, { pack, assetMs }, uiPack] = await Promise.all([
+      const [{ bindings, wasmMs }, { pack, assetMs }, uiPack, soundPack] = await Promise.all([
         import(`${prefix}pkg/wild_wheels_wasm.js${v}`).then(async bindings => {
           await bindings.default({ module_or_path: `${prefix}pkg/wild_wheels_wasm_bg.wasm${v}` });
           wasmDone = true;
@@ -227,6 +231,9 @@ export class BevyPresentation {
         fetch(`${prefix}ui.wwup${v}`)
           .then(res => (res.ok ? res.arrayBuffer() : null))
           .catch(() => null),
+        fetch(`${prefix}sounds.wwsp${v}`)
+          .then(res => (res.ok ? res.arrayBuffer() : null))
+          .catch(() => null),
       ]);
       if (this.mobile && typeof bindings.set_mobile_presentation_level !== 'function') {
         throw new Error('Mobile Bevy graphics require the current WASM build');
@@ -235,7 +242,14 @@ export class BevyPresentation {
       if (uiPack && uiPack.byteLength > 0 && typeof bindings.set_ui_pack === 'function') {
         bindings.set_ui_pack(new Uint8Array(uiPack));
       }
-      bindings.start_presentation(new Uint8Array(pack), this.mobile);
+      const soundBytes = soundPack && soundPack.byteLength > 0 ? new Uint8Array(soundPack) : new Uint8Array(0);
+      this.hasAudio = soundBytes.byteLength > 0 && typeof bindings.start_client === 'function';
+      if (typeof bindings.start_client === 'function') {
+        bindings.start_client(new Uint8Array(pack), soundBytes, this.mobile, false);
+      } else {
+        bindings.start_presentation(new Uint8Array(pack), this.mobile);
+      }
+      if (this.muted) bindings.set_muted?.(true);
       this.bindings = bindings;
       this.ready = true;
       if (this.mobile) this.updateMobileLevel();
@@ -267,6 +281,53 @@ export class BevyPresentation {
     try { return JSON.parse(raw); } catch { return []; }
   }
 
+  setMuted(muted) {
+    this.muted = Boolean(muted);
+    this.bindings?.set_muted?.(this.muted);
+  }
+
+  pushAudioEvent(name) {
+    if (this.hasAudio) this.bindings?.push_audio_event?.(name);
+  }
+
+  pushVoice(driver, cue, volume = 1) {
+    if (this.hasAudio) this.bindings?.push_voice?.(driver, cue, volume);
+  }
+
+  setDirectNet(enabled) {
+    const next = Boolean(enabled && !this.failed && !this.mobile && typeof this.bindings?.set_direct_net === 'function');
+    if (next === this.directNet) return;
+    this.directNet = next;
+    this.bindings?.set_direct_net?.(next);
+  }
+
+  resetSession() {
+    this.bindings?.reset_session?.();
+  }
+
+  acceptNetPacket(packet) {
+    if (!this.directNet || !this.bindings?.accept_net_packet) return;
+    const bytes = packet instanceof Uint8Array ? packet : new Uint8Array(packet);
+    this.bindings.accept_net_packet(bytes);
+  }
+
+  pollNetOutbound() {
+    if (!this.directNet || !this.bindings?.poll_net_outbound) return '';
+    return this.bindings.poll_net_outbound() || '';
+  }
+
+  setInputBlocked(blocked) {
+    this.bindings?.set_input_blocked?.(Boolean(blocked));
+  }
+
+  setVirtualKeys(bits) {
+    this.bindings?.set_virtual_keys?.(bits >>> 0);
+  }
+
+  triggerAction(kind, item = '') {
+    this.bindings?.trigger_action?.(kind, item);
+  }
+
   draw(world, client) {
     this.supported = world.mode === 'combat' && !world.bomber;
     if (this.mobile) this.updateMobileLevel();
@@ -287,11 +348,13 @@ export class BevyPresentation {
         if (now + 1 < this.nextFrame) return this.active;
         this.nextFrame = Math.max(now + 1, this.nextFrame + 1000 / this.quality.profile.fps);
       }
-      const packet = client ? client.presentationPacket() : this.encode({
-        type: 'state', time: world.elapsed, you: world.id,
-        world: { ...world, arenaDef: arenas[world.arena] },
-      });
-      bindings.present_frame(packet);
+      if (!this.directNet) {
+        const packet = client ? client.presentationPacket() : this.encode({
+          type: 'state', time: world.elapsed, you: world.id,
+          world: { ...world, arenaDef: arenas[world.arena] },
+        });
+        bindings.present_frame(packet);
+      }
       const rejected = bindings.take_invalid_packets();
       if (rejected) this.log.limited('bevy-frame-invalid', 15000, 'warn', 'bevy-frame-invalid', { rejected });
       if (!bindings.presentation_ready()) return false;

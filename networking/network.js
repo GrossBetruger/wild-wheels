@@ -355,6 +355,7 @@ export class NetworkGame {
   }
   accept(packet){
     if(!this.active)return;
+    this.onBinaryPacket?.(packet);
     const now=performance.now()/1000;this.lastPacket=now*1000;this.client.accept(packet,now);this.client.frame(0,this.paused?0:this.keys,now);this.client.peek();
     const state=this.client.state();
     if(state.world.arenaDef&&Number.isInteger(state.world.arena)&&state.world.arena>=0&&state.world.arena<32){arenas[state.world.arena]=state.world.arenaDef;this.onArenas();}
@@ -403,7 +404,18 @@ export class NetworkGame {
     const now=performance.now()/1000;
     if(!this.active||!this.client||this.socket?.readyState!==WebSocket.OPEN||this.socket.bufferedAmount>16384)return;
     if(now-this.lastPing>=1){this.lastPing=now;this.socket.send(JSON.stringify({type:'ping',sent:now}));}
+    if(this.pollOutbound){
+      const rustOut=this.pollOutbound();
+      if(rustOut!==null){
+        if(rustOut)this.socket.send(rustOut);
+        return;
+      }
+    }
     this.socket.send(this.client.outboundText(this.paused?0:this.keys));
+  }
+  flushOutbound(){
+    if(!this.pollOutbound)return;
+    this.input();
   }
   stream(){
     const token=this.token,url=new URL('/api/socket',location.href);url.protocol=location.protocol==='https:'?'wss:':'ws:';const socket=this.socket=new WebSocket(url);
@@ -431,7 +443,7 @@ export class NetworkGame {
     this.colorPending=false;this.colorError='';this.nextDriver=null;
     this.nameFeedback.textContent='';this.nameDirty=false;this.namePending=false;this.namePromise=null;
     this.restoreOnVisible=false;this.voice.disconnect();
-    if(notify)this.request('/api/leave',{}).catch(()=>{});this.token=null;this.chatColor=null;this.socket?.close();this.state=null;this.pending=null;this.actions=[];this.keys.clear();this.client=null;this.rtt=0;this.lastPing=-Infinity;
+    if(notify)this.request('/api/leave',{}).catch(()=>{});this.token=null;this.chatColor=null;this.socket?.close();this.state=null;this.pending=null;this.actions=[];this.keys.clear();this.client=null;this.rtt=0;this.lastPing=-Infinity;this.onSessionReset?.();
     this.internetError=false;this.hostButton.disabled=false;this.name.disabled=false;this.botCount.disabled=false;for(const option of this.botCount.options)option.disabled=false;this.leaveButton.classList.add('hidden');this.micButton.classList.add('hidden');this.voiceBanner?.classList.add('hidden');this.copyButton.classList.add('hidden');this.internetButton.classList.add('hidden');this.animalChoice.classList.add('hidden');this.share.classList.add('hidden');this.help.classList.add('hidden');this.players.replaceChildren();this.status.textContent=message;this.onLeave();
     if(this.dedicated){document.body.classList.remove('arena-connected');this.connectionStatus(message);}
   }

@@ -56,6 +56,7 @@ function loadArenaRenderer() {
   return bevyImport ??= import('./bevy-presentation.js').then(({ BevyPresentation }) => {
     bevy = new BevyPresentation(canvas, clientLog, mobile);
     bevy.setQuality(qualitySelect.value);
+    bevy.setMuted(!audio.enabled);
     characterPreview.uplifted = bevy;
     return bevy;
   }).catch(error => {
@@ -135,23 +136,24 @@ if (dedicated || dedicatedSolo) {
 globalThis.__syncBuildLabel?.();
 const soloLimits = {targetScore: 10, matchMinutes: 3};
 const newGame = () => { if (mobile) bomberWeapon = 'abomb'; return applyPlayerColors(mode === 'combat' ? (mobile ? equipBomber(createBattle(selected, track, Math.random, soloLimits)) : createBattle(selected, track, Math.random, soloLimits)) : createRace(selected, track), network.preferredColor); };
-const useWeapon = () => network.active ? network.action('fire') : mode === 'combat' ? fireBattle(race) : useItem(race);
+const useWeapon = () => bevy?.directNet ? bevy.triggerAction('fire') : network.active ? network.action('fire') : mode === 'combat' ? fireBattle(race) : useItem(race);
 function chooseWeapon(item) {
+  if (bevy?.directNet) return bevy.triggerAction(item ? 'select' : 'cycle', item || '');
   if (network.active) return item ? network.action('select',item) : network.action('cycle');
   if (mode === 'combat' && pulledByWormhole(race, race)) return;
   return item ? selectItem(race,item) : cycleItem(race);
 }
 const switchWeapon = () => chooseWeapon();
-const chaff = () => network.active ? network.action('chaff') : mode === 'combat' ? releaseChaff(race) : false;
-const turbo = () => network.active ? network.action('turbo') : mode === 'combat' ? useBattleTurbo(race) : useTurbo(race);
+const chaff = () => bevy?.directNet ? bevy.triggerAction('chaff') : network.active ? network.action('chaff') : mode === 'combat' ? releaseChaff(race) : false;
+const turbo = () => bevy?.directNet ? bevy.triggerAction('turbo') : network.active ? network.action('turbo') : mode === 'combat' ? useBattleTurbo(race) : useTurbo(race);
 const special = () => {
   if (race.driver === 15 && mode === 'combat' && battleActive(race) && !(race.destroyed > 0) && !(race.specialCooldown > 0) && race.specialAbilities !== false && !karmaTarget(race, race)) {
     uiNotice = { text: race.lastKiller == null ? 'KARMIC RACCOONING · NO ONE HAS KO’D YOU YET' : 'KARMIC RACCOONING · LAST KILLER IS RESPAWNING', until: performance.now() + 2400 };
     return false;
   }
-  return network.active ? network.action('special') : useSpecial(race);
+  return bevy?.directNet ? bevy.triggerAction('special') : network.active ? network.action('special') : useSpecial(race);
 };
-const somersault = () => network.active ? network.action('somersault') : mode === 'combat' ? somersaultBattle(race) : false;
+const somersault = () => bevy?.directNet ? bevy.triggerAction('somersault') : network.active ? network.action('somersault') : mode === 'combat' ? somersaultBattle(race) : false;
 const mobilePanel = document.createElement('div'); mobilePanel.className = 'mobile-panel'; mobilePanel.classList.toggle('hidden', !mobile);
 const mobileHint = document.createElement('span');
 try { if (localStorage.getItem('wild-wheels:bomber-view') === 'map') renderer.bomberView = 'map'; } catch { }
@@ -252,7 +254,7 @@ for (const [field, caption, maximum] of [['targetScore', 'Kills to win', 100], [
 function resetMap() { race = newGame(); lastPhase = ''; lastCount = -1; keys.clear(); updateMapLabels(); }
 function chooseMap(index) { if (dedicated && !network.active) return; if (index === track) return; if (network.active) { if (network.canConfigure) network.control('arena', index); return; } track = index; selectedMaps[mode] = index; resetMap(); }
 const network = new NetworkGame({
-  anchor: modeSwitch, limits: () => soloLimits, keys, role: mobile ? 'bomber' : 'driver', clientType: clientLog.client, offline: dedicatedSolo, beforeConnect: ensureBevyReady, driver: () => selected, arena: () => track, onArenas: () => { ensureMapButtons(); updateMapLabels(); }, unlock: () => audio.unlock(), sound: type => audio.event(type), isAudioEnabled: () => audio.enabled, getAudioContext: () => audio.context, onState: world => {
+  anchor: modeSwitch, limits: () => soloLimits, keys, role: mobile ? 'bomber' : 'driver', clientType: clientLog.client, offline: dedicatedSolo, beforeConnect: ensureBevyReady, driver: () => selected, arena: () => track, onArenas: () => { ensureMapButtons(); updateMapLabels(); }, unlock: () => audio.unlock(), sound: type => { if (bevy?.audioActive) { if (!bevy.directNet) bevy.pushAudioEvent(type); } else audio.event(type); }, isAudioEnabled: () => audio.enabled, getAudioContext: () => audio.context, onState: world => {
     const changed = mode !== 'combat' || track !== world.arena;
     if (race.soundEpoch !== world.soundEpoch) bomberWeapon = 'abomb';
     if (world.phase === "ready" && (world.targetScore !== race.targetScore || world.duration !== race.duration)) lastPhase = "";
@@ -263,6 +265,13 @@ const network = new NetworkGame({
   }, onLeave: () => { race = newGame(); lastPhase = ''; keys.clear(); updateMapLabels(); }
 });
 network.log = (level, event, data) => clientLog.note(level, event, data); startReporting(clientLog, { token: () => network.token });
+network.onBinaryPacket = packet => {
+  if (!bevy?.ready || bevy.failed || mobile || race.bomber) return;
+  bevy.setDirectNet(true);
+  bevy.acceptNetPacket(packet);
+};
+network.pollOutbound = () => (bevy?.directNet ? bevy.pollNetOutbound() : null);
+network.onSessionReset = () => { bevy?.resetSession(); bevy?.setDirectNet(false); };
 const startRow = document.createElement('div'); startRow.className = 'start-row'; $('start').before(startRow); startRow.append(network.createNameField(), $('start'));
 const photography = new BomberPhotography({ canvas, viewport: document.querySelector('.viewport'), network, sound: type => audio.event(type), unlock: () => audio.unlock() });
 const gameColumn = document.createElement('div'); gameColumn.className = 'game-column'; racePanel.before(gameColumn); gameColumn.append(racePanel);
@@ -466,7 +475,7 @@ function drawMap() {
   for (const [i, branch] of branches.entries()) { map.beginPath(); for (let j = 0; j <= 40; j++) { const [x, y] = mapPoint((branch.start + (branch.end - branch.start) * j / 40) * Math.PI * 2, i + 1); if (j === 0) map.moveTo(x, y); if (j > 0) map.lineTo(x, y); } map.strokeStyle = '#c6a258'; map.lineWidth = 4; map.stroke(); }
   for (const b of race.bots) { const [x, y] = mapPoint(b.s / LENGTH * Math.PI * 2, b.route); map.fillStyle = b.color; map.beginPath(); map.arc(x, y, 3, 0, 7); map.fill(); } const [x, y] = mapPoint(race.s / LENGTH * Math.PI * 2, race.route); map.fillStyle = race.color; map.beginPath(); map.arc(x, y, 5, 0, 7); map.fill(); map.strokeStyle = '#fff'; map.lineWidth = 2; map.stroke(); map.font = '9px monospace'; map.fillStyle = '#9a91a0'; map.textAlign = 'center'; map.fillText('CHOOSE YOUR ROUTE', 140, 69);
 }
-function tone(freq, duration = .1) { audio.tone(freq, duration); }
+function tone(freq, duration = .1) { if (!bevy?.audioActive) audio.tone(freq, duration); }
 function timeLabel(t) { return `${String(Math.floor(t / 60)).padStart(2, '0')}:${(t % 60).toFixed(2).padStart(5, '0')}`; }
 let scoreboardKey = '';
 function put(id, value) { const node = $(id); if (node.textContent !== String(value)) node.textContent = value; }
@@ -631,7 +640,7 @@ function hud() {
   switch(race.phase){
     case 'ready':message.querySelector('.pill').textContent=race.bomber?'YOU HAVE AIR SUPPORT':mode==='combat'?'EVERY KART FOR ITSELF':'THE GRID IS WAITING';message.querySelector('h2').textContent=race.bomber?'Trouble from above.':mode==='combat'?'Small karts. Big trouble.':'Born to be wild.';message.querySelector('p').textContent=race.bomber?'Start with 2 of each bomb · Stink every 5s · A-bomb every 10s':mode==='combat'?`First to ${race.targetScore} kills · ${race.duration / 60} min · Hold Space to fire`:'Six racers. Three laps. Two alternate routes.';message.querySelector('small').textContent=`${mode==='combat'?arenas[track].name:tracks[track].name} · ${race.bomber?'Tap to bomb · Drag to explore':'Press Enter to start'}`;button.textContent=race.bomber?'LET’S BOMB ↗':mode==='combat'?'LET’S BATTLE ↗':'LET’S RACE ↗';$('status').textContent='READY WHEN YOU ARE';break;
     case 'countdown':message.querySelector('.pill').textContent='ON YOUR MARKS';message.querySelector('p').textContent=race.bomber?'Pick your target. Tap when the battle starts.':'Hold ↑ or W to accelerate';message.querySelector('small').textContent='';$('status').textContent='LIGHTS OUT IN 3…';break;
-    case 'racing':tone(850,.3);$('status').textContent='MAKE SOME PIXEL DUST';break;
+    case 'racing':tone(850,.3);$('status').textContent='MAKE SOME PIXEL DUST';if(bevy?.directNet&&!(document.activeElement instanceof HTMLInputElement||document.activeElement instanceof HTMLTextAreaElement))bevy.canvas.focus({preventScroll:true});break;
     case 'paused':message.querySelector('.pill').textContent='PIT STOP';message.querySelector('h2').textContent='Catch your breath.';message.querySelector('p').textContent=network.active?'The match continues while you are away.':'Your rivals can wait.';button.textContent='BACK TO THE RACE ↗';$('status').textContent=dedicated?'AFK · MATCH CONTINUES':'RACE PAUSED';if(dedicated){message.querySelector('.pill').textContent='AFK';message.querySelector('small').textContent='Your place and score are saved.';button.textContent='BACK TO ARENA ↗';}break;
     case 'finished':keys.clear();message.querySelector('.pill').textContent=mode==='combat'?(battleTieNotice(race)||'BATTLE COMPLETE'):'RACE COMPLETE';message.querySelector('h2').textContent=`${race.finishRank}${ordinal(race.finishRank)} PLACE`;message.querySelector('p').textContent=mode==='combat'?`${race.kills} kills · ${race.deaths} deaths · ${timeLabel(race.finishTime)}`:`Finished ${race.finishRank}${ordinal(race.finishRank).toLowerCase()} of 6 · ${timeLabel(race.finishTime)}`;message.querySelector('small').textContent='';button.textContent='PLAY AGAIN ↗';$('status').textContent='MATCH COMPLETE';break;
   }
@@ -657,7 +666,7 @@ function pause() { if (network.active) { network.pause(); return; } if (race.pha
 $('start').onclick = start; $('pause').onclick = pause; $('restart').onclick = () => { if (dedicated) return; if (network.active) { network.control('reset'); return; } race = newGame(); lastPhase = ''; keys.clear(); };
 $('change-track').onclick = () => chooseMap((track + 1) % mapButtons.length);
 $('sound').textContent = 'SOUND ON'; $('sound').setAttribute('aria-label', 'Mute sound');
-$('sound').onclick = () => { audio.toggle(); $('sound').textContent = audio.enabled ? 'SOUND ON' : 'SOUND OFF'; $('sound').setAttribute('aria-label', audio.enabled ? 'Mute sound' : 'Enable sound'); tone(660); };
+$('sound').onclick = () => { audio.toggle(); bevy?.setMuted(!audio.enabled); $('sound').textContent = audio.enabled ? 'SOUND ON' : 'SOUND OFF'; $('sound').setAttribute('aria-label', audio.enabled ? 'Mute sound' : 'Enable sound'); tone(660); };
 $('fullscreen').onclick = async () => { try { if (document.fullscreenElement) { await document.exitFullscreen(); return; } await (useBevy && mobile ? racePanel : document.querySelector('.viewport')).requestFullscreen(); } catch { uiNotice = { text: 'Fullscreen unavailable in this browser', until: performance.now() + 3000 }; } };
 window.addEventListener('keydown', e => {
   if (e.target !== chat.input || !returnsToGame(e, race.phase)) return;
@@ -680,13 +689,14 @@ window.addEventListener('keydown', e => {
   }
   if (key === 'tab' || key === 'meta') {
     if (!playing || e.shiftKey || e.ctrlKey || e.altKey || key === 'tab' && e.metaKey) return;
-    e.preventDefault(); if (!e.repeat) switchWeapon(); return;
+    e.preventDefault(); if (!e.repeat && !(bevy?.directNet && document.activeElement === bevy.canvas)) switchWeapon(); return;
   }
   if (e.target instanceof HTMLButtonElement && [' ', 'Enter'].includes(e.key) && !playing) return;
   if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'shift'].includes(key)) e.preventDefault();
   keys.add(key); if (e.repeat) return;
-  if (network.active) network.input();
-  switch (key) { case 'enter': start(); break; case 'escape': case 'p': pause(); break; case ' ': useWeapon(); break; case 'q': switchWeapon(); break; case 'x': if (!e.ctrlKey && !e.metaKey && !e.altKey) turbo(); break; case 'f': if (!e.ctrlKey && !e.metaKey && !e.altKey) special(); break; case 'z': if (!e.ctrlKey && !e.metaKey && !e.altKey) somersault(); break; case 'c': if (!e.ctrlKey && !e.metaKey && !e.altKey) chaff(); break; case 'v': if (!e.ctrlKey && !e.metaKey && !e.altKey && network.active) network.setTalking(true); break; }
+  if (network.active && !bevy?.directNet) network.input();
+  const rustOwnsAction = Boolean(bevy?.directNet && playing && document.activeElement === bevy.canvas);
+  switch (key) { case 'enter': start(); break; case 'escape': case 'p': pause(); break; case ' ': if (!rustOwnsAction) useWeapon(); break; case 'q': if (!rustOwnsAction) switchWeapon(); break; case 'x': if (!e.ctrlKey && !e.metaKey && !e.altKey && !rustOwnsAction) turbo(); break; case 'f': if (!e.ctrlKey && !e.metaKey && !e.altKey && !rustOwnsAction) special(); break; case 'z': if (!e.ctrlKey && !e.metaKey && !e.altKey && !rustOwnsAction) somersault(); break; case 'c': if (!e.ctrlKey && !e.metaKey && !e.altKey && !rustOwnsAction) chaff(); break; case 'v': if (!e.ctrlKey && !e.metaKey && !e.altKey && network.active) network.setTalking(true); break; }
 });
 window.addEventListener('keyup', e => { const key = gameKey(e); keys.delete(key); if (key === 'v') network.setTalking(false); if (network.active) network.input(); });
 const stepAway = () => { network.setTalking(false); if (!['racing', 'countdown'].includes(race.phase)) return; if (network.active && network.dedicated) { if (!network.afk) network.setAway(true); return; } pause(); };
@@ -719,16 +729,40 @@ function frame(t) {
   if (network.active) race = network.render(dt) ?? race;
   if (!network.active && mode === 'combat') tickBattle(race, keys, dt);
   if (!network.active && mode === 'race') tick(race, keys, dt);
+  if (bevy?.ready && !bevy.failed) {
+    const direct = Boolean(network.active && mode === 'combat' && !race.bomber && !mobile);
+    bevy.setDirectNet(direct);
+    if (bevy.directNet) {
+      const ae = document.activeElement;
+      const typing = Boolean(ae && (ae instanceof HTMLInputElement || ae instanceof HTMLTextAreaElement || ae instanceof HTMLSelectElement || ae.isContentEditable));
+      bevy.setInputBlocked(race.phase !== 'racing' || network.paused || typing);
+      let vbits = 0;
+      if (!typing && ae !== bevy.canvas) {
+        if (keys.has('arrowup') || keys.has('w')) vbits |= 1;
+        if (keys.has('arrowdown') || keys.has('s')) vbits |= 2;
+        if (keys.has('arrowright') || keys.has('d')) vbits |= 4;
+        if (keys.has('arrowleft') || keys.has('a')) vbits |= 8;
+        if (keys.has('shift')) vbits |= 16;
+      }
+      bevy.setVirtualKeys(vbits);
+      network.flushOutbound();
+    }
+  }
+  const rustAudio = Boolean(bevy?.audioActive);
   for (const event of race.events) {
-    audio.event(event);
+    if (rustAudio) { if (!bevy.directNet) bevy.pushAudioEvent(event); }
+    else audio.event(event);
     if (event === 'victory' || event === 'finish') announceFinish();
   }
   race.events.length = 0;
   const priority = { win: 5, lap: 4, cheer: 3, hurt: 2, pass: 1 };
   race.voices.sort((a, b) => priority[b.cue] - priority[a.cue]);
-  for (const call of race.voices) audio.voice(call);
+  for (const call of race.voices) {
+    if (rustAudio) { if (!bevy.directNet) bevy.pushVoice(call.driver, call.cue, call.volume ?? 1); }
+    else audio.voice(call);
+  }
   race.voices.length = 0;
-  audio.update(race);
+  if (!rustAudio) audio.update(race);
   const refreshUi = !useBevy || !mobile || t + 1 >= nextMobileUiFrame;
   if (useBevy && mobile && refreshUi) nextMobileUiFrame = Math.max(nextMobileUiFrame + 1000 / 30, t + 1);
   draw(refreshUi);

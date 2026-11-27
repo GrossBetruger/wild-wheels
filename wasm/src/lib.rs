@@ -21,8 +21,11 @@ static OUTBOUND_TEXT: Mutex<Option<String>> = Mutex::new(None);
 static QUEUED_ACTIONS: Mutex<Vec<(String, String)>> = Mutex::new(Vec::new());
 static PRESENTATION_READY: AtomicBool = AtomicBool::new(false);
 static DIRECT_NET_MODE: AtomicBool = AtomicBool::new(false);
+static RESET_SESSION: AtomicBool = AtomicBool::new(false);
 static HUD_ACTIVE: AtomicBool = AtomicBool::new(false);
 static HUD_ACTIONS_OUT: Mutex<Vec<(String, String)>> = Mutex::new(Vec::new());
+static PENDING_AUDIO_EVENTS: Mutex<Vec<String>> = Mutex::new(Vec::new());
+static PENDING_VOICES: Mutex<Vec<(usize, String, f64)>> = Mutex::new(Vec::new());
 static VIRTUAL_KEYS: AtomicU32 = AtomicU32::new(0);
 static INPUT_BLOCKED: AtomicBool = AtomicBool::new(false);
 // Mobile profiles are ordered from highest detail to idle in bevy-presentation.js.
@@ -39,6 +42,37 @@ pub fn set_ui_pack(ui_pack: Vec<u8>) {
 #[wasm_bindgen]
 pub fn set_hud_active(active: bool) {
     HUD_ACTIVE.store(active, Ordering::Relaxed);
+}
+
+#[wasm_bindgen]
+pub fn set_direct_net(enabled: bool) {
+    let prev = DIRECT_NET_MODE.swap(enabled, Ordering::Relaxed);
+    if prev != enabled {
+        RESET_SESSION.store(true, Ordering::Relaxed);
+    }
+}
+
+#[wasm_bindgen]
+pub fn reset_session() {
+    RESET_SESSION.store(true, Ordering::Relaxed);
+}
+
+#[wasm_bindgen]
+pub fn push_audio_event(name: String) {
+    if let Ok(mut q) = PENDING_AUDIO_EVENTS.lock() {
+        if q.len() < 64 {
+            q.push(name);
+        }
+    }
+}
+
+#[wasm_bindgen]
+pub fn push_voice(driver: usize, cue: String, volume: f64) {
+    if let Ok(mut q) = PENDING_VOICES.lock() {
+        if q.len() < 32 {
+            q.push((driver, cue, volume));
+        }
+    }
 }
 
 #[wasm_bindgen]
@@ -78,7 +112,7 @@ pub fn start_client(pack: Vec<u8>, sound_pack: Vec<u8>, mobile: bool, direct_net
                 title: "Wild Wheels".into(),
                 canvas: Some("#bevy-canvas".into()),
                 fit_canvas_to_parent: true,
-                prevent_default_event_handling: direct_net,
+                prevent_default_event_handling: false,
                 resolution: WindowResolution::new(1280, 720),
                 resize_constraints: match mobile {
                     true => bevy::window::WindowResizeConstraints {
@@ -299,7 +333,28 @@ fn sync_session(
     mut hud_state: ResMut<hud::HudState>,
     mut hud_events: ResMut<hud::HudEvents>,
 ) {
+    if RESET_SESSION.swap(false, Ordering::Relaxed) {
+        session.client = None;
+        session.sounds.clear();
+        session.voices.clear();
+        hud_events.actions.clear();
+        if let Ok(mut q) = INCOMING_PACKETS.lock() {
+            q.clear();
+        }
+        if let Ok(mut slot) = OUTBOUND_TEXT.lock() {
+            *slot = None;
+        }
+        if let Ok(mut q) = QUEUED_ACTIONS.lock() {
+            q.clear();
+        }
+    }
     if !DIRECT_NET_MODE.load(Ordering::Relaxed) {
+        if let Ok(mut q) = PENDING_AUDIO_EVENTS.lock() {
+            session.sounds.append(&mut q);
+        }
+        if let Ok(mut q) = PENDING_VOICES.lock() {
+            session.voices.append(&mut q);
+        }
         if let Ok(mut out) = HUD_ACTIONS_OUT.lock() {
             for act in hud_events.actions.drain(..) {
                 if let hud::HudAct::Game(action) = act {
@@ -358,7 +413,7 @@ fn sync_session(
         hud_events.actions.clear();
         return;
     };
-    hud_state.active = true;
+    hud_state.active = HUD_ACTIVE.load(Ordering::Relaxed);
     for act in hud_events.actions.drain(..) {
         if let hud::HudAct::Game(action) = act {
             let _ = client.action(action, now);
@@ -415,7 +470,11 @@ fn sync_session(
         if keys.just_pressed(KeyCode::KeyC) {
             let _ = client.action(ClientAction::Chaff, now);
         }
-        if keys.just_pressed(KeyCode::Tab) || keys.just_pressed(KeyCode::KeyQ) {
+        if keys.just_pressed(KeyCode::Tab)
+            || keys.just_pressed(KeyCode::KeyQ)
+            || keys.just_pressed(KeyCode::SuperLeft)
+            || keys.just_pressed(KeyCode::SuperRight)
+        {
             let _ = client.action(ClientAction::CycleWeapon, now);
         }
     }
