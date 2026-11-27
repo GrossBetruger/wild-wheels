@@ -12,7 +12,7 @@ fn experimental_asset(code: &mut String, hash: &mut Sha256, route: &str, path: &
         Some("wasm") => "application/wasm",
         Some("glb") => "model/gltf-binary",
         Some("png") => "image/png",
-        Some("wwgp" | "wwsp") => "application/octet-stream",
+        Some("wwgp" | "wwsp" | "wwup") => "application/octet-stream",
         _ => panic!("Unexpected experimental asset type: {}", path.display()),
     };
     println!("cargo:rerun-if-changed={}", path.display());
