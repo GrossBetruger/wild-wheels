@@ -226,7 +226,7 @@ export class NetworkGame {
     this.chatColor=isPlayerColor(reply.chatColor)?reply.chatColor:null;
     const preferred=reply.preferredColor??reply.world.color;
     if(isPlayerColor(preferred)){this.preferredColor=preferred;this.colorDirty=false;this.rememberColor();}
-    this.colorPending=false;this.colorError='';
+    this.colorPending=false;this.colorError='';this.nextDriver=null;
     const draft=this.nameDirty?this.name.value:null;
     if(reply.invite)this.invite=reply.invite;
     const url=new URL(location.href);url.searchParams.set('room',reply.code);if(this.invite)url.hash=new URLSearchParams({invite:this.invite}).toString();history.replaceState(null,'',url);this.invitation=reply.code;
@@ -370,7 +370,8 @@ export class NetworkGame {
     this.abilities.textContent=state.specialAbilities===false?'SPECIAL ABILITIES · OFF':'SPECIAL ABILITIES · ON';this.abilities.disabled=!this.canConfigure;this.abilities.setAttribute('aria-pressed',String(state.specialAbilities!==false));
     const arenaCap=Math.min(state.maxPlayers??6,arenas[state.world.arena]?.maxPlayers??(state.maxPlayers??6));
     this.botCount.value=String(state.bots);this.botCount.disabled=!this.canConfigure||!['ready','finished'].includes(state.world.phase);for(const option of this.botCount.options)option.disabled=Number(option.value)>arenaCap-state.players.length;
-    this.animalChoice.value=String(state.world.driver);this.animalChoice.disabled=!['ready','finished'].includes(state.world.phase);
+    this.animalChoice.value=String(this.nextDriver??state.world.driver);this.animalChoice.disabled=false;
+    if(['ready','finished'].includes(state.world.phase)&&this.nextDriver!==null&&state.world.driver===this.nextDriver)this.nextDriver=null;
     this.status.textContent=`${state.players.length} PLAYER${state.players.length===1?'':'S'} · ${state.bots} BOT${state.bots===1?'':'S'} · ${this.isHost?'Share the link, then press Let’s Battle.':this.role==='bomber'?'Press Let’s Play when you’re ready.':'Choose your racer and press Let’s Play.'}`;
     if(this.dedicated)this.status.textContent=`SHARED ARENA · ${state.players.length} PLAYER${state.players.length===1?'':'S'} · ${state.bots} BOT${state.bots===1?'':'S'} · Anyone can start the match.`;
     if(['ready','finished'].includes(state.world.phase)){
@@ -413,15 +414,20 @@ export class NetworkGame {
   }
   async control(action,arena,bots){try{if(action==='start'&&!await this.saveName())return;await this.request('/api/control',{action,arena,bots});this.paused=false;}catch(error){this.status.textContent=error.message;}}
   async chooseDriver(driver){
-    if(!this.active||!['ready','finished'].includes(this.state?.world.phase))return;
-    try{await this.request('/api/driver',{driver});}catch(error){this.status.textContent=error.message;}
+    if(!this.active)return null;
+    try{
+      const reply=await this.request('/api/driver',{driver});
+      this.nextDriver=Number.isInteger(reply.nextDriver)?reply.nextDriver:null;
+      this.animalChoice.value=String(this.nextDriver??driver);
+      return this.nextDriver;
+    }catch(error){this.status.textContent=error.message;return null;}
   }
   pause(){if(this.dedicated)return this.setAway(!this.afk);this.paused=!this.paused;this.keys.clear();this.actions=[];this.input();this.onState(this.view());}
   leave(message='You left the room.',notify=true){
     if(!this.active)return;
     this.readyDialog?.close();this.playRequestPrompt=new PlayRequestPrompt();this.joinTracker.reset();
     this.hostButton.classList.remove('hidden');this.botCount.classList.remove('hidden');this.share.parentElement.classList.remove('hidden');
-    this.colorPending=false;this.colorError='';
+    this.colorPending=false;this.colorError='';this.nextDriver=null;
     this.nameFeedback.textContent='';this.nameDirty=false;this.namePending=false;this.namePromise=null;
     this.restoreOnVisible=false;this.voice.disconnect();
     if(notify)this.request('/api/leave',{}).catch(()=>{});this.token=null;this.chatColor=null;this.socket?.close();this.state=null;this.pending=null;this.actions=[];this.keys.clear();this.client=null;this.rtt=0;this.lastPing=-Infinity;

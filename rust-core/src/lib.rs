@@ -16,12 +16,12 @@ const FIELDS: usize = 16;
 const CLEAR: u32 = 1;
 const CHARGE: u32 = 2;
 const MAX_CHARGE: u32 = 4;
-const BOOST: u32 = 8;
 const TRAIL: u32 = 16;
 const CRASH: u32 = 32;
 const WALL: u32 = 64;
 const DRIFT_WALL: u32 = 128;
 pub(crate) const NIGHTMARE_DRIVE: u32 = 256;
+pub(crate) const DRIFT_CHARGE: u32 = 512;
 #[derive(Clone, Copy)]
 #[repr(C)]
 struct Kart { data: [f64; FIELDS] }
@@ -76,7 +76,7 @@ pub extern "C" fn step(slot: usize, arena_index: usize, steer: f64, dt: f64, fla
     let [mut x,mut z,mut heading,mut motion,mut camera,mut speed,mut drift,mut boost,mut flip,mut cooldown,mut dizzy,camera_start,mut yaw,was,wall,reserved] = kart.data;
     let advance = flags&1 != 0;
     let gas=flags&2 != 0;let brake=flags&4 != 0;let handbrake=flags&8 != 0;
-    let use_motion=flags&16 != 0;let can_boost=flags&32 != 0;let local=flags&64 != 0;
+    let use_motion=flags&16 != 0;let local=flags&64 != 0;
     if advance {
         dizzy=(dizzy-dt).max(0.0);flip=(flip-dt).max(0.0);cooldown=(cooldown-dt).max(0.0);boost=(boost-dt).max(0.0);yaw=steer*0.12;
     }
@@ -84,15 +84,13 @@ pub extern "C" fn step(slot: usize, arena_index: usize, steer: f64, dt: f64, fla
     if dizzy>0.0 { let wild=boost>0.0;let control=match wild{true=>0.25,false=>0.4};let frequency=match wild{true=>14.0,false=>10.0};let sway=match wild{true=>1.65,false=>0.95};turn=(turn*control+((arena::DIZZY_DURATION-dizzy)*frequency).sin()*sway).clamp(-1.0,1.0); }
     let drifting=handbrake && flip<=0.0 && !brake && turn.abs()>0.1 && speed>match was!=0.0 { true=>70.0,false=>110.0 };
     let mut events=0;
-    if drifting {
+    let can_charge_drift = flags&DRIFT_CHARGE != 0;
+    if drifting && can_charge_drift {
         let before=drift;drift=(drift+dt).min(1.2);
         if before<0.45 && drift>=0.45 { events|=CHARGE; }
         if before<0.85 && drift>=0.85 { events|=MAX_CHARGE; }
     }
     if !drifting && was!=0.0 {
-        if !handbrake && !brake && speed>90.0 && drift>=0.45 && can_boost {
-            boost=boost.max(match drift>=0.85 { true=>1.35,false=>0.8 });motion=heading;events|=BOOST;
-        }
         drift=0.0;events|=CLEAR;
     }
     heading-=turn*match drifting { true=>4.8,false=>1.7+(speed.abs()/300.0).min(1.0)*0.7 }*dt;

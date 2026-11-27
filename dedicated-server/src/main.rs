@@ -519,7 +519,7 @@ async fn control(app: &App, path: &str, token: &str, body: &Value) -> room::Resu
                 true => at + sessions::LIFETIME,
                 false => store.find(current_token, at).map_or(at + sessions::LIFETIME, |p| p.expires),
             };
-            sessions::Session {identity:p.identity.clone(), token:p.token.clone(), name:p.name.clone(), driver:p.driver, role:p.role.clone(), color:p.preferred_color.clone(), chat_color:Some(p.chat_color.clone()), expires}
+            sessions::Session {identity:p.identity.clone(), token:p.token.clone(), name:p.name.clone(), driver:p.next_driver.unwrap_or(p.driver), role:p.role.clone(), color:p.preferred_color.clone(), chat_color:Some(p.chat_color.clone()), expires}
         });
         (value, record, previous_color)
     };

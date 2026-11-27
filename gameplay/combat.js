@@ -339,9 +339,9 @@ function moveActor(r, actor, steer, gas, brake, dt, handbrake = false) {
   // Chassis rotation and travel direction separate while the rear tires slide.
   const drifting = handbrake && !(actor.somersault > 0) && !brake && Math.abs(steer) > .1 && actor.speed > (actor.wasDrifting ? 70 : 110);
   const before = actor.drift;
-  if (drifting) { actor.drift = Math.min(1.2, actor.drift + dt); if (before < .45 && actor.drift >= .45) sound(r, 'driftCharge', actor); if (before < .85 && actor.drift >= .85) sound(r, 'driftChargeMax', actor); }
+  const canChargeRing = actor.driver === 10 && r.specialAbilities !== false;
+  if (drifting && canChargeRing) { actor.drift = Math.min(1.2, actor.drift + dt); if (before < .45 && actor.drift >= .45) sound(r, 'driftCharge', actor); if (before < .85 && actor.drift >= .85) sound(r, 'driftChargeMax', actor); }
   if (!drifting && actor.wasDrifting) {
-    if (!handbrake && !brake && actor.speed > 90 && actor.drift >= .45) { actor.boost = Math.max(actor.boost, actor.drift >= .85 ? 1.35 : .8); actor.motionHeading = actor.heading; fx(r, 'boost', actor); }
     actor.drift = 0; actor.driftTrail = null;
   }
   actor.wasDrifting = drifting;

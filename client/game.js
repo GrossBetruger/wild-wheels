@@ -259,7 +259,7 @@ const network = new NetworkGame({
     const driverChanged = selected !== world.driver;
     race = world; mode = 'combat'; track = world.arena; if (changed) { lastPhase = ''; updateMapLabels(); }
     document.querySelector('.race-meta').textContent = `${world.targetScore} KILLS · ${world.duration / 60} MIN · ${network.state.players.length + network.state.bots} FIGHTERS`;
-    if (changed || driverChanged) showDriver(world.driver);
+    if (changed || driverChanged) showDriver(network.nextDriver ?? world.driver);
   }, onLeave: () => { race = newGame(); lastPhase = ''; keys.clear(); updateMapLabels(); }
 });
 network.log = (level, event, data) => clientLog.note(level, event, data); startReporting(clientLog, { token: () => network.token });
@@ -375,7 +375,7 @@ let rewardEpoch='',rewardElapsed=0,rewardRound=0;
 const routeHint=document.createElement('div');routeHint.className='route-hint';document.querySelector('.viewport').append(routeHint);
 const nameplateLayer=document.createElement('div');nameplateLayer.className='kart-nameplates';nameplateLayer.setAttribute('aria-hidden','true');document.querySelector('.viewport').append(nameplateLayer);const nameplateNodes=new Map();
 const dizzyNotice=document.createElement('div');dizzyNotice.id='dizzy-notice';dizzyNotice.className='dizzy-notice hidden';dizzyNotice.setAttribute('role','status');document.querySelector('.viewport').append(dizzyNotice);
-const driftMeter=document.createElement('div');driftMeter.className='drift-meter hidden';const driftLabel=document.createElement('strong'),driftCharge=document.createElement('progress'),driftHelp=document.createElement('small');driftCharge.max=1.2;driftCharge.setAttribute('aria-label','Drift boost charge');driftHelp.textContent='RELEASE DRIFT TO BOOST';driftMeter.append(driftLabel,driftCharge,driftHelp);document.querySelector('.viewport').append(driftMeter);
+const driftMeter=document.createElement('div');driftMeter.className='drift-meter hidden';const driftLabel=document.createElement('strong'),driftCharge=document.createElement('progress'),driftHelp=document.createElement('small');driftCharge.max=1.2;driftCharge.setAttribute('aria-label','Ring of Fire drift charge');driftHelp.textContent='HOLD DRIFT FOR RING OF FIRE';driftMeter.append(driftLabel,driftCharge,driftHelp);document.querySelector('.viewport').append(driftMeter);
 const brakeButton=document.createElement('button');brakeButton.dataset.key='arrowdown';brakeButton.textContent='BRAKE';brakeButton.className='hidden';document.querySelector('.touch-controls').append(brakeButton);
 const chaffButton=document.createElement('button');chaffButton.id='release-chaff';chaffButton.className='chaff-button hidden';chaffButton.type='button';chaffButton.onclick=chaff;document.querySelector('.viewport').append(chaffButton);
 const somersaultButton=document.createElement('button');somersaultButton.id='somersault';somersaultButton.className='chaff-button somersault-button hidden';somersaultButton.type='button';somersaultButton.onclick=somersault;document.querySelector('.viewport').append(somersaultButton);
@@ -525,7 +525,7 @@ function hud() {
   $('change-track').disabled = network.active && !network.canConfigure; $('restart').disabled = network.active && !network.canConfigure;
   const guest = network.active && !network.isHost && !dedicated;
   for (const node of [modeSwitch, mapSwitch, $('change-track'), $('restart')]) node.classList.toggle('hidden', guest || (dedicated && (node === modeSwitch || node === $('restart') || node === $('change-track') || !network.active)));
-  $('drivers').classList.toggle('hidden', (guest || dedicated) && !['ready', 'finished'].includes(race.phase));
+  $('drivers').classList.toggle('hidden', (guest || dedicated) && race.bomber);
   document.querySelector('.racer-panel').classList.toggle('hidden', (guest || dedicated) && race.bomber);
   $('start').disabled = dedicated && !network.active || network.active && !network.canControl && race.phase !== 'paused' && (network.wantsToPlay || network.readyPending || !['ready', 'finished'].includes(race.phase));
   if (dedicated) $('start').disabled = !network.active || network.awayPending || !network.afk && !['ready', 'finished', 'paused'].includes(race.phase);
@@ -536,7 +536,7 @@ function hud() {
     $('message').querySelector('small').textContent = network.wantsToPlay ? 'The match starts automatically unless the host refuses.' : network.playRequestRefused ? 'The host refused. You can ask again.' : 'Ask to start automatically in three seconds.';
   }
   if (palettePhase !== race.phase) highlightSelectedColor();
-  for (const button of $('drivers').children) button.disabled = !['ready', 'finished'].includes(race.phase);
+  for (const button of $('drivers').children) button.disabled = false;
   if (mode === 'race') {
     $('position').replaceChildren(document.createTextNode(String(race.rank)), Object.assign(document.createElement('span'), { textContent: ordinal(race.rank) }));
     $('lap').replaceChildren(document.createTextNode(String(Math.min(3, Math.floor(race.s / LENGTH) + 1)).padStart(2, '0') + ' '), Object.assign(document.createElement('span'), { textContent: '/ 03' }));
@@ -574,7 +574,8 @@ function hud() {
   bridgesStatus.classList.toggle('hidden',!showBridges);
   if(showBridges){let bits=race.eulerBridges??0,crossed=0;while(bits){crossed+=bits&1;bits>>>=1;}bridgesStatus.classList.toggle('near',crossed===6);bridgesStatus.textContent=`🌉 BRIDGES ${crossed}/${bridgeTotal}`;}
   routeHint.textContent='';
-  driftMeter.classList.toggle('hidden',mode!=='combat'||!race.wasDrifting||race.phase!=='racing');driftCharge.value=race.drift;driftLabel.textContent=race.drift>=.85?'SUPER BOOST READY':race.drift>=.45?'BOOST READY':'DRIFT CHARGING';driftMeter.classList.toggle('charged',race.drift>=.45);driftMeter.classList.toggle('super',race.drift>=.85);
+  const showDrift=mode==='combat'&&race.wasDrifting&&race.phase==='racing'&&race.driver===10&&race.specialAbilities!==false;
+  driftMeter.classList.toggle('hidden',!showDrift);driftCharge.value=race.drift;driftLabel.textContent=race.drift>=.85?'RING OF FIRE':'RING CHARGING';driftMeter.classList.toggle('charged',race.drift>=.45);driftMeter.classList.toggle('super',race.drift>=.85);
   if(mode==='combat'){
     put('position',`${race.kills} / ${race.targetScore}`);put('lap','♥'.repeat(race.health));$('lap').setAttribute('aria-label',`${race.health} of ${MAX_HEALTH} hearts`);put('timer',timeLabel(Math.max(0,race.duration-(race.finishTime??race.elapsed))));
     const order=standings(race),version=JSON.stringify(order.map(actor=>[actor.id,actor.name,actor.driver,actor.kills,actor.deaths,actor===race]));
@@ -604,9 +605,9 @@ function hud() {
   if(lastPhase===race.phase)return;lastPhase=race.phase;
   const battle=mode==='combat',controls=document.querySelectorAll('.control');brakeButton.classList.toggle('hidden',!battle);
   controls[0].querySelector('span').textContent=battle?'WASD works · ↓ / S reverses':'WASD works, too';
-  controls[1].querySelector('kbd').textContent='SHIFT';controls[1].querySelector('strong').textContent=battle?'Slide into a U-turn':'Drift the corners';controls[1].querySelector('span').textContent=battle?'Hold + steer, release to launch':'Hold + steer, release to boost';
+  controls[1].querySelector('kbd').textContent='SHIFT';controls[1].querySelector('strong').textContent=battle?'Slide into a U-turn':'Drift the corners';controls[1].querySelector('span').textContent=battle?'Hold + steer for tight U-turns':'Hold + steer to slide tight';
   controls[2].querySelector('span').textContent=battle?'Q / ⌘ weapons · X turbo · C chaff · Z flip':'Space fires · Q / ⌘ weapons · X turbo';controls[3].querySelector('strong').textContent=dedicated?'AFK / Back':'Pause';controls[3].querySelector('span').textContent=dedicated?'Your place is saved · Match continues':battle?'Pause your battle':'Pause your race';
-  canvas.setAttribute('aria-label',battle?'Combat arena. Arrow keys drive, Shift and steering drift into a U-turn, release Shift to boost. Hold Space to shoot, Tab, Q or Command changes weapons, X uses turbo, Z jumps and turns 180 degrees, C releases chaff to distract missiles.':'Kart racing track. Arrow keys drive, Shift drifts, Space fires, Tab, Q or Command changes weapons, X uses turbo.');
+  canvas.setAttribute('aria-label',battle?'Combat arena. Arrow keys drive, Shift and steering drift into a U-turn. Hold Space to shoot, Tab, Q or Command changes weapons, X uses turbo, Z jumps and turns 180 degrees, C releases chaff to distract missiles.':'Kart racing track. Arrow keys drive, Shift drifts, Space fires, Tab, Q or Command changes weapons, X uses turbo.');
   if(race.bomber)canvas.setAttribute('aria-label','Bomber arena. Select A-bombs or stinkbombs, then tap a target. Start with two A-bombs and two stinkbombs. Stinkbombs refill every five seconds; A-bombs every ten seconds. Drag to pan; use plus and minus to zoom.');
   $('map').setAttribute('aria-label',battle?'Arena map with cover and fighter positions':'Track map with alternate routes and racer positions');
   if(['ready','countdown','finished','paused'].includes(race.phase))finishFlash.classList.add('hidden');
@@ -623,7 +624,20 @@ function hud() {
   }
 }
 function showDriver(index) { selected = index;[...$('drivers').children].forEach((b, i) => { b.classList.toggle('selected', i === index); b.setAttribute('aria-pressed', String(i === index)); }); const d = drivers[index]; $('driver-name').textContent = d.name; $('driver-desc').textContent = d.desc; $('intelligence-stat').parentElement.title = 'Carrying limits: ' + itemCapacity(index, 'hedgehog') + ' hedgehogs, ' + itemCapacity(index, 'missile') + ' missiles, ' + itemCapacity(index, 'boost') + ' turbos, ' + itemCapacity(index, 'abomb') + ' of each bomb.'; $('cuteness-stat').parentElement.title = 'Arena: recovers one heart every ' + recoveryInterval(index) + ' seconds without taking damage, up to 3 hearts. Replenishes one hedgehog every ' + hedgehogRecoveryInterval(index) + ' seconds.'; $('fuel-stat').parentElement.title = 'Each turbo lasts ' + boostDuration(index) + ' seconds.'; $('driver-number').textContent = String(index + 1).padStart(2, '0'); for (const [id, value] of [['fuel-stat', d.fuel], ['speed-stat', d.speed], ['handling-stat', d.handling], ['accel-stat', d.accel], ['cuteness-stat', d.cuteness], ['intelligence-stat', d.intelligence]]) { $(id).replaceChildren(...Array.from({ length: 5 }, (_, i) => Object.assign(document.createElement('i'), { className: i < value ? 'on' : '' }))); } }
-function selectDriver(index) { if (network.active) { network.chooseDriver(index); return; } showDriver(index); race = newGame(); lastPhase = ''; }
+function selectDriver(index) {
+  if (network.active) {
+    network.chooseDriver(index).then(next => {
+      if (Number.isInteger(next)) { showDriver(next); uiNotice = { text: `Next match: ${drivers[next].name}`, until: performance.now() + 2500 }; }
+    });
+    return;
+  }
+  showDriver(index);
+  if (['countdown', 'racing', 'paused'].includes(race.phase)) {
+    uiNotice = { text: `Next match: ${drivers[index].name}`, until: performance.now() + 2500 };
+    return;
+  }
+  race = newGame(); lastPhase = '';
+}
 drivers.forEach((d, i) => { const b = document.createElement('button'); b.className = 'driver'; b.textContent = d.emoji; b.title = d.name; b.setAttribute('aria-label', d.name); b.onclick = () => selectDriver(i); $('drivers').append(b); });
 async function start() { if (!network.hasName) { network.focusName(); return; } if (mode === 'combat') await ensureBevyReady(); if (!network.active && network.invitation) { await network.connect('/api/join'); if (!network.active) return; } if (dedicated && !network.active) return; if (race.bomber && mobile) enterMobileFullscreen(); audio.unlock().catch(() => { $('sound').textContent = 'CLICK FOR SOUND'; }); if (network.active) { if (network.paused) { network.pause(); return; } if (network.canControl) { network.control('start'); return; } network.requestPlay(); return; } if (race.phase === 'paused') { race.phase = race.resumePhase || 'racing'; return; } if (race.phase === 'racing' || race.phase === 'countdown') return; race = newGame(); race.name = network.name.value.trim(); network.rememberName(); race.phase = 'countdown'; lastCount = -1; tone(400); }
 function pause() { if (network.active) { network.pause(); return; } if (race.phase === 'paused') { race.phase = race.resumePhase; return; } if (!['racing', 'countdown'].includes(race.phase)) return; race.resumePhase = race.phase; race.phase = 'paused'; keys.clear(); }

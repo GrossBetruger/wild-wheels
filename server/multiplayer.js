@@ -153,7 +153,7 @@ export class Multiplayer {
   syncRoom(room) { const config = this.roomConfig(room), text = JSON.stringify(config); if (text === room.configText) return; room.core.configure(config); room.configText = text; }
   makeWorld(room) {
     room.photoAlbum = new PhotoAlbum(); room.startRequest = null; room.soundEpoch = (room.soundEpoch ?? 0) + 1; room.seed = randomInt(0x100000000); room.botCount = Math.min(room.botCount, Math.max(0, arenaLimit(room.arena) - room.members.size));
-    for (const member of room.members.values()) { member.wantsToPlay = false; member.playRequestRefused = false; this.assign(room, member); }
+    for (const member of room.members.values()) { if (member.nextDriver != null) { member.driver = member.nextDriver; member.nextDriver = null; } member.wantsToPlay = false; member.playRequestRefused = false; this.assign(room, member); }
     const config = this.roomConfig(room); room.core = ArenaCore.room(config); room.configText = JSON.stringify(config); this.fixtureWorld?.(room);
   }
   armPlayRequest(room) { room.startRequest = { id: room.startRequestSequence = (room.startRequestSequence ?? 0) + 1, deadline: this.startNow() + 3000 }; }
@@ -399,11 +399,16 @@ export class Multiplayer {
           this.setReady(member, body.ready); this.broadcast(room); json(200, { ok: true }); break;
         }
         case '/api/driver': {
-          if (!['ready', 'finished'].includes(room.core.status.phase)) throw problem(409, 'Choose a character before the next match.');
           if (!Number.isInteger(body.driver) || body.driver < 0 || body.driver >= drivers.length) throw problem(400, 'Choose a character.');
-          member.driver = body.driver;
-          this.syncRoom(room);
-          this.broadcast(room); json(200, { ok: true }); break;
+          const between = ['ready', 'finished'].includes(room.core.status.phase);
+          if (between) {
+            member.driver = body.driver; member.nextDriver = null;
+            this.syncRoom(room);
+            this.broadcast(room);
+          } else {
+            member.nextDriver = body.driver;
+          }
+          json(200, { ok: true, driver: member.driver, nextDriver: member.nextDriver ?? null }); break;
         }
         case '/api/input': {
           this.controls(member, body); json(200, { ok: true }); break;

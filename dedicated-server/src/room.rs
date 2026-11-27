@@ -66,6 +66,7 @@ pub struct Member {
     pub identity: String,
     pub name: String,
     pub driver: usize,
+    pub next_driver: Option<usize>,
     pub color: String,
     pub chat_color: String,
     pub preferred_color: Option<String>,
@@ -300,6 +301,7 @@ impl Room {
             identity: token(),
             name,
             driver: chosen,
+            next_driver: None,
             color,
             chat_color,
             preferred_color,
@@ -396,6 +398,9 @@ impl Room {
         getrandom::fill(&mut bytes).unwrap();
         self.seed = u32::from_le_bytes(bytes);
         for p in self.members.iter_mut().flatten() {
+            if let Some(next) = p.next_driver.take() {
+                p.driver = next;
+            }
             p.clear(-1, -1);
         }
         self.core = NativeArena::new(self.config()).unwrap();
@@ -440,10 +445,20 @@ impl Room {
                 return Ok(json!({"ok":true,"name":self.members[id].as_ref().unwrap().name}));
             }
             "/api/driver" => {
-                if !matches!(self.core.phase(), "ready" | "finished") {
-                    return Err((409, "Choose a character before the next match."));
+                let chosen = driver(&b["driver"])?;
+                let between = matches!(self.core.phase(), "ready" | "finished");
+                let member = self.members[id].as_mut().unwrap();
+                if between {
+                    member.driver = chosen;
+                    member.next_driver = None;
+                } else {
+                    member.next_driver = Some(chosen);
                 }
-                self.members[id].as_mut().unwrap().driver = driver(&b["driver"])?;
+                let reply = json!({"ok":true,"driver":member.driver,"nextDriver":member.next_driver});
+                if between {
+                    self.broadcast();
+                }
+                return Ok(reply);
             }
             "/api/leave" => {
                 let generation = self.members[id].as_ref().unwrap().generation;
@@ -728,6 +743,11 @@ impl Room {
                     .collect();
                 let ratings = self.board.rate(&results);
                 self.log.note("info", "match-result", json!({"match":self.epoch,"winner":winner,"played":played,"ratings":ratings}));
+                for p in self.members.iter_mut().flatten() {
+                    if let Some(next) = p.next_driver.take() {
+                        p.driver = next;
+                    }
+                }
             }
             self.phase = self.core.phase().to_owned();
         }
@@ -1113,5 +1133,20 @@ mod automatic_color_tests {
             room.control(0, "/api/control", &json!({"action":"arena","arena":2})).unwrap_err().0,
             409
         );
+    }
+
+    #[test]
+    fn mid_match_driver_choice_applies_to_the_next_match() {
+        let mut room = Room::new(0, 1);
+        room.join(&json!({"name":"Alice","driver":1})).unwrap();
+        room.control(0, "/api/control", &json!({"action":"start"})).unwrap();
+        let reply = room.control(0, "/api/driver", &json!({"driver":15})).unwrap();
+        assert_eq!(reply["driver"], 1);
+        assert_eq!(reply["nextDriver"], 15);
+        assert_eq!(room.members[0].as_ref().unwrap().driver, 1);
+        assert_eq!(room.members[0].as_ref().unwrap().next_driver, Some(15));
+        room.reset();
+        assert_eq!(room.members[0].as_ref().unwrap().driver, 15);
+        assert_eq!(room.members[0].as_ref().unwrap().next_driver, None);
     }
 }

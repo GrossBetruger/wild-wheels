@@ -944,11 +944,11 @@ fn readings(
             },
         );
     }
-    if racing && p.was_drifting {
+    if racing && p.was_drifting && p.driver == 10 && view.special_abilities {
         let (label, color) = match p.drift {
-            charge if charge >= 0.85 => ("SUPER BOOST READY", Color::srgb_u8(0xc8, 0x8a, 0xff)),
-            charge if charge >= 0.45 => ("BOOST READY", Color::srgb_u8(0x72, 0xdc, 0xff)),
-            _ => ("DRIFT CHARGING", Color::WHITE),
+            charge if charge >= 0.85 => ("RING OF FIRE", Color::srgb_u8(0xc8, 0x8a, 0xff)),
+            charge if charge >= 0.45 => ("RING CHARGING", Color::srgb_u8(0x72, 0xdc, 0xff)),
+            _ => ("RING CHARGING", Color::WHITE),
         };
         out.insert(
             Id::Drift,
@@ -1723,7 +1723,7 @@ pub fn setup(mut commands: Commands, mut fonts: ResMut<Assets<Font>>) {
     ui.bar(drift, Id::Drift, hex(0xfbb369ff));
     ui.words(
         drift,
-        "RELEASE DRIFT TO BOOST",
+        "HOLD DRIFT FOR RING OF FIRE",
         Style {
             bold: false,
             ..Style::new(8.0, amber)

@@ -104,7 +104,14 @@ test('a player can choose an animal in the lobby and keep it for the next match'
   const started=multiplayer.snapshot(room,multiplayer.members.get(guest.token));
   assert.equal(started.world.driver,3);
   assert.equal(started.world.color,color);
-  assert.equal((await post('/api/driver',{driver:2},guest.token)).status,409);
+  const queued=await post('/api/driver',{driver:2},guest.token);
+  assert.equal(queued.status,200);
+  assert.equal(queued.driver,3);
+  assert.equal(queued.nextDriver,2);
+  assert.equal(multiplayer.snapshot(room,multiplayer.members.get(guest.token)).world.driver,3);
+  await post('/api/control',{action:'reset'},host.token);
+  await post('/api/control',{action:'start'},host.token);
+  assert.equal(multiplayer.snapshot(room,multiplayer.members.get(guest.token)).world.driver,2);
 });
 test('a remote player can hit and kill another human with server-scored missiles',async t=>{
   const {multiplayer,post}=await serverFor(t);const host=await post('/api/rooms',{name:'Defender',driver:0,arena:0});const guest=await post('/api/join',{name:'Attacker',driver:1,code:host.code});

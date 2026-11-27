@@ -112,19 +112,24 @@ test('arena drift makes a tight sliding U-turn in either direction within two th
     assert.equal(r.speed,400);assert.ok(r.skids.length>0);assert.ok(r.driftParticles.length>0);
   }
 });
-test('releasing a charged arena drift launches forward without spending an inventory turbo',()=>{
+test('releasing an arena drift does not grant a boost to ordinary racers',()=>{
   const r=createBattle(0,0,()=>.5);Object.assign(r,{phase:'racing',wx:-65,wz:0,heading:0,motionHeading:0,cameraHeading:0,speed:400,bots:[],supplies:[],turbos:1});
-  for(let frame=0;frame<40;frame++)tickBattle(r,new Set(['arrowup','shift','arrowleft']),1/60);
-  const z=r.wz;tickBattle(r,new Set(['arrowup']),1/60);
-  assert.equal(r.boost,.8);assert.equal(r.turbos,1);assert.ok(r.wz<z,'Releasing launches in the new facing direction');assert.ok(r.speed>400);
-  for(let frame=0;frame<15;frame++)tickBattle(r,new Set(['arrowup']),1/60);
-  assert.ok(r.speed>600);assert.equal(r.events.filter(event=>event==='boost').length,1);
-});
-test('a longer arena slide earns the stronger boost and two charge cues',()=>{
-  const r=createBattle(0,0,()=>.5);Object.assign(r,{phase:'racing',wx:-65,wz:0,heading:0,motionHeading:0,cameraHeading:0,speed:400,bots:[],supplies:[]});
   for(let frame=0;frame<55;frame++)tickBattle(r,new Set(['arrowup','shift','arrowleft']),1/60);
+  assert.equal(r.drift,0);assert.equal(r.wasDrifting,true);
   tickBattle(r,new Set(['arrowup']),1/60);
-  assert.equal(r.boost,1.35);assert.equal(r.events.filter(event=>event==='driftCharge').length,1);assert.equal(r.events.filter(event=>event==='driftChargeMax').length,1);
+  assert.equal(r.boost,0);assert.equal(r.turbos,1);
+  assert.equal(r.events.filter(event=>event==='driftCharge').length,0);
+  assert.equal(r.events.filter(event=>event==='driftChargeMax').length,0);
+});
+test('Master-Yuda still charges drift while turning to ignite Ring of Fire, without gaining a release boost',()=>{
+  const r=createBattle(10,0,()=>.5);Object.assign(r,{phase:'racing',wx:-65,wz:0,heading:0,motionHeading:0,cameraHeading:0,speed:400,bots:[],supplies:[]});
+  for(let frame=0;frame<55;frame++)tickBattle(r,new Set(['arrowup','shift','arrowleft']),1/60);
+  assert.ok(r.drift>=.85);
+  assert.equal(r.events.filter(event=>event==='driftCharge').length,1);
+  assert.equal(r.events.filter(event=>event==='driftChargeMax').length,1);
+  assert.ok(r.effects.some(effect=>effect.type==='fireRing'));
+  tickBattle(r,new Set(['arrowup']),1/60);
+  assert.equal(r.boost,0);
 });
 test('weapons fire in the facing direction during a sideways arena drift',()=>{
   const r=createBattle(0,0,()=>.5);Object.assign(r,{phase:'racing',wx:-65,wz:0,heading:0,motionHeading:0,cameraHeading:0,speed:400,bots:[],supplies:[],fireCooldown:0,item:'hedgehog'});

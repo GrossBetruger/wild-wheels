@@ -153,7 +153,7 @@ export function tick(r, keys, dt) {
   r.yaw+=(steering*(drifting?.55:.23)-r.yaw)*Math.min(1,dt*7);
   if(Math.abs(r.x)>1.22){const side=Math.sign(r.x);r.x=side*1.22;r.vx=-side*Math.max(.9,Math.abs(r.vx)*.65);r.speed*=.68;r.shake=.5;r.spin=-side*.6;effect(r,'crash');animalCall(r,r,'hurt');notify(r,'BARRIER HIT!');}
   if (drifting) r.drift += dt;
-  if (!drifting && r.wasDrifting) { if (r.drift > .7) { r.boost = 1.2; effect(r,'boost'); notify(r, 'NICE DRIFT! + TURBO'); } r.drift = 0; }
+  if (!drifting && r.wasDrifting) r.drift = 0;
   r.wasDrifting = drifting;
   if(drifting||brake&&r.speed>180)r.skids.push({s:r.s,x:r.x,route:r.route,time:r.elapsed});
   const before = r.s;

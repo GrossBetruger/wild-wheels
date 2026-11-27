@@ -60,7 +60,7 @@ test('a client stops at a boosted drift wall impact immediately and the server c
 });
 
 test('a client survives a boosted wall impact after releasing drift and agrees with the server',()=>{
-  const seed=createBattle();Object.assign(seed,{phase:'racing',human:true,multiplayer:true,wx:93.8,wz:70,heading:Math.PI/2,motionHeading:Math.PI/2,cameraHeading:Math.PI/2,speed:300,boost:0,wasDrifting:true,drift:1,health:6,shield:0,supplies:[]});for(const bot of seed.bots)Object.assign(bot,{inactive:true,destroyed:1e9});
+  const seed=createBattle();Object.assign(seed,{phase:'racing',human:true,multiplayer:true,wx:93.8,wz:70,heading:Math.PI/2,motionHeading:Math.PI/2,cameraHeading:Math.PI/2,speed:300,boost:1.5,wasDrifting:true,drift:1,health:6,shield:0,supplies:[]});for(const bot of seed.bots)Object.assign(bot,{inactive:true,destroyed:1e9});
   const server=new ArenaCore(seed),client=new ArenaClient();client.accept(server.packet(),0);client.frame(1/60,['arrowup'],1/60);
   const predicted=client.snapshot();assert.equal(predicted.health,6);assert.ok(predicted.boost>1);assert.ok(predicted.speed>0&&predicted.speed<120);
   server.step(1/60,[{actor:0,...client.outbound(['arrowup'])}]);client.accept(server.packet(),.05);client.frame(0,[],.05);
