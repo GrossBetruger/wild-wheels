@@ -762,29 +762,32 @@ export class Renderer {
       const R=arena.size,step=4,edge=R+2,full=(R+4)*2;
       const hAt=(x,z)=>groundHeight(arena,x,z);
       const angDiff=(a,b)=>Math.abs(Math.atan2(Math.sin(a-b),Math.cos(a-b)));
-      // Four intersecting spiral dirt roads climbing from valley (r=86) to summit ring (r=22).
+      // Four intersecting spiral dirt roads climbing from valley (r=108) to summit ring (r=38).
       const onDirtRoad=(x,z)=>{
         const r=Math.hypot(x,z);
-        if(r>=17.5&&r<=25.5)return true;
-        if(r<22||r>88)return false;
-        const theta=Math.atan2(z,x),t=(r-24)/62;
+        if(r>=29.5&&r<=38.5)return true;
+        if(r<36||r>112)return false;
+        const theta=Math.atan2(z,x),t=Math.max(0,Math.min(1,(r-38)/70));
         const roads=[-Math.PI/2+1.25*t,Math.PI/2+1.25*t,-1.25*t,Math.PI-1.25*t];
-        return roads.some(rt=>r*angDiff(theta,rt)<4.8);
+        return roads.some(rt=>r*angDiff(theta,rt)<7.8);
       };
       for(let x=-R;x<R;x+=step)for(let z=-R;z<R;z+=step){
         const mx=x+step/2,mz=z+step/2,r=Math.hypot(mx,mz),dirt=onDirtRoad(mx,mz);
-        const col=dirt?(((Math.round(x/step)+Math.round(z/step))&1)?'#9e734a':'#926942'):r<=17.5?(((Math.round(x/step)+Math.round(z/step))&1)?'#76a852':'#6c9c4a'):r<=70?(((Math.round(x/step)+Math.round(z/step))&1)?'#5c8c46':'#52803e'):(((Math.round(x/step)+Math.round(z/step))&1)?'#4d7a3c':'#467036');
-        const a=[x,hAt(x,z),z],b=[x+step,hAt(x+step,z),z],c=[x+step,hAt(x+step,z+step),z+step],d=[x,hAt(x,z+step),z+step];
+        const ha=hAt(x,z),hb=hAt(x+step,z),hc=hAt(x+step,z+step),hd=hAt(x,z+step);
+        const cliff=Math.max(ha,hb,hc,hd)-Math.min(ha,hb,hc,hd)>2.2;
+        const odd=((Math.round(x/step)+Math.round(z/step))&1);
+        const col=dirt?(odd?'#9e734a':'#926942'):cliff?(odd?'#7a746c':'#6b655e'):r<=29.5?(odd?'#76a852':'#6c9c4a'):r<=108?(odd?'#5c8c46':'#52803e'):(odd?'#4d7a3c':'#467036');
+        const a=[x,ha,z],b=[x+step,hb,z],c=[x+step,hc,z+step],d=[x,hd,z+step];
         m.tri(a,d,c,col);m.tri(a,c,b,col);
       }
-      // Golden King-of-the-Hill crown ring inlaid on the summit plateau (y = 12.06).
-      for(let i=0;i<32;i++){
-        const a=i/32*Math.PI*2,b=(i+1)/32*Math.PI*2,r0=16.6,r1=17.8;
-        m.quad([Math.cos(a)*r0,12.06,Math.sin(a)*r0],[Math.cos(a)*r1,12.06,Math.sin(a)*r1],[Math.cos(b)*r1,12.06,Math.sin(b)*r1],[Math.cos(b)*r0,12.06,Math.sin(b)*r0],i%2?'#f4cf58':'#fff0b5');
+      // Golden King-of-the-Hill crown ring inlaid on the flat summit plateau (y = 22.06).
+      for(let i=0;i<40;i++){
+        const a=i/40*Math.PI*2,b=(i+1)/40*Math.PI*2,r0=27.6,r1=29.2;
+        m.quad([Math.cos(a)*r0,22.06,Math.sin(a)*r0],[Math.cos(a)*r1,22.06,Math.sin(a)*r1],[Math.cos(b)*r1,22.06,Math.sin(b)*r1],[Math.cos(b)*r0,22.06,Math.sin(b)*r0],i%2?'#f4cf58':'#fff0b5');
       }
-      // Wooden trail signposts at the four mid-slope dirt-road crossroads (r ≈ 63).
+      // Wooden trail signposts at the four mid-slope dirt-road crossroads (r ≈ 85).
       for(const a of [-Math.PI/4,Math.PI/4,3*Math.PI/4,-3*Math.PI/4]){
-        const px=Math.cos(a)*63,pz=Math.sin(a)*63,py=hAt(px,pz);
+        const px=Math.cos(a)*85,pz=Math.sin(a)*85,py=hAt(px,pz);
         m.box(px,py,pz,.7,4.2,.7,'#6e4b2c');m.box(px,py+3.5,pz,2.6,.55,.35,'#d9b47a');
       }
       for(const side of [-1,1]){m.box(side*edge,0,0,4,5,full,arena.wall);m.box(0,0,side*edge,full,5,4,arena.wall);for(let i=-R+6;i<R;i+=15){m.box(side*edge,5,i,4,.5,5,'#eadfb9');m.box(i,5,side*edge,5,.5,4,'#eadfb9');}}
@@ -1033,7 +1036,7 @@ export class Renderer {
     }
     for(const supply of r.supplies){if(supply.cooldown>0)continue;if(supply.kind==='bicycle'){if(!this.drawnBicycles.has(supply.id))this.bicycleDrop(supply,time);continue;}const pose={x:supply.wx,z:supply.wz,tx:0,tz:1},gy=groundHeight(arenas[r.arena],pose.x,pose.z),bob=Math.sin(time*2)*.3;m.at(pose.x,gy+.1,pose.z);m.disc(0,0,0,3,3,{missile:'#c65d51',hedgehog:'#bb9c68',boost:'#d4bc55',health:'#78b88c',hedgeproof:'#52c9bc',tehilim:'#6388cf'}[supply.kind]);switch(supply.kind){case 'tehilim':this.tehilimBook(pose.x,gy+2+bob,pose.z,time);this.glow.at(pose.x,gy+2,pose.z);this.glow.particle(0,0,0,2.5,[.08,.15,.4]);break;case 'hedgeproof':this.hedgeguardIcon(pose.x,gy+2+bob,pose.z,time);this.glow.at(pose.x,gy+1.8+bob,pose.z);this.glow.particle(0,0,0,2.8,[.08,.45,.38]);break;case 'missile':this.missile(m,pose,gy+2+bob,time,1.5);break;case 'hedgehog':this.hedgehog(m,pose.x,gy+1.5+bob,pose.z,1.1,time);break;case 'boost':m.at(pose.x,gy+1+bob,pose.z,time);m.box(0,0,0,1.2,2,.8,'#f1cc62');break;case 'health':m.at(pose.x,gy+1+bob,pose.z,time);m.box(0,.7,0,2.4,.7,.5,'#d6f4c6');m.box(0,0,0,.7,2.4,.5,'#d6f4c6');break;}}
     for(const shot of r.projectiles){
-      const pose={x:shot.wx,z:shot.wz,tx:Math.sin(shot.heading),tz:Math.cos(shot.heading)},sy=shot.height+groundHeight(arenas[r.arena],shot.wx,shot.wz),owner=shot.vulcan?(shot.owner===r.id?r:r.bots.find(actor=>actor.id===shot.owner)):null,cricket=shot.kind==='hedgehog'&&owner?.driver===5,dollars=shot.kind==='hedgehog'&&owner?.driver===6,electrons=shot.kind==='hedgehog'&&owner?.driver===8,pumps=shot.kind==='hedgehog'&&owner?.driver===9,laser=shot.kind==='hedgehog'&&owner?.driver===10;
+      const pose={x:shot.wx,z:shot.wz,tx:Math.sin(shot.heading),tz:Math.cos(shot.heading)},sy=shot.height,owner=shot.vulcan?(shot.owner===r.id?r:r.bots.find(actor=>actor.id===shot.owner)):null,cricket=shot.kind==='hedgehog'&&owner?.driver===5,dollars=shot.kind==='hedgehog'&&owner?.driver===6,electrons=shot.kind==='hedgehog'&&owner?.driver===8,pumps=shot.kind==='hedgehog'&&owner?.driver===9,laser=shot.kind==='hedgehog'&&owner?.driver===10;
       if(shot.kind==='missile'){this.missile(m,pose,sy);this.glow.at(shot.wx,sy,shot.wz,shot.heading);this.glow.flame(0,0,-1,.25,2,[.5,.17,.03],time);}
       if(shot.kind==='hedgehog'){
         if(cricket)this.cricket(m,shot.wx,sy,shot.wz,shot.heading,time);
@@ -1043,7 +1046,7 @@ export class Renderer {
         if(laser)this.laserBolt(m,shot.wx,sy,shot.wz,shot.heading);
         if(!cricket&&!dollars&&!electrons&&!pumps&&!laser)this.hedgehog(m,shot.wx,sy,shot.wz,shot.vulcan?.45:.6,time*15);
       }
-      for(let i=0;i<shot.trail.length;i+=3){const t=shot.trail[i],ty=t.height+groundHeight(arenas[r.arena],t.wx,t.wz),size=.12+(1-i/shot.trail.length)*.5;if(shot.vulcan){this.glow.at(t.wx,ty,t.wz);this.glow.particle(0,0,0,.32,cricket?[.12,.6,.035]:dollars?[.2,.55,.06]:electrons?[.04,.35,.8]:laser?[.025,.65,.45]:pumps?(i%2?[.8,.46,.12]:[.7,.16,.38]):[.7,.35,.03]);continue;}m.at(t.wx,ty,t.wz);m.ball(0,0,0,size,size,size,shot.kind==='missile'?'#c5c6c8':'#d7bf85',5,3);}
+      for(let i=0;i<shot.trail.length;i+=3){const t=shot.trail[i],ty=t.height,size=.12+(1-i/shot.trail.length)*.5;if(shot.vulcan){this.glow.at(t.wx,ty,t.wz);this.glow.particle(0,0,0,.32,cricket?[.12,.6,.035]:dollars?[.2,.55,.06]:electrons?[.04,.35,.8]:laser?[.025,.65,.45]:pumps?(i%2?[.8,.46,.12]:[.7,.16,.38]):[.7,.35,.03]);continue;}m.at(t.wx,ty,t.wz);m.ball(0,0,0,size,size,size,shot.kind==='missile'?'#c5c6c8':'#d7bf85',5,3);}
     }
     drawLocusts(this,m,r,time);
     for(const bomb of r.bombs??[]){
@@ -1103,8 +1106,8 @@ export class Renderer {
         const signals=new Mesh();
         for(const shot of r.projectiles){
           if(shot.life<=0)continue;const color=shot.owner===r.id?'#a4ffb6':'#ff709d',length=shot.kind==='missile'?1.6:.55,width=shot.kind==='missile'?.38:.2;
-          signals.at(shot.wx,shot.height+groundHeight(arenas[r.arena],shot.wx,shot.wz),shot.wz,shot.heading);signals.tri([-width,0,-length],[width,0,-length],[0,0,length],color);signals.tri([0,-width,-length],[0,width,-length],[0,0,length],color);signals.ball(0,0,0,width,width,width,color,7,4);
-          for(let i=0;i<shot.trail.length;i+=3){const trail=shot.trail[i];signals.at(trail.wx,trail.height+groundHeight(arenas[r.arena],trail.wx,trail.wz),trail.wz);signals.ball(0,0,0,.075,.075,.075,color,5,3);}
+          signals.at(shot.wx,shot.height,shot.wz,shot.heading);signals.tri([-width,0,-length],[width,0,-length],[0,0,length],color);signals.tri([0,-width,-length],[0,width,-length],[0,0,length],color);signals.ball(0,0,0,width,width,width,color,7,4);
+          for(let i=0;i<shot.trail.length;i+=3){const trail=shot.trail[i];signals.at(trail.wx,trail.height,trail.wz);signals.ball(0,0,0,.075,.075,.075,color,5,3);}
         }
         for(const bomb of r.bombs??[]){const progress=Math.min(1,bomb.age/BOMB_FALL_TIME),color=bomb.owner===r.id?'#a4ffb6':'#ff709d';signals.at(bomb.wx,groundHeight(arenas[r.arena],bomb.wx,bomb.wz)+65*(1-progress*progress),bomb.wz);signals.ball(0,0,0,1.6,2.4,1.6,color,10,6);}
         gl.bindBuffer(gl.ARRAY_BUFFER,this.dynamicBuffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(signals.data),gl.DYNAMIC_DRAW);this.drawBuffer(this.dynamicBuffer,signals.data.length/9);

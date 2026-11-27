@@ -12,7 +12,8 @@ impl Game{
         let kind=match missile{true=>"missile",false=>"hedgehog"};let g=&mut self.global;g.projectile_sequence+=1;
         let (sx,sz)=wrap_point(g.arena,a.wx+a.heading.sin()*3.5,a.wz+a.heading.cos()*3.5);
         let vulcan_life = if is_torus_arena(g.arena) { 1.8 } else { 1.3 };
-        g.projectiles.push(Shot{id:g.projectile_sequence,owner:id,kind:kind.into(),vulcan,target,wx:sx,wz:sz,heading:a.heading,speed:match(missile,vulcan){(true,_)=>70.0,(_,true)=>125.0,_=>90.0},height:1.3,vy:3.0,life:match(missile,vulcan){(true,_)=>3.0,(_,true)=>vulcan_life,_=>2.5},action_id,..Shot::default()});
+        let spawn_height = ground_height(g.arena, a.wx, a.wz) + 1.3;
+        g.projectiles.push(Shot{id:g.projectile_sequence,owner:id,kind:kind.into(),vulcan,target,wx:sx,wz:sz,heading:a.heading,speed:match(missile,vulcan){(true,_)=>70.0,(_,true)=>125.0,_=>90.0},height:spawn_height,vy:3.0,life:match(missile,vulcan){(true,_)=>3.0,(_,true)=>vulcan_life,_=>2.5},action_id,..Shot::default()});
         if missile&&!MISSILES_ONLY{a.missiles-=1;}if !missile&&!vulcan{a.ammo-=1;}
         a.fire_cooldown=match(missile,vulcan){(true,_)=>0.9,(_,true)=>0.075,_=>0.225};
         if a.item=="missile"&&a.missiles==0{a.item="hedgehog".into();}
@@ -127,8 +128,9 @@ impl Game{
             let age=shot.orbit_age.unwrap_or(0.0)+delta;shot.orbit_age=Some(age);let direction=match shot.orbit_direction<0.0{true=>-1.0,false=>1.0};let circling=(age/0.6).min(1.0);let fall=(age-0.6).max(0.0);let angle=shot.orbit_angle+direction*std::f64::consts::TAU*circling;let radius=shot.orbit_radius;let speed=radius*std::f64::consts::TAU/0.6;
             let center=shot.orbit_center.as_ref().map_or((point.0,point.1),|p|(p.wx,p.wz));shot.heading=angle+direction*std::f64::consts::FRAC_PI_2;
             shot.wx=center.0+angle.sin()*radius+shot.heading.sin()*speed*fall;shot.wz=center.1+angle.cos()*radius+shot.heading.cos()*speed*fall;
-            let sink=((shot.orbit_height-0.25)/1.2).clamp(0.0,0.75);shot.height=shot.orbit_height-sink*age-7.0*fall*fall;shot.vy=-sink-14.0*fall;
-            let impact=shot.height<=0.15||fall>0.0&&wall_blocked(self.global.arena,shot.wx,shot.wz,0.3);if impact{shot.height=shot.height.max(0.15);shot.life=0.0;}(impact,None,Some(point.2))
+            let floor_y = ground_height(self.global.arena, shot.wx, shot.wz) + 0.15;
+            let sink=((shot.orbit_height-floor_y-0.1)/1.2).clamp(0.0,0.75);shot.height=shot.orbit_height-sink*age-7.0*fall*fall;shot.vy=-sink-14.0*fall;
+            let impact=shot.height<=floor_y||fall>0.0&&wall_blocked(self.global.arena,shot.wx,shot.wz,0.3);if impact{shot.height=shot.height.max(floor_y);shot.life=0.0;}(impact,None,Some(point.2))
         };
         if let Some(point)=decoy{if shot.orbit_age.is_some(){let (x,z)=(shot.wx,shot.wz);let result=orbit(shot,point,dt);if self.ring_blocks(x,z,shot.wx,shot.wz){shot.quenched=true;shot.life=0.0;return(true,None,None);}return result;}}
         let target=decoy.map(|p|(p.0,p.1)).or_else(||shot.target.and_then(|id|self.actors.get(id)).filter(|a|a.destroyed<=0.0&&!a.afk).map(|a|{let lead=match shot.reflected{true=>(distance(shot.wx,shot.wz,a.wx,a.wz)/shot.speed).min(0.8),false=>0.0};(a.wx+a.motion_heading.sin()*a.speed*0.085*lead,a.wz+a.motion_heading.cos()*a.speed*0.085*lead)}));
@@ -144,8 +146,19 @@ impl Game{
                 shot.heading += angle(dx.atan2(dz), shot.heading).clamp(-turn, turn);
             }
             let (previous_x,previous_z)=(shot.wx,shot.wz);
-            let (wx,wz)=wrap_point(self.global.arena,shot.wx+shot.heading.sin()*shot.speed*dt/steps as f64,shot.wz+shot.heading.cos()*shot.speed*dt/steps as f64);
+            let sub_dt = dt / steps as f64;
+            let (wx,wz)=wrap_point(self.global.arena,shot.wx+shot.heading.sin()*shot.speed*sub_dt,shot.wz+shot.heading.cos()*shot.speed*sub_dt);
             shot.wx=wx;shot.wz=wz;
+            let terrain_y = ground_height(self.global.arena, shot.wx, shot.wz);
+            if terrain_y > shot.height + 0.45 {
+                shot.life = 0.0;
+                return (true, None, decoy.map(|p| p.2));
+            }
+            let target_y = terrain_y + 1.3;
+            if shot.height > target_y {
+                let drop = (18.0 + (shot.height - target_y) * 2.4) * sub_dt;
+                shot.height = (shot.height - drop).max(target_y);
+            }
             let wrapped = distance(previous_x,previous_z,shot.wx,shot.wz) > 10.0;
             if field.is_some_and(|(x,z)| distance(x,z,shot.wx,shot.wz) <= WORMHOLE_KILL_RADIUS) || (!wrapped && self.ring_blocks(previous_x,previous_z,shot.wx,shot.wz)){shot.quenched=true;shot.life=0.0;return(true,None,None);}
             if let Some(point)=decoy{if distance(shot.wx,shot.wz,point.0,point.1)<6.0{shot.orbit_age=Some(0.0);shot.orbit_direction=match steering<0.0{true=>-1.0,false=>1.0};shot.orbit_angle=shot.heading-shot.orbit_direction*std::f64::consts::FRAC_PI_2;shot.orbit_radius=shot.speed*0.6/std::f64::consts::TAU;shot.orbit_height=shot.height;shot.orbit_center=Some(Point{wx:shot.wx-shot.orbit_angle.sin()*shot.orbit_radius,wz:shot.wz-shot.orbit_angle.cos()*shot.orbit_radius});shot.chaffed=true;shot.life=shot.life.max(3.0);return orbit(shot,point,dt*(steps-step-1)as f64/steps as f64);}}

@@ -303,6 +303,8 @@ pub fn scenery_mesh(def: &ArenaDef, has_landscape: bool) -> Mesh {
         let sign_wood = hex_linear("#d9b47a");
         let rock = hex_linear("#7c7770");
         let rock_top = hex_linear("#a39e95");
+        let cliff_a = hex_linear("#7a746c");
+        let cliff_b = hex_linear("#6b655e");
         let pine_a = hex_linear("#3b6e3f");
         let pine_b = hex_linear("#4c8549");
 
@@ -310,21 +312,21 @@ pub fn scenery_mesh(def: &ArenaDef, has_landscape: bool) -> Mesh {
         let ang_diff = |a: f32, b: f32| (a - b).sin().atan2((a - b).cos()).abs();
         let on_dirt_road = |x: f32, z: f32| {
             let rad = x.hypot(z);
-            if (17.5..=25.5).contains(&rad) {
+            if (29.5..=38.5).contains(&rad) {
                 return true;
             }
-            if !(22.0..=88.0).contains(&rad) {
+            if !(36.0..=112.0).contains(&rad) {
                 return false;
             }
             let theta = z.atan2(x);
-            let t = (rad - 24.0) / 62.0;
+            let t = ((rad - 38.0) / 70.0).clamp(0.0, 1.0);
             let roads = [
                 -std::f32::consts::FRAC_PI_2 + 1.25 * t,
                 std::f32::consts::FRAC_PI_2 + 1.25 * t,
                 -1.25 * t,
                 std::f32::consts::PI - 1.25 * t,
             ];
-            roads.iter().any(|&rt| rad * ang_diff(theta, rt) < 4.8)
+            roads.iter().any(|&rt| rad * ang_diff(theta, rt) < 7.8)
         };
 
         let mut x = -r;
@@ -334,38 +336,45 @@ pub fn scenery_mesh(def: &ArenaDef, has_landscape: bool) -> Mesh {
                 let (mx, mz) = (x + step * 0.5, z + step * 0.5);
                 let rad = mx.hypot(mz);
                 let odd = (((x / step).round() as i32 + (z / step).round() as i32) & 1) != 0;
+                let ha = h_at(x, z);
+                let hb = h_at(x + step, z);
+                let hc = h_at(x + step, z + step);
+                let hd = h_at(x, z + step);
+                let cliff = ha.max(hb).max(hc).max(hd) - ha.min(hb).min(hc).min(hd) > 2.2;
                 let col = if on_dirt_road(mx, mz) {
                     if odd { dirt_a } else { dirt_b }
-                } else if rad <= 17.5 {
+                } else if cliff {
+                    if odd { cliff_a } else { cliff_b }
+                } else if rad <= 29.5 {
                     if odd { summit_a } else { summit_b }
-                } else if rad <= 70.0 {
+                } else if rad <= 108.0 {
                     if odd { slope_a } else { slope_b }
                 } else if odd {
                     valley_a
                 } else {
                     valley_b
                 };
-                let a = [x, h_at(x, z), z];
-                let b = [x + step, h_at(x + step, z), z];
-                let c = [x + step, h_at(x + step, z + step), z + step];
-                let d = [x, h_at(x, z + step), z + step];
+                let a = [x, ha, z];
+                let b = [x + step, hb, z];
+                let c = [x + step, hc, z + step];
+                let d = [x, hd, z + step];
                 m.tri(a, d, c, col);
                 m.tri(a, c, b, col);
                 z += step;
             }
             x += step;
         }
-        // Golden King-of-the-Hill crown ring inlaid on the summit plateau.
-        for i in 0..32 {
-            let a = i as f32 / 32.0 * std::f32::consts::TAU;
-            let b = (i + 1) as f32 / 32.0 * std::f32::consts::TAU;
-            let (r0, r1) = (16.6_f32, 17.8_f32);
+        // Golden King-of-the-Hill crown ring inlaid on the flat summit plateau.
+        for i in 0..40 {
+            let a = i as f32 / 40.0 * std::f32::consts::TAU;
+            let b = (i + 1) as f32 / 40.0 * std::f32::consts::TAU;
+            let (r0, r1) = (27.6_f32, 29.2_f32);
             let col = if i % 2 == 1 { gold_a } else { gold_b };
             m.quad(
-                [a.cos() * r0, 12.06, a.sin() * r0],
-                [a.cos() * r1, 12.06, a.sin() * r1],
-                [b.cos() * r1, 12.06, b.sin() * r1],
-                [b.cos() * r0, 12.06, b.sin() * r0],
+                [a.cos() * r0, 22.06, a.sin() * r0],
+                [a.cos() * r1, 22.06, a.sin() * r1],
+                [b.cos() * r1, 22.06, b.sin() * r1],
+                [b.cos() * r0, 22.06, b.sin() * r0],
                 col,
             );
         }
@@ -376,7 +385,7 @@ pub fn scenery_mesh(def: &ArenaDef, has_landscape: bool) -> Mesh {
             3.0 * std::f32::consts::FRAC_PI_4,
             -3.0 * std::f32::consts::FRAC_PI_4,
         ] {
-            let (px, pz) = (a.cos() * 63.0, a.sin() * 63.0);
+            let (px, pz) = (a.cos() * 85.0, a.sin() * 85.0);
             let py = h_at(px, pz);
             m.box_part(px, py, pz, 0.7, 4.2, 0.7, wood);
             m.box_part(px, py + 3.5, pz, 2.6, 0.55, 0.35, sign_wood);

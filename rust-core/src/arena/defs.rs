@@ -49,6 +49,87 @@ pub struct ArenaDef {
     pub spawns: Vec<[f64; 2]>,
 }
 
+pub const HILL_HEIGHT: f64 = 22.0;
+pub const HILL_TOP_R: f64 = 38.0;
+pub const HILL_CLIFF_FOOT_R: f64 = 46.0;
+pub const HILL_ROAD_END_R: f64 = 108.0;
+pub const HILL_ROAD_HALF_W: f64 = 7.5;
+pub const HILL_ROAD_SHOULDER: f64 = 5.0;
+pub const MAX_CLIMB_SLOPE: f64 = 0.85;
+
+pub fn hill_road_dist(x: f64, z: f64) -> f64 {
+    let r = x.hypot(z);
+    if r <= HILL_TOP_R {
+        return 0.0;
+    }
+    let theta = z.atan2(x);
+    let t = ((r - HILL_TOP_R) / (HILL_ROAD_END_R - HILL_TOP_R)).clamp(0.0, 1.0);
+    let roads = [
+        -std::f64::consts::FRAC_PI_2 + 1.25 * t,
+        std::f64::consts::FRAC_PI_2 + 1.25 * t,
+        -1.25 * t,
+        std::f64::consts::PI - 1.25 * t,
+    ];
+    roads
+        .into_iter()
+        .map(|rt| {
+            let d = (theta - rt).sin().atan2((theta - rt).cos()).abs();
+            r * d
+        })
+        .fold(f64::INFINITY, f64::min)
+}
+
+pub fn hill_ground_height(x: f64, z: f64) -> f64 {
+    let r = x.hypot(z);
+    if r <= HILL_TOP_R {
+        return HILL_HEIGHT;
+    }
+    if r >= HILL_ROAD_END_R {
+        return 0.0;
+    }
+    let cliff_h = if r >= HILL_CLIFF_FOOT_R {
+        0.0
+    } else {
+        HILL_HEIGHT * (1.0 - (r - HILL_TOP_R) / (HILL_CLIFF_FOOT_R - HILL_TOP_R))
+    };
+    let t = (r - HILL_TOP_R) / (HILL_ROAD_END_R - HILL_TOP_R);
+    let road_h = HILL_HEIGHT * 0.5 * (1.0 + (std::f64::consts::PI * t).cos());
+    let d_road = hill_road_dist(x, z);
+    if d_road <= HILL_ROAD_HALF_W {
+        return road_h;
+    }
+    if d_road >= HILL_ROAD_HALF_W + HILL_ROAD_SHOULDER {
+        return cliff_h;
+    }
+    let w = 1.0 - (d_road - HILL_ROAD_HALF_W) / HILL_ROAD_SHOULDER;
+    cliff_h + (road_h - cliff_h) * w
+}
+
+pub fn hill_step_blocked(x0: f64, z0: f64, x1: f64, z1: f64) -> bool {
+    let d = (x1 - x0).hypot(z1 - z0);
+    if d <= 1e-6 {
+        return false;
+    }
+    let steps = (d / 2.0).ceil().max(1.0) as usize;
+    let mut px = x0;
+    let mut pz = z0;
+    let mut ph = hill_ground_height(px, pz);
+    for i in 1..=steps {
+        let u = i as f64 / steps as f64;
+        let nx = x0 + (x1 - x0) * u;
+        let nz = z0 + (z1 - z0) * u;
+        let nh = hill_ground_height(nx, nz);
+        let seg = (nx - px).hypot(nz - pz).max(0.25);
+        if (nh - ph).abs() / seg > MAX_CLIMB_SLOPE {
+            return true;
+        }
+        px = nx;
+        pz = nz;
+        ph = nh;
+    }
+    false
+}
+
 impl ArenaDef {
     pub fn valid(&self) -> bool {
         let name = self.name.trim();
@@ -98,14 +179,22 @@ impl ArenaDef {
         if !self.is_hill() {
             return 0.0;
         }
-        let r = x.hypot(z);
-        if r <= 26.0 {
-            return 12.0;
+        hill_ground_height(x, z)
+    }
+    pub fn cliff_step_blocked(&self, x0: f64, z0: f64, x1: f64, z1: f64) -> bool {
+        self.is_hill() && hill_step_blocked(x0, z0, x1, z1)
+    }
+    pub fn is_on_cliff(&self, x: f64, z: f64) -> bool {
+        if !self.is_hill() {
+            return false;
         }
-        if r >= 70.0 {
-            return 0.0;
+        let h = hill_ground_height(x, z);
+        for (dx, dz) in [(2.0, 0.0), (-2.0, 0.0), (0.0, 2.0), (0.0, -2.0)] {
+            if (hill_ground_height(x + dx, z + dz) - h).abs() / 2.0 > MAX_CLIMB_SLOPE {
+                return true;
+            }
         }
-        6.0 * (1.0 + (std::f64::consts::PI * (r - 26.0) / 44.0).cos())
+        false
     }
     pub fn wrap(&self, x: f64, z: f64) -> (f64, f64) {
         if !self.is_torus() {
@@ -311,6 +400,15 @@ pub fn torus_delta(arena: usize, dx: f64, dz: f64) -> (f64, f64) {
 }
 pub fn is_hill_arena(arena: usize) -> bool {
     with_arena(arena, |d| d.is_hill())
+}
+pub fn ground_height(arena: usize, x: f64, z: f64) -> f64 {
+    with_arena(arena, |d| d.ground_height(x, z))
+}
+pub fn cliff_step_blocked(arena: usize, x0: f64, z0: f64, x1: f64, z1: f64) -> bool {
+    with_arena(arena, |d| d.cliff_step_blocked(x0, z0, x1, z1))
+}
+pub fn is_on_cliff(arena: usize, x: f64, z: f64) -> bool {
+    with_arena(arena, |d| d.is_on_cliff(x, z))
 }
 pub fn is_torus_arena(arena: usize) -> bool {
     with_arena(arena, |d| d.is_torus())

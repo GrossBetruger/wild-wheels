@@ -9,6 +9,7 @@ fn random(g: &mut Globals) -> f64 {
 }
 fn safe(g: &Globals, actors: &[Actor], index: usize, x: f64, z: f64, spacing: f64) -> bool {
     !blocked(g.arena, x, z, 8.0)
+        && !is_on_cliff(g.arena, x, z)
         && !actors.iter().any(|a| {
             !a.inactive
                 && !a.afk
@@ -23,8 +24,8 @@ fn safe(g: &Globals, actors: &[Actor], index: usize, x: f64, z: f64, spacing: f6
 }
 pub(super) fn place(g: &mut Globals, actors: &[Actor], index: usize) -> bool {
     let hilltop = is_hill_arena(g.arena) && index < 7;
-    let spacing = if hilltop { 10.5 } else { 16.0 };
-    let limit = if hilltop { 22.0 } else { arena_size(g.arena) - 8.0 };
+    let spacing = if hilltop { 12.0 } else { 16.0 };
+    let limit = if hilltop { 32.0 } else { arena_size(g.arena) - 8.0 };
     let mut candidate = None;
     for _ in 0..128 {
         let x = (random(g) * 2.0 - 1.0) * limit;

@@ -1037,14 +1037,14 @@ pub fn sync(
                 Role::GhostShot,
                 p.id as usize,
                 ghost,
-                at(p.wx, p.height + view.arena_def.ground_height(p.wx, p.wz), p.wz, p.heading),
+                at(p.wx, p.height, p.wz, p.heading),
             );
         }
         stage.show(
             Role::Shot,
             p.id as usize,
             play,
-            at(p.wx, p.height + view.arena_def.ground_height(p.wx, p.wz), p.wz, p.heading),
+            at(p.wx, p.height, p.wz, p.heading),
         );
     }
     for p in view.projectiles {
@@ -1062,7 +1062,7 @@ pub fn sync(
             };
             let play = stage.clip(&name);
             let key = p.id as usize * 16 + index / 3;
-            let puff = at(sample.wx, sample.height + view.arena_def.ground_height(sample.wx, sample.wz), sample.wz, 0.0).with_scale(Vec3::splat(size));
+            let puff = at(sample.wx, sample.height, sample.wz, 0.0).with_scale(Vec3::splat(size));
             if seeing {
                 let ghost = Play {
                     ghost: true,

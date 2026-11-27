@@ -59,18 +59,34 @@ fn load_kernel_arena(index: usize, def: &ArenaDef) -> Result<(), ()> {
     if crate::set_arena(index, def.size, count) != 1 {
         return Err(());
     }
-    crate::set_arena_shape(index, def.is_octagon(), def.is_torus());
+    crate::set_arena_shape(index, def.is_octagon(), def.is_torus(), def.is_hill());
     Ok(())
 }
 pub fn distance(ax:f64,az:f64,bx:f64,bz:f64)->f64 { (ax-bx).hypot(az-bz) }
 pub fn angle(a:f64,b:f64)->f64 { (a-b).sin().atan2((a-b).cos()) }
 pub fn clear(arena:usize,ax:f64,az:f64,bx:f64,bz:f64)->bool {
+    let ya=ground_height(arena,ax,az)+1.3;
+    let yb=ground_height(arena,bx,bz)+1.3;
+    if yb>ya+1.5{return false;}
     let d=distance(ax,az,bx,bz);let mut t=3.0;
-    while t<d {if blocked(arena,ax+(bx-ax)*t/d,az+(bz-az)*t/d,0.4){return false;}t+=3.0;}true
+    while t<d {
+        let (px,pz)=(ax+(bx-ax)*t/d,az+(bz-az)*t/d);
+        if blocked(arena,px,pz,0.4)||ground_height(arena,px,pz)>ya+0.45{return false;}
+        t+=3.0;
+    }
+    true
 }
 pub fn wall_clear(arena:usize,ax:f64,az:f64,bx:f64,bz:f64)->bool {
+    let ya=ground_height(arena,ax,az)+1.3;
+    let yb=ground_height(arena,bx,bz)+1.3;
+    if yb>ya+1.5{return false;}
     let d=distance(ax,az,bx,bz);let mut t=3.0;
-    while t<d {if wall_blocked(arena,ax+(bx-ax)*t/d,az+(bz-az)*t/d,0.4){return false;}t+=3.0;}true
+    while t<d {
+        let (px,pz)=(ax+(bx-ax)*t/d,az+(bz-az)*t/d);
+        if wall_blocked(arena,px,pz,0.4)||ground_height(arena,px,pz)>ya+0.45{return false;}
+        t+=3.0;
+    }
+    true
 }
 pub fn sound(g:&mut Globals,kind:&str,owner:usize,x:f64,z:f64,key:Option<String>){
     if !g.multiplayer {g.events.push(json!(kind));return;}

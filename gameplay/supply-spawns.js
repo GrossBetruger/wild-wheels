@@ -1,13 +1,14 @@
+import { isOnCliff } from './combat.js';
 export const SUPPLY_WALL_CLEARANCE=8, SUPPLY_ACTOR_CLEARANCE=12, SUPPLY_SPACING=16;
 function random(world){let state=(world.supplySeed??1)>>>0||1;state^=state<<13;state^=state>>>17;state^=state<<5;world.supplySeed=state>>>0;return world.supplySeed/4294967296;}
 export function safeSupplyPosition(world,arena,index,x,z,spacing=SUPPLY_SPACING){
   const limit=arena.size-8;
-  if(Math.abs(x)>limit||Math.abs(z)>limit||(arena.shape==='octagon'&&(Math.abs(x)+Math.abs(z))*Math.SQRT1_2>limit)||arena.blocks.some(([bx,bz,w,d])=>Math.abs(x-bx)<w/2+8&&Math.abs(z-bz)<d/2+8))return false;
+  if(Math.abs(x)>limit||Math.abs(z)>limit||(arena.shape==='octagon'&&(Math.abs(x)+Math.abs(z))*Math.SQRT1_2>limit)||arena.blocks.some(([bx,bz,w,d])=>Math.abs(x-bx)<w/2+8&&Math.abs(z-bz)<d/2+8)||isOnCliff(arena,x,z))return false;
   if([world,...world.bots].some(actor=>!actor.inactive&&!actor.afk&&!actor.bomber&&!(actor.destroyed>0)&&Math.hypot(actor.wx-x,actor.wz-z)<12))return false;
   return !world.supplies.some((s,i)=>i!==index&&Math.hypot((s.homeWx??s.wx)-x,(s.homeWz??s.wz)-z)<spacing);
 }
 export function placeSupply(world,arena,index){
-  const hilltop=arena.shape==='hill'&&index<7,spacing=hilltop?10.5:SUPPLY_SPACING,limit=hilltop?22:arena.size-8;
+  const hilltop=arena.shape==='hill'&&index<7,spacing=hilltop?12:SUPPLY_SPACING,limit=hilltop?32:arena.size-8;
   const accept=(x,z)=>{
     if(hilltop&&Math.hypot(x,z)>limit)return false;
     if(!safeSupplyPosition(world,arena,index,x,z,spacing))return false;

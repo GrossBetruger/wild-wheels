@@ -1009,7 +1009,7 @@ pub fn sync(
             (_, true) => stage.clip(&format!("shot:vulcan:{owner}")),
             _ => stage.clip("shot:hedgehog"),
         };
-        let mut shot_tf = at(p.wx, p.height + view.arena_def.ground_height(p.wx, p.wz), p.wz, p.heading);
+        let mut shot_tf = at(p.wx, p.height, p.wz, p.heading);
         if owner == crate::ryeah::DRIVER && p.kind == "hedgehog" {
             shot_tf.translation += ryeah_shot_offset(p.heading, p.age);
         }
@@ -1044,7 +1044,7 @@ pub fn sync(
             };
             let play = stage.clip(&name);
             let key = p.id as usize * 16 + index / trail_stride;
-            let mut puff = at(sample.wx, sample.height + view.arena_def.ground_height(sample.wx, sample.wz), sample.wz, 0.0).with_scale(Vec3::splat(size));
+            let mut puff = at(sample.wx, sample.height, sample.wz, 0.0).with_scale(Vec3::splat(size));
             if owner == crate::ryeah::DRIVER && p.kind == "hedgehog" {
                 let sample_age = p.age * (1.0 - (index as f64 / trail_len)).max(0.0);
                 puff.translation += ryeah_shot_offset(p.heading, sample_age);

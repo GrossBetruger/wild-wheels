@@ -19,19 +19,25 @@ pub fn age(g:&mut Globals,dt:f64){
     g.drift_particles.retain(|p|p.age<p.life);if g.drift_particles.len()>240{g.drift_particles.drain(..g.drift_particles.len()-240);}
 }
 pub fn navigate(arena:usize,a:&Actor,b:&Actor)->Vec<Point>{
-    let cell=|v:f64|(((v+90.0)/10.0).floor() as i32).clamp(0,17);
-    let start=cell(a.wx)+cell(a.wz)*18;let goal=cell(b.wx)+cell(b.wz)*18;
-    let mut queue=VecDeque::from([start]);let mut previous=[-2;324];previous[start as usize]=-1;
+    let span=arena_size(arena);
+    let cells:i32=if span>110.0{24}else{18};
+    let step=(span*2.0)/f64::from(cells);
+    let center=|i:i32| -span+(f64::from(i)+0.5)*step;
+    let cell=|v:f64|(((v+span)/step).floor() as i32).clamp(0,cells-1);
+    let start=cell(a.wx)+cell(a.wz)*cells;let goal=cell(b.wx)+cell(b.wz)*cells;
+    let mut queue=VecDeque::from([start]);let mut previous=vec![-2;(cells*cells) as usize];previous[start as usize]=-1;
     while previous[goal as usize]== -2{
-        let Some(n)=queue.pop_front() else{return Vec::new();};let x=n%18;let z=n/18;
+        let Some(n)=queue.pop_front() else{return Vec::new();};let x=n%cells;let z=n/cells;
+        let (cx,cz)=(center(x),center(z));
         for (dx,dz) in [(1,0),(-1,0),(0,1),(0,-1)]{
-            let nx=x+dx;let nz=z+dz;if !(0..18).contains(&nx)||!(0..18).contains(&nz){continue;}
-            let next=nx+nz*18;if previous[next as usize]!= -2||blocked(arena,(nx*10-85) as f64,(nz*10-85) as f64,3.0){continue;}
+            let nx=x+dx;let nz=z+dz;if !(0..cells).contains(&nx)||!(0..cells).contains(&nz){continue;}
+            let next=nx+nz*cells;let (wx,wz)=(center(nx),center(nz));
+            if previous[next as usize]!= -2||blocked(arena,wx,wz,3.0)||cliff_step_blocked(arena,cx,cz,wx,wz){continue;}
             previous[next as usize]=n;queue.push_back(next);
         }
     }
     let mut path=Vec::new();let mut n=goal;
-    while n!=start&&n!= -1{path.push(Point{wx:(n%18*10-85) as f64,wz:(n/18*10-85) as f64});n=previous[n as usize];}path.reverse();path
+    while n!=start&&n!= -1{path.push(Point{wx:center(n%cells),wz:center(n/cells)});n=previous[n as usize];}path.reverse();path
 }
 impl Game{
     pub(super) fn move_cart(&mut self,id:usize,steer:f64,keys:u32,dt:f64,advance:bool,lethal:bool){

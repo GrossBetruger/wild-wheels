@@ -40,12 +40,54 @@ export function wrapTorus(arena, x, z) {
   const s = arena.size, span = s * 2;
   return [(((x + s) % span) + span) % span - s, (((z + s) % span) + span) % span - s];
 }
+const HILL_HEIGHT = 22, HILL_TOP_R = 38, HILL_CLIFF_FOOT_R = 46, HILL_ROAD_END_R = 108, HILL_ROAD_HALF_W = 7.5, HILL_ROAD_SHOULDER = 5, MAX_CLIMB_SLOPE = .85;
+export function hillRoadDist(x, z) {
+  const r = Math.hypot(x, z);
+  if (r <= HILL_TOP_R) return 0;
+  const theta = Math.atan2(z, x), t = clamp((r - HILL_TOP_R) / (HILL_ROAD_END_R - HILL_TOP_R), 0, 1);
+  const roads = [-Math.PI / 2 + 1.25 * t, Math.PI / 2 + 1.25 * t, -1.25 * t, Math.PI - 1.25 * t];
+  let best = Infinity;
+  for (const rt of roads) {
+    const d = Math.abs(Math.atan2(Math.sin(theta - rt), Math.cos(theta - rt)));
+    if (r * d < best) best = r * d;
+  }
+  return best;
+}
 export function groundHeight(arena, x, z) {
   if (arena?.shape !== 'hill') return 0;
   const r = Math.hypot(x, z);
-  if (r <= 26) return 12;
-  if (r >= 70) return 0;
-  return 6 * (1 + Math.cos(Math.PI * (r - 26) / 44));
+  if (r <= HILL_TOP_R) return HILL_HEIGHT;
+  if (r >= HILL_ROAD_END_R) return 0;
+  const cliffH = r >= HILL_CLIFF_FOOT_R ? 0 : HILL_HEIGHT * (1 - (r - HILL_TOP_R) / (HILL_CLIFF_FOOT_R - HILL_TOP_R));
+  const t = (r - HILL_TOP_R) / (HILL_ROAD_END_R - HILL_TOP_R);
+  const roadH = HILL_HEIGHT * .5 * (1 + Math.cos(Math.PI * t));
+  const dRoad = hillRoadDist(x, z);
+  if (dRoad <= HILL_ROAD_HALF_W) return roadH;
+  if (dRoad >= HILL_ROAD_HALF_W + HILL_ROAD_SHOULDER) return cliffH;
+  const w = 1 - (dRoad - HILL_ROAD_HALF_W) / HILL_ROAD_SHOULDER;
+  return cliffH + (roadH - cliffH) * w;
+}
+export function cliffStepBlocked(arena, x0, z0, x1, z1) {
+  if (arena?.shape !== 'hill') return false;
+  const d = Math.hypot(x1 - x0, z1 - z0);
+  if (d <= 1e-6) return false;
+  const steps = Math.max(1, Math.ceil(d / 2));
+  let px = x0, pz = z0, ph = groundHeight(arena, px, pz);
+  for (let i = 1; i <= steps; i++) {
+    const u = i / steps, nx = x0 + (x1 - x0) * u, nz = z0 + (z1 - z0) * u, nh = groundHeight(arena, nx, nz);
+    const seg = Math.max(.25, Math.hypot(nx - px, nz - pz));
+    if (Math.abs(nh - ph) / seg > MAX_CLIMB_SLOPE) return true;
+    px = nx; pz = nz; ph = nh;
+  }
+  return false;
+}
+export function isOnCliff(arena, x, z) {
+  if (arena?.shape !== 'hill') return false;
+  const h = groundHeight(arena, x, z);
+  for (const [dx, dz] of [[2, 0], [-2, 0], [0, 2], [0, -2]]) {
+    if (Math.abs(groundHeight(arena, x + dx, z + dz) - h) / 2 > MAX_CLIMB_SLOPE) return true;
+  }
+  return false;
 }
 export function inArenaBounds(arena, x, z, padding = 0) {
   const limit = arena.size - padding;
@@ -61,7 +103,16 @@ export function blocked(arena, x, z, padding = 2) {
     || arena.blocks.some(([bx, bz, w, d]) => Math.abs(x - bx) < w / 2 + padding && Math.abs(z - bz) < d / 2 + padding)
     || (arena.water ?? []).some(([bx, bz, w, d]) => Math.abs(x - bx) < w / 2 + padding && Math.abs(z - bz) < d / 2 + padding);
 }
-function clearShot(arena, a, b) { const d = distance(a, b); for (let t = 3; t < d; t += 3)if (blocked(arena, a.wx + (b.wx - a.wx) * t / d, a.wz + (b.wz - a.wz) * t / d, .4)) return false; return true; }
+function clearShot(arena, a, b) {
+  const ya = groundHeight(arena, a.wx, a.wz) + 1.3, yb = groundHeight(arena, b.wx, b.wz) + 1.3;
+  if (yb > ya + 1.5) return false;
+  const d = distance(a, b);
+  for (let t = 3; t < d; t += 3) {
+    const px = a.wx + (b.wx - a.wx) * t / d, pz = a.wz + (b.wz - a.wz) * t / d;
+    if (blocked(arena, px, pz, .4) || groundHeight(arena, px, pz) > ya + .45) return false;
+  }
+  return true;
+}
 function spawn(r, actor, initial = false) {
   const arena = arenas[r.arena], radius = arena.shape === 'octagon' ? 48 : 78;
   const actors = [r, ...r.bots], count = Math.max(1, actors.filter(a => !a.inactive).length);
@@ -133,7 +184,8 @@ export function releaseChaff(r, actor = r) {
 export function makeProjectile(r, actor) {
   const kind = actor.item === 'missile' && actor.missiles > 0 ? 'missile' : 'hedgehog', vulcan = kind === 'hedgehog' && actor.vulcan > 0, arena = arenas[r.arena];
   const [wx, wz] = wrapTorus(arena, actor.wx + Math.sin(actor.heading) * 3.5, actor.wz + Math.cos(actor.heading) * 3.5);
-  return { kind, vulcan, owner: actor.id, target: targetAhead(r, actor)?.id ?? null, wx, wz, heading: actor.heading, speed: kind === 'missile' ? 70 : vulcan ? 125 : 90, height: 1.3, vy: 3, life: kind === 'missile' ? 3 : vulcan ? (arena.shape === 'torus' ? 1.8 : 1.3) : 2.5, age: 0, trail: [], bounces: 0 };
+  const spawnHeight = groundHeight(arena, actor.wx, actor.wz) + 1.3;
+  return { kind, vulcan, owner: actor.id, target: targetAhead(r, actor)?.id ?? null, wx, wz, heading: actor.heading, speed: kind === 'missile' ? 70 : vulcan ? 125 : 90, height: spawnHeight, vy: 3, life: kind === 'missile' ? 3 : vulcan ? (arena.shape === 'torus' ? 1.8 : 1.3) : 2.5, age: 0, trail: [], bounces: 0 };
 }
 export function targetAhead(world, actor = world, cone = .65) {
   return [world, ...world.bots].filter(other => other.id !== actor.id && !other.bomber && !other.inactive && !other.destroyed && other.shield <= 0 && distance(other, actor) < 100 && Math.abs(angleDelta(Math.atan2(other.wx - actor.wx, other.wz - actor.wz), actor.heading)) < cone && clearShot(arenas[world.arena], actor, other)).sort((a, b) => distance(actor, a) - distance(actor, b))[0] ?? null;
@@ -227,10 +279,11 @@ function orbitChaff(shot, decoy, dt, arena) {
   const center = shot.orbitCenter ?? decoy, radius = shot.orbitRadius, speed = radius * Math.PI * 2 / .6;
   shot.heading = angle + direction * Math.PI / 2;
   shot.wx = center.wx + Math.sin(angle) * radius + Math.sin(shot.heading) * speed * fall; shot.wz = center.wz + Math.cos(angle) * radius + Math.cos(shot.heading) * speed * fall;
-  const sink = Math.min(.75, Math.max(0, (shot.orbitHeight - .25) / 1.2));
+  const floorY = groundHeight(arena, shot.wx, shot.wz) + .15;
+  const sink = Math.min(.75, Math.max(0, (shot.orbitHeight - floorY - .1) / 1.2));
   shot.height = shot.orbitHeight - sink * shot.orbitAge - 7 * fall * fall; shot.vy = -sink - 14 * fall;
-  const impact = shot.height <= .15 || fall > 0 && blocked(arena, shot.wx, shot.wz, .3);
-  if (impact) { shot.height = Math.max(.15, shot.height); shot.life = 0; }
+  const impact = shot.height <= floorY || fall > 0 && blocked(arena, shot.wx, shot.wz, .3);
+  if (impact) { shot.height = Math.max(floorY, shot.height); shot.life = 0; }
   return { impact, decoy };
 }
 function projectileWormhole(world, actors, shot) {
@@ -275,8 +328,15 @@ export function advanceProjectile(r, shot, dt) {
       const turn = (12 + 18 * Math.max(0, 1 - Math.hypot(dx, dz) / 44)) * dt / steps;
       shot.heading += clamp(angleDelta(Math.atan2(dx, dz), shot.heading), -turn, turn);
     }
-    const previousX = shot.wx, previousZ = shot.wz;
-    [shot.wx, shot.wz] = wrapTorus(arena, shot.wx + Math.sin(shot.heading) * shot.speed * dt / steps, shot.wz + Math.cos(shot.heading) * shot.speed * dt / steps);
+    const previousX = shot.wx, previousZ = shot.wz, subDt = dt / steps;
+    [shot.wx, shot.wz] = wrapTorus(arena, shot.wx + Math.sin(shot.heading) * shot.speed * subDt, shot.wz + Math.cos(shot.heading) * shot.speed * subDt);
+    const terrainY = groundHeight(arena, shot.wx, shot.wz);
+    if (terrainY > shot.height + .45) { shot.life = 0; return { impact: true, victim: undefined, decoy }; }
+    const targetY = terrainY + 1.3;
+    if (shot.height > targetY) {
+      const drop = (18 + (shot.height - targetY) * 2.4) * subDt;
+      shot.height = Math.max(targetY, shot.height - drop);
+    }
     const wrapped = Math.hypot(shot.wx - previousX, shot.wz - previousZ) > 10;
     if ((field && distance(shot, field) <= WORMHOLE_KILL_RADIUS) || (!wrapped && fireRingBlocks(r, previousX, previousZ, shot.wx, shot.wz))) { shot.quenched = true; shot.life = 0; return { impact: true, victim: null, decoy: null }; }
     if (decoy && distance(shot, decoy) < 6) {
@@ -322,14 +382,22 @@ export function damageBattle(r, victim, owner, amount, kind = 'hedgehog') {
   return true;
 }
 export function navigate(arena, actor, target) {
-  const size = 18, cell = 10, toCell = value => clamp(Math.floor((value + 90) / cell), 0, size - 1), start = toCell(actor.wx) + toCell(actor.wz) * size, goal = toCell(target.wx) + toCell(target.wz) * size;
+  const span = arena.size, size = span > 110 ? 24 : 18, cell = (span * 2) / size;
+  const center = i => -span + (i + .5) * cell, toCell = value => clamp(Math.floor((value + span) / cell), 0, size - 1);
+  const start = toCell(actor.wx) + toCell(actor.wz) * size, goal = toCell(target.wx) + toCell(target.wz) * size;
   const queue = [start], prev = new Map([[start, -1]]);
   for (let i = 0; i < queue.length && !prev.has(goal); i++) {
-    const n = queue[i], x = n % size, z = Math.floor(n / size);
-    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = x + dx, nz = z + dz, next = nx + nz * size; if (nx < 0 || nx >= size || nz < 0 || nz >= size || prev.has(next) || blocked(arena, nx * cell - 85, nz * cell - 85, 3)) continue; prev.set(next, n); queue.push(next); }
+    const n = queue[i], x = n % size, z = Math.floor(n / size), cx = center(x), cz = center(z);
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx, nz = z + dz, next = nx + nz * size;
+      if (nx < 0 || nx >= size || nz < 0 || nz >= size || prev.has(next)) continue;
+      const wx = center(nx), wz = center(nz);
+      if (blocked(arena, wx, wz, 3) || cliffStepBlocked(arena, cx, cz, wx, wz)) continue;
+      prev.set(next, n); queue.push(next);
+    }
   }
   if (!prev.has(goal)) return [];
-  const path = []; for (let n = goal; n !== start && n !== -1; n = prev.get(n))path.unshift({ wx: (n % size) * cell - 85, wz: Math.floor(n / size) * cell - 85 }); return path;
+  const path = []; for (let n = goal; n !== start && n !== -1; n = prev.get(n)) path.unshift({ wx: center(n % size), wz: center(Math.floor(n / size)) }); return path;
 }
 export function driftWheels(actor) {
   const tx = Math.sin(actor.heading), tz = Math.cos(actor.heading);
@@ -376,9 +444,9 @@ function moveActor(r, actor, steer, gas, brake, dt, handbrake = false) {
   const travel = drifting || actor === r || actor.human ? actor.motionHeading : actor.heading;
   const arena = arenas[r.arena];
   const [nx, nz] = wrapTorus(arena, actor.wx + Math.sin(travel) * actor.speed * .085 * dt, actor.wz + Math.cos(travel) * actor.speed * .085 * dt);
-  if (!blocked(arena, nx, nz)) { actor.wx = nx; actor.wz = nz; if (drifting) emitDriftTrail(r, actor, dt); return; }
-  if (!blocked(arena, nx, actor.wz)) actor.wx = nx;
-  if (!blocked(arena, actor.wx, nz)) actor.wz = nz;
+  if (!blocked(arena, nx, nz) && !cliffStepBlocked(arena, actor.wx, actor.wz, nx, nz)) { actor.wx = nx; actor.wz = nz; if (drifting) emitDriftTrail(r, actor, dt); return; }
+  if (!blocked(arena, nx, actor.wz) && !cliffStepBlocked(arena, actor.wx, actor.wz, nx, actor.wz)) actor.wx = nx;
+  if (!blocked(arena, actor.wx, nz) && !cliffStepBlocked(arena, actor.wx, actor.wz, actor.wx, nz)) actor.wz = nz;
   if (actor.boost > 0 && drifting) {
     if (!r.prediction) { damageBattle(r, actor, -1, MAX_HEALTH, 'wall'); return; }
     actor.predictedCrash = true; actor.speed = 0; actor.boost = 0; actor.drift = 0; actor.wasDrifting = false; actor.somersault = 0; actor.dizzy = 0; return;
@@ -491,7 +559,7 @@ export function tickBattle(r, keys, dt, inputs = null) {
     const aim = batAim(r, actor, arena); if (!aim.target) continue;
     const wx = aim.origin.wx + Math.sin(aim.heading) * 1.4, wz = aim.origin.wz + Math.cos(aim.heading) * 1.4; if (blocked(arena, wx, wz, .3)) continue;
     r.projectileSequence = (r.projectileSequence ?? 0) + 1;
-    r.projectiles.push({ id: r.projectileSequence, owner: actor.id, kind: 'hedgehog', vulcan: true, target: aim.target.id, wx, wz, heading: aim.heading, speed: 125, height: 3.5 + (actor.boost > 0 ? 2.4 : 0) + (somersaultPose(actor)?.height ?? 0), vy: 3, life: 1.3, age: 0, trail: [], bounces: 0 });
+    r.projectiles.push({ id: r.projectileSequence, owner: actor.id, kind: 'hedgehog', vulcan: true, target: aim.target.id, wx, wz, heading: aim.heading, speed: 125, height: groundHeight(arena, actor.wx, actor.wz) + 3.5 + (actor.boost > 0 ? 2.4 : 0) + (somersaultPose(actor)?.height ?? 0), vy: 3, life: 1.3, age: 0, trail: [], bounces: 0 });
     actor.batCooldown = .3; if (r.multiplayer || distance(actor, r) < 90) sound(r, 'vulcanFire', actor);
   }
   for (const cloud of r.chaffClouds) divertMissiles(r, cloud);

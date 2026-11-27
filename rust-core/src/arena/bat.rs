@@ -3,7 +3,18 @@ fn origin(a:&Actor,arena:usize)->(f64,f64){
     for side in [4.0,-4.0,2.0,-2.0]{let x=a.wx+a.heading.cos()*side;let z=a.wz-a.heading.sin()*side;if !wall_blocked(arena,x,z,0.8)&&line(arena,a.wx,a.wz,x,z){return(x,z);}}
     (a.wx,a.wz)
 }
-fn line(arena:usize,x:f64,z:f64,xx:f64,zz:f64)->bool{let d=distance(x,z,xx,zz);let mut t=0.0;while t<=d{if wall_blocked(arena,x+(xx-x)*t/d.max(1e-9),z+(zz-z)*t/d.max(1e-9),0.4){return false;}t+=1.0;}true}
+fn line(arena:usize,x:f64,z:f64,xx:f64,zz:f64)->bool{
+    let ya=ground_height(arena,x,z)+3.5;
+    let yb=ground_height(arena,xx,zz)+1.3;
+    if yb>ya+1.5{return false;}
+    let d=distance(x,z,xx,zz);let mut t=0.0;
+    while t<=d{
+        let (px,pz)=(x+(xx-x)*t/d.max(1e-9),z+(zz-z)*t/d.max(1e-9));
+        if wall_blocked(arena,px,pz,0.4)||ground_height(arena,px,pz)>ya+0.45{return false;}
+        t+=1.0;
+    }
+    true
+}
 impl Game{
     /// Where an owl's bat hovers, the way it faces, and the racer it aims at, if
     /// any: the same for the shots it fires and for drawing it.
@@ -18,7 +29,7 @@ impl Game{
         let Some((x,z,heading,Some(target)))=self.bat_aim(id) else{return;};
         let(wx,wz)=(x+heading.sin()*1.4,z+heading.cos()*1.4);if wall_blocked(self.global.arena,wx,wz,0.3){return;}
         let a=&self.actors[id];let target=Some(target);let jump=match a.somersault>0.0{true=>(1.0-a.somersault/0.55).clamp(0.0,1.0).mul_add(std::f64::consts::PI,0.0).sin()*match a.driver==10{true=>2.8,false=>5.0},false=>0.0};
-        let height=3.5+match a.boost>0.0{true=>2.4,false=>0.0}+jump;let a=&mut self.actors[id];a.bat_cooldown=0.3;
+        let height=ground_height(self.global.arena,a.wx,a.wz)+3.5+match a.boost>0.0{true=>2.4,false=>0.0}+jump;let a=&mut self.actors[id];a.bat_cooldown=0.3;
         let g=&mut self.global;g.projectile_sequence+=1;let (wx,wz)=wrap_point(g.arena,wx,wz);let life=if is_torus_arena(g.arena){1.8}else{1.3};g.projectiles.push(Shot{id:g.projectile_sequence,owner:id,kind:"hedgehog".into(),vulcan:true,target,wx,wz,heading,speed:125.0,height,vy:3.0,life,..Shot::default()});
         if g.multiplayer||distance(a.wx,a.wz,self.actors[0].wx,self.actors[0].wz)<90.0{super::sound(g,"vulcanFire",id,wx,wz,None);}
     }

@@ -116,7 +116,8 @@ impl Client{
                 let target=game.actors.iter().filter(|b|b.id!=self.viewer&&!b.bomber&&!b.inactive&&b.destroyed<=0.0&&b.shield<=0.0&&distance(actor.wx,actor.wz,b.wx,b.wz)<100.0&&angle((b.wx-actor.wx).atan2(b.wz-actor.wz),actor.heading).abs()<0.65&&clear(game.global.arena,actor.wx,actor.wz,b.wx,b.wz)).min_by(|a,b|distance(actor.wx,actor.wz,a.wx,a.wz).total_cmp(&distance(actor.wx,actor.wz,b.wx,b.wz))).map(|a|a.id);
                 let (sx,sz)=wrap_point(game.global.arena,actor.wx+actor.heading.sin()*3.5,actor.wz+actor.heading.cos()*3.5);
                 let vulcan_life=if is_torus_arena(game.global.arena){1.8}else{1.3};
-                let model=Shot{id:0x80000000u32.wrapping_add(id),owner:self.viewer,kind:kind.into(),wx:sx,wz:sz,heading:actor.heading,speed:match(missile,vulcan){(true,_)=>70.0,(_,true)=>125.0,_=>90.0},height:1.3,vy:3.0,life:match(missile,vulcan){(true,_)=>3.0,(_,true)=>vulcan_life,_=>2.5},target,vulcan,action_id:Some(id),..Shot::default()};
+                let spawn_height=ground_height(game.global.arena,actor.wx,actor.wz)+1.3;
+                let model=Shot{id:0x80000000u32.wrapping_add(id),owner:self.viewer,kind:kind.into(),wx:sx,wz:sz,heading:actor.heading,speed:match(missile,vulcan){(true,_)=>70.0,(_,true)=>125.0,_=>90.0},height:spawn_height,vy:3.0,life:match(missile,vulcan){(true,_)=>3.0,(_,true)=>vulcan_life,_=>2.5},target,vulcan,action_id:Some(id),..Shot::default()};
                 self.local_shots.push(LocalShot{id,born:now,updated:now,model,error:[0.0;2]});self.emit(match(missile,vulcan){(true,_)=>"missile",(_,true)=>"vulcanFire",_=>"fire"},now,Some(format!("action:{}",id)),!resource.is_empty());(kind.into(),resource.into(),self.fire_tick)
             },_=>return false
         };

@@ -163,8 +163,8 @@ pub fn extra_arenas() -> Vec<ArenaDef> {
         },
         ArenaDef {
             name: "King of the Hill".into(),
-            desc: "Four intersecting dirt roads climb a central hill packed with power-ups on the summit.".into(),
-            size: 96.0,
+            desc: "Four cliff-lined dirt roads climb a towering central plateau. Control the high ground.".into(),
+            size: 168.0,
             shape: "hill".into(),
             max_players: None,
             ground: "#5c8c46".into(),
@@ -172,23 +172,23 @@ pub fn extra_arenas() -> Vec<ArenaDef> {
             sky: "#b8d8ee".into(),
             // Four rocky valley outcrops providing cover along the outer ring (clear of all 4 dirt roads & spawns).
             blocks: vec![
-                [-68.0, -68.0, 14.0, 14.0],
-                [68.0, -68.0, 14.0, 14.0],
-                [-68.0, 68.0, 14.0, 14.0],
-                [68.0, 68.0, 14.0, 14.0],
+                [-126.0, -126.0, 18.0, 18.0],
+                [126.0, -126.0, 18.0, 18.0],
+                [-126.0, 126.0, 18.0, 18.0],
+                [126.0, 126.0, 18.0, 18.0],
             ],
             water: vec![],
             bridges: vec![],
             // Eight valley-floor spawns encircling the hill, all facing the summit.
             spawns: vec![
-                [0.0, -78.0],
-                [55.0, -55.0],
-                [78.0, 0.0],
-                [55.0, 55.0],
-                [0.0, 78.0],
-                [-55.0, 55.0],
-                [-78.0, 0.0],
-                [-55.0, -55.0],
+                [0.0, -138.0],
+                [98.0, -98.0],
+                [138.0, 0.0],
+                [98.0, 98.0],
+                [0.0, 138.0],
+                [-98.0, 98.0],
+                [-138.0, 0.0],
+                [-98.0, -98.0],
             ],
         },
     ]
@@ -627,24 +627,53 @@ mod tests {
     }
 
     #[test]
-    fn king_of_the_hill_has_elevated_summit_and_hilltop_powerups() {
+    fn king_of_the_hill_has_elevated_summit_cliffs_and_high_ground_ballistics() {
         ensure_loaded();
         let arenas = server_arenas();
         let idx = arenas.iter().position(|a| a.name == "King of the Hill").expect("King of the Hill exists");
         let hill = &arenas[idx];
         assert!(hill.valid());
         assert!(hill.is_hill());
-        assert_eq!(hill.ground_height(0.0, 0.0), 12.0);
-        assert_eq!(hill.ground_height(80.0, 0.0), 0.0);
-        assert!(hill.ground_height(48.0, 0.0) > 4.0 && hill.ground_height(48.0, 0.0) < 8.0);
+        assert_eq!(hill.size, 168.0);
+        // Flat summit plateau at y = 22.0, valley floor at y = 0.0.
+        assert_eq!(hill.ground_height(0.0, 0.0), 22.0);
+        assert_eq!(hill.ground_height(35.0, 0.0), 22.0);
+        assert_eq!(hill.ground_height(120.0, 0.0), 0.0);
+        // Off-road cliff between roads blocks climbing straight up from valley to summit.
+        let cliff_angle = std::f64::consts::FRAC_PI_4; // between the 4 road mouths near r = 42
+        assert!(
+            hill.cliff_step_blocked(
+                cliff_angle.cos() * 48.0,
+                cliff_angle.sin() * 48.0,
+                cliff_angle.cos() * 36.0,
+                cliff_angle.sin() * 36.0,
+            ),
+            "off-road cliff must block climbing straight to the summit"
+        );
+        // Climbing along a dirt road ramp from r = 108 to r = 38 must be smoothly passable.
+        let mut prev = (0.0_f64, 0.0_f64);
+        for step in 0..=70 {
+            let r = 108.0 - step as f64;
+            let t = (r - 38.0) / 70.0;
+            let theta = -1.25 * t;
+            let cur = (theta.cos() * r, theta.sin() * r);
+            if step > 0 {
+                assert!(
+                    !hill.cliff_step_blocked(prev.0, prev.1, cur.0, cur.1),
+                    "dirt road climb must not be blocked at r={r}"
+                );
+            }
+            prev = cur;
+        }
         for &[sx, sz] in &hill.spawns {
             assert!(!hill.blocked(sx, sz, 6.0), "spawn ({sx}, {sz}) must be clear");
+            assert!(!hill.is_on_cliff(sx, sz), "spawn ({sx}, {sz}) must not be on a cliff");
         }
         let mut room = Room::new(idx, 1);
         room.join(&json!({"name":"Climber","driver":0})).unwrap();
         let pkt = room.core.packet(0);
         let client = NativeClient::from_packet(&pkt, 0.0).unwrap();
-        let on_summit = client.view().supplies.iter().filter(|s| s.wx.hypot(s.wz) <= 23.0).count();
+        let on_summit = client.view().supplies.iter().filter(|s| s.wx.hypot(s.wz) <= 34.0).count();
         assert!(on_summit >= 5, "expected a cluster of power-ups on the hilltop, got {on_summit}");
     }
 }
