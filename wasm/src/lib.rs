@@ -103,6 +103,7 @@ pub fn start_client(pack: Vec<u8>, sound_pack: Vec<u8>, mobile: bool, direct_net
         .insert_resource(hud::HudState {
             active: false,
             show_menu_buttons: false,
+            show_leaderboard: false,
             ..default()
         })
         .init_resource::<hud::HudEvents>()

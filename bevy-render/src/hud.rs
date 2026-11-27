@@ -28,6 +28,7 @@ pub struct HudTone(pub Color);
 pub struct HudState {
     pub active: bool,
     pub show_menu_buttons: bool,
+    pub show_leaderboard: bool,
     pub board: Option<Vec<(String, f64, u64, u64)>>,
     pub voice_text: String,
     pub voice_talking: bool,
@@ -38,6 +39,7 @@ impl Default for HudState {
         Self {
             active: false,
             show_menu_buttons: true,
+            show_leaderboard: true,
             board: None,
             voice_text: String::new(),
             voice_talking: false,
@@ -58,14 +60,6 @@ pub struct CardChrome(pub Id);
 /// Pre-baked 2x DPI color emoji icon on an ammo card or action button.
 #[derive(Component, Clone, Copy)]
 pub struct CardIcon(pub Id);
-
-/// Pre-baked 2x DPI color heart icon (0..6) in the top-left health row.
-#[derive(Component, Clone, Copy)]
-pub struct HeartIcon(pub usize);
-
-/// Marker for the fallback plain-text health readout (hidden when pre-baked hearts are available).
-#[derive(Component)]
-pub struct HealthFallbackText;
 
 /// Marker for the MENU / AFK corner container.
 #[derive(Component)]
@@ -124,7 +118,6 @@ const MAP_BRIDGE_SLOTS: usize = 16;
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum Id {
     Kills,
-    Health,
     Time,
     Board,
     Incoming,
@@ -740,6 +733,7 @@ fn readings(
     graphics: &Graphics,
     notices: &Notices,
     now: f64,
+    show_leaderboard: bool,
     board: Option<&[(String, f64, u64, u64)]>,
     voice_text: String,
     talking: bool,
@@ -761,53 +755,54 @@ fn readings(
     let left = view.duration - view.finish_time.unwrap_or(view.elapsed);
     text(Id::Time, clock(left));
     text(Id::Speed, format!("{:.0}", (p.speed * 0.24).round()));
-    text(Id::Health, "\u{2665}".repeat(p.health.max(0.0) as usize));
-    let rows: Vec<_> = standings(view)
-        .iter()
-        .map(|a| {
-            let first = graphics
-                .racers()
-                .get(a.driver)
-                .and_then(|racer| racer.name.split(' ').next());
-            let name = match a.id == view.you {
-                true => "YOU",
-                false => a.name.as_deref().or(first).unwrap_or("Racer"),
-            };
-            format!("{name}  {:.0} / {}", a.kills, a.deaths)
-        })
-        .collect();
-    // Under the match's own standings, the server's all-time board: Elo rating, wins and games played.
-    // A server that sent no board shows none; one with an empty board says so.
-    let all_time = match board {
-        None => String::new(),
-        Some(board) => {
-            let rows: String = all_time_rows(board, p.name.as_deref(), ALL_TIME_ROWS)
-                .into_iter()
-                .map(|row| {
-                    let marker = match row.you {
-                        true => " (YOU)",
-                        false => "",
-                    };
-                    format!(
-                        "\n{}. {}{}  {} · {} / {}",
-                        row.rank, row.name, marker, row.rating, row.wins, row.games
-                    )
-                })
-                .collect();
-            let rows = match rows.is_empty() {
-                true => "\nNo matches finished yet".to_owned(),
-                false => rows,
-            };
-            format!("\n\nALL-TIME · ELO · WINS / GAMES{rows}")
-        }
-    };
-    text(
-        Id::Board,
-        format!(
-            "LEADERBOARD · KILLS / DEATHS\n{}{all_time}",
-            rows.join("\n")
-        ),
-    );
+    if show_leaderboard {
+        let rows: Vec<_> = standings(view)
+            .iter()
+            .map(|a| {
+                let first = graphics
+                    .racers()
+                    .get(a.driver)
+                    .and_then(|racer| racer.name.split(' ').next());
+                let name = match a.id == view.you {
+                    true => "YOU",
+                    false => a.name.as_deref().or(first).unwrap_or("Racer"),
+                };
+                format!("{name}  {:.0} / {}", a.kills, a.deaths)
+            })
+            .collect();
+        // Under the match's own standings, the server's all-time board: Elo rating, wins and games played.
+        // A server that sent no board shows none; one with an empty board says so.
+        let all_time = match board {
+            None => String::new(),
+            Some(board) => {
+                let rows: String = all_time_rows(board, p.name.as_deref(), ALL_TIME_ROWS)
+                    .into_iter()
+                    .map(|row| {
+                        let marker = match row.you {
+                            true => " (YOU)",
+                            false => "",
+                        };
+                        format!(
+                            "\n{}. {}{}  {} · {} / {}",
+                            row.rank, row.name, marker, row.rating, row.wins, row.games
+                        )
+                    })
+                    .collect();
+                let rows = match rows.is_empty() {
+                    true => "\nNo matches finished yet".to_owned(),
+                    false => rows,
+                };
+                format!("\n\nALL-TIME · ELO · WINS / GAMES{rows}")
+            }
+        };
+        text(
+            Id::Board,
+            format!(
+                "LEADERBOARD · KILLS / DEATHS\n{}{all_time}",
+                rows.join("\n")
+            ),
+        );
+    }
     // The line under the top bar: respawn, spawn shield or rapid fire.
     let weapon = match p.driver {
         14 => "UZI",
@@ -1152,7 +1147,6 @@ fn readings(
 /// Keeping the handles keeps the faces loaded for as long as the UI exists.
 #[derive(Resource, Clone)]
 pub struct MenloFaces {
-    #[expect(dead_code)]
     handles: Vec<Handle<Font>>,
     pub source: bevy::text::FontSource,
 }
@@ -1228,7 +1222,9 @@ fn boxed(node: Node, border: f32, radius: f32) -> Node {
 }
 struct Hud<'a, 'w, 's> {
     commands: &'a mut Commands<'w, 's>,
-    face: bevy::text::FontSource,
+    regular: bevy::text::FontSource,
+    bold: bevy::text::FontSource,
+    bold_italic: bevy::text::FontSource,
 }
 impl Hud<'_, '_, '_> {
     fn node(&mut self, parent: Entity, node: Node, fill: Color, edge: Color) -> Entity {
@@ -1242,10 +1238,15 @@ impl Hud<'_, '_, '_> {
             .id()
     }
     fn words(&mut self, parent: Entity, text: &str, style: Style, marker: Option<Label>) {
+        let font = match (style.bold, style.italic) {
+            (true, true) => self.bold_italic.clone(),
+            (true, false) => self.bold.clone(),
+            _ => self.regular.clone(),
+        };
         let mut entity = self.commands.spawn((
             Text::new(text),
             TextFont {
-                font: self.face.clone(),
+                font,
                 font_size: bevy::text::FontSize::Px(style.size * K),
                 weight: match style.bold {
                     true => bevy::text::FontWeight::BOLD,
@@ -1307,7 +1308,9 @@ impl Hud<'_, '_, '_> {
             fill,
             edge,
         );
-        self.commands.entity(panel).insert(Part::Panel(id));
+        self.commands
+            .entity(panel)
+            .insert((Part::Panel(id), UiTransform::default()));
         self.words(panel, "", style, Some(Label::Of(id)));
     }
     fn bar(&mut self, parent: Entity, id: Id, color: Color) {
@@ -1346,15 +1349,34 @@ impl Hud<'_, '_, '_> {
 
 /// Builds the browser's arena HUD once; `update` fills it in every frame.
 /// Positions and sizes are the browser's CSS, scaled by `K`.
-pub fn setup(mut commands: Commands, mut fonts: ResMut<Assets<Font>>) {
-    let face = match load_ui_fonts(&mut fonts) {
+pub fn setup(
+    mut commands: Commands,
+    mut fonts: ResMut<Assets<Font>>,
+    assets: Res<AssetServer>,
+) {
+    let mono_regular: Handle<Font> = assets.load("fonts/DejaVuSansMono.ttf");
+    let mono_bold: Handle<Font> = assets.load("fonts/DejaVuSansMono-Bold.ttf");
+    let mono_bold_italic: Handle<Font> = assets.load("fonts/DejaVuSansMono-BoldOblique.ttf");
+    let fallback = match load_ui_fonts(&mut fonts) {
         Some(faces) => {
-            let source = faces.source.clone();
+            let extra = faces.handles.clone();
             commands.insert_resource(faces);
-            source
+            extra
         }
-        None => bevy::text::FontSource::default(),
+        None => Vec::new(),
     };
+    let make_source = |primaries: &[Handle<Font>]| {
+        let mut list: Vec<_> = primaries
+            .iter()
+            .cloned()
+            .map(bevy::text::FontSource::Handle)
+            .collect();
+        list.extend(fallback.iter().cloned().map(bevy::text::FontSource::Handle));
+        bevy::text::FontSource::List(list)
+    };
+    let regular = make_source(&[mono_regular]);
+    let bold = make_source(&[mono_bold.clone()]);
+    let bold_italic = make_source(&[mono_bold_italic, mono_bold]);
     let white = Color::WHITE;
     let none = Color::NONE;
     let fixed = |node: Node| Node {
@@ -1378,7 +1400,9 @@ pub fn setup(mut commands: Commands, mut fonts: ResMut<Assets<Font>>) {
         .id();
     let mut ui = Hud {
         commands: &mut commands,
-        face,
+        regular,
+        bold,
+        bold_italic,
     };
     // .kart-nameplate: above the kart, under everything else on the HUD.
     for index in 0..SLOTS {
@@ -1458,40 +1482,6 @@ pub fn setup(mut commands: Commands, mut fonts: ResMut<Assets<Font>>) {
     );
     ui.words(kills, "", shadowed(38.0), Some(Label::Of(Id::Kills)));
     ui.words(kills, "KILLS", small(), None);
-    let health = block(
-        &mut ui,
-        Node {
-            align_items: AlignItems::Start,
-            ..default()
-        },
-    );
-    ui.words(health, "HEALTH", small(), None);
-    let hearts_row = ui.node(
-        health,
-        Node {
-            column_gap: px(3.0 * K),
-            align_items: AlignItems::Center,
-            ..default()
-        },
-        none,
-        none,
-    );
-    for slot in 0..6 {
-        ui.commands.spawn((
-            ImageNode::default(),
-            Node {
-                width: px(22.0 * K),
-                height: px(22.0 * K),
-                display: Display::None,
-                ..default()
-            },
-            HeartIcon(slot),
-            ChildOf(hearts_row),
-        ));
-    }
-    let health_fallback = ui.node(hearts_row, Node::default(), none, none);
-    ui.commands.entity(health_fallback).insert(HealthFallbackText);
-    ui.words(health_fallback, "", shadowed(19.0), Some(Label::Of(Id::Health)));
     let timer = block(
         &mut ui,
         Node {
@@ -1549,6 +1539,7 @@ pub fn setup(mut commands: Commands, mut fonts: ResMut<Assets<Font>>) {
                 right: px(20.0 * K),
                 top: px(70.0 * K + MAP_SIZE.y + 8.0 * K),
                 padding: UiRect::all(px(8.0 * K)),
+                display: Display::None,
                 ..default()
             },
             1.0,
@@ -1557,6 +1548,7 @@ pub fn setup(mut commands: Commands, mut fonts: ResMut<Assets<Font>>) {
         hex(0x202336b8),
         hex(0xffffff30),
     );
+    ui.commands.entity(board).insert(Part::Panel(Id::Board));
     ui.words(
         board,
         "",
@@ -1825,9 +1817,9 @@ pub fn setup(mut commands: Commands, mut fonts: ResMut<Assets<Font>>) {
     let action = |width: f32| {
         boxed(
             Node {
-                width: px(width * K),
+                min_width: px(width * K),
                 min_height: px(44.0 * K),
-                padding: UiRect::axes(px(5.0 * K), px(10.0 * K)),
+                padding: UiRect::axes(px(12.0 * K), px(8.0 * K)),
                 justify_content: JustifyContent::Center,
                 align_items: AlignItems::Center,
                 ..default()
@@ -1836,7 +1828,7 @@ pub fn setup(mut commands: Commands, mut fonts: ResMut<Assets<Font>>) {
             8.0,
         )
     };
-    let label = || Style::new(11.0, ACTION.ink);
+    let label = || Style::new(10.0, ACTION.ink);
     // .somersault-button, above the item box.
     let flip = ui.button(
         root,
@@ -1855,9 +1847,9 @@ pub fn setup(mut commands: Commands, mut fonts: ResMut<Assets<Font>>) {
         Node {
             position_type: PositionType::Absolute,
             left: px(-18.0 * K),
+            right: px(-18.0 * K),
             top: px(-18.0 * K),
-            width: px((152.0 + 36.0) * K),
-            height: px((44.0 + 36.0) * K),
+            bottom: px(-18.0 * K),
             display: Display::None,
             ..default()
         },
@@ -1867,8 +1859,9 @@ pub fn setup(mut commands: Commands, mut fonts: ResMut<Assets<Font>>) {
     ui.commands.spawn((
         ImageNode::default(),
         Node {
-            width: px(20.0 * K),
-            height: px(20.0 * K),
+            width: px(18.0 * K),
+            height: px(18.0 * K),
+            flex_shrink: 0.0,
             display: Display::None,
             ..default()
         },
@@ -1938,9 +1931,9 @@ pub fn setup(mut commands: Commands, mut fonts: ResMut<Assets<Font>>) {
             HudAct::Game(action),
             boxed(
                 column(Node {
-                    width: px(82.0 * K),
+                    min_width: px(88.0 * K),
                     min_height: px(65.0 * K),
-                    padding: UiRect::axes(px(6.0 * K), px(5.0 * K)),
+                    padding: UiRect::axes(px(9.0 * K), px(5.0 * K)),
                     align_items: AlignItems::Center,
                     justify_content: JustifyContent::Center,
                     row_gap: px(2.0 * K),
@@ -1956,9 +1949,9 @@ pub fn setup(mut commands: Commands, mut fonts: ResMut<Assets<Font>>) {
             Node {
                 position_type: PositionType::Absolute,
                 left: px(-16.0 * K),
+                right: px(-16.0 * K),
                 top: px(-16.0 * K),
-                width: px((82.0 + 32.0) * K),
-                height: px((65.0 + 32.0) * K),
+                bottom: px(-16.0 * K),
                 display: Display::None,
                 ..default()
             },
@@ -1979,16 +1972,17 @@ pub fn setup(mut commands: Commands, mut fonts: ResMut<Assets<Font>>) {
         ui.commands.spawn((
             ImageNode::default(),
             Node {
-                width: px(24.0 * K),
-                height: px(24.0 * K),
+                width: px(21.0 * K),
+                height: px(21.0 * K),
+                flex_shrink: 0.0,
                 display: Display::None,
                 ..default()
             },
             CardIcon(id),
             ChildOf(top_row),
         ));
-        ui.words(top_row, "", Style { shadow: true, ..Style::new(32.0, CARD.ink) }, Some(Label::Count(id)));
-        ui.words(card, "", Style::new(8.0, CARD.ink), Some(Label::Of(id)));
+        ui.words(top_row, "", Style { shadow: true, ..Style::new(28.0, CARD.ink) }, Some(Label::Count(id)));
+        ui.words(card, "", Style::new(7.5, CARD.ink), Some(Label::Of(id)));
     }
     ui.words(item, "", Style::new(10.0, white), Some(Label::Of(Id::Item)));
     ui.words(
@@ -2022,9 +2016,9 @@ pub fn setup(mut commands: Commands, mut fonts: ResMut<Assets<Font>>) {
             Node {
                 position_type: PositionType::Absolute,
                 left: px(-18.0 * K),
+                right: px(-18.0 * K),
                 top: px(-18.0 * K),
-                width: px((width + 36.0) * K),
-                height: px((44.0 + 36.0) * K),
+                bottom: px(-18.0 * K),
                 display: Display::None,
                 ..default()
             },
@@ -2034,8 +2028,9 @@ pub fn setup(mut commands: Commands, mut fonts: ResMut<Assets<Font>>) {
         ui.commands.spawn((
             ImageNode::default(),
             Node {
-                width: px(20.0 * K),
-                height: px(20.0 * K),
+                width: px(18.0 * K),
+                height: px(18.0 * K),
+                flex_shrink: 0.0,
                 display: Display::None,
                 ..default()
             },
@@ -2119,6 +2114,7 @@ type Nodes<'w, 's> = Query<
         &'static mut Node,
         &'static mut BackgroundColor,
         &'static mut BorderColor,
+        Option<&'static mut UiTransform>,
     ),
     Without<Card>,
 >;
@@ -2218,6 +2214,7 @@ pub fn update(
         &graphics,
         &notices,
         now,
+        state.show_leaderboard,
         state.board.as_deref(),
         state.voice_text.clone(),
         state.voice_talking,
@@ -2264,7 +2261,7 @@ pub fn update(
         }
     };
     let center = MAP_SIZE / 2.0;
-    for (part, mut node, mut color, mut edge) in &mut nodes {
+    for (part, mut node, mut color, mut edge, ui_tf) in &mut nodes {
         match *part {
             Part::Root => show(&mut node, true),
             Part::Panel(id) => {
@@ -2272,10 +2269,22 @@ pub fn update(
                     .and_then(|n| n.card_key.as_deref())
                     .and_then(|k| ui_cards.get(k))
                     .is_some();
-                show(
-                    &mut node,
-                    !uses_html && readings.get(&id).is_some_and(|r| !r.text.is_empty()),
-                );
+                let visible = !uses_html && readings.get(&id).is_some_and(|r| !r.text.is_empty());
+                show(&mut node, visible);
+                if id == Id::Whack
+                    && let Some(mut tf) = ui_tf
+                {
+                    if visible
+                        && let Some(whack) = &notices.whack
+                    {
+                        let elapsed = (now - whack.started).max(0.0) as f32;
+                        let wave = 0.5 - 0.5 * ((elapsed / 0.65) * std::f32::consts::TAU).cos();
+                        tf.translation = Val2::px(0.0, -13.0 * K * wave);
+                        tf.rotation = Rot2::radians((-2.0 + 4.0 * wave).to_radians());
+                    } else {
+                        *tf = UiTransform::default();
+                    }
+                }
             }
             Part::HtmlCard(id) => {
                 let active_card = notice_for(&notices, id).and_then(|n| {
@@ -2512,26 +2521,18 @@ pub fn sync_prebaked_chrome(
     session: Res<GameSession>,
     state: Res<HudState>,
     ui_cards: Res<UiCards>,
-    mut hearts: Query<
-        (&HeartIcon, &mut ImageNode, &mut Node),
-        (Without<HealthFallbackText>, Without<CardIcon>, Without<CardChrome>, Without<MenuButtonsCorner>),
-    >,
-    mut fallback: Query<
-        &mut Node,
-        (With<HealthFallbackText>, Without<HeartIcon>, Without<CardIcon>, Without<CardChrome>, Without<MenuButtonsCorner>),
-    >,
     mut icons: Query<
         (&CardIcon, &mut ImageNode, &mut Node),
-        (Without<HeartIcon>, Without<HealthFallbackText>, Without<CardChrome>, Without<MenuButtonsCorner>),
+        (Without<CardChrome>, Without<MenuButtonsCorner>),
     >,
     mut chromes: Query<
         (&CardChrome, &mut ImageNode, &mut Node),
-        (Without<HeartIcon>, Without<HealthFallbackText>, Without<CardIcon>, Without<MenuButtonsCorner>),
+        (Without<CardIcon>, Without<MenuButtonsCorner>),
     >,
     mut card_bg: Query<(&Card, &mut BackgroundColor, &mut BorderColor)>,
     mut menu_corner: Query<
         &mut Node,
-        (With<MenuButtonsCorner>, Without<HeartIcon>, Without<HealthFallbackText>, Without<CardIcon>, Without<CardChrome>),
+        (With<MenuButtonsCorner>, Without<CardIcon>, Without<CardChrome>),
     >,
 ) {
     let view = session.client.as_ref().map(|c| c.view());
@@ -2548,34 +2549,7 @@ pub fn sync_prebaked_chrome(
         }
     }
 
-    // 1. Pre-baked 2x DPI color heart icons (❤️ for 1..3, 💛 for 4..6).
-    let heart_base = ui_cards.get("icon:heart");
-    let heart_extra = ui_cards.get("icon:heart_extra").or(heart_base);
-    let has_hearts = heart_base.is_some();
-    for mut fb in &mut fallback {
-        let want = if has_hearts { Display::None } else { Display::Flex };
-        if fb.display != want {
-            fb.display = want;
-        }
-    }
-    let hp = (p.health.max(0.0).ceil() as usize).min(6);
-    for (slot, mut img, mut node) in &mut hearts {
-        let visible = has_hearts && slot.0 < hp;
-        let want = if visible { Display::Flex } else { Display::None };
-        if node.display != want {
-            node.display = want;
-        }
-        if visible {
-            let art = if slot.0 < 3 { heart_base } else { heart_extra };
-            if let Some(art) = art
-                && img.image != art.image
-            {
-                img.image = art.image.clone();
-            }
-        }
-    }
-
-    // 2. Pre-baked 2x DPI color emoji icons on ammo cards & action buttons.
+    // 1. Pre-baked 2x DPI color emoji icons on ammo cards & action buttons.
     for (icon, mut img, mut node) in &mut icons {
         let key = match icon.0 {
             Id::Hedgehogs => {
@@ -2698,13 +2672,26 @@ pub fn sync_prebaked_chrome(
     }
 }
 
-/// Handles hover tint & left-click dispatch on HUD buttons (`HudAct`) for both Native & WASM.
+/// Handles hover tint & left-click dispatch on HUD buttons (`HudAct`) for both Native & WASM,
+/// and scales `UiScale` proportionally to viewport width so the 1280px HUD layout fits
+/// smaller browser viewports (~922px) at exact 1:1 CSS proportions.
 pub fn handle_clicks(
     mouse: Res<ButtonInput<MouseButton>>,
     state: Res<HudState>,
+    windows: Query<&Window>,
+    mut ui_scale: ResMut<UiScale>,
     mut events: ResMut<HudEvents>,
     mut buttons: Query<(&RelativeCursorPosition, &HudAct, &HudTone, &mut BackgroundColor, Option<&Card>)>,
 ) {
+    if let Ok(window) = windows.single() {
+        let w = window.width();
+        if w > 100.0 {
+            let target = (w / 1280.0).clamp(0.62, 1.25);
+            if (ui_scale.0 - target).abs() > 0.01 {
+                ui_scale.0 = target;
+            }
+        }
+    }
     if !state.active {
         return;
     }

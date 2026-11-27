@@ -12,6 +12,7 @@ fn experimental_asset(code: &mut String, hash: &mut Sha256, route: &str, path: &
         Some("wasm") => "application/wasm",
         Some("glb") => "model/gltf-binary",
         Some("png") => "image/png",
+        Some("ttf") => "font/ttf",
         Some("wwgp" | "wwsp" | "wwup") => "application/octet-stream",
         _ => panic!("Unexpected experimental asset type: {}", path.display()),
     };
@@ -31,7 +32,7 @@ fn experimental_models(code: &mut String, hash: &mut Sha256, directory: &Path, p
         if file_type.is_dir() {
             experimental_models(code, hash, &entry.path(), &route);
         }
-        if file_type.is_file() && matches!(entry.path().extension().and_then(|extension| extension.to_str()), Some("glb" | "png")) {
+        if file_type.is_file() && matches!(entry.path().extension().and_then(|extension| extension.to_str()), Some("glb" | "png" | "ttf")) {
             experimental_asset(code, hash, &route, &entry.path());
         }
     }

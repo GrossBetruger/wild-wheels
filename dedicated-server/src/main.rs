@@ -351,6 +351,7 @@ async fn http(
                         "wasm" => "application/wasm",
                         "glb" => "model/gltf-binary",
                         "png" => "image/png",
+                        "ttf" => "font/ttf",
                         _ => "application/octet-stream",
                     };
                     let mut r = static_response(&method, mime, Bytes::from(bytes), encoding);

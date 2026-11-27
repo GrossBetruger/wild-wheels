@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { Multiplayer } from './server/multiplayer.js';
 import { createTunnelControl } from './server/tunnel-control.js';
 import { createTextEndpoint } from './server/text.js';
-const mime=name=>({'html':'text/html','css':'text/css','svg':'image/svg+xml','wasm':'application/wasm','ogg':'audio/ogg','flac':'audio/flac','png':'image/png','glb':'model/gltf-binary','wwgp':'application/octet-stream','wwsp':'application/octet-stream','wwup':'application/octet-stream'})[name.split('.').at(-1)]??'text/javascript';
+const mime=name=>({'html':'text/html','css':'text/css','svg':'image/svg+xml','wasm':'application/wasm','ogg':'audio/ogg','flac':'audio/flac','png':'image/png','glb':'model/gltf-binary','ttf':'font/ttf','wwgp':'application/octet-stream','wwsp':'application/octet-stream','wwup':'application/octet-stream'})[name.split('.').at(-1)]??'text/javascript';
 const compressedBetaAssets=new Set(['/experimental/graphics.wwgp','/experimental/ui.wwup','/experimental/pkg/wild_wheels_wasm.js','/experimental/pkg/wild_wheels_wasm_bg.wasm']);
 function acceptsGzip(header=''){
   let wildcard=false;
@@ -63,7 +63,7 @@ const server=createServer(async (req, res) => {
     const host=/^[a-zA-Z0-9.\[\]:-]+$/.test(req.headers.host??'')?req.headers.host:'localhost';
     const local=['localhost',`localhost:${multiplayer.port}`,'127.0.0.1',`127.0.0.1:${multiplayer.port}`].includes(host);
     const control=local&&multiplayer.controlPort?` http://127.0.0.1:${multiplayer.controlPort}`:'';
-    const binary = ['application/wasm', 'model/gltf-binary', 'image/png', 'application/octet-stream'].includes(file[1]);
+    const binary = ['application/wasm', 'model/gltf-binary', 'image/png', 'font/ttf', 'application/octet-stream'].includes(file[1]);
     if(compressible)res.setHeader('Vary','Accept-Encoding');
     if(gzip)res.setHeader('Content-Encoding','gzip');
     const cacheable = route.startsWith('/experimental/') && route !== '/experimental/' && route !== '/experimental/index.html';
