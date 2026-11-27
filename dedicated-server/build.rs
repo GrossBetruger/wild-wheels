@@ -95,8 +95,8 @@ fn main() {
     println!("cargo:rerun-if-env-changed=WILD_WHEELS_EXPERIMENTAL_DIR");
     if let Some(directory) = env::var_os("WILD_WHEELS_EXPERIMENTAL_DIR") {
         let generated = fs::canonicalize(root.join(directory)).expect("Experimental asset build directory");
-        let source = root.join("wasm-poc");
-        for name in ["graphics.wwgp", "sounds.wwsp", "pkg/wild_wheels_wasm_poc.js", "pkg/wild_wheels_wasm_poc_bg.wasm"] {
+        let source = root.join("wasm");
+        for name in ["graphics.wwgp", "sounds.wwsp", "pkg/wild_wheels_wasm.js", "pkg/wild_wheels_wasm_bg.wasm"] {
             let route = format!("/experimental/{name}");
             experimental_asset(&mut code, &mut hash, &route, &generated.join(name));
             if name != "sounds.wwsp" {

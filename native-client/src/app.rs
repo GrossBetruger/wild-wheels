@@ -344,9 +344,9 @@ pub fn run(mut config: Config) -> Result<(), Box<dyn Error>> {
         session.join(config.clone());
     }
     let asset_path = [
-        concat!(env!("CARGO_MANIFEST_DIR"), "/../wasm-poc/assets"),
-        "wasm-poc/assets",
-        "../wasm-poc/assets",
+        concat!(env!("CARGO_MANIFEST_DIR"), "/../wasm/assets"),
+        "wasm/assets",
+        "../wasm/assets",
     ]
     .into_iter()
     .find_map(|p| std::fs::canonicalize(p).ok().filter(|d| d.is_dir()))

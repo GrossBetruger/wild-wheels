@@ -7,7 +7,7 @@ import {fileURLToPath} from 'node:url';
 import {gunzipSync} from 'node:zlib';
 
 const directory = 'releases/bevy-web';
-const files = ['wild_wheels_wasm_poc.js', 'wild_wheels_wasm_poc_bg.wasm'];
+const files = ['wild_wheels_wasm.js', 'wild_wheels_wasm_bg.wasm'];
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 const asset = name => join(directory, name + '.gz');
 

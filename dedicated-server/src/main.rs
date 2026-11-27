@@ -234,7 +234,7 @@ async fn http(
                 .and_then(|s| serde_json::from_str::<Value>(&s).ok())
                 .unwrap_or(Value::Null);
             let wasm_ready = ASSETS.iter().any(|a| a.0 == "/experimental/graphics.wwgp")
-                || std::path::Path::new("wasm-poc/pkg/wild_wheels_wasm_poc_bg.wasm").is_file();
+                || std::path::Path::new("wasm/pkg/wild_wheels_wasm_bg.wasm").is_file();
             response(
                 200,
                 json!({
@@ -337,9 +337,9 @@ async fn http(
             if !allowed {
                 return error((404, "Not found."));
             }
-            let source = std::path::Path::new("wasm-poc");
+            let source = std::path::Path::new("wasm");
             let gzip = source.join(format!("{rel}.gz"));
-            let compressed = matches!(rel, "graphics.wwgp" | "pkg/wild_wheels_wasm_poc.js" | "pkg/wild_wheels_wasm_poc_bg.wasm");
+            let compressed = matches!(rel, "graphics.wwgp" | "pkg/wild_wheels_wasm.js" | "pkg/wild_wheels_wasm_bg.wasm");
             let encoding = (compressed && gzip.is_file()).then(|| accepts_gzip(&h));
             let file_path = match encoding { Some(true) => gzip, _ => source.join(rel) };
             match std::fs::read(&file_path) {

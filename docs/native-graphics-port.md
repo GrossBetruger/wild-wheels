@@ -207,8 +207,8 @@ span in the local Bevy race. The browser check needs built web assets and Chrome
 It also runs in the multiplayer regression workflow.
 
 ```sh
-node --test wasm-poc/blender/specialist-animation.test.mjs
-bash scripts/build/build-experimental.sh wasm-poc
+node --test wasm/blender/specialist-animation.test.mjs
+bash scripts/build/build-experimental.sh wasm
 npm run test:browser-netcode -- --wingbeats
 ```
 

@@ -6,7 +6,7 @@ import { Multiplayer } from './server/multiplayer.js';
 import { createTunnelControl } from './server/tunnel-control.js';
 import { createTextEndpoint } from './server/text.js';
 const mime=name=>({'html':'text/html','css':'text/css','svg':'image/svg+xml','wasm':'application/wasm','ogg':'audio/ogg','flac':'audio/flac','png':'image/png','glb':'model/gltf-binary','wwgp':'application/octet-stream','wwsp':'application/octet-stream'})[name.split('.').at(-1)]??'text/javascript';
-const compressedBetaAssets=new Set(['/experimental/graphics.wwgp','/experimental/pkg/wild_wheels_wasm_poc.js','/experimental/pkg/wild_wheels_wasm_poc_bg.wasm']);
+const compressedBetaAssets=new Set(['/experimental/graphics.wwgp','/experimental/pkg/wild_wheels_wasm.js','/experimental/pkg/wild_wheels_wasm_bg.wasm']);
 function acceptsGzip(header=''){
   let wildcard=false;
   for(const value of header.split(',')){
@@ -24,7 +24,7 @@ const experimentalAsset=route=>{
   if(rel.includes('..')||rel.startsWith('/')||rel.endsWith('.gz')||!/^[a-zA-Z0-9._/-]+$/.test(rel))return null;
   if(rel==='index.html')return ['index.html',mime(rel)];
   if(!['graphics.wwgp','sounds.wwsp'].includes(rel)&&!rel.startsWith('pkg/')&&!rel.startsWith('assets/'))return null;
-  return ['wasm-poc/'+rel,mime(rel)];
+  return ['wasm/'+rel,mime(rel)];
 };
 const loadFiles=()=>new Map(JSON.parse(readFileSync(new URL('./public-assets.json',import.meta.url))).map(name=>[name==='index.html'?'/':'/'+name,[name,mime(name)]]));
 let files=loadFiles();
@@ -58,7 +58,7 @@ const server=createServer(async (req, res) => {
       ? await readFile(new URL(file[0]+'.gz',import.meta.url)).catch(error=>{if(error.code==='ENOENT')return null;throw error;})
       : null;
     const raw = gzip??await readFile(new URL(file[0], import.meta.url));
-    const hasBevy = file[0] === 'index.html' && [...compressedBetaAssets].every(asset => existsSync(new URL('wasm-poc/' + asset.slice('/experimental/'.length), import.meta.url)));
+    const hasBevy = file[0] === 'index.html' && [...compressedBetaAssets].every(asset => existsSync(new URL('wasm/' + asset.slice('/experimental/'.length), import.meta.url)));
     const body = file[0] === 'index.html' ? raw.toString().replace('<body>', `<body data-bevy="${hasBevy}" data-build="${await build()}">`) : raw;
     const host=/^[a-zA-Z0-9.\[\]:-]+$/.test(req.headers.host??'')?req.headers.host:'localhost';
     const local=['localhost',`localhost:${multiplayer.port}`,'127.0.0.1',`127.0.0.1:${multiplayer.port}`].includes(host);

@@ -34,7 +34,7 @@ if [[ $mode == apply ]]; then
 fi
 
 candidates=()
-for target in wasm-poc/target dedicated-server/target/bevy-wasm; do
+for target in wasm/target dedicated-server/target/bevy-wasm; do
   for profile in "$target"/{debug,release,wasm32-unknown-unknown/release}; do
     [[ -d $profile && $(realpath -- "$profile") == "$project_dir/$profile" ]] || continue
     # Hold Cargo's profile lock through deletion, keeping the lock file intact.

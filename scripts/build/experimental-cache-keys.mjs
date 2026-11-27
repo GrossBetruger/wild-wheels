@@ -32,7 +32,7 @@ function fingerprint(inputs, recipe) {
 const [toolchain, target] = process.argv.slice(2);
 // Bump the relevant recipe version for changes to output flags or pack format.
 console.log(fingerprint([
-  'wasm-poc/Cargo.toml', 'wasm-poc/Cargo.lock', 'wasm-poc/src',
+  'wasm/Cargo.toml', 'wasm/Cargo.lock', 'wasm/src',
   'bevy-render/Cargo.toml', 'bevy-render/src',
   'rust-core/Cargo.toml', 'rust-core/build.rs', 'rust-core/src',
   'gameplay/player-colors.js', 'gameplay/special-abilities.js',

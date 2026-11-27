@@ -213,8 +213,8 @@ export class BevyPresentation {
     };
     try {
       const [{ bindings, wasmMs }, { pack, assetMs }] = await Promise.all([
-        import(`${prefix}pkg/wild_wheels_wasm_poc.js${v}`).then(async bindings => {
-          await bindings.default({ module_or_path: `${prefix}pkg/wild_wheels_wasm_poc_bg.wasm${v}` });
+        import(`${prefix}pkg/wild_wheels_wasm.js${v}`).then(async bindings => {
+          await bindings.default({ module_or_path: `${prefix}pkg/wild_wheels_wasm_bg.wasm${v}` });
           wasmDone = true;
           emit();
           return { bindings, wasmMs: performance.now() - started };

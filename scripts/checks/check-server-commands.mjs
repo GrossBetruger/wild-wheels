@@ -23,12 +23,12 @@ const experimental=async()=>{
   assert.equal(page.status,200);
   const regular=await fetch(`http://127.0.0.1:${port}/`);
   assert.equal(await page.text(),await regular.text(),'The renderer routes must serve the same HTML');
-  for(const [path,type] of [['pkg/wild_wheels_wasm_poc.js','text/javascript'],['pkg/wild_wheels_wasm_poc_bg.wasm','application/wasm'],['graphics.wwgp','application/octet-stream'],['sounds.wwsp','application/octet-stream'],['assets/models/debris_girder.glb','model/gltf-binary']]){
+  for(const [path,type] of [['pkg/wild_wheels_wasm.js','text/javascript'],['pkg/wild_wheels_wasm_bg.wasm','application/wasm'],['graphics.wwgp','application/octet-stream'],['sounds.wwsp','application/octet-stream'],['assets/models/debris_girder.glb','model/gltf-binary']]){
     const asset=await fetch(base+path,{method:'HEAD'});
     assert.equal(asset.status,200,path);
     assert.equal(asset.headers.get('content-type').split(';')[0],type,path);
   }
-  const wasm=base+'pkg/wild_wheels_wasm_poc_bg.wasm';
+  const wasm=base+'pkg/wild_wheels_wasm_bg.wasm';
   const compressed=await fetch(wasm,{method:'HEAD',headers:{'Accept-Encoding':'gzip'}});
   const identity=await fetch(wasm,{method:'HEAD',headers:{'Accept-Encoding':'gzip;q=0, *;q=1'}});
   assert.equal(compressed.headers.get('content-encoding'),'gzip');

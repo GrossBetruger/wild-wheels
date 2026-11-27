@@ -27,7 +27,7 @@ const ACCORDION_LEN: f32 = 1.2;
 const CELEBRATE_LEN: f32 = 1.6;
 
 /// Scarf baked passes in shape-key order: (frames, frames/sec), matching
-/// `SCARF_IDLE` and `SCARF_BOOST` in `wasm-poc/blender/build_avita.py`.
+/// `SCARF_IDLE` and `SCARF_BOOST` in `wasm/blender/build_avita.py`.
 const SCARF_PASSES: [(usize, f32); 2] = [(12, 6.0), (10, 10.0)];
 
 pub struct AvitaPlugin;

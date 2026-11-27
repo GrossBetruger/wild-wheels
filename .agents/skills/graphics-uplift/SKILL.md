@@ -1,12 +1,12 @@
 ---
 name: graphics-uplift
 description: >-
-  Uplift Wild Wheels 3D visuals in the Bevy WASM PoC (wasm-poc/) using headless
+  Uplift Wild Wheels 3D visuals in the Bevy renderer (bevy-render/ and wasm/) using headless
   Blender 5.3 PBR .glb modeling, skeletal rigs with animation clips and shape
   keys, procedural Bevy meshes/VFX, dynamic lighting, and physics-driven
   particles. Use when upgrading or animating racers, vehicles, props,
   afterburners, explosions, smoke, fire, arena lighting, or visual polish in
-  wasm-poc/.
+  bevy-render/ or wasm/.
 ---
 
 # Wild Wheels 3D Graphics Uplift

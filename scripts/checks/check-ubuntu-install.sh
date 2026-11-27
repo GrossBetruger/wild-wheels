@@ -12,7 +12,7 @@ for ((attempt=0;attempt<300;attempt++)); do
   if curl --fail --silent http://127.0.0.1:5174/healthz > /tmp/wild-wheels-health.json; then
     cat /tmp/wild-wheels-health.json
     printf '\n'
-    curl --fail --silent --head http://127.0.0.1:5174/experimental/pkg/wild_wheels_wasm_poc_bg.wasm
+    curl --fail --silent --head http://127.0.0.1:5174/experimental/pkg/wild_wheels_wasm_bg.wasm
     exit 0
   fi
   sleep 1

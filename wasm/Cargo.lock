@@ -5440,7 +5440,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "wild-wheels-wasm-poc"
+name = "wild-wheels-wasm"
 version = "0.1.0"
 dependencies = [
  "bevy",

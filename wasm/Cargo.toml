@@ -1,5 +1,5 @@
 [package]
-name = "wild-wheels-wasm-poc"
+name = "wild-wheels-wasm"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.97.1"
@@ -38,5 +38,5 @@ lto = "thin"
 strip = true
 
 # wasm-bindgen reads target_features from the linked module before generating bindings.
-[profile.release.package.wild-wheels-wasm-poc]
+[profile.release.package.wild-wheels-wasm]
 strip = "debuginfo"

@@ -50,7 +50,7 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: bash scripts/build/build-experimental.sh wasm-poc
+      - run: bash scripts/build/build-experimental.sh wasm
       - run: npm run test:regression -- --functional --repeat 1 --output-dir regression-results
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()

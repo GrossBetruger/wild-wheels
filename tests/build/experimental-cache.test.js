@@ -11,7 +11,8 @@ test('scenery, recordings and Rust-generated palette changes invalidate their re
   const repo = mkdtempSync(join(tmpdir(), 'ww-cache-'));
   t.after(() => rmSync(repo, {recursive:true, force:true}));
   for (const path of ['scripts/build', 'client', 'characters', 'ui', 'gameplay', 'audio',
-    'assets/audio', 'rust-core.wasm', 'wasm-poc/Cargo.toml', 'wasm-poc/Cargo.lock', 'wasm-poc/src',
+    'assets/audio', 'rust-core.wasm', 'wasm/Cargo.toml', 'wasm/Cargo.lock', 'wasm/src',
+    'bevy-render/Cargo.toml', 'bevy-render/src',
     'rust-core/Cargo.toml', 'rust-core/build.rs', 'rust-core/src']) {
     mkdirSync(dirname(join(repo, path)), {recursive:true});
     cpSync(join(root, path), join(repo, path), {recursive:true});
