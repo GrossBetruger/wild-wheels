@@ -39,3 +39,4 @@ console.log(fingerprint([
 ], ['wasm-release-web-v1', toolchain, target, process.env.RUSTFLAGS, process.env.CARGO_ENCODED_RUSTFLAGS]));
 console.log(fingerprint([...imports('scripts/build/port-graphics.mjs'), 'rust-core.wasm'], ['graphics-web-v1']));
 console.log(fingerprint([...imports('scripts/build/port-sounds.mjs'), 'assets/audio'], ['sounds-v1', process.platform]));
+console.log(fingerprint([...imports('scripts/build/port-ui.mjs'), 'style.css'], ['ui-v1']));

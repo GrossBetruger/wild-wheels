@@ -8,14 +8,18 @@ rust-core/target/
 
 dedicated-server/target/
 native-client/target/
+wasm-poc/
 wasm/target/
 wasm/.wasm.sha256
 wasm/.graphics.sha256
 wasm/.sounds.sha256
+wasm/.ui.sha256
 wasm/pkg/
 wasm/graphics.wwgp
 wasm/graphics.wwgp.gz
 wasm/sounds.wwsp
+wasm/ui.wwup
+wasm/ui.wwup.gz
 wasm/perf-log.jsonl
 
 .wild-wheels/

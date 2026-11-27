@@ -10,8 +10,8 @@ use std::time::Duration;
 use wasm_bindgen::prelude::*;
 use wild_wheels_core::{ClientAction, ClientInput, NativeClient};
 use wild_wheels_render::{
-    ARENA_CAMERA, MOBILE_IDLE, MobileGraphics, Presentation, WildWheelsRenderPlugin, app,
-    mobile_rendering, scene, sound,
+    ARENA_CAMERA, MOBILE_IDLE, MobileGraphics, Presentation, WildWheelsRenderPlugin, app, hud,
+    mobile_rendering, scene, sound, ui_port,
 };
 
 static INVALID_PACKETS: AtomicU32 = AtomicU32::new(0);
@@ -26,6 +26,13 @@ static INPUT_BLOCKED: AtomicBool = AtomicBool::new(false);
 // Mobile profiles are ordered from highest detail to idle in bevy-presentation.js.
 static MOBILE_LEVEL: AtomicU32 = AtomicU32::new(1);
 static MOBILE_FRAMES: AtomicU32 = AtomicU32::new(0);
+
+#[wasm_bindgen]
+pub fn set_ui_pack(ui_pack: Vec<u8>) {
+    if !ui_pack.is_empty() {
+        wild_wheels_render::set_ui_pack_bytes(Box::leak(ui_pack.into_boxed_slice()));
+    }
+}
 
 #[wasm_bindgen]
 pub fn start_presentation(pack: Vec<u8>, mobile: bool) {
@@ -72,7 +79,25 @@ pub fn start_client(pack: Vec<u8>, sound_pack: Vec<u8>, mobile: bool, direct_net
     });
     app.insert_resource(MobileGraphics { mobile, level: 1 })
         .insert_resource(app::GameSession::default())
-        .add_plugins(WildWheelsRenderPlugin);
+        .init_resource::<hud::Notices>()
+        .insert_resource(hud::HudState {
+            active: false,
+            show_menu_buttons: false,
+            ..default()
+        })
+        .init_resource::<hud::HudEvents>()
+        .add_plugins(WildWheelsRenderPlugin)
+        .add_systems(Startup, (ui_port::setup, hud::setup))
+        .add_systems(
+            Update,
+            (
+                hud::update,
+                hud::sync_prebaked_chrome,
+                hud::handle_clicks,
+            )
+                .chain()
+                .after(Presentation),
+        );
     if has_audio {
         app.add_plugins(sound::GameAudioPlugin)
             .add_systems(Update, sound::play.after(Presentation));
@@ -250,8 +275,12 @@ fn sync_session(
     time: Res<Time>,
     keys: Res<ButtonInput<KeyCode>>,
     mut session: ResMut<app::GameSession>,
+    mut hud_state: ResMut<hud::HudState>,
+    mut hud_events: ResMut<hud::HudEvents>,
 ) {
     if !DIRECT_NET_MODE.load(Ordering::Relaxed) {
+        hud_state.active = false;
+        hud_events.actions.clear();
         let Some(packet) = PRESENTATION_FRAME.lock().ok().and_then(|mut f| f.take()) else {
             return;
         };
@@ -287,8 +316,16 @@ fn sync_session(
         }
     }
     let Some(client) = session.client.as_mut() else {
+        hud_state.active = false;
+        hud_events.actions.clear();
         return;
     };
+    hud_state.active = true;
+    for act in hud_events.actions.drain(..) {
+        if let hud::HudAct::Game(action) = act {
+            let _ = client.action(action, now);
+        }
+    }
     let blocked = INPUT_BLOCKED.load(Ordering::Relaxed);
     let mut bits = if blocked { 0 } else { VIRTUAL_KEYS.load(Ordering::Relaxed) };
     if !blocked {

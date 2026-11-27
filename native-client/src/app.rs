@@ -416,6 +416,8 @@ pub fn run(mut config: Config) -> Result<(), Box<dyn Error>> {
         ))
         .init_resource::<LobbyStage>()
         .init_resource::<crate::hud::Notices>()
+        .init_resource::<crate::hud::HudState>()
+        .init_resource::<crate::hud::HudEvents>()
         .init_resource::<crate::chat::ChatPanel>()
         .add_systems(
             Startup,
@@ -428,6 +430,7 @@ pub fn run(mut config: Config) -> Result<(), Box<dyn Error>> {
                     crate::bench::begin,
                     crate::chat::control,
                     crate::gui::control,
+                    dispatch_hud_events,
                     mark(0),
                     drive,
                     mark(1),
@@ -448,7 +451,10 @@ pub fn run(mut config: Config) -> Result<(), Box<dyn Error>> {
                     crate::gui::draw,
                     crate::gui::hover,
                     mark(7),
+                    sync_hud_state,
                     crate::hud::update,
+                    crate::hud::sync_prebaked_chrome,
+                    crate::hud::handle_clicks,
                     crate::chat::draw,
                     crate::chat::scroll,
                     mark(8),
@@ -465,6 +471,71 @@ pub fn run(mut config: Config) -> Result<(), Box<dyn Error>> {
 struct LobbyStage {
     client: Option<NativeClient>,
     active: bool,
+}
+
+fn sync_hud_state(
+    session: Res<GameSession>,
+    menu: Res<crate::gui::Menu>,
+    mut hud_state: ResMut<crate::hud::HudState>,
+) {
+    hud_state.active = menu.screen(&session) == crate::gui::Screen::Playing;
+    hud_state.show_menu_buttons = true;
+    hud_state.board = session.board.clone();
+    let talking = session.voice.is_talking();
+    hud_state.voice_talking = talking;
+    let voice_error = session.voice.error();
+    let mut voice_parts = Vec::new();
+    if talking {
+        if !session.voice.is_socket_ready() {
+            voice_parts.push("MIC LIVE (VOICE RECONNECTING...)".to_owned());
+        } else if let Some(err) = &voice_error {
+            voice_parts.push(format!("MIC LIVE · {err}"));
+        } else {
+            voice_parts.push("MIC LIVE".to_owned());
+        }
+    }
+    if let Some(client) = session.client.as_ref() {
+        let view = client.view();
+        let speaker_names: Vec<_> = session
+            .voice
+            .active_speakers()
+            .into_iter()
+            .filter_map(|id| {
+                view.actors
+                    .iter()
+                    .find(|a| a.id == id)
+                    .and_then(|a| a.name.clone())
+            })
+            .collect();
+        if !speaker_names.is_empty() {
+            voice_parts.push(format!("VOICE: {}", speaker_names.join(", ")));
+        }
+    }
+    if voice_parts.is_empty()
+        && let Some(err) = voice_error
+    {
+        voice_parts.push(format!("MIC: {err}"));
+    }
+    hud_state.voice_text = voice_parts.join(" · ");
+}
+
+fn dispatch_hud_events(
+    mut events: ResMut<crate::hud::HudEvents>,
+    mut session: ResMut<GameSession>,
+    mut menu: ResMut<crate::gui::Menu>,
+) {
+    for act in events.actions.drain(..) {
+        match act {
+            crate::hud::HudAct::Game(action) => session.act(action),
+            crate::hud::HudAct::Menu => menu.open = true,
+            crate::hud::HudAct::SitOut => {
+                let away = !session.away;
+                if session.set_away(away) {
+                    menu.open = false;
+                }
+            }
+        }
+    }
 }
 
 fn sync_to_render(

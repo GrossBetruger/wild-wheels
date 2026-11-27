@@ -124,6 +124,41 @@ export function cardCatalog() {
   return cards;
 }
 
+/// Pre-baked 2x DPI color emoji icons & CSS HUD chrome rendered from `style.css`.
+export function hudChromeCatalog() {
+  const icons = [
+    ['icon:hedgehog', '🦔', 24],
+    ['icon:missile', '🚀', 24],
+    ['icon:vulcan', '🔥', 24],
+    ['icon:turbo', '⚡', 24],
+    ['icon:heart', '❤️', 20],
+    ['icon:heart_extra', '💛', 20],
+    ['icon:chaff', '✨', 18],
+    ['icon:flip', '🤸', 18],
+    ['icon:special', '✦', 18],
+    ['icon:mic', '🎙️', 18],
+    ['icon:shield', '🛡️', 18],
+  ].map(([key, glyph, size]) => ({kind: 'icon', key, glyph, size}));
+
+  const cards = [
+    {key: 'chrome:ammo:base', id: '', cls: 'ammo-card', disabled: false},
+    {key: 'chrome:ammo:selected', id: '', cls: 'ammo-card selected', disabled: false},
+    {key: 'chrome:ammo:missile', id: 'ammo-missile', cls: 'ammo-card selected', disabled: false},
+    {key: 'chrome:ammo:vulcan', id: '', cls: 'ammo-card vulcan', disabled: false},
+    {key: 'chrome:ammo:disabled', id: '', cls: 'ammo-card', disabled: true},
+    {key: 'chrome:ammo:selected_disabled', id: '', cls: 'ammo-card selected', disabled: true},
+  ].map(spec => ({kind: 'ammo-chrome', ...spec}));
+
+  const buttons = [
+    {key: 'chrome:btn:action', cls: 'chaff-button', disabled: false, width: 152},
+    {key: 'chrome:btn:disabled', cls: 'chaff-button', disabled: true, width: 152},
+    {key: 'chrome:btn:nightmare', cls: 'chaff-button nightmare-button', disabled: false, width: 190},
+    {key: 'chrome:btn:nightmare_active', cls: 'chaff-button nightmare-button active', disabled: false, width: 190},
+  ].map(spec => ({kind: 'btn-chrome', ...spec}));
+
+  return [...icons, ...cards, ...buttons];
+}
+
 // Minimal pure-Node PNG -> RGBA8 decoder for Chrome's 8-bit RGB/RGBA screenshots.
 function decodePngRgba(png) {
   if (png.length < 24 || png.readUInt32BE(0) !== 0x89504e47) {
@@ -368,6 +403,64 @@ export async function buildUiPack({optional = false} = {}) {
         detailTop: Math.max(0, Math.round(rect.dy - rect.y)),
         detailW: Math.max(1, Math.round(rect.dw)),
         detailH: Math.max(1, Math.round(rect.dh)),
+        rgba,
+      });
+    }
+    for (const spec of hudChromeCatalog()) {
+      const expr = `(() => {
+        const host = document.getElementById('host');
+        const spec = ${JSON.stringify(spec)};
+        let el, pad = 2;
+        if (spec.kind === 'icon') {
+          el = document.createElement('span');
+          el.textContent = spec.glyph;
+          el.style.cssText = 'position:absolute;left:40px;top:40px;display:inline-flex;align-items:center;justify-content:center;width:' + (spec.size + 8) + 'px;height:' + (spec.size + 8) + 'px;font-size:' + spec.size + 'px;line-height:1;color:#fff;text-shadow:0 2px 3px rgba(16,20,33,.55);';
+          pad = 2;
+        } else if (spec.kind === 'ammo-chrome') {
+          el = document.createElement('button');
+          if (spec.id) el.id = spec.id;
+          el.className = spec.cls;
+          el.disabled = spec.disabled;
+          el.style.cssText = 'position:absolute;left:40px;top:40px;margin:0;transition:none;';
+          el.innerHTML = '&nbsp;';
+          pad = 16;
+        } else {
+          el = document.createElement('button');
+          el.className = spec.cls;
+          el.disabled = spec.disabled;
+          el.style.cssText = 'position:absolute;left:40px;top:40px;right:auto;bottom:auto;width:' + spec.width + 'px;margin:0;transition:none;';
+          el.innerHTML = '&nbsp;';
+          pad = 18;
+        }
+        host.replaceChildren(el);
+        const r = el.getBoundingClientRect();
+        return {
+          x: Math.max(0, Math.floor(r.left - pad)),
+          y: Math.max(0, Math.floor(r.top - pad)),
+          w: Math.ceil(r.width + pad * 2),
+          h: Math.ceil(r.height + pad * 2),
+          pad,
+          rw: Math.round(r.width),
+          rh: Math.round(r.height),
+        };
+      })()`;
+      const evaluated = await call('Runtime.evaluate', {expression: expr, returnByValue: true}, sessionId);
+      const rect = evaluated.result.value;
+      const shot = await call('Page.captureScreenshot', {
+        format: 'png',
+        clip: {x: rect.x, y: rect.y, width: rect.w, height: rect.h, scale: 1},
+      }, sessionId);
+      const {width, height, rgba} = decodePngRgba(Buffer.from(shot.data, 'base64'));
+      entries.push({
+        key: spec.key,
+        width,
+        height,
+        logicalW: rect.w,
+        logicalH: rect.h,
+        detailLeft: rect.pad,
+        detailTop: rect.pad,
+        detailW: rect.rw,
+        detailH: rect.rh,
         rgba,
       });
     }

@@ -3,7 +3,6 @@
 //! racer names, ability names and announcement cards come from the ported pack.
 use crate::{
     app::GameSession,
-    gui::{Act, Menu, Screen, Tone},
     ported::{Graphics, tint},
     scene::FollowCamera,
     ui_port::UiCards,
@@ -11,6 +10,66 @@ use crate::{
 use bevy::{prelude::*, ui::RelativeCursorPosition};
 use std::collections::{HashMap, HashSet, VecDeque};
 use wild_wheels_core::{ClientAction, ClientView};
+
+/// Actions emitted when the player clicks a HUD button.
+#[derive(Component, Clone, Copy, Debug)]
+pub enum HudAct {
+    Game(ClientAction),
+    Menu,
+    SitOut,
+}
+
+/// Resting fill color for hover/press feedback on a HUD button.
+#[derive(Component, Clone, Copy)]
+pub struct HudTone(pub Color);
+
+/// Host-supplied HUD visibility & external state (populated by Native or WASM before `hud::update`).
+#[derive(Resource)]
+pub struct HudState {
+    pub active: bool,
+    pub show_menu_buttons: bool,
+    pub board: Option<Vec<(String, f64, u64, u64)>>,
+    pub voice_text: String,
+    pub voice_talking: bool,
+}
+
+impl Default for HudState {
+    fn default() -> Self {
+        Self {
+            active: false,
+            show_menu_buttons: true,
+            board: None,
+            voice_text: String::new(),
+            voice_talking: false,
+        }
+    }
+}
+
+/// Click events produced by `hud::handle_clicks` for the host (Native or WASM) to dispatch.
+#[derive(Resource, Default)]
+pub struct HudEvents {
+    pub actions: Vec<HudAct>,
+}
+
+/// Pre-baked 2x DPI CSS chrome background behind an ammo card or action button.
+#[derive(Component, Clone, Copy)]
+pub struct CardChrome(pub Id);
+
+/// Pre-baked 2x DPI color emoji icon on an ammo card or action button.
+#[derive(Component, Clone, Copy)]
+pub struct CardIcon(pub Id);
+
+/// Pre-baked 2x DPI color heart icon (0..6) in the top-left health row.
+#[derive(Component, Clone, Copy)]
+pub struct HeartIcon(pub usize);
+
+/// Marker for the fallback plain-text health readout (hidden when pre-baked hearts are available).
+#[derive(Component)]
+pub struct HealthFallbackText;
+
+/// Marker for the MENU / AFK corner container.
+#[derive(Component)]
+pub struct MenuButtonsCorner;
 
 /// Racers whose special ability the browser offers a button for.
 const SPECIALISTS: [usize; 9] = [5, 7, 8, 9, 11, 12, 13, 14, 15];
@@ -580,7 +639,7 @@ pub fn standings<'a>(view: &ClientView<'a>) -> Vec<&'a wild_wheels_core::Actor> 
 }
 /// One row of the all-time Elo leaderboard: rank, player name, Elo rating, wins, games, and whether it is the viewer.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct AllTimeRow {
+pub struct AllTimeRow {
     pub rank: usize,
     pub name: String,
     pub rating: i64,
@@ -589,11 +648,11 @@ pub(crate) struct AllTimeRow {
     pub you: bool,
 }
 
-pub(crate) const ALL_TIME_ROWS: usize = 8;
+pub const ALL_TIME_ROWS: usize = 8;
 
 /// Mirrors `allTimeRows` in `ui/all-time.js`: returns the top `limit` entries
 /// and appends the viewer's own entry if ranked lower than `limit`.
-pub(crate) fn all_time_rows(
+pub fn all_time_rows(
     board: &[(String, f64, u64, u64)],
     you: Option<&str>,
     limit: usize,
@@ -628,7 +687,7 @@ pub(crate) fn all_time_rows(
 }
 
 /// Finds a player's all-time Elo entry (1-based rank, rounded Elo rating, wins, games) by name.
-pub(crate) fn player_elo(
+pub fn player_elo(
     board: &[(String, f64, u64, u64)],
     name: Option<&str>,
 ) -> Option<(usize, i64, u64, u64)> {
@@ -1105,7 +1164,8 @@ const SYSTEM_FONT_PATHS: &[&str] = &[
     "/System/Library/Fonts/Supplemental/Arial.ttf",
 ];
 
-pub(crate) fn load_ui_fonts(fonts: &mut Assets<Font>) -> Option<MenloFaces> {
+#[cfg(not(target_arch = "wasm32"))]
+pub fn load_ui_fonts(fonts: &mut Assets<Font>) -> Option<MenloFaces> {
     let mut handles = Vec::new();
     for path in SYSTEM_FONT_PATHS {
         if let Ok(bytes) = std::fs::read(path) {
@@ -1129,6 +1189,11 @@ pub(crate) fn load_ui_fonts(fonts: &mut Assets<Font>) -> Option<MenloFaces> {
             .collect(),
     );
     Some(MenloFaces { handles, source })
+}
+
+#[cfg(target_arch = "wasm32")]
+pub fn load_ui_fonts(_fonts: &mut Assets<Font>) -> Option<MenloFaces> {
+    None
 }
 
 struct Style {
@@ -1266,12 +1331,12 @@ impl Hud<'_, '_, '_> {
         );
         self.commands.entity(fill).insert(Part::Fill(id));
     }
-    fn button(&mut self, parent: Entity, id: Id, act: Act, node: Node, look: Look) -> Entity {
+    fn button(&mut self, parent: Entity, id: Id, act: HudAct, node: Node, look: Look) -> Entity {
         let button = self.node(parent, node, look.fill, look.edge);
         self.commands.entity(button).insert((
             RelativeCursorPosition::default(),
             act,
-            Tone(look.fill),
+            HudTone(look.fill),
             Card(id),
         ));
         button
@@ -1400,7 +1465,32 @@ pub fn setup(mut commands: Commands, mut fonts: ResMut<Assets<Font>>) {
         },
     );
     ui.words(health, "HEALTH", small(), None);
-    ui.words(health, "", shadowed(19.0), Some(Label::Of(Id::Health)));
+    let hearts_row = ui.node(
+        health,
+        Node {
+            column_gap: px(3.0 * K),
+            align_items: AlignItems::Center,
+            ..default()
+        },
+        none,
+        none,
+    );
+    for slot in 0..6 {
+        ui.commands.spawn((
+            ImageNode::default(),
+            Node {
+                width: px(22.0 * K),
+                height: px(22.0 * K),
+                display: Display::None,
+                ..default()
+            },
+            HeartIcon(slot),
+            ChildOf(hearts_row),
+        ));
+    }
+    let health_fallback = ui.node(hearts_row, Node::default(), none, none);
+    ui.commands.entity(health_fallback).insert(HealthFallbackText);
+    ui.words(health_fallback, "", shadowed(19.0), Some(Label::Of(Id::Health)));
     let timer = block(
         &mut ui,
         Node {
@@ -1750,14 +1840,40 @@ pub fn setup(mut commands: Commands, mut fonts: ResMut<Assets<Font>>) {
     let flip = ui.button(
         root,
         Id::Flip,
-        Act::Game(ClientAction::Somersault),
+        HudAct::Game(ClientAction::Somersault),
         fixed(Node {
             left: px(20.0 * K),
             bottom: px(150.0 * K),
+            column_gap: px(5.0 * K),
             ..action(152.0)
         }),
         ACTION,
     );
+    ui.commands.spawn((
+        ImageNode::default(),
+        Node {
+            position_type: PositionType::Absolute,
+            left: px(-18.0 * K),
+            top: px(-18.0 * K),
+            width: px((152.0 + 36.0) * K),
+            height: px((44.0 + 36.0) * K),
+            display: Display::None,
+            ..default()
+        },
+        CardChrome(Id::Flip),
+        ChildOf(flip),
+    ));
+    ui.commands.spawn((
+        ImageNode::default(),
+        Node {
+            width: px(20.0 * K),
+            height: px(20.0 * K),
+            display: Display::None,
+            ..default()
+        },
+        CardIcon(Id::Flip),
+        ChildOf(flip),
+    ));
     ui.words(flip, "", label(), Some(Label::Of(Id::Flip)));
     // .item-box: status lines, the rapid-fire timer, the ammo rack and the item line.
     let item = ui.node(
@@ -1818,14 +1934,15 @@ pub fn setup(mut commands: Commands, mut fonts: ResMut<Assets<Font>>) {
         let card = ui.button(
             rack,
             id,
-            Act::Game(action),
+            HudAct::Game(action),
             boxed(
                 column(Node {
                     width: px(82.0 * K),
                     min_height: px(65.0 * K),
-                    padding: UiRect::axes(px(8.0 * K), px(6.0 * K)),
+                    padding: UiRect::axes(px(6.0 * K), px(5.0 * K)),
                     align_items: AlignItems::Center,
                     justify_content: JustifyContent::Center,
+                    row_gap: px(2.0 * K),
                     ..default()
                 }),
                 1.0,
@@ -1833,7 +1950,43 @@ pub fn setup(mut commands: Commands, mut fonts: ResMut<Assets<Font>>) {
             ),
             CARD,
         );
-        ui.words(card, "", Style::new(34.0, CARD.ink), Some(Label::Count(id)));
+        ui.commands.spawn((
+            ImageNode::default(),
+            Node {
+                position_type: PositionType::Absolute,
+                left: px(-16.0 * K),
+                top: px(-16.0 * K),
+                width: px((82.0 + 32.0) * K),
+                height: px((65.0 + 32.0) * K),
+                display: Display::None,
+                ..default()
+            },
+            CardChrome(id),
+            ChildOf(card),
+        ));
+        let top_row = ui.node(
+            card,
+            Node {
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                column_gap: px(4.0 * K),
+                ..default()
+            },
+            none,
+            none,
+        );
+        ui.commands.spawn((
+            ImageNode::default(),
+            Node {
+                width: px(24.0 * K),
+                height: px(24.0 * K),
+                display: Display::None,
+                ..default()
+            },
+            CardIcon(id),
+            ChildOf(top_row),
+        ));
+        ui.words(top_row, "", Style { shadow: true, ..Style::new(32.0, CARD.ink) }, Some(Label::Count(id)));
         ui.words(card, "", Style::new(8.0, CARD.ink), Some(Label::Of(id)));
     }
     ui.words(item, "", Style::new(10.0, white), Some(Label::Of(Id::Item)));
@@ -1854,14 +2007,40 @@ pub fn setup(mut commands: Commands, mut fonts: ResMut<Assets<Font>>) {
         let button = ui.button(
             root,
             id,
-            Act::Game(act),
+            HudAct::Game(act),
             fixed(Node {
                 right: px(20.0 * K),
                 bottom: px(bottom * K),
+                column_gap: px(5.0 * K),
                 ..action(width)
             }),
             ACTION,
         );
+        ui.commands.spawn((
+            ImageNode::default(),
+            Node {
+                position_type: PositionType::Absolute,
+                left: px(-18.0 * K),
+                top: px(-18.0 * K),
+                width: px((width + 36.0) * K),
+                height: px((44.0 + 36.0) * K),
+                display: Display::None,
+                ..default()
+            },
+            CardChrome(id),
+            ChildOf(button),
+        ));
+        ui.commands.spawn((
+            ImageNode::default(),
+            Node {
+                width: px(20.0 * K),
+                height: px(20.0 * K),
+                display: Display::None,
+                ..default()
+            },
+            CardIcon(id),
+            ChildOf(button),
+        ));
         ui.words(button, "", label(), Some(Label::Of(id)));
     }
     // .pause: the browser's AFK button, with the menu beside it.
@@ -1876,7 +2055,8 @@ pub fn setup(mut commands: Commands, mut fonts: ResMut<Assets<Font>>) {
         none,
         none,
     );
-    for (text, act) in [("MENU", Act::Menu), ("AFK", Act::SitOut)] {
+    ui.commands.entity(corner).insert(MenuButtonsCorner);
+    for (text, act) in [("MENU", HudAct::Menu), ("AFK", HudAct::SitOut)] {
         let fill = hex(0x28273866);
         let pause = ui.node(
             corner,
@@ -1893,7 +2073,7 @@ pub fn setup(mut commands: Commands, mut fonts: ResMut<Assets<Font>>) {
         );
         ui.commands
             .entity(pause)
-            .insert((RelativeCursorPosition::default(), act, Tone(fill)));
+            .insert((RelativeCursorPosition::default(), act, HudTone(fill)));
         ui.words(
             pause,
             text,
@@ -1946,7 +2126,7 @@ type Cards<'w, 's> = Query<
     's,
     (
         &'static Card,
-        &'static mut Tone,
+        &'static mut HudTone,
         &'static mut BorderColor,
         &'static mut Node,
     ),
@@ -2006,7 +2186,7 @@ fn card_motion(notice: &Notice, now: f64) -> (f32, f32) {
 #[allow(clippy::too_many_arguments)]
 pub fn update(
     session: Res<GameSession>,
-    menu: Res<Menu>,
+    state: Res<HudState>,
     graphics: Res<Graphics>,
     ui_cards: Res<UiCards>,
     time: Res<Time>,
@@ -2019,7 +2199,7 @@ pub fn update(
     mut detail_boxes: DetailBoxes,
 ) {
     let view = session.client.as_ref().map(|client| client.view());
-    let Some(view) = view.filter(|_| menu.screen(&session) == Screen::Playing) else {
+    let Some(view) = view.filter(|_| state.active) else {
         for (part, mut node, ..) in &mut nodes {
             if *part == Part::Root && node.display != Display::None {
                 node.display = Display::None;
@@ -2032,45 +2212,14 @@ pub fn update(
     };
     let now = time.elapsed_secs_f64();
     notices.sample(&view, &graphics, now);
-    let talking = session.voice.is_talking();
-    let voice_error = session.voice.error();
-    let mut voice_parts = Vec::new();
-    if talking {
-        if !session.voice.is_socket_ready() {
-            voice_parts.push("MIC LIVE (VOICE RECONNECTING...)".to_owned());
-        } else if let Some(err) = &voice_error {
-            voice_parts.push(format!("MIC LIVE · {err}"));
-        } else {
-            voice_parts.push("MIC LIVE".to_owned());
-        }
-    }
-    let speaker_names: Vec<_> = session
-        .voice
-        .active_speakers()
-        .into_iter()
-        .filter_map(|id| {
-            view.actors
-                .iter()
-                .find(|a| a.id == id)
-                .and_then(|a| a.name.clone())
-        })
-        .collect();
-    if !speaker_names.is_empty() {
-        voice_parts.push(format!("VOICE: {}", speaker_names.join(", ")));
-    }
-    if voice_parts.is_empty()
-        && let Some(err) = voice_error
-    {
-        voice_parts.push(format!("MIC: {err}"));
-    }
     let readings = readings(
         &view,
         &graphics,
         &notices,
         now,
-        session.board.as_deref(),
-        voice_parts.join(" · "),
-        talking,
+        state.board.as_deref(),
+        state.voice_text.clone(),
+        state.voice_talking,
     );
     let dark = crate::scene::dark_humor(&view).0 > 0.0;
     // Rivals far enough away to need a name, where the camera can see them.
@@ -2352,6 +2501,232 @@ pub fn update(
             node.border = UiRect::all(width);
         }
         show(&mut node, reading.is_some());
+    }
+}
+
+/// Syncs pre-baked 2x DPI CSS chrome textures (borders + box-shadow glows) and
+/// color emoji icons (`icon:*`, `chrome:*`) from `UiCards`, plus MENU/AFK corner visibility.
+#[allow(clippy::too_many_arguments)]
+pub fn sync_prebaked_chrome(
+    session: Res<GameSession>,
+    state: Res<HudState>,
+    ui_cards: Res<UiCards>,
+    mut hearts: Query<
+        (&HeartIcon, &mut ImageNode, &mut Node),
+        (Without<HealthFallbackText>, Without<CardIcon>, Without<CardChrome>, Without<MenuButtonsCorner>),
+    >,
+    mut fallback: Query<
+        &mut Node,
+        (With<HealthFallbackText>, Without<HeartIcon>, Without<CardIcon>, Without<CardChrome>, Without<MenuButtonsCorner>),
+    >,
+    mut icons: Query<
+        (&CardIcon, &mut ImageNode, &mut Node),
+        (Without<HeartIcon>, Without<HealthFallbackText>, Without<CardChrome>, Without<MenuButtonsCorner>),
+    >,
+    mut chromes: Query<
+        (&CardChrome, &mut ImageNode, &mut Node),
+        (Without<HeartIcon>, Without<HealthFallbackText>, Without<CardIcon>, Without<MenuButtonsCorner>),
+    >,
+    mut card_bg: Query<(&Card, &mut BackgroundColor, &mut BorderColor)>,
+    mut menu_corner: Query<
+        &mut Node,
+        (With<MenuButtonsCorner>, Without<HeartIcon>, Without<HealthFallbackText>, Without<CardIcon>, Without<CardChrome>),
+    >,
+) {
+    let view = session.client.as_ref().map(|c| c.view());
+    let Some(view) = view.filter(|_| state.active) else {
+        return;
+    };
+    let p = view.player;
+    let live = view.phase == "racing" && p.destroyed <= 0.0;
+
+    for mut corner in &mut menu_corner {
+        let want = if state.show_menu_buttons { Display::Flex } else { Display::None };
+        if corner.display != want {
+            corner.display = want;
+        }
+    }
+
+    // 1. Pre-baked 2x DPI color heart icons (❤️ for 1..3, 💛 for 4..6).
+    let heart_base = ui_cards.get("icon:heart");
+    let heart_extra = ui_cards.get("icon:heart_extra").or(heart_base);
+    let has_hearts = heart_base.is_some();
+    for mut fb in &mut fallback {
+        let want = if has_hearts { Display::None } else { Display::Flex };
+        if fb.display != want {
+            fb.display = want;
+        }
+    }
+    let hp = (p.health.max(0.0).ceil() as usize).min(6);
+    for (slot, mut img, mut node) in &mut hearts {
+        let visible = has_hearts && slot.0 < hp;
+        let want = if visible { Display::Flex } else { Display::None };
+        if node.display != want {
+            node.display = want;
+        }
+        if visible {
+            let art = if slot.0 < 3 { heart_base } else { heart_extra };
+            if let Some(art) = art
+                && img.image != art.image
+            {
+                img.image = art.image.clone();
+            }
+        }
+    }
+
+    // 2. Pre-baked 2x DPI color emoji icons on ammo cards & action buttons.
+    for (icon, mut img, mut node) in &mut icons {
+        let key = match icon.0 {
+            Id::Hedgehogs => {
+                if p.vulcan > 0.0 {
+                    "icon:vulcan"
+                } else {
+                    "icon:hedgehog"
+                }
+            }
+            Id::Missiles => "icon:missile",
+            Id::Turbos => "icon:turbo",
+            Id::Flip => "icon:flip",
+            Id::Special => "icon:special",
+            Id::Chaff => "icon:chaff",
+            _ => "",
+        };
+        if let Some(art) = ui_cards.get(key) {
+            if node.display != Display::Flex {
+                node.display = Display::Flex;
+            }
+            if img.image != art.image {
+                img.image = art.image.clone();
+            }
+        } else if node.display != Display::None {
+            node.display = Display::None;
+        }
+    }
+
+    // 3. Pre-baked 2x DPI CSS glow/border chrome behind ammo cards & action buttons.
+    let mut chrome_active = HashSet::new();
+    for (chrome, mut img, mut node) in &mut chromes {
+        let key = match chrome.0 {
+            Id::Hedgehogs => {
+                let selected = p.item == "hedgehog" || p.vulcan > 0.0;
+                let ready = live && (p.vulcan > 0.0 || p.ammo > 0);
+                if p.vulcan > 0.0 {
+                    "chrome:ammo:vulcan"
+                } else if selected && ready {
+                    "chrome:ammo:selected"
+                } else if selected {
+                    "chrome:ammo:selected_disabled"
+                } else if ready {
+                    "chrome:ammo:base"
+                } else {
+                    "chrome:ammo:disabled"
+                }
+            }
+            Id::Missiles => {
+                let selected = p.item == "missile" && p.vulcan <= 0.0;
+                let ready = live && p.missiles > 0;
+                if selected && ready {
+                    "chrome:ammo:missile"
+                } else if selected {
+                    "chrome:ammo:selected_disabled"
+                } else if ready {
+                    "chrome:ammo:base"
+                } else {
+                    "chrome:ammo:disabled"
+                }
+            }
+            Id::Turbos => {
+                let ready = live && p.turbos > 0;
+                if ready {
+                    "chrome:ammo:base"
+                } else {
+                    "chrome:ammo:disabled"
+                }
+            }
+            Id::Flip => {
+                if live && p.somersault <= 0.0 {
+                    "chrome:btn:action"
+                } else {
+                    "chrome:btn:disabled"
+                }
+            }
+            Id::Chaff => {
+                if live && p.chaff > 0 {
+                    "chrome:btn:action"
+                } else {
+                    "chrome:btn:disabled"
+                }
+            }
+            Id::Special => {
+                if p.driver == 7 {
+                    if p.nightmare_active > 0.0 {
+                        "chrome:btn:nightmare_active"
+                    } else {
+                        "chrome:btn:nightmare"
+                    }
+                } else if live {
+                    "chrome:btn:action"
+                } else {
+                    "chrome:btn:disabled"
+                }
+            }
+            _ => "",
+        };
+        if let Some(art) = ui_cards.get(key) {
+            chrome_active.insert(chrome.0);
+            if node.display != Display::Flex {
+                node.display = Display::Flex;
+            }
+            if img.image != art.image {
+                img.image = art.image.clone();
+            }
+        } else if node.display != Display::None {
+            node.display = Display::None;
+        }
+    }
+
+    // When a card/button uses pre-baked CSS chrome, hide its fallback Bevy box so
+    // the real CSS border & box-shadow glow render cleanly with zero double-border.
+    if !chrome_active.is_empty() {
+        for (card, mut bg, mut edge) in &mut card_bg {
+            if chrome_active.contains(&card.0) {
+                bg.0 = Color::NONE;
+                edge.set_if_neq(BorderColor::all(Color::NONE));
+            }
+        }
+    }
+}
+
+/// Handles hover tint & left-click dispatch on HUD buttons (`HudAct`) for both Native & WASM.
+pub fn handle_clicks(
+    mouse: Res<ButtonInput<MouseButton>>,
+    state: Res<HudState>,
+    mut events: ResMut<HudEvents>,
+    mut buttons: Query<(&RelativeCursorPosition, &HudAct, &HudTone, &mut BackgroundColor, Option<&Card>)>,
+) {
+    if !state.active {
+        return;
+    }
+    let clicked = mouse.just_pressed(MouseButton::Left);
+    for (cursor, act, tone, mut bg, card) in &mut buttons {
+        let hovered = cursor.cursor_over();
+        // Only tint fallback Bevy backgrounds (cards with pre-baked CSS chrome have bg == NONE).
+        if card.is_none() || bg.0 != Color::NONE {
+            bg.0 = if hovered {
+                let s = tone.0.to_srgba();
+                Color::srgba(
+                    (s.red + 0.08).min(1.0),
+                    (s.green + 0.08).min(1.0),
+                    (s.blue + 0.08).min(1.0),
+                    (s.alpha + 0.12).min(1.0),
+                )
+            } else {
+                tone.0
+            };
+        }
+        if clicked && hovered {
+            events.actions.push(*act);
+        }
     }
 }
 

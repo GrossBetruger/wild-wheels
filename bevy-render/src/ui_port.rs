@@ -8,7 +8,6 @@ use bevy::{
 };
 use std::collections::HashMap;
 
-static PACK: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/ui.wwup"));
 const VERSION: u32 = 1;
 
 #[derive(Clone)]
@@ -93,7 +92,8 @@ fn parse(bytes: &[u8]) -> Option<Vec<RawCard<'_>>> {
 
 pub fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     let mut cards = HashMap::new();
-    if let Some(raw_cards) = parse(PACK) {
+    let pack = crate::ui_pack_bytes();
+    if let Some(raw_cards) = parse(pack) {
         for raw in raw_cards {
             let Ok(rgba) = miniz_oxide::inflate::decompress_to_vec_zlib(raw.compressed) else {
                 continue;
@@ -130,32 +130,33 @@ pub fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     commands.insert_resource(UiCards(cards));
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn embedded_ui_pack_parses_cleanly() {
-        let cards = parse(PACK).expect("embedded WWUP pack must be valid");
-        for raw in &cards {
-            let rgba = miniz_oxide::inflate::decompress_to_vec_zlib(raw.compressed)
-                .expect("valid zlib RGBA payload");
-            assert_eq!(
-                rgba.len(),
-                usize::from(raw.width) * usize::from(raw.height) * 4,
-                "RGBA size mismatch for {}",
-                raw.key
-            );
-            assert!(raw.logical_w > 0 && raw.logical_h > 0);
+pub fn verify_pack(bytes: &[u8]) -> Result<usize, String> {
+    let cards = parse(bytes).ok_or_else(|| "invalid WWUP pack header/layout".to_owned())?;
+    for raw in &cards {
+        let rgba = miniz_oxide::inflate::decompress_to_vec_zlib(raw.compressed)
+            .map_err(|_| format!("invalid zlib RGBA payload for {}", raw.key))?;
+        let expected = usize::from(raw.width) * usize::from(raw.height) * 4;
+        if rgba.len() != expected || raw.logical_w == 0 || raw.logical_h == 0 {
+            return Err(format!("RGBA/size mismatch for {}", raw.key));
         }
-        // When Chrome ported the cards at build time, confirm all key themes exist.
-        if !cards.is_empty() {
-            for required in ["ability:5", "ability:15", "reward:intelligence"] {
-                assert!(
-                    cards.iter().any(|c| c.key == required),
-                    "missing ported HTML card {required}"
-                );
+    }
+    if !cards.is_empty() {
+        for required in [
+            "ability:5",
+            "ability:15",
+            "reward:intelligence",
+            "icon:hedgehog",
+            "icon:missile",
+            "icon:turbo",
+            "icon:heart",
+            "chrome:ammo:base",
+            "chrome:ammo:selected",
+            "chrome:btn:action",
+        ] {
+            if !cards.iter().any(|c| c.key == required) {
+                return Err(format!("missing ported HTML asset {required}"));
             }
         }
     }
+    Ok(cards.len())
 }

@@ -331,7 +331,7 @@ async fn http(
                     .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-' | b'/'))
                 && (matches!(
                     rel,
-                    "graphics.wwgp" | "sounds.wwsp"
+                    "graphics.wwgp" | "sounds.wwsp" | "ui.wwup"
                 ) || rel.starts_with("pkg/")
                     || rel.starts_with("assets/"));
             if !allowed {
@@ -339,7 +339,7 @@ async fn http(
             }
             let source = std::path::Path::new("wasm");
             let gzip = source.join(format!("{rel}.gz"));
-            let compressed = matches!(rel, "graphics.wwgp" | "pkg/wild_wheels_wasm.js" | "pkg/wild_wheels_wasm_bg.wasm");
+            let compressed = matches!(rel, "graphics.wwgp" | "ui.wwup" | "pkg/wild_wheels_wasm.js" | "pkg/wild_wheels_wasm_bg.wasm");
             let encoding = (compressed && gzip.is_file()).then(|| accepts_gzip(&h));
             let file_path = match encoding { Some(true) => gzip, _ => source.join(rel) };
             match std::fs::read(&file_path) {

@@ -5,8 +5,8 @@ import { createHash } from 'node:crypto';
 import { Multiplayer } from './server/multiplayer.js';
 import { createTunnelControl } from './server/tunnel-control.js';
 import { createTextEndpoint } from './server/text.js';
-const mime=name=>({'html':'text/html','css':'text/css','svg':'image/svg+xml','wasm':'application/wasm','ogg':'audio/ogg','flac':'audio/flac','png':'image/png','glb':'model/gltf-binary','wwgp':'application/octet-stream','wwsp':'application/octet-stream'})[name.split('.').at(-1)]??'text/javascript';
-const compressedBetaAssets=new Set(['/experimental/graphics.wwgp','/experimental/pkg/wild_wheels_wasm.js','/experimental/pkg/wild_wheels_wasm_bg.wasm']);
+const mime=name=>({'html':'text/html','css':'text/css','svg':'image/svg+xml','wasm':'application/wasm','ogg':'audio/ogg','flac':'audio/flac','png':'image/png','glb':'model/gltf-binary','wwgp':'application/octet-stream','wwsp':'application/octet-stream','wwup':'application/octet-stream'})[name.split('.').at(-1)]??'text/javascript';
+const compressedBetaAssets=new Set(['/experimental/graphics.wwgp','/experimental/ui.wwup','/experimental/pkg/wild_wheels_wasm.js','/experimental/pkg/wild_wheels_wasm_bg.wasm']);
 function acceptsGzip(header=''){
   let wildcard=false;
   for(const value of header.split(',')){
@@ -23,7 +23,7 @@ const experimentalAsset=route=>{
   const rel=route.slice('/experimental/'.length)||'index.html';
   if(rel.includes('..')||rel.startsWith('/')||rel.endsWith('.gz')||!/^[a-zA-Z0-9._/-]+$/.test(rel))return null;
   if(rel==='index.html')return ['index.html',mime(rel)];
-  if(!['graphics.wwgp','sounds.wwsp'].includes(rel)&&!rel.startsWith('pkg/')&&!rel.startsWith('assets/'))return null;
+  if(!['graphics.wwgp','sounds.wwsp','ui.wwup'].includes(rel)&&!rel.startsWith('pkg/')&&!rel.startsWith('assets/'))return null;
   return ['wasm/'+rel,mime(rel)];
 };
 const loadFiles=()=>new Map(JSON.parse(readFileSync(new URL('./public-assets.json',import.meta.url))).map(name=>[name==='index.html'?'/':'/'+name,[name,mime(name)]]));

@@ -105,6 +105,16 @@ fn main() {
                 compressed.push_str(&format!("({route:?},include_bytes!({gzip:?})),\n"));
             }
         }
+        let ui_pack = generated.join("ui.wwup");
+        if ui_pack.is_file() {
+            let route = "/experimental/ui.wwup";
+            experimental_asset(&mut code, &mut hash, route, &ui_pack);
+            let gzip = generated.join("ui.wwup.gz");
+            if gzip.is_file() {
+                println!("cargo:rerun-if-changed={}", gzip.display());
+                compressed.push_str(&format!("({route:?},include_bytes!({gzip:?})),\n"));
+            }
+        }
         experimental_models(&mut code, &mut hash, &source.join("assets"), "/experimental/assets");
     }
     // Build identity also changes with native service/core sources.

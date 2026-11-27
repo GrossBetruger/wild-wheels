@@ -5,6 +5,7 @@ pub mod avita;
 pub mod bench;
 pub mod blender;
 pub mod explosions;
+pub mod hud;
 pub mod knowitowl;
 pub mod pearococo;
 pub mod plumage;
@@ -17,6 +18,7 @@ pub mod sound;
 pub mod specialist;
 pub mod sprite;
 pub mod tycoon;
+pub mod ui_port;
 pub mod wormhole;
 pub mod xray;
 pub mod yuda;
@@ -33,6 +35,7 @@ pub static ARENA_CAMERA: Mutex<[f32; 19]> = Mutex::new([0.0; 19]);
 
 static PACK_BYTES: OnceLock<&'static [u8]> = OnceLock::new();
 static SOUND_BYTES: OnceLock<&'static [u8]> = OnceLock::new();
+static UI_BYTES: OnceLock<&'static [u8]> = OnceLock::new();
 type ReportHook = fn(&str, f32, &'static str, &str, serde_json::Value);
 static REPORT_HOOK: OnceLock<ReportHook> = OnceLock::new();
 
@@ -42,6 +45,10 @@ pub fn set_pack_bytes(bytes: &'static [u8]) {
 
 pub fn set_sound_pack_bytes(bytes: &'static [u8]) {
     let _ = SOUND_BYTES.set(bytes);
+}
+
+pub fn set_ui_pack_bytes(bytes: &'static [u8]) {
+    let _ = UI_BYTES.set(bytes);
 }
 
 pub fn set_report_hook(hook: ReportHook) {
@@ -54,6 +61,10 @@ pub(crate) fn pack_bytes() -> &'static [u8] {
 
 pub(crate) fn sound_pack_bytes() -> &'static [u8] {
     SOUND_BYTES.get().copied().unwrap_or(&[])
+}
+
+pub(crate) fn ui_pack_bytes() -> &'static [u8] {
+    UI_BYTES.get().copied().unwrap_or(&[])
 }
 
 pub mod reports {

@@ -29,12 +29,13 @@ mkdir -p -- "$output/pkg"
 build_status checking-assets
 cache_started=$SECONDS
 keys=$(node --no-warnings --experimental-vm-modules scripts/build/experimental-cache-keys.mjs "$toolchain" "$target")
-{ read -r wasm_hash; read -r graphics_hash; read -r sounds_hash; } <<< "$keys"
+{ read -r wasm_hash; read -r graphics_hash; read -r sounds_hash; read -r ui_hash; } <<< "$keys"
 printf 'Checked asset cache in %ss.\n' "$((SECONDS-cache_started))"
 
 need_wasm=1
 need_graphics=1
 need_sounds=1
+need_ui=1
 
 if cache_hit "$output/.wasm.sha256" "$wasm_hash" \
   "$output/pkg/wild_wheels_wasm.js" \
@@ -55,12 +56,18 @@ if cache_hit "$output/.sounds.sha256" "$sounds_hash" \
   need_sounds=0
 fi
 
-if (( need_wasm == 0 && need_graphics == 0 && need_sounds == 0 )); then
-  printf 'Experimental client assets up to date (WASM, graphics, and sounds cached).\n'
+if cache_hit "$output/.ui.sha256" "$ui_hash" \
+  "$output/ui.wwup" \
+  "$output/ui.wwup.gz"; then
+  need_ui=0
+fi
+
+if (( need_wasm == 0 && need_graphics == 0 && need_sounds == 0 && need_ui == 0 )); then
+  printf 'Experimental client assets up to date (WASM, graphics, sounds, and UI cached).\n'
   exit 0
 fi
 
-if (( need_graphics || need_sounds )); then
+if (( need_graphics || need_sounds || need_ui )); then
   command -v node >/dev/null || { printf '%s\n' 'Node.js is required to build the experimental client. On Ubuntu/Debian, run ./install_ubuntu.sh.' >&2; exit 1; }
 fi
 if (( need_sounds )) && [[ $(uname -s) != Darwin ]]; then
@@ -134,4 +141,17 @@ if (( need_sounds )); then
   printf 'Sound pack took %ss.\n' "$((SECONDS-stage_started))"
 else
   printf 'Skipping sounds.wwsp rebuild (unchanged).\n'
+fi
+
+if (( need_ui )); then
+  build_status packing-ui
+  printf 'Building UI pack (ui.wwup)…\n'
+  stage_started=$SECONDS
+  node scripts/build/port-ui.mjs --optional "$staging/ui.wwup"
+  gzip -n -c -- "$staging/ui.wwup" > "$staging/ui.wwup.gz"
+  mv -f -- "$staging/ui.wwup" "$staging/ui.wwup.gz" "$output/"
+  printf '%s\n' "$ui_hash" > "$output/.ui.sha256"
+  printf 'UI pack took %ss.\n' "$((SECONDS-stage_started))"
+else
+  printf 'Skipping ui.wwup rebuild (unchanged).\n'
 fi
