@@ -554,5 +554,45 @@ mod tests {
         let client = NativeClient::from_packet(&packet, 0.0).unwrap();
         assert_eq!(client.view().arena_def.name, "Pac-Man");
         assert!(client.view().arena_def.is_torus());
+
+        // End-to-end: advance into racing, turn around at (0, -64) to face -Z toward the -96 edge,
+        // fire a hedgehog, and verify it wraps across -96 and emerges on the +96 side!
+        for _ in 0..220 {
+            room.tick();
+        }
+        assert_eq!(room.core.phase(), "racing");
+        // Somersault flips heading 180° from +Z (toward center) to -Z (toward the -96 portal edge).
+        room.control(
+            0,
+            "/api/input",
+            &json!({"sequence":1,"keys":[],"actions":[{"type":"somersault"}]}),
+        )
+        .unwrap();
+        for _ in 0..40 {
+            room.tick();
+        }
+        room.control(
+            0,
+            "/api/input",
+            &json!({"sequence":2,"keys":[],"actions":[{"type":"fire"}]}),
+        )
+        .unwrap();
+        let mut saw_negative_side = false;
+        let mut saw_wrapped_positive_side = false;
+        for _ in 0..60 {
+            room.tick();
+            let pkt = room.core.packet(0);
+            let c = NativeClient::from_packet(&pkt, 0.0).unwrap();
+            for shot in c.view().projectiles {
+                if shot.wz < -70.0 {
+                    saw_negative_side = true;
+                }
+                if saw_negative_side && shot.wz > 60.0 {
+                    saw_wrapped_positive_side = true;
+                }
+            }
+        }
+        assert!(saw_negative_side, "projectile should fly toward the -96 portal edge");
+        assert!(saw_wrapped_positive_side, "projectile should wrap across -96 and emerge on the +96 side");
     }
 }

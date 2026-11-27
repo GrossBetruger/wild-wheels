@@ -257,7 +257,7 @@ export function advanceProjectile(r, shot, dt) {
   const decoy = field ? null : r.chaffClouds?.find(c => c.id === shot.decoy) ?? (shot.decoyCenter ? { ...shot.decoyCenter, owner: shot.decoyOwner } : null), target = decoy ?? actors.find(k => k.id === shot.target && !k.destroyed);
   if (decoy && shot.orbitAge !== undefined) { const x = shot.wx, z = shot.wz, result = orbitChaff(shot, decoy, dt, arena); if (fireRingBlocks(r, x, z, shot.wx, shot.wz)) { shot.quenched = true; shot.life = 0; return { impact: true, victim: null, decoy: null }; } return result; }
   let steering = 0;
-  if (shot.kind === 'missile' && target) { const turnRate = decoy ? 4.5 : shot.reflected ? 10 : 1.6, lead = shot.reflected && !decoy ? Math.min(.8, distance(shot, target) / shot.speed) : 0, heading = target.motionHeading ?? target.heading ?? 0, speed = (target.speed ?? 0) * .085; steering = clamp(angleDelta(Math.atan2(target.wx + Math.sin(heading) * speed * lead - shot.wx, target.wz + Math.cos(heading) * speed * lead - shot.wz), shot.heading), -turnRate * dt, turnRate * dt); shot.heading += steering; }
+  if (shot.kind === 'missile' && target) { const turnRate = decoy ? 4.5 : shot.reflected ? 10 : 1.6, lead = shot.reflected && !decoy ? Math.min(.8, distance(shot, target) / shot.speed) : 0, heading = target.motionHeading ?? target.heading ?? 0, speed = (target.speed ?? 0) * .085; const [dx, dz] = wrapTorus(arena, target.wx + Math.sin(heading) * speed * lead - shot.wx, target.wz + Math.cos(heading) * speed * lead - shot.wz); steering = clamp(angleDelta(Math.atan2(dx, dz), shot.heading), -turnRate * dt, turnRate * dt); shot.heading += steering; }
   const repeller = actors.find(a => a.id === shot.repelledFrom && a.tehilim > 0 && !a.destroyed && !a.inactive && !a.afk);
   if (repeller && distance(shot, repeller) < 45) { const d = distance(shot, repeller), away = Math.atan2(shot.wx - repeller.wx, shot.wz - repeller.wz); steering = clamp(angleDelta(away, shot.heading), -12 * dt, 12 * dt); shot.heading = d < 5 ? away : shot.heading + steering; }
   let impact = false, victim; const steps = Math.ceil(shot.speed * dt / 1.5);
@@ -269,7 +269,8 @@ export function advanceProjectile(r, shot, dt) {
     }
     const previousX = shot.wx, previousZ = shot.wz;
     [shot.wx, shot.wz] = wrapTorus(arena, shot.wx + Math.sin(shot.heading) * shot.speed * dt / steps, shot.wz + Math.cos(shot.heading) * shot.speed * dt / steps);
-    if ((field && distance(shot, field) <= WORMHOLE_KILL_RADIUS) || fireRingBlocks(r, previousX, previousZ, shot.wx, shot.wz)) { shot.quenched = true; shot.life = 0; return { impact: true, victim: null, decoy: null }; }
+    const wrapped = Math.hypot(shot.wx - previousX, shot.wz - previousZ) > 10;
+    if ((field && distance(shot, field) <= WORMHOLE_KILL_RADIUS) || (!wrapped && fireRingBlocks(r, previousX, previousZ, shot.wx, shot.wz))) { shot.quenched = true; shot.life = 0; return { impact: true, victim: null, decoy: null }; }
     if (decoy && distance(shot, decoy) < 6) {
       shot.orbitAge = 0; shot.orbitDirection = steering < 0 ? -1 : 1; shot.orbitAngle = shot.heading - shot.orbitDirection * Math.PI / 2; shot.orbitRadius = shot.speed * .6 / (Math.PI * 2); shot.orbitHeight = shot.height;
       shot.orbitCenter = { wx: shot.wx - Math.sin(shot.orbitAngle) * shot.orbitRadius, wz: shot.wz - Math.cos(shot.orbitAngle) * shot.orbitRadius }; shot.chaffed = true; shot.life = Math.max(shot.life, 3);

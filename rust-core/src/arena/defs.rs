@@ -290,3 +290,6 @@ pub fn blocked(arena: usize, x: f64, z: f64, padding: f64) -> bool {
 pub fn wrap_point(arena: usize, x: f64, z: f64) -> (f64, f64) {
     with_arena(arena, |d| d.wrap(x, z))
 }
+pub fn torus_delta(arena: usize, dx: f64, dz: f64) -> (f64, f64) {
+    with_arena(arena, |d| d.wrap(dx, dz))
+}
