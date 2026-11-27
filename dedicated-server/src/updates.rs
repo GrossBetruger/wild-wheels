@@ -68,7 +68,11 @@ impl Updates {
         if self.git(&["branch", "--show-current"]).await? != "main" {
             return Err((409, "Server updates require a checkout of main."));
         }
-        if !self.git(&["status", "--porcelain"]).await?.is_empty() {
+        if !self
+            .git(&["status", "--porcelain", "--", ".", ":(exclude)releases/bevy-web/*.gz"])
+            .await?
+            .is_empty()
+        {
             return Err((
                 409,
                 "The server checkout has local changes. Commit or remove them before updating.",
