@@ -14,6 +14,7 @@ mod scene;
 mod sound;
 mod sprite;
 mod specialist;
+mod tycoon;
 mod wormhole;
 mod xray;
 mod yuda;
@@ -481,6 +482,7 @@ fn presentation_app(pack: Vec<u8>, canvas: &str, interactive: bool, mobile: bool
             preview::PreviewPlugin,
             relativity::RelativityPlugin,
             ryeah::RYeahPlugin,
+            tycoon::TycoonPlugin,
             wormhole::WormholePlugin,
             yuda::YudaPlugin,
         ))

@@ -580,7 +580,7 @@ fn drive_pearococo(
                             .spawn((
                                 Mesh3d(assets.feathers[i].clone()),
                                 MeshMaterial3d(assets.plumage_mat.clone()),
-                                MeshTag { value: Wind::default().tag(false) },
+                                MeshTag::new(Wind::default().tag(false)),
                                 NoFrustumCulling,
                                 Transform::IDENTITY,
                             ))
