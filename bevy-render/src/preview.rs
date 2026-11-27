@@ -17,7 +17,7 @@ use wild_wheels_core::{Actor, ClientView};
 /// The stand-in's id: far above any racer's, so nothing in a match refers to it.
 pub const ID: usize = 4000;
 /// Where the stage stands, well beyond the main camera's sight.
-const STAGE: Vec3 = Vec3::new(6000.0, 0.0, 6000.0);
+pub const STAGE: Vec3 = Vec3::new(6000.0, 0.0, 6000.0);
 /// The browser's preview backdrop.
 const BACKDROP: Color = Color::srgb(0.898, 0.871, 0.937);
 /// Frames copied out for the page each second.
@@ -35,14 +35,15 @@ struct Request {
     boost: bool,
     tall: bool,
     size: UVec2,
+    readback: bool,
 }
 
 static REQUEST: Mutex<Option<Request>> = Mutex::new(None);
 /// The newest frame not yet taken: width, height, then RGBA rows.
 static FRAME: Mutex<Vec<u8>> = Mutex::new(Vec::new());
 
-/// Show a racer on the preview stage. `width` must be a multiple of 64, so
-/// that rows of the copied image carry no padding.
+/// Show a racer on the preview stage for offscreen GPU readback (browser HUD).
+/// `width` must be a multiple of 64, so that rows of the copied image carry no padding.
 #[allow(clippy::too_many_arguments)]
 pub fn show_character_preview(
     driver: usize,
@@ -57,7 +58,35 @@ pub fn show_character_preview(
 ) {
     let size = UVec2::new((width.clamp(64, 1024) / 64) * 64, height.clamp(32, 1024));
     if let Ok(mut request) = REQUEST.lock() {
-        *request = Some(Request { driver, color, clock, yaw, celebrate, boost, tall, size });
+        *request = Some(Request {
+            driver,
+            color,
+            clock,
+            yaw,
+            celebrate,
+            boost,
+            tall,
+            size,
+            readback: true,
+        });
+    }
+}
+
+/// Show a live 3D racer on the preview turntable at `STAGE` for a direct camera
+/// (used by the native client lobby without offscreen readback).
+pub fn show_stage_preview(driver: usize, color: String) {
+    if let Ok(mut request) = REQUEST.lock() {
+        *request = Some(Request {
+            driver,
+            color,
+            clock: 0.0,
+            yaw: 0.0,
+            celebrate: 0.0,
+            boost: false,
+            tall: matches!(driver, 11 | 12 | 14),
+            size: UVec2::new(64, 64),
+            readback: false,
+        });
     }
 }
 
@@ -77,6 +106,7 @@ pub fn take_character_preview() -> Vec<u8> {
 #[derive(Resource, Default)]
 pub struct Preview {
     racers: Vec<Actor>,
+    disc_spawned: bool,
     film: Option<Film>,
     since_copy: f32,
 }
@@ -140,11 +170,8 @@ fn stage(
         ..default()
     });
 
-    if preview.film.is_none() {
-        let mut image = Image::new_target_texture(request.size.x, request.size.y, TextureFormat::Rgba8UnormSrgb, None);
-        // Copied out for the page after every render.
-        image.texture_descriptor.usage |= TextureUsages::COPY_SRC;
-        let image = images.add(image);
+    if !preview.disc_spawned {
+        preview.disc_spawned = true;
         // The browser's preview turntable: a cream disc with a lilac rim.
         for (radius, drop, color) in [(4.7, 0.12, Color::srgb(0.776, 0.729, 0.839)), (4.5, 0.08, Color::srgb(0.973, 0.953, 0.898))] {
             commands.spawn((
@@ -157,6 +184,19 @@ fn stage(
                 Transform::from_translation(STAGE - Vec3::Y * drop),
             ));
         }
+    }
+    if !request.readback {
+        if let Some((mut camera, _)) = preview.film.as_ref().and_then(|film| cameras.get_mut(film.camera).ok()) {
+            camera.is_active = false;
+        }
+        return;
+    }
+
+    if preview.film.is_none() {
+        let mut image = Image::new_target_texture(request.size.x, request.size.y, TextureFormat::Rgba8UnormSrgb, None);
+        // Copied out for the page after every render.
+        image.texture_descriptor.usage |= TextureUsages::COPY_SRC;
+        let image = images.add(image);
         let mut camera = commands.spawn((
             Camera3d::default(),
             Camera {

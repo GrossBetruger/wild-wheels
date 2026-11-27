@@ -414,6 +414,7 @@ pub fn run(mut config: Config) -> Result<(), Box<dyn Error>> {
             crate::sound::GameAudioPlugin,
             crate::feedback::FeedbackPlugin,
         ))
+        .init_resource::<LobbyStage>()
         .init_resource::<crate::hud::Notices>()
         .init_resource::<crate::chat::ChatPanel>()
         .add_systems(
@@ -460,18 +461,68 @@ pub fn run(mut config: Config) -> Result<(), Box<dyn Error>> {
         .run();
     Ok(())
 }
+#[derive(Resource, Default)]
+struct LobbyStage {
+    client: Option<NativeClient>,
+    active: bool,
+}
+
 fn sync_to_render(
     mut native: ResMut<GameSession>,
     mut render: ResMut<wild_wheels_render::app::GameSession>,
+    mut lobby: ResMut<LobbyStage>,
+    menu: Res<crate::gui::Menu>,
+    graphics: Res<crate::ported::Graphics>,
 ) {
-    std::mem::swap(&mut native.client, &mut render.client);
-    std::mem::swap(&mut native.sounds, &mut render.sounds);
-    std::mem::swap(&mut native.voices, &mut render.voices);
+    if native.joined() {
+        lobby.active = false;
+        wild_wheels_render::preview::hide_character_preview();
+        std::mem::swap(&mut native.client, &mut render.client);
+        std::mem::swap(&mut native.sounds, &mut render.sounds);
+        std::mem::swap(&mut native.voices, &mut render.voices);
+        return;
+    }
+    if lobby.client.is_none() {
+        let cfg = serde_json::json!({
+            "code": "00",
+            "maxPlayers": 8,
+            "arena": 0,
+            "bots": 0,
+            "dedicated": true,
+            "host": null,
+            "epoch": 1,
+            "seed": 1,
+            "players": [{"id": 0, "name": "Preview", "driver": 0, "role": "driver"}],
+            "specialAbilities": true,
+            "targetScore": 10,
+            "matchMinutes": 3
+        });
+        if let Ok(arena) = wild_wheels_core::NativeArena::new(cfg) {
+            let pkt = arena.packet(0);
+            lobby.client = NativeClient::from_packet(&pkt, 0.0).ok();
+        }
+    }
+    let color = menu.color.clone().unwrap_or_else(|| {
+        let [r, g, b] = graphics
+            .racers()
+            .get(menu.driver)
+            .map_or([255; 3], |racer| racer.color);
+        format!("#{r:02x}{g:02x}{b:02x}")
+    });
+    wild_wheels_render::preview::show_stage_preview(menu.driver, color);
+    lobby.active = true;
+    std::mem::swap(&mut lobby.client, &mut render.client);
 }
 fn sync_from_render(
     mut native: ResMut<GameSession>,
     mut render: ResMut<wild_wheels_render::app::GameSession>,
+    mut lobby: ResMut<LobbyStage>,
 ) {
+    if lobby.active {
+        std::mem::swap(&mut lobby.client, &mut render.client);
+        lobby.active = false;
+        return;
+    }
     std::mem::swap(&mut native.client, &mut render.client);
     std::mem::swap(&mut native.sounds, &mut render.sounds);
     std::mem::swap(&mut native.voices, &mut render.voices);

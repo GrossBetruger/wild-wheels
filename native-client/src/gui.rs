@@ -3,7 +3,7 @@
 use crate::{
     app::GameSession,
     config::{Config, player_name, server_origin},
-    ported::{Graphics, Ported},
+    ported::Graphics,
     prefs::Preferences,
     scene::FollowCamera,
     transport::Command,
@@ -28,8 +28,8 @@ const PRIMARY: Color = Color::srgb(0.80, 0.36, 0.26);
 const GOLD: Color = Color::srgb(0.95, 0.80, 0.38);
 const MUTED: Color = Color::srgb(0.72, 0.70, 0.80);
 const WARNING: Color = Color::srgb(1.0, 0.62, 0.52);
-/// The racer preview stands far above the arena, out of every match's sight.
-const PREVIEW: Vec3 = Vec3::new(0.0, 500.0, 0.0);
+/// The racer preview stands on the shared `bevy-render` stage, far from every match.
+const PREVIEW: Vec3 = wild_wheels_render::preview::STAGE;
 /// Set once, in rust-core.
 const ROOM_CAPACITY: usize = wild_wheels_core::MAX_PLAYERS;
 const CONTROLS: &str = "Arrows / WASD   drive\nShift   drift\nSpace   fire\nTab   switch weapon\nX   boost      C   chaff\nZ   flip      F   special ability\nV   push to talk (mic)\nP   sit out (AFK)      Esc   menu";
@@ -71,17 +71,14 @@ pub enum Act {
 /// A button's resting color, brightened while the pointer is over it.
 #[derive(Component)]
 pub struct Tone(pub Color);
-#[derive(Component)]
-pub struct Preview;
-
 #[derive(Resource)]
 pub struct Menu {
     /// Developer options from the command line, kept for every join.
     base: Config,
     server: String,
     name: String,
-    driver: usize,
-    color: Option<String>,
+    pub(crate) driver: usize,
+    pub(crate) color: Option<String>,
     field: Field,
     /// The in-game menu is open; driving input is ignored meanwhile.
     pub open: bool,
@@ -181,14 +178,7 @@ pub(crate) fn clipboard() -> Option<String> {
     Some(text.lines().next()?.trim().to_owned())
 }
 
-pub fn setup(mut commands: Commands) {
-    commands.spawn((
-        Transform::from_translation(PREVIEW),
-        Visibility::default(),
-        Ported::default(),
-        Preview,
-    ));
-}
+pub fn setup() {}
 
 #[allow(clippy::too_many_arguments)]
 pub fn control(
@@ -966,33 +956,11 @@ pub fn hover(mut buttons: Query<(&RelativeCursorPosition, &Tone, &mut Background
 pub fn preview(
     menu: Res<Menu>,
     session: Res<GameSession>,
-    graphics: Res<Graphics>,
     time: Res<Time>,
     mut sky: ResMut<ClearColor>,
-    mut previews: Query<&mut Ported, With<Preview>>,
     mut cameras: Query<&mut Transform, With<FollowCamera>>,
 ) {
-    let choosing = !session.joined();
-    for mut preview in &mut previews {
-        let clip = match choosing {
-            true => graphics.clip(&format!("driver:{}:idle", menu.driver)),
-            false => None,
-        };
-        if preview.clip != clip {
-            preview.clip = clip;
-        }
-        preview.tint = menu
-            .color
-            .as_deref()
-            .and_then(crate::ported::tint)
-            .unwrap_or_else(|| {
-                graphics
-                    .racers()
-                    .get(menu.driver)
-                    .map_or([255; 3], |racer| racer.color)
-            });
-    }
-    if !choosing {
+    if session.joined() {
         return;
     }
     sky.0 = Color::srgb_u8(0xe5, 0xde, 0xef);
