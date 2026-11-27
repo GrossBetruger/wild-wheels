@@ -232,7 +232,7 @@ export class NetworkGame {
     if(reply.invite)this.invite=reply.invite;
     const url=new URL(location.href);url.searchParams.set('room',reply.code);if(this.invite)url.hash=new URLSearchParams({invite:this.invite}).toString();history.replaceState(null,'',url);this.invitation=reply.code;
     this.restoreOnVisible=false;
-    this.token=reply.token;this.socket?.close();this.nameDirty=false;this.namePending=false;this.namePromise=null;this.sequence=0;this.pending=null;this.failures=0;this.shareEdited=false;this.actions=[];this.keys.clear();this.paused=Boolean(reply.players.find(player=>player.id===reply.you)?.afk);this.client=new ArenaClient();this.accept(bootstrapPacket(reply));
+    this.token=reply.token;this.socket?.close();this.nameDirty=false;this.namePending=false;this.namePromise=null;this.sequence=0;this.pending=null;this.failures=0;this.shareEdited=false;this.actions=[];this.keys.clear();this.paused=Boolean(reply.players.find(player=>player.id===reply.you)?.afk);this.client=new ArenaClient();this.onBootstrap?.();this.accept(bootstrapPacket(reply));
     if(draft!==null){this.name.value=draft;this.nameDirty=draft.trim()!==reply.world.name;}
     this.rememberName();this.stream();this.voice.connect(reply.token);
   }
@@ -428,7 +428,8 @@ export class NetworkGame {
   syncRustSocket(){
     if(!this.rustSocketActive||!this.active)return;
     const rtt=this.getRustRtt?.();if(rtt>0)this.rtt=rtt;
-    const lastMs=this.getRustLastPacketMs?.();if(lastMs>0)this.lastPacket=lastMs;
+    const seq=this.getRustPacketSeq?.()??0;
+    if(seq!==this.lastRustPacketSeq){this.lastRustPacketSeq=seq;this.lastPacket=performance.now();}
     const pkt=this.takeRustPacket?.();
     if(pkt)this.accept(pkt,true);
     const closed=this.takeRustClosed?.();
@@ -437,7 +438,10 @@ export class NetworkGame {
   stream(){
     const token=this.token,url=new URL('/api/socket',location.href);url.protocol=location.protocol==='https:'?'wss:':'ws:';const opened=performance.now();
     if(this.connectRustSocket?.(url.href,token,this.clientType)){
-      this.socket?.close();this.socket=null;this.rustSocketActive=true;this.rustSocketOpened=opened;return;
+      this.socket?.close();
+      const self=this;
+      this.socket={get readyState(){return self.rustSocketActive?WebSocket.OPEN:WebSocket.CLOSED;},bufferedAmount:0,close(){}};
+      this.rustSocketActive=true;this.rustSocketOpened=opened;return;
     }
     this.rustSocketActive=false;
     const socket=this.socket=new WebSocket(url);

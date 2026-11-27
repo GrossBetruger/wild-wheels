@@ -2,7 +2,7 @@
 //! Handles authentication, binary snapshot ingestion, outbound input sending, and ping/pong RTT.
 
 use std::cell::RefCell;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
@@ -24,7 +24,8 @@ thread_local! {
 
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 static RTT_BITS: AtomicU64 = AtomicU64::new(0);
-static LAST_PACKET_MS_BITS: AtomicU64 = AtomicU64::new(0);
+static PACKET_SEQ: AtomicU64 = AtomicU64::new(0);
+static NEEDS_RESEND: AtomicBool = AtomicBool::new(false);
 static CLOSED_EVENT: Mutex<Option<String>> = Mutex::new(None);
 static LATEST_UI_PACKET: Mutex<Option<Vec<u8>>> = Mutex::new(None);
 
@@ -44,8 +45,12 @@ pub fn rtt_secs() -> f64 {
     f64::from_bits(RTT_BITS.load(Ordering::Relaxed))
 }
 
-pub fn last_packet_ms() -> f64 {
-    f64::from_bits(LAST_PACKET_MS_BITS.load(Ordering::Relaxed))
+pub fn packet_seq() -> u64 {
+    PACKET_SEQ.load(Ordering::Relaxed)
+}
+
+pub fn take_needs_resend() -> bool {
+    NEEDS_RESEND.swap(false, Ordering::Relaxed)
 }
 
 pub fn take_closed_json() -> String {
@@ -75,7 +80,7 @@ pub fn disconnect() {
         }
     });
     RTT_BITS.store(0f64.to_bits(), Ordering::Relaxed);
-    LAST_PACKET_MS_BITS.store(0f64.to_bits(), Ordering::Relaxed);
+    NEEDS_RESEND.store(false, Ordering::Relaxed);
     if let Ok(mut slot) = CLOSED_EVENT.lock() {
         *slot = None;
     }
@@ -100,6 +105,7 @@ pub fn connect(url: &str, token: &str, client_type: &str) -> bool {
     .to_string();
     let ws_open = ws.clone();
     let on_open = Closure::<dyn FnMut()>::new(move || {
+        NEEDS_RESEND.store(true, Ordering::Relaxed);
         let _ = ws_open.send_with_str(&auth_msg);
     });
 
@@ -112,7 +118,7 @@ pub fn connect(url: &str, token: &str, client_type: &str) -> bool {
         let data = event.data();
         if let Ok(buf) = data.clone().dyn_into::<js_sys::ArrayBuffer>() {
             let bytes = js_sys::Uint8Array::new(&buf).to_vec();
-            LAST_PACKET_MS_BITS.store(js_sys::Date::now().to_bits(), Ordering::Relaxed);
+            PACKET_SEQ.fetch_add(1, Ordering::Relaxed);
             if let Ok(mut latest) = LATEST_UI_PACKET.lock() {
                 *latest = Some(bytes.clone());
             }

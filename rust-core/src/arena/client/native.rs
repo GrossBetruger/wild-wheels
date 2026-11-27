@@ -196,6 +196,10 @@ impl NativeClient {
     pub fn last_sent_movement(&self) -> i64 {
         self.inner.last_sent
     }
+    pub fn resend(&mut self) {
+        self.inner.last_sent = -1;
+        self.inner.last_sent_action = -1;
+    }
     /// Call only after reserving transport capacity: this advances send cursors.
     pub fn outbound(&mut self, input: ClientInput) -> Result<Vec<u8>, ClientError> {
         if !input.valid() {

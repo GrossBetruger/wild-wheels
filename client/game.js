@@ -265,6 +265,7 @@ const network = new NetworkGame({
   }, onLeave: () => { race = newGame(); lastPhase = ''; keys.clear(); updateMapLabels(); }
 });
 network.log = (level, event, data) => clientLog.note(level, event, data); startReporting(clientLog, { token: () => network.token });
+network.onBootstrap = () => { bevy?.resetSession(); };
 network.onBinaryPacket = packet => {
   if (!bevy?.ready || bevy.failed || mobile || race.bomber) return;
   bevy.setDirectNet(true);
@@ -274,7 +275,7 @@ network.connectRustSocket = (url, token, clientType) => Boolean(bevy?.ready && !
 network.disconnectRustSocket = () => bevy?.disconnectSocket();
 network.takeRustClosed = () => bevy?.takeSocketClosed() ?? null;
 network.getRustRtt = () => bevy?.socketRtt() ?? 0;
-network.getRustLastPacketMs = () => bevy?.socketLastPacketMs() ?? 0;
+network.getRustPacketSeq = () => bevy?.socketPacketSeq() ?? 0;
 network.takeRustPacket = () => bevy?.takeLatestPacket() ?? null;
 network.pollOutbound = () => (bevy?.directNet ? bevy.pollNetOutbound() : null);
 network.onSessionReset = () => { bevy?.disconnectSocket(); bevy?.resetSession(); bevy?.setDirectNet(false); };

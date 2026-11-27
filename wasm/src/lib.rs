@@ -56,6 +56,15 @@ pub fn set_direct_net(enabled: bool) {
 
 #[wasm_bindgen]
 pub fn reset_session() {
+    if let Ok(mut q) = INCOMING_PACKETS.lock() {
+        q.clear();
+    }
+    if let Ok(mut slot) = OUTBOUND_TEXT.lock() {
+        *slot = None;
+    }
+    if let Ok(mut q) = QUEUED_ACTIONS.lock() {
+        q.clear();
+    }
     RESET_SESSION.store(true, Ordering::Relaxed);
 }
 
@@ -200,8 +209,8 @@ pub fn socket_rtt_secs() -> f64 {
 }
 
 #[wasm_bindgen]
-pub fn socket_last_packet_ms() -> f64 {
-    net::last_packet_ms()
+pub fn socket_packet_seq() -> f64 {
+    net::packet_seq() as f64
 }
 
 #[wasm_bindgen]
@@ -375,15 +384,6 @@ fn sync_session(
         session.sounds.clear();
         session.voices.clear();
         hud_events.actions.clear();
-        if let Ok(mut q) = INCOMING_PACKETS.lock() {
-            q.clear();
-        }
-        if let Ok(mut slot) = OUTBOUND_TEXT.lock() {
-            *slot = None;
-        }
-        if let Ok(mut q) = QUEUED_ACTIONS.lock() {
-            q.clear();
-        }
     }
     if !DIRECT_NET_MODE.load(Ordering::Relaxed) {
         if let Ok(mut q) = PENDING_AUDIO_EVENTS.lock() {
@@ -450,6 +450,9 @@ fn sync_session(
         hud_events.actions.clear();
         return;
     };
+    if net::take_needs_resend() {
+        client.resend();
+    }
     hud_state.active = HUD_ACTIVE.load(Ordering::Relaxed);
     let mut had_action = false;
     for act in hud_events.actions.drain(..) {

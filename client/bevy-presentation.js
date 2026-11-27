@@ -365,8 +365,8 @@ export class BevyPresentation {
     return this.bindings?.socket_rtt_secs?.() ?? 0;
   }
 
-  socketLastPacketMs() {
-    return this.bindings?.socket_last_packet_ms?.() ?? 0;
+  socketPacketSeq() {
+    return this.bindings?.socket_packet_seq?.() ?? 0;
   }
 
   takeLatestPacket() {
