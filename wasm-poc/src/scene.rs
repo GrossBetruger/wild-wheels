@@ -558,7 +558,7 @@ fn racers(stage: &mut Stage, view: &ClientView, bats: &Bats, dt: f32, now: f32, 
             }
             roll += *lean;
         }
-        let ground = Vec3::new(a.wx as f32, 0.0, a.wz as f32);
+        let ground = Vec3::new(a.wx as f32, view.arena_def.ground_height(a.wx, a.wz) as f32, a.wz as f32);
         let body = placement(
             ground + Vec3::Y * height,
             a.heading as f32 + yaw,
@@ -1006,7 +1006,7 @@ pub fn sync(
             (_, true) => stage.clip(&format!("shot:vulcan:{owner}")),
             _ => stage.clip("shot:hedgehog"),
         };
-        let mut shot_tf = at(p.wx, p.height, p.wz, p.heading);
+        let mut shot_tf = at(p.wx, p.height + view.arena_def.ground_height(p.wx, p.wz), p.wz, p.heading);
         if owner == crate::ryeah::DRIVER && p.kind == "hedgehog" {
             shot_tf.translation += ryeah_shot_offset(p.heading, p.age);
         }
@@ -1041,7 +1041,7 @@ pub fn sync(
             };
             let play = stage.clip(&name);
             let key = p.id as usize * 16 + index / trail_stride;
-            let mut puff = at(sample.wx, sample.height, sample.wz, 0.0).with_scale(Vec3::splat(size));
+            let mut puff = at(sample.wx, sample.height + view.arena_def.ground_height(sample.wx, sample.wz), sample.wz, 0.0).with_scale(Vec3::splat(size));
             if owner == crate::ryeah::DRIVER && p.kind == "hedgehog" {
                 let sample_age = p.age * (1.0 - (index as f64 / trail_len)).max(0.0);
                 puff.translation += ryeah_shot_offset(p.heading, sample_age);
@@ -1081,7 +1081,7 @@ pub fn sync(
             Role::Supply,
             supply.id as usize,
             play,
-            at(supply.wx, 0.0, supply.wz, 0.0),
+            at(supply.wx, view.arena_def.ground_height(supply.wx, supply.wz), supply.wz, 0.0),
         );
     }
     let drift_limit = mobile.detail(usize::MAX, [24, 16, 8, 4]);
@@ -1113,7 +1113,7 @@ pub fn sync(
         0.0,
         p.camera_heading.cos() as f32,
     );
-    let center = Vec3::new(p.wx as f32, 0.0, p.wz as f32);
+    let center = Vec3::new(p.wx as f32, view.arena_def.ground_height(p.wx, p.wz) as f32, p.wz as f32);
     let height = 16.0 * zoom
         + match p.destroyed > 0.0 {
             true => 15.0,

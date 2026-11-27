@@ -40,6 +40,13 @@ export function wrapTorus(arena, x, z) {
   const s = arena.size, span = s * 2;
   return [(((x + s) % span) + span) % span - s, (((z + s) % span) + span) % span - s];
 }
+export function groundHeight(arena, x, z) {
+  if (arena?.shape !== 'hill') return 0;
+  const r = Math.hypot(x, z);
+  if (r <= 26) return 12;
+  if (r >= 70) return 0;
+  return 6 * (1 + Math.cos(Math.PI * (r - 26) / 44));
+}
 export function inArenaBounds(arena, x, z, padding = 0) {
   const limit = arena.size - padding;
   if (Math.abs(x) > limit || Math.abs(z) > limit) return false;

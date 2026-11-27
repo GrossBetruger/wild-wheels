@@ -587,7 +587,7 @@ fn racers(stage: &mut Stage, view: &ClientView, bats: &Bats, dt: f32, now: f32, 
             }
             roll += *lean;
         }
-        let ground = Vec3::new(a.wx as f32, 0.0, a.wz as f32);
+        let ground = Vec3::new(a.wx as f32, view.arena_def.ground_height(a.wx, a.wz) as f32, a.wz as f32);
         let body = placement(
             ground + Vec3::Y * height,
             a.heading as f32 + yaw,
@@ -1030,7 +1030,7 @@ pub fn sync(
             };
             let play = stage.clip(&name);
             let key = p.id as usize * 16 + index / 3;
-            let puff = at(sample.wx, sample.height, sample.wz, 0.0).with_scale(Vec3::splat(size));
+            let puff = at(sample.wx, sample.height + view.arena_def.ground_height(sample.wx, sample.wz), sample.wz, 0.0).with_scale(Vec3::splat(size));
             if seeing {
                 let ghost = Play {
                     ghost: true,
@@ -1064,7 +1064,7 @@ pub fn sync(
             Role::Supply,
             supply.id as usize,
             play,
-            at(supply.wx, 0.0, supply.wz, 0.0),
+            at(supply.wx, view.arena_def.ground_height(supply.wx, supply.wz), supply.wz, 0.0),
         );
     }
     effects(&mut stage, &view, seeing, time.elapsed_secs());
@@ -1095,7 +1095,7 @@ pub fn sync(
         0.0,
         p.camera_heading.cos() as f32,
     );
-    let center = Vec3::new(p.wx as f32, 0.0, p.wz as f32);
+    let center = Vec3::new(p.wx as f32, view.arena_def.ground_height(p.wx, p.wz) as f32, p.wz as f32);
     let height = 16.0 * zoom
         + match p.destroyed > 0.0 {
             true => 15.0,

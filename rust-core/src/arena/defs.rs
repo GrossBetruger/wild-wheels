@@ -57,7 +57,7 @@ impl ArenaDef {
             && self.desc.encode_utf16().count() <= 160
             && self.size.is_finite()
             && (16.0..=256.0).contains(&self.size)
-            && matches!(self.shape.as_str(), "square" | "octagon" | "torus")
+            && matches!(self.shape.as_str(), "square" | "octagon" | "torus" | "hill")
             && self.max_players.is_none_or(|n| (2..=64).contains(&n))
             && valid_hex(&self.ground)
             && valid_hex(&self.wall)
@@ -90,6 +90,22 @@ impl ArenaDef {
     }
     pub fn is_torus(&self) -> bool {
         self.shape == "torus"
+    }
+    pub fn is_hill(&self) -> bool {
+        self.shape == "hill"
+    }
+    pub fn ground_height(&self, x: f64, z: f64) -> f64 {
+        if !self.is_hill() {
+            return 0.0;
+        }
+        let r = x.hypot(z);
+        if r <= 26.0 {
+            return 12.0;
+        }
+        if r >= 70.0 {
+            return 0.0;
+        }
+        6.0 * (1.0 + (std::f64::consts::PI * (r - 26.0) / 44.0).cos())
     }
     pub fn wrap(&self, x: f64, z: f64) -> (f64, f64) {
         if !self.is_torus() {
@@ -292,4 +308,7 @@ pub fn wrap_point(arena: usize, x: f64, z: f64) -> (f64, f64) {
 }
 pub fn torus_delta(arena: usize, dx: f64, dz: f64) -> (f64, f64) {
     with_arena(arena, |d| d.wrap(dx, dz))
+}
+pub fn is_hill_arena(arena: usize) -> bool {
+    with_arena(arena, |d| d.is_hill())
 }

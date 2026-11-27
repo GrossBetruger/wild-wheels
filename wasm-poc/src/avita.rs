@@ -310,8 +310,9 @@ fn fly_avita(
             } else {
                 -rig.turn_swing * 0.28
             };
+            let gy = view.arena_def.ground_height(a.wx, a.wz) as f32;
             let tf = ported::placement(
-                Vec3::new(a.wx as f32, som_h + waggle_lift, a.wz as f32),
+                Vec3::new(a.wx as f32, gy + som_h + waggle_lift, a.wz as f32),
                 a.heading as f32 + som_yaw,
                 som_pitch + boost_pitch,
                 bank_roll,
@@ -427,8 +428,9 @@ fn fly_avita(
                 }
             }
         } else {
+            let gy = view.arena_def.ground_height(a.wx, a.wz) as f32;
             let tf = ported::placement(
-                Vec3::new(a.wx as f32, som_h, a.wz as f32),
+                Vec3::new(a.wx as f32, gy + som_h, a.wz as f32),
                 a.heading as f32 + som_yaw,
                 som_pitch + boost_pitch,
                 som_roll,

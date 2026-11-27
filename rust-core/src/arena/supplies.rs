@@ -7,7 +7,7 @@ fn random(g: &mut Globals) -> f64 {
     g.supply_seed = state;
     state as f64 / 4294967296.0
 }
-fn safe(g: &Globals, actors: &[Actor], index: usize, x: f64, z: f64) -> bool {
+fn safe(g: &Globals, actors: &[Actor], index: usize, x: f64, z: f64, spacing: f64) -> bool {
     !blocked(g.arena, x, z, 8.0)
         && !actors.iter().any(|a| {
             !a.inactive
@@ -18,28 +18,37 @@ fn safe(g: &Globals, actors: &[Actor], index: usize, x: f64, z: f64) -> bool {
         })
         && !g.supplies.iter().enumerate().any(|(i, s)| {
             i != index
-                && (s.home_wx.unwrap_or(s.wx) - x).hypot(s.home_wz.unwrap_or(s.wz) - z) < 16.0
+                && (s.home_wx.unwrap_or(s.wx) - x).hypot(s.home_wz.unwrap_or(s.wz) - z) < spacing
         })
 }
 pub(super) fn place(g: &mut Globals, actors: &[Actor], index: usize) -> bool {
-    let limit = arena_size(g.arena) - 8.0;
+    let hilltop = is_hill_arena(g.arena) && index < 7;
+    let spacing = if hilltop { 10.5 } else { 16.0 };
+    let limit = if hilltop { 22.0 } else { arena_size(g.arena) - 8.0 };
     let mut candidate = None;
     for _ in 0..128 {
         let x = (random(g) * 2.0 - 1.0) * limit;
         let z = (random(g) * 2.0 - 1.0) * limit;
-        if safe(g, actors, index, x, z) {
+        if hilltop && x.hypot(z) > limit {
+            continue;
+        }
+        if safe(g, actors, index, x, z, spacing) {
             candidate = Some((x, z));
             break;
         }
     }
     if candidate.is_none() {
-        let cells = (limit * 2.0 / 8.0).floor() as usize + 1;
+        let step = if hilltop { 5.0 } else { 8.0 };
+        let cells = (limit * 2.0 / step).floor() as usize + 1;
         let start = (random(g) * (cells * cells) as f64).floor() as usize;
         for offset in 0..cells * cells {
             let cell = (start + offset) % (cells * cells);
-            let x = -limit + (cell % cells) as f64 * 8.0;
-            let z = -limit + (cell / cells) as f64 * 8.0;
-            if safe(g, actors, index, x, z) {
+            let x = -limit + (cell % cells) as f64 * step;
+            let z = -limit + (cell / cells) as f64 * step;
+            if hilltop && x.hypot(z) > limit {
+                continue;
+            }
+            if safe(g, actors, index, x, z, spacing) {
                 candidate = Some((x, z));
                 break;
             }

@@ -310,8 +310,9 @@ fn ride_yuda(
             let wheelie_pitch = -0.56 * rig.wheelie;
             let wheelie_lift = 1.65 * (-wheelie_pitch).sin() * 0.55;
 
+            let gy = view.arena_def.ground_height(a.wx, a.wz) as f32;
             let place = ported::placement(
-                Vec3::new(a.wx as f32, jump + wheelie_lift, a.wz as f32),
+                Vec3::new(a.wx as f32, gy + jump + wheelie_lift, a.wz as f32),
                 a.heading as f32 + yaw,
                 somersault_pitch + wheelie_pitch,
                 rig.roll,
@@ -493,8 +494,9 @@ fn ride_yuda(
                 }
             }
         } else {
+            let gy = view.arena_def.ground_height(a.wx, a.wz) as f32;
             let place = ported::placement(
-                Vec3::new(a.wx as f32, jump, a.wz as f32),
+                Vec3::new(a.wx as f32, gy + jump, a.wz as f32),
                 a.heading as f32 + yaw,
                 somersault_pitch,
                 0.0,

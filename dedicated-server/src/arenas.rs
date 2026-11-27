@@ -161,6 +161,36 @@ pub fn extra_arenas() -> Vec<ArenaDef> {
                 [72.0, 32.0],
             ],
         },
+        ArenaDef {
+            name: "King of the Hill".into(),
+            desc: "Four intersecting dirt roads climb a central hill packed with power-ups on the summit.".into(),
+            size: 96.0,
+            shape: "hill".into(),
+            max_players: None,
+            ground: "#5c8c46".into(),
+            wall: "#8f6a46".into(),
+            sky: "#b8d8ee".into(),
+            // Four rocky valley outcrops providing cover along the outer ring (clear of all 4 dirt roads & spawns).
+            blocks: vec![
+                [-68.0, -68.0, 14.0, 14.0],
+                [68.0, -68.0, 14.0, 14.0],
+                [-68.0, 68.0, 14.0, 14.0],
+                [68.0, 68.0, 14.0, 14.0],
+            ],
+            water: vec![],
+            bridges: vec![],
+            // Eight valley-floor spawns encircling the hill, all facing the summit.
+            spawns: vec![
+                [0.0, -78.0],
+                [55.0, -55.0],
+                [78.0, 0.0],
+                [55.0, 55.0],
+                [0.0, 78.0],
+                [-55.0, 55.0],
+                [-78.0, 0.0],
+                [-55.0, -55.0],
+            ],
+        },
     ]
 }
 
@@ -594,5 +624,27 @@ mod tests {
         }
         assert!(saw_negative_side, "projectile should fly toward the -96 portal edge");
         assert!(saw_wrapped_positive_side, "projectile should wrap across -96 and emerge on the +96 side");
+    }
+
+    #[test]
+    fn king_of_the_hill_has_elevated_summit_and_hilltop_powerups() {
+        ensure_loaded();
+        let arenas = server_arenas();
+        let idx = arenas.iter().position(|a| a.name == "King of the Hill").expect("King of the Hill exists");
+        let hill = &arenas[idx];
+        assert!(hill.valid());
+        assert!(hill.is_hill());
+        assert_eq!(hill.ground_height(0.0, 0.0), 12.0);
+        assert_eq!(hill.ground_height(80.0, 0.0), 0.0);
+        assert!(hill.ground_height(48.0, 0.0) > 4.0 && hill.ground_height(48.0, 0.0) < 8.0);
+        for &[sx, sz] in &hill.spawns {
+            assert!(!hill.blocked(sx, sz, 6.0), "spawn ({sx}, {sz}) must be clear");
+        }
+        let mut room = Room::new(idx, 1);
+        room.join(&json!({"name":"Climber","driver":0})).unwrap();
+        let pkt = room.core.packet(0);
+        let client = NativeClient::from_packet(&pkt, 0.0).unwrap();
+        let on_summit = client.view().supplies.iter().filter(|s| s.wx.hypot(s.wz) <= 23.0).count();
+        assert!(on_summit >= 5, "expected a cluster of power-ups on the hilltop, got {on_summit}");
     }
 }

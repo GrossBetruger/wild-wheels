@@ -49,3 +49,11 @@ test('a failed build reports the failure and re-enables web updates',async t=>{
   assert.equal(network.updateServerButton.disabled,false);
   assert.equal(network.checkUpdatesButton.disabled,false);
 });
+test('checking for updates returns an AFK player to active before querying GitHub',async t=>{
+  const network=panel();network.afk=true;const calls=[];
+  network.setAway=async afk=>{calls.push(['setAway',afk]);network.afk=afk;network.token='fresh-token';};
+  t.mock.method(globalThis,'fetch',async(url,opts)=>{calls.push(['fetch',url,opts.headers.Authorization]);return{ok:true,json:async()=>({available:false,latest:'abc'})};});
+  await NetworkGame.prototype.checkServerUpdates.call(network);
+  assert.deepEqual(calls,[['setAway',false],['fetch','/api/updates/check','Bearer fresh-token']]);
+  assert.equal(network.afk,false);
+});

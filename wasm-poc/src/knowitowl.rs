@@ -528,7 +528,7 @@ fn ride(
         }
         riding.insert(a.id);
         let (jump, pitch, _, yaw) = scene::somersault(DRIVER, a.somersault);
-        let ground = Vec3::new(a.wx as f32, 0.0, a.wz as f32);
+        let ground = Vec3::new(a.wx as f32, view.arena_def.ground_height(a.wx, a.wz) as f32, a.wz as f32);
         let place = ported::placement(ground + Vec3::Y * jump, a.heading as f32 + yaw, pitch, 0.0);
         let Some((mut rig, mut root, mut shown)) = rigs.iter_mut().find(|(rig, ..)| rig.id == a.id) else {
             spawn(&mut commands, &assets, &mut materials, !mobile.mobile, a.id, place);
@@ -762,8 +762,9 @@ fn sync_bats(
         let (jump, _, _, _) = scene::somersault(DRIVER, a.somersault);
         let lift = if a.boost > 0.0 { FLIGHT_HEIGHT } else { 0.0 };
         let bob = (now * 7.2 + a.id as f32).sin() * 0.22;
+        let gy = view.arena_def.ground_height(bx, bz) as f32;
         let place = ported::placement(
-            Vec3::new(bx as f32, 3.35 + jump + lift + bob, bz as f32),
+            Vec3::new(bx as f32, gy + 3.35 + jump + lift + bob, bz as f32),
             aim as f32,
             0.0,
             0.0,

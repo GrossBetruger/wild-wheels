@@ -327,7 +327,8 @@ fn spawn_boost_apples(
         }
 
         let (somersault_h, pitch, _, _) = scene::somersault(a.driver, a.somersault);
-        let height = if a.somersault > 0.0 { somersault_h } else { 0.0 };
+        let gy = view.arena_def.ground_height(a.wx, a.wz) as f32;
+        let height = gy + if a.somersault > 0.0 { somersault_h } else { 0.0 };
         let tf = ported::placement(
             Vec3::new(a.wx as f32, height, a.wz as f32),
             a.heading as f32,

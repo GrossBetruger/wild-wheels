@@ -285,6 +285,129 @@ pub fn scenery_mesh(def: &ArenaDef, has_landscape: bool) -> Mesh {
         }
         m.at(0.0, 0.0, 0.0, 0.0);
         return m.finish();
+    } else if def.is_hill() {
+        let step = 4.0_f32;
+        let edge = r + 2.0;
+        let full = (r + 4.0) * 2.0;
+        let dirt_a = hex_linear("#9e734a");
+        let dirt_b = hex_linear("#926942");
+        let summit_a = hex_linear("#76a852");
+        let summit_b = hex_linear("#6c9c4a");
+        let slope_a = hex_linear("#5c8c46");
+        let slope_b = hex_linear("#52803e");
+        let valley_a = hex_linear("#4d7a3c");
+        let valley_b = hex_linear("#467036");
+        let gold_a = hex_linear("#f4cf58");
+        let gold_b = hex_linear("#fff0b5");
+        let wood = hex_linear("#6e4b2c");
+        let sign_wood = hex_linear("#d9b47a");
+        let rock = hex_linear("#7c7770");
+        let rock_top = hex_linear("#a39e95");
+        let pine_a = hex_linear("#3b6e3f");
+        let pine_b = hex_linear("#4c8549");
+
+        let h_at = |x: f32, z: f32| def.ground_height(f64::from(x), f64::from(z)) as f32;
+        let ang_diff = |a: f32, b: f32| (a - b).sin().atan2((a - b).cos()).abs();
+        let on_dirt_road = |x: f32, z: f32| {
+            let rad = x.hypot(z);
+            if (17.5..=25.5).contains(&rad) {
+                return true;
+            }
+            if !(22.0..=88.0).contains(&rad) {
+                return false;
+            }
+            let theta = z.atan2(x);
+            let t = (rad - 24.0) / 62.0;
+            let roads = [
+                -std::f32::consts::FRAC_PI_2 + 1.25 * t,
+                std::f32::consts::FRAC_PI_2 + 1.25 * t,
+                -1.25 * t,
+                std::f32::consts::PI - 1.25 * t,
+            ];
+            roads.iter().any(|&rt| rad * ang_diff(theta, rt) < 4.8)
+        };
+
+        let mut x = -r;
+        while x < r {
+            let mut z = -r;
+            while z < r {
+                let (mx, mz) = (x + step * 0.5, z + step * 0.5);
+                let rad = mx.hypot(mz);
+                let odd = (((x / step).round() as i32 + (z / step).round() as i32) & 1) != 0;
+                let col = if on_dirt_road(mx, mz) {
+                    if odd { dirt_a } else { dirt_b }
+                } else if rad <= 17.5 {
+                    if odd { summit_a } else { summit_b }
+                } else if rad <= 70.0 {
+                    if odd { slope_a } else { slope_b }
+                } else if odd {
+                    valley_a
+                } else {
+                    valley_b
+                };
+                let a = [x, h_at(x, z), z];
+                let b = [x + step, h_at(x + step, z), z];
+                let c = [x + step, h_at(x + step, z + step), z + step];
+                let d = [x, h_at(x, z + step), z + step];
+                m.tri(a, d, c, col);
+                m.tri(a, c, b, col);
+                z += step;
+            }
+            x += step;
+        }
+        // Golden King-of-the-Hill crown ring inlaid on the summit plateau.
+        for i in 0..32 {
+            let a = i as f32 / 32.0 * std::f32::consts::TAU;
+            let b = (i + 1) as f32 / 32.0 * std::f32::consts::TAU;
+            let (r0, r1) = (16.6_f32, 17.8_f32);
+            let col = if i % 2 == 1 { gold_a } else { gold_b };
+            m.quad(
+                [a.cos() * r0, 12.06, a.sin() * r0],
+                [a.cos() * r1, 12.06, a.sin() * r1],
+                [b.cos() * r1, 12.06, b.sin() * r1],
+                [b.cos() * r0, 12.06, b.sin() * r0],
+                col,
+            );
+        }
+        // Wooden trail signposts at the four hillside dirt-road intersections.
+        for a in [
+            -std::f32::consts::FRAC_PI_4,
+            std::f32::consts::FRAC_PI_4,
+            3.0 * std::f32::consts::FRAC_PI_4,
+            -3.0 * std::f32::consts::FRAC_PI_4,
+        ] {
+            let (px, pz) = (a.cos() * 63.0, a.sin() * 63.0);
+            let py = h_at(px, pz);
+            m.box_part(px, py, pz, 0.7, 4.2, 0.7, wood);
+            m.box_part(px, py + 3.5, pz, 2.6, 0.55, 0.35, sign_wood);
+        }
+        for side in [-1.0_f32, 1.0] {
+            m.box_part(side * edge, 0.0, 0.0, 4.0, 5.0, full, wall);
+            m.box_part(0.0, 0.0, side * edge, full, 5.0, 4.0, wall);
+            let mut i = -r + 6.0;
+            while i < r {
+                m.box_part(side * edge, 5.0, i, 4.0, 0.5, 5.0, trim);
+                m.box_part(i, 5.0, side * edge, 5.0, 0.5, 4.0, trim);
+                i += 15.0;
+            }
+        }
+        for &[bx, bz, bw, bd] in &def.blocks {
+            let (x, z, w, d) = (bx as f32, bz as f32, bw as f32, bd as f32);
+            let by = h_at(x, z);
+            m.box_part(x, by, z, w, 6.0, d, rock);
+            m.box_part(x, by + 6.0, z, w + 0.4, 0.5, d + 0.4, rock_top);
+        }
+        if !has_landscape {
+            for i in 0..16 {
+                let a = i as f32 / 16.0 * std::f32::consts::TAU;
+                m.at(a.sin() * (r + 22.0), 0.0, a.cos() * (r + 22.0), 0.0);
+                m.box_part(0.0, 0.0, 0.0, 1.2, 7.0, 1.2, wood);
+                m.cone(0.0, 5.0, 0.0, 5.0, 10.0, pine_a, 7);
+                m.cone(0.0, 11.0, 0.0, 3.6, 8.0, pine_b, 7);
+            }
+        }
+        m.at(0.0, 0.0, 0.0, 0.0);
+        return m.finish();
     } else {
         let span = ((r + 4.0) / 10.0).ceil() as i32 * 10;
         let cutouts: Vec<[f32; 4]> = def
@@ -636,7 +759,7 @@ mod tests {
 
     #[test]
     fn builds_valid_meshes_for_custom_square_and_octagon_arenas() {
-        for shape in ["square", "octagon", "torus"] {
+        for shape in ["square", "octagon", "torus", "hill"] {
             let def = ArenaDef {
                 name: format!("Custom {shape}"),
                 desc: "Dynamic server map".into(),

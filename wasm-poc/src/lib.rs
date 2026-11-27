@@ -1103,7 +1103,8 @@ fn sync_blender_models(
         } else {
             (t * 6.0 + a.id as f32).sin() * 0.04
         };
-        let height = if a.somersault > 0.0 { somersault_h } else { bounce };
+        let gy = view.arena_def.ground_height(a.wx, a.wz) as f32;
+        let height = gy + if a.somersault > 0.0 { somersault_h } else { bounce };
         let tf = ported::placement(
             Vec3::new(a.wx as f32, height, a.wz as f32),
             a.heading as f32,
@@ -1112,7 +1113,7 @@ fn sync_blender_models(
         );
         let tf = if specialist::separate_vehicle(a.driver) {
             let (height, pitch, roll, yaw) = scene::somersault(a.driver, a.somersault);
-            let body = ported::placement(Vec3::new(a.wx as f32, height, a.wz as f32),
+            let body = ported::placement(Vec3::new(a.wx as f32, gy + height, a.wz as f32),
                 a.heading as f32 + yaw, pitch, roll);
             let seat = match a.driver {
                 // The nurse hovers above her ambulance, tilted around the browser's seat pivot.

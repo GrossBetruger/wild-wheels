@@ -178,6 +178,7 @@ export class NetworkGame {
     if(this.updating)return;
     this.checkUpdatesButton.disabled=true;this.updateServerButton.classList.add('hidden');this.updateStatus.textContent='Checking GitHub…';
     try{
+      if(this.afk)await this.setAway(false);
       const response=await fetch('/api/updates/check',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${this.token}`},body:'{}',signal:AbortSignal.timeout(30000)});
       const result=await response.json();if(!response.ok)throw new Error(result.error);
       this.serverUpdate=result;this.updateServerButton.classList.toggle('hidden',!result.available);
