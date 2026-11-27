@@ -312,3 +312,6 @@ pub fn torus_delta(arena: usize, dx: f64, dz: f64) -> (f64, f64) {
 pub fn is_hill_arena(arena: usize) -> bool {
     with_arena(arena, |d| d.is_hill())
 }
+pub fn is_torus_arena(arena: usize) -> bool {
+    with_arena(arena, |d| d.is_torus())
+}

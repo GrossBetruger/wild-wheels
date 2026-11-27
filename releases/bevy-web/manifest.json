@@ -1,7 +1,7 @@
 {
-  "source": "61768d3ebf3929d6db87a3619296fc1d8b6f1b40b28d4c04c505bfa1c76c6128",
+  "source": "b5ec47e6f9eb07ff6f8e3d0c1a5a26b11b42355be3b7e458b0ff5c4a8521a74c",
   "sha256": {
     "wild_wheels_wasm_poc.js": "7d58dcb9c95173f489b69e49fbe3e947513126360297e33ba61004d3ef862906",
-    "wild_wheels_wasm_poc_bg.wasm": "7d6fe26604bb3452eebf7000d6a4bd485b270dba756ddc68b16afa030b754a65"
+    "wild_wheels_wasm_poc_bg.wasm": "6fb017da7253528890fb6eef9bc6e7d5eb79014f82ba2b70d0e58dd807a179a2"
   }
 }

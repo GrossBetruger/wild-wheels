@@ -131,8 +131,9 @@ export function releaseChaff(r, actor = r) {
   return true;
 }
 export function makeProjectile(r, actor) {
-  const kind = actor.item === 'missile' && actor.missiles > 0 ? 'missile' : 'hedgehog', vulcan = kind === 'hedgehog' && actor.vulcan > 0;
-  return { kind, vulcan, owner: actor.id, target: targetAhead(r, actor)?.id ?? null, wx: actor.wx + Math.sin(actor.heading) * 3.5, wz: actor.wz + Math.cos(actor.heading) * 3.5, heading: actor.heading, speed: kind === 'missile' ? 70 : vulcan ? 125 : 90, height: 1.3, vy: 3, life: kind === 'missile' ? 3 : vulcan ? 1.3 : 2.5, age: 0, trail: [], bounces: 0 };
+  const kind = actor.item === 'missile' && actor.missiles > 0 ? 'missile' : 'hedgehog', vulcan = kind === 'hedgehog' && actor.vulcan > 0, arena = arenas[r.arena];
+  const [wx, wz] = wrapTorus(arena, actor.wx + Math.sin(actor.heading) * 3.5, actor.wz + Math.cos(actor.heading) * 3.5);
+  return { kind, vulcan, owner: actor.id, target: targetAhead(r, actor)?.id ?? null, wx, wz, heading: actor.heading, speed: kind === 'missile' ? 70 : vulcan ? 125 : 90, height: 1.3, vy: 3, life: kind === 'missile' ? 3 : vulcan ? (arena.shape === 'torus' ? 1.8 : 1.3) : 2.5, age: 0, trail: [], bounces: 0 };
 }
 export function targetAhead(world, actor = world, cone = .65) {
   return [world, ...world.bots].filter(other => other.id !== actor.id && !other.bomber && !other.inactive && !other.destroyed && other.shield <= 0 && distance(other, actor) < 100 && Math.abs(angleDelta(Math.atan2(other.wx - actor.wx, other.wz - actor.wz), actor.heading)) < cone && clearShot(arenas[world.arena], actor, other)).sort((a, b) => distance(actor, a) - distance(actor, b))[0] ?? null;

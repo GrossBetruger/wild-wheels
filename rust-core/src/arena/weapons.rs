@@ -11,7 +11,8 @@ impl Game{
         if !missile&&!vulcan&&a.ammo==0{return;}
         let kind=match missile{true=>"missile",false=>"hedgehog"};let g=&mut self.global;g.projectile_sequence+=1;
         let (sx,sz)=wrap_point(g.arena,a.wx+a.heading.sin()*3.5,a.wz+a.heading.cos()*3.5);
-        g.projectiles.push(Shot{id:g.projectile_sequence,owner:id,kind:kind.into(),vulcan,target,wx:sx,wz:sz,heading:a.heading,speed:match(missile,vulcan){(true,_)=>70.0,(_,true)=>125.0,_=>90.0},height:1.3,vy:3.0,life:match(missile,vulcan){(true,_)=>3.0,(_,true)=>1.3,_=>2.5},action_id,..Shot::default()});
+        let vulcan_life = if is_torus_arena(g.arena) { 1.8 } else { 1.3 };
+        g.projectiles.push(Shot{id:g.projectile_sequence,owner:id,kind:kind.into(),vulcan,target,wx:sx,wz:sz,heading:a.heading,speed:match(missile,vulcan){(true,_)=>70.0,(_,true)=>125.0,_=>90.0},height:1.3,vy:3.0,life:match(missile,vulcan){(true,_)=>3.0,(_,true)=>vulcan_life,_=>2.5},action_id,..Shot::default()});
         if missile&&!MISSILES_ONLY{a.missiles-=1;}if !missile&&!vulcan{a.ammo-=1;}
         a.fire_cooldown=match(missile,vulcan){(true,_)=>0.9,(_,true)=>0.075,_=>0.225};
         if a.item=="missile"&&a.missiles==0{a.item="hedgehog".into();}

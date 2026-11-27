@@ -19,7 +19,7 @@ impl Game{
         let(wx,wz)=(x+heading.sin()*1.4,z+heading.cos()*1.4);if wall_blocked(self.global.arena,wx,wz,0.3){return;}
         let a=&self.actors[id];let target=Some(target);let jump=match a.somersault>0.0{true=>(1.0-a.somersault/0.55).clamp(0.0,1.0).mul_add(std::f64::consts::PI,0.0).sin()*match a.driver==10{true=>2.8,false=>5.0},false=>0.0};
         let height=3.5+match a.boost>0.0{true=>2.4,false=>0.0}+jump;let a=&mut self.actors[id];a.bat_cooldown=0.3;
-        let g=&mut self.global;g.projectile_sequence+=1;g.projectiles.push(Shot{id:g.projectile_sequence,owner:id,kind:"hedgehog".into(),vulcan:true,target,wx,wz,heading,speed:125.0,height,vy:3.0,life:1.3,..Shot::default()});
+        let g=&mut self.global;g.projectile_sequence+=1;let (wx,wz)=wrap_point(g.arena,wx,wz);let life=if is_torus_arena(g.arena){1.8}else{1.3};g.projectiles.push(Shot{id:g.projectile_sequence,owner:id,kind:"hedgehog".into(),vulcan:true,target,wx,wz,heading,speed:125.0,height,vy:3.0,life,..Shot::default()});
         if g.multiplayer||distance(a.wx,a.wz,self.actors[0].wx,self.actors[0].wz)<90.0{super::sound(g,"vulcanFire",id,wx,wz,None);}
     }
 }
