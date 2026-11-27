@@ -212,7 +212,7 @@ export class BevyPresentation {
       this.reportProgress({ stage: 'downloading', percent, loadedBytes: packLoaded, totalBytes: packTotal });
     };
     try {
-      const [{ bindings, wasmMs }, { pack, assetMs }] = await Promise.all([
+      const [{ bindings, wasmMs }, { pack, assetMs }, uiPack] = await Promise.all([
         import(`${prefix}pkg/wild_wheels_wasm.js${v}`).then(async bindings => {
           await bindings.default({ module_or_path: `${prefix}pkg/wild_wheels_wasm_bg.wasm${v}` });
           wasmDone = true;
@@ -224,11 +224,17 @@ export class BevyPresentation {
           packTotal = total;
           emit();
         }).then(pack => ({ pack, assetMs: performance.now() - started })),
+        fetch(`${prefix}ui.wwup${v}`)
+          .then(res => (res.ok ? res.arrayBuffer() : null))
+          .catch(() => null),
       ]);
       if (this.mobile && typeof bindings.set_mobile_presentation_level !== 'function') {
         throw new Error('Mobile Bevy graphics require the current WASM build');
       }
       this.reportProgress({ stage: 'initializing', percent: 97, loadedBytes: pack.byteLength, totalBytes: pack.byteLength });
+      if (uiPack && uiPack.byteLength > 0 && typeof bindings.set_ui_pack === 'function') {
+        bindings.set_ui_pack(new Uint8Array(uiPack));
+      }
       bindings.start_presentation(new Uint8Array(pack), this.mobile);
       this.bindings = bindings;
       this.ready = true;
@@ -243,7 +249,7 @@ export class BevyPresentation {
   fail(event, error) {
     this.failed = true;
     this.ready = true;
-    this.viewport.classList.remove('bevy-active');
+    this.viewport.classList.remove('bevy-active', 'bevy-hud-active');
     if (this.mobile) this.updateMobileLevel();
     this.reportProgress({ stage: 'failed', percent: 100 });
     this.log.note('error', event, { message: error?.message });
@@ -259,7 +265,8 @@ export class BevyPresentation {
     this.supported = world.mode === 'combat' && !world.bomber;
     if (this.mobile) this.updateMobileLevel();
     if (this.failed || !this.supported) {
-      if (this.active) this.viewport.classList.remove('bevy-active');
+      if (this.active) this.viewport.classList.remove('bevy-active', 'bevy-hud-active');
+      this.bindings?.set_hud_active?.(false);
       return false;
     }
     if (this.mobile && (!this.inView || document.hidden)) return true;
@@ -288,7 +295,10 @@ export class BevyPresentation {
           mobile: this.mobile, width: this.canvas.width, height: this.canvas.height });
         this.startup = null;
       }
+      const hudOn = (world.phase === 'racing' || world.phase === 'paused') && !this.mobile;
+      bindings.set_hud_active?.(hudOn);
       if (!this.active) this.viewport.classList.add('bevy-active');
+      this.viewport.classList.toggle('bevy-hud-active', hudOn);
       return true;
     } catch (error) {
       this.fail('bevy-frame-failed', error);

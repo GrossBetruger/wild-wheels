@@ -144,14 +144,19 @@ else
 fi
 
 if (( need_ui )); then
-  build_status packing-ui
-  printf 'Building UI pack (ui.wwup)…\n'
-  stage_started=$SECONDS
-  node scripts/build/port-ui.mjs --optional "$staging/ui.wwup"
-  gzip -n -c -- "$staging/ui.wwup" > "$staging/ui.wwup.gz"
-  mv -f -- "$staging/ui.wwup" "$staging/ui.wwup.gz" "$output/"
-  printf '%s\n' "$ui_hash" > "$output/.ui.sha256"
-  printf 'UI pack took %ss.\n' "$((SECONDS-stage_started))"
+  if [[ -f "$output/ui.wwup" && -f "$output/ui.wwup.gz" ]] && (( $(wc -c < "$output/ui.wwup") > 32 )); then
+    printf '%s\n' "$ui_hash" > "$output/.ui.sha256"
+    printf 'Reused published pre-baked UI pack (ui.wwup).\n'
+  else
+    build_status packing-ui
+    printf 'Building UI pack (ui.wwup)…\n'
+    stage_started=$SECONDS
+    node scripts/build/port-ui.mjs --optional "$staging/ui.wwup"
+    gzip -n -c -- "$staging/ui.wwup" > "$staging/ui.wwup.gz"
+    mv -f -- "$staging/ui.wwup" "$staging/ui.wwup.gz" "$output/"
+    printf '%s\n' "$ui_hash" > "$output/.ui.sha256"
+    printf 'UI pack took %ss.\n' "$((SECONDS-stage_started))"
+  fi
 else
   printf 'Skipping ui.wwup rebuild (unchanged).\n'
 fi

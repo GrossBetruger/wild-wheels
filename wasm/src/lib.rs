@@ -21,6 +21,8 @@ static OUTBOUND_TEXT: Mutex<Option<String>> = Mutex::new(None);
 static QUEUED_ACTIONS: Mutex<Vec<(String, String)>> = Mutex::new(Vec::new());
 static PRESENTATION_READY: AtomicBool = AtomicBool::new(false);
 static DIRECT_NET_MODE: AtomicBool = AtomicBool::new(false);
+static HUD_ACTIVE: AtomicBool = AtomicBool::new(false);
+static HUD_ACTIONS_OUT: Mutex<Vec<(String, String)>> = Mutex::new(Vec::new());
 static VIRTUAL_KEYS: AtomicU32 = AtomicU32::new(0);
 static INPUT_BLOCKED: AtomicBool = AtomicBool::new(false);
 // Mobile profiles are ordered from highest detail to idle in bevy-presentation.js.
@@ -32,6 +34,24 @@ pub fn set_ui_pack(ui_pack: Vec<u8>) {
     if !ui_pack.is_empty() {
         wild_wheels_render::set_ui_pack_bytes(Box::leak(ui_pack.into_boxed_slice()));
     }
+}
+
+#[wasm_bindgen]
+pub fn set_hud_active(active: bool) {
+    HUD_ACTIVE.store(active, Ordering::Relaxed);
+}
+
+#[wasm_bindgen]
+pub fn take_hud_actions() -> String {
+    let actions = HUD_ACTIONS_OUT
+        .lock()
+        .ok()
+        .map(|mut q| std::mem::take(&mut *q))
+        .unwrap_or_default();
+    if actions.is_empty() {
+        return String::new();
+    }
+    serde_json::to_string(&actions).unwrap_or_default()
 }
 
 #[wasm_bindgen]
@@ -279,9 +299,25 @@ fn sync_session(
     mut hud_events: ResMut<hud::HudEvents>,
 ) {
     if !DIRECT_NET_MODE.load(Ordering::Relaxed) {
-        hud_state.active = false;
-        hud_events.actions.clear();
+        if let Ok(mut out) = HUD_ACTIONS_OUT.lock() {
+            for act in hud_events.actions.drain(..) {
+                if let hud::HudAct::Game(action) = act {
+                    let (kind, item) = match action {
+                        ClientAction::Fire => ("fire", ""),
+                        ClientAction::CycleWeapon => ("cycle", ""),
+                        ClientAction::Boost => ("turbo", ""),
+                        ClientAction::Chaff => ("chaff", ""),
+                        ClientAction::Somersault => ("somersault", ""),
+                        ClientAction::Special => ("special", ""),
+                        ClientAction::SelectHedgehog => ("select", "hedgehog"),
+                        ClientAction::SelectMissile => ("select", "missile"),
+                    };
+                    out.push((kind.into(), item.into()));
+                }
+            }
+        }
         let Some(packet) = PRESENTATION_FRAME.lock().ok().and_then(|mut f| f.take()) else {
+            hud_state.active = HUD_ACTIVE.load(Ordering::Relaxed) && session.client.is_some();
             return;
         };
         let result = match session.client.as_mut() {
@@ -294,6 +330,7 @@ fn sync_session(
             INVALID_PACKETS.fetch_add(1, Ordering::Relaxed);
             return;
         }
+        hud_state.active = HUD_ACTIVE.load(Ordering::Relaxed) && session.client.is_some();
         PRESENTATION_READY.store(true, Ordering::Relaxed);
         return;
     }

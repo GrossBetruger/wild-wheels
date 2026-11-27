@@ -1,7 +1,7 @@
 // Ship the wasm-bindgen module and its loader as one matching browser release.
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
-import {mkdirSync, readFileSync, renameSync, writeFileSync} from 'node:fs';
+import {existsSync, mkdirSync, readFileSync, renameSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {gunzipSync} from 'node:zlib';
@@ -22,6 +22,13 @@ function publish(output) {
     writeFileSync(asset(name), packed);
     hashes[name] = digest(packed);
   }
+  const uiPackGz = join(output, 'ui.wwup.gz');
+  const uiPackRaw = join(output, 'ui.wwup');
+  if (existsSync(uiPackGz) && existsSync(uiPackRaw) && readFileSync(uiPackRaw).length > 32) {
+    const packed = readFileSync(uiPackGz);
+    writeFileSync(asset('ui.wwup'), packed);
+    hashes['ui.wwup'] = digest(packed);
+  }
   writeFileSync(join(directory, 'manifest.json'), JSON.stringify({source, sha256:hashes}, null, 2) + '\n');
   console.log('Prepared the browser WASM release in ' + directory);
 }
@@ -36,7 +43,8 @@ function restore(output, source, staging) {
   const manifest = JSON.parse(readFileSync(join(directory, 'manifest.json'), 'utf8'));
   if (manifest.source !== source) throw Error('release was built from different inputs');
   const pointer = Buffer.from('version https://git-lfs.github.com/spec/v1');
-  if (files.some(name => readFileSync(asset(name)).subarray(0, pointer.length).equals(pointer))) {
+  const lfsFiles = manifest.sha256?.['ui.wwup'] && existsSync(asset('ui.wwup')) ? [...files, 'ui.wwup'] : files;
+  if (lfsFiles.some(name => readFileSync(asset(name)).subarray(0, pointer.length).equals(pointer))) {
     status('fetching-wasm');
     console.log('Downloading published WASM from Git LFS…');
     execFileSync('git', ['lfs', 'pull', '--include='+directory+'/*.gz', '--exclude='], {
@@ -56,6 +64,15 @@ function restore(output, source, staging) {
   }
   writeFileSync(join(staging, 'wasm.sha256'), source + '\n');
   renameSync(join(staging, 'wasm.sha256'), join(output, '.wasm.sha256'));
+  if (manifest.sha256?.['ui.wwup'] && existsSync(asset('ui.wwup'))) {
+    const packed = readFileSync(asset('ui.wwup'));
+    if (digest(packed) === manifest.sha256['ui.wwup']) {
+      writeFileSync(join(staging, 'ui.wwup.gz'), packed);
+      writeFileSync(join(staging, 'ui.wwup'), gunzipSync(packed, {maxOutputLength:64*1024*1024}));
+      renameSync(join(staging, 'ui.wwup.gz'), join(output, 'ui.wwup.gz'));
+      renameSync(join(staging, 'ui.wwup'), join(output, 'ui.wwup'));
+    }
+  }
   console.log('Reused verified Git LFS WASM release.');
 }
 
