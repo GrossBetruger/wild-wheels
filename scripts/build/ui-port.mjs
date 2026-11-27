@@ -11,7 +11,6 @@ import {mkdtemp, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join, resolve} from 'node:path';
 import {deflateSync, inflateSync} from 'node:zlib';
-import WebSocket from 'ws';
 import {abilityCards,wormholeCard} from '../../ui/ability-announcements.js';
 
 export const UI_PACK_VERSION = 1;
@@ -289,12 +288,21 @@ export async function buildUiPack({optional = false} = {}) {
     const match = chromeLog.match(/DevTools listening on (ws:\/\/[^\s]+)/);
     if (!match) throw new Error(`Chrome exited before DevTools opened: ${chromeLog}`);
 
-    ws = new WebSocket(match[1]);
-    await new Promise((res, rej) => { ws.once('open', res); ws.once('error', rej); });
+    const WS = globalThis.WebSocket ?? (await import('ws')).default;
+    ws = new WS(match[1]);
+    await new Promise((res, rej) => {
+      if (typeof ws.addEventListener === 'function') {
+        ws.addEventListener('open', res, {once: true});
+        ws.addEventListener('error', rej, {once: true});
+      } else {
+        ws.once('open', res);
+        ws.once('error', rej);
+      }
+    });
     let nextId = 0;
     const pending = new Map();
-    ws.on('message', bytes => {
-      const msg = JSON.parse(bytes);
+    const onMessage = raw => {
+      const msg = JSON.parse(typeof raw === 'string' ? raw : raw?.data ?? String(raw));
       if (msg.id && pending.has(msg.id)) {
         const {resolve: res, reject: rej, timer} = pending.get(msg.id);
         pending.delete(msg.id);
@@ -302,7 +310,12 @@ export async function buildUiPack({optional = false} = {}) {
         if (msg.error) rej(new Error(JSON.stringify(msg.error)));
         else res(msg.result);
       }
-    });
+    };
+    if (typeof ws.addEventListener === 'function') {
+      ws.addEventListener('message', onMessage);
+    } else {
+      ws.on('message', onMessage);
+    }
     const call = (method, params = {}, sessionId = undefined) => new Promise((res, rej) => {
       const id = ++nextId;
       const timer = setTimeout(() => { pending.delete(id); rej(new Error(`CDP timeout: ${method}`)); }, 15000);
