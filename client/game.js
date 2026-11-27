@@ -711,7 +711,7 @@ const unlockAudio = () => {
   if (!network.active) return;
   audio.unlock().then(() => {
     network.voice.unlockPlayback();
-    if (audio.context?.state === 'running' && (!bevy?.hasAudio || bevy.audioContexts.every(c => c.state === 'running'))) {
+    if (audio.context?.state === 'running' && (!bevy?.hasAudio || (bevy.audioContexts.length > 0 && bevy.audioContexts.every(c => c.state === 'running')))) {
       for (const event of ['pointerdown', 'keydown']) window.removeEventListener(event, unlockAudio);
     }
   }).catch(() => { });

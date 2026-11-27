@@ -364,7 +364,8 @@ fn apply_mobile_level(
 
 fn sync_session(
     time: Res<Time>,
-    keys: Res<ButtonInput<KeyCode>>,
+    mut last_send: Local<f64>,
+    mut last_keys: Local<u32>,
     mut session: ResMut<app::GameSession>,
     mut hud_state: ResMut<hud::HudState>,
     mut hud_events: ResMut<hud::HudEvents>,
@@ -450,31 +451,20 @@ fn sync_session(
         return;
     };
     hud_state.active = HUD_ACTIVE.load(Ordering::Relaxed);
+    let mut had_action = false;
     for act in hud_events.actions.drain(..) {
         if let hud::HudAct::Game(action) = act {
             let _ = client.action(action, now);
+            had_action = true;
         }
     }
     let blocked = INPUT_BLOCKED.load(Ordering::Relaxed);
-    let mut bits = if blocked { 0 } else { VIRTUAL_KEYS.load(Ordering::Relaxed) };
+    let bits = if blocked { 0 } else { VIRTUAL_KEYS.load(Ordering::Relaxed) };
     if !blocked {
-        if keys.pressed(KeyCode::KeyW) || keys.pressed(KeyCode::ArrowUp) {
-            bits |= 1;
-        }
-        if keys.pressed(KeyCode::KeyS) || keys.pressed(KeyCode::ArrowDown) {
-            bits |= 2;
-        }
-        if keys.pressed(KeyCode::KeyD) || keys.pressed(KeyCode::ArrowRight) {
-            bits |= 4;
-        }
-        if keys.pressed(KeyCode::KeyA) || keys.pressed(KeyCode::ArrowLeft) {
-            bits |= 8;
-        }
-        if keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight) {
-            bits |= 16;
-        }
-        if bits & 32 != 0 || keys.pressed(KeyCode::Space) {
-            let _ = client.action(ClientAction::Fire, now);
+        if bits & 32 != 0 {
+            if client.action(ClientAction::Fire, now).unwrap_or(false) {
+                had_action = true;
+            }
         }
         if let Ok(mut q) = QUEUED_ACTIONS.lock() {
             for (kind, item) in q.drain(..) {
@@ -490,25 +480,36 @@ fn sync_session(
                     _ => None,
                 };
                 if let Some(a) = action {
-                    let _ = client.action(a, now);
+                    if client.action(a, now).unwrap_or(false) {
+                        had_action = true;
+                    }
                 }
             }
         }
     }
-    let input = ClientInput { keys: bits & 31, steer: None };
+    let move_keys = bits & 31;
+    let input = ClientInput { keys: move_keys, steer: None };
     let _ = client.advance(dt, input, now);
-    if net::is_connected() {
-        if net::can_send()
-            && let Ok(out) = client.outbound(input)
+    let changed = had_action || move_keys != *last_keys;
+    let min_interval = if changed { 1.0 / 60.0 } else { 1.0 / 30.0 };
+    if now - *last_send >= min_interval {
+        if net::is_connected() {
+            if net::can_send()
+                && let Ok(out) = client.outbound(input)
+                && let Ok(text) = String::from_utf8(out)
+            {
+                net::send_if_ready(&text);
+                *last_send = now;
+                *last_keys = move_keys;
+            }
+        } else if let Ok(out) = client.outbound(input)
             && let Ok(text) = String::from_utf8(out)
+            && let Ok(mut slot) = OUTBOUND_TEXT.lock()
         {
-            net::send_if_ready(&text);
+            *slot = Some(text);
+            *last_send = now;
+            *last_keys = move_keys;
         }
-    } else if let Ok(out) = client.outbound(input)
-        && let Ok(text) = String::from_utf8(out)
-        && let Ok(mut slot) = OUTBOUND_TEXT.lock()
-    {
-        *slot = Some(text);
     }
     let mut sounds = client.drain_audio();
     let mut voices = client.drain_voices();

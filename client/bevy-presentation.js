@@ -85,7 +85,6 @@ export class BevyPresentation {
     this.surface.className = 'bevy-surface';
     this.canvas = document.createElement('canvas');
     this.canvas.id = 'bevy-canvas';
-    this.canvas.setAttribute('aria-hidden', 'true');
     this.canvas.tabIndex = 0;
     this.surface.append(this.canvas);
     gameCanvas.after(this.surface);
@@ -248,14 +247,25 @@ export class BevyPresentation {
       const OrigAC = globalThis.AudioContext;
       if (this.hasAudio && typeof OrigAC === 'function' && !OrigAC.__wwWrapped) {
         const contexts = this.audioContexts;
-        const WrappedAC = function (...args) {
-          const ctx = new OrigAC(...args);
-          contexts.push(ctx);
-          return ctx;
-        };
-        WrappedAC.prototype = OrigAC.prototype;
+        class WrappedAC extends OrigAC {
+          constructor(...args) {
+            super(...args);
+            contexts.push(this);
+          }
+        }
         WrappedAC.__wwWrapped = true;
         globalThis.AudioContext = WrappedAC;
+      }
+      if (this.hasAudio && typeof window !== 'undefined') {
+        const resumeOnGesture = () => {
+          this.unlockAudio();
+          if (this.audioContexts.length > 0 && this.audioContexts.every(c => c.state === 'running')) {
+            window.removeEventListener('pointerdown', resumeOnGesture, true);
+            window.removeEventListener('keydown', resumeOnGesture, true);
+          }
+        };
+        window.addEventListener('pointerdown', resumeOnGesture, { capture: true, passive: true });
+        window.addEventListener('keydown', resumeOnGesture, { capture: true, passive: true });
       }
       if (typeof bindings.start_client === 'function') {
         bindings.start_client(new Uint8Array(pack), soundBytes, this.mobile, false);
