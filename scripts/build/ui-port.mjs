@@ -9,12 +9,13 @@ import {spawn} from 'node:child_process';
 import {existsSync, readFileSync} from 'node:fs';
 import {mkdtemp, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
-import {join, resolve} from 'node:path';
+import {dirname, join, resolve} from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {deflateSync, inflateSync} from 'node:zlib';
 import {abilityCards,wormholeCard} from '../../ui/ability-announcements.js';
 
 export const UI_PACK_VERSION = 1;
-const ROOT = resolve(import.meta.dirname, '../..');
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const SCALE = 2;
 const GLOW_PAD = 42;
 
