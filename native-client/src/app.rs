@@ -343,11 +343,15 @@ pub fn run(mut config: Config) -> Result<(), Box<dyn Error>> {
     if config.join {
         session.join(config.clone());
     }
-    let asset_path = ["wasm-poc/assets", "../wasm-poc/assets"]
-        .into_iter()
-        .find(|p| std::path::Path::new(p).is_dir())
-        .unwrap_or("assets")
-        .to_owned();
+    let asset_path = [
+        concat!(env!("CARGO_MANIFEST_DIR"), "/../wasm-poc/assets"),
+        "wasm-poc/assets",
+        "../wasm-poc/assets",
+    ]
+    .into_iter()
+    .find_map(|p| std::fs::canonicalize(p).ok().filter(|d| d.is_dir()))
+    .map(|p| p.to_string_lossy().into_owned())
+    .unwrap_or_else(|| "assets".into());
     let mut app = App::new();
     let plugins = DefaultPlugins
         .set(AssetPlugin {
