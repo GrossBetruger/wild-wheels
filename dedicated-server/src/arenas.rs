@@ -163,7 +163,7 @@ pub fn extra_arenas() -> Vec<ArenaDef> {
         },
         ArenaDef {
             name: "King of the Hill".into(),
-            desc: "Four cliff-lined dirt roads climb a towering central plateau. Control the high ground.".into(),
+            desc: "Four wide dirt roads climb a cliff-ringed central plateau. Control the high ground.".into(),
             size: 168.0,
             shape: "hill".into(),
             max_players: None,
@@ -637,33 +637,39 @@ mod tests {
         assert_eq!(hill.size, 168.0);
         // Flat summit plateau at y = 22.0, valley floor at y = 0.0.
         assert_eq!(hill.ground_height(0.0, 0.0), 22.0);
-        assert_eq!(hill.ground_height(35.0, 0.0), 22.0);
+        assert_eq!(hill.ground_height(40.0, 0.0), 22.0);
         assert_eq!(hill.ground_height(120.0, 0.0), 0.0);
-        // Off-road cliff between roads blocks climbing straight up from valley to summit.
-        let cliff_angle = std::f64::consts::FRAC_PI_4; // between the 4 road mouths near r = 42
+        // Off-road cliff between roads is completely insurmountable — even for tiny slow steps!
+        let cliff_angle = std::f64::consts::FRAC_PI_4;
         assert!(
             hill.cliff_step_blocked(
-                cliff_angle.cos() * 48.0,
-                cliff_angle.sin() * 48.0,
-                cliff_angle.cos() * 36.0,
-                cliff_angle.sin() * 36.0,
+                cliff_angle.cos() * 55.0,
+                cliff_angle.sin() * 55.0,
+                cliff_angle.cos() * 54.9,
+                cliff_angle.sin() * 54.9,
             ),
-            "off-road cliff must block climbing straight to the summit"
+            "even a tiny uphill step into a cliff must be strictly blocked"
         );
-        // Climbing along a dirt road ramp from r = 108 to r = 38 must be smoothly passable.
-        let mut prev = (0.0_f64, 0.0_f64);
-        for step in 0..=70 {
-            let r = 108.0 - step as f64;
-            let t = (r - 38.0) / 70.0;
-            let theta = -1.25 * t;
-            let cur = (theta.cos() * r, theta.sin() * r);
-            if step > 0 {
+        // Driving DOWN off the cliff from the summit is allowed (and slides cleanly down to the valley).
+        assert!(
+            !hill.cliff_step_blocked(
+                cliff_angle.cos() * 41.0,
+                cliff_angle.sin() * 41.0,
+                cliff_angle.cos() * 46.0,
+                cliff_angle.sin() * 46.0,
+            ),
+            "driving downhill off a cliff must be allowed"
+        );
+        // Climbing along all four wide cardinal dirt roads from r = 112 to r = 42 must be smoothly passable.
+        for (dx, dz) in [(1.0_f64, 0.0_f64), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0)] {
+            for r in (42..112).rev() {
+                let r0 = (r + 1) as f64;
+                let r1 = r as f64;
                 assert!(
-                    !hill.cliff_step_blocked(prev.0, prev.1, cur.0, cur.1),
-                    "dirt road climb must not be blocked at r={r}"
+                    !hill.cliff_step_blocked(dx * r0, dz * r0, dx * r1, dz * r1),
+                    "cardinal dirt road climb must not be blocked at r={r}"
                 );
             }
-            prev = cur;
         }
         for &[sx, sz] in &hill.spawns {
             assert!(!hill.blocked(sx, sz, 6.0), "spawn ({sx}, {sz}) must be clear");

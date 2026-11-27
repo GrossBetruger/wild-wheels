@@ -761,33 +761,29 @@ export class Renderer {
     }else if(arena.shape==='hill'){
       const R=arena.size,step=4,edge=R+2,full=(R+4)*2;
       const hAt=(x,z)=>groundHeight(arena,x,z);
-      const angDiff=(a,b)=>Math.abs(Math.atan2(Math.sin(a-b),Math.cos(a-b)));
-      // Four intersecting spiral dirt roads climbing from valley (r=108) to summit ring (r=38).
+      // Four wide straight cardinal dirt roads climbing from valley (r=112) to summit ring (r=42).
       const onDirtRoad=(x,z)=>{
         const r=Math.hypot(x,z);
-        if(r>=29.5&&r<=38.5)return true;
-        if(r<36||r>112)return false;
-        const theta=Math.atan2(z,x),t=Math.max(0,Math.min(1,(r-38)/70));
-        const roads=[-Math.PI/2+1.25*t,Math.PI/2+1.25*t,-1.25*t,Math.PI-1.25*t];
-        return roads.some(rt=>r*angDiff(theta,rt)<7.8);
+        if(r>=32&&r<=42.5)return true;
+        return r>=38&&r<=116&&Math.min(Math.abs(x),Math.abs(z))<=14.2;
       };
       for(let x=-R;x<R;x+=step)for(let z=-R;z<R;z+=step){
         const mx=x+step/2,mz=z+step/2,r=Math.hypot(mx,mz),dirt=onDirtRoad(mx,mz);
         const ha=hAt(x,z),hb=hAt(x+step,z),hc=hAt(x+step,z+step),hd=hAt(x,z+step);
-        const cliff=Math.max(ha,hb,hc,hd)-Math.min(ha,hb,hc,hd)>2.2;
+        const cliff=Math.max(ha,hb,hc,hd)-Math.min(ha,hb,hc,hd)>2.1;
         const odd=((Math.round(x/step)+Math.round(z/step))&1);
-        const col=dirt?(odd?'#9e734a':'#926942'):cliff?(odd?'#7a746c':'#6b655e'):r<=29.5?(odd?'#76a852':'#6c9c4a'):r<=108?(odd?'#5c8c46':'#52803e'):(odd?'#4d7a3c':'#467036');
+        const col=dirt?(odd?'#9e734a':'#926942'):cliff?(odd?'#7a746c':'#6b655e'):r<=32?(odd?'#76a852':'#6c9c4a'):r<=112?(odd?'#5c8c46':'#52803e'):(odd?'#4d7a3c':'#467036');
         const a=[x,ha,z],b=[x+step,hb,z],c=[x+step,hc,z+step],d=[x,hd,z+step];
         m.tri(a,d,c,col);m.tri(a,c,b,col);
       }
       // Golden King-of-the-Hill crown ring inlaid on the flat summit plateau (y = 22.06).
       for(let i=0;i<40;i++){
-        const a=i/40*Math.PI*2,b=(i+1)/40*Math.PI*2,r0=27.6,r1=29.2;
+        const a=i/40*Math.PI*2,b=(i+1)/40*Math.PI*2,r0=30.0,r1=31.8;
         m.quad([Math.cos(a)*r0,22.06,Math.sin(a)*r0],[Math.cos(a)*r1,22.06,Math.sin(a)*r1],[Math.cos(b)*r1,22.06,Math.sin(b)*r1],[Math.cos(b)*r0,22.06,Math.sin(b)*r0],i%2?'#f4cf58':'#fff0b5');
       }
-      // Wooden trail signposts at the four mid-slope dirt-road crossroads (r ≈ 85).
-      for(const a of [-Math.PI/4,Math.PI/4,3*Math.PI/4,-3*Math.PI/4]){
-        const px=Math.cos(a)*85,pz=Math.sin(a)*85,py=hAt(px,pz);
+      // Wooden trail signposts flanking the four dirt-road entrances (r = 114).
+      for(const [px,pz] of [[16,-114],[-16,114],[114,16],[-114,-16]]){
+        const py=hAt(px,pz);
         m.box(px,py,pz,.7,4.2,.7,'#6e4b2c');m.box(px,py+3.5,pz,2.6,.55,.35,'#d9b47a');
       }
       for(const side of [-1,1]){m.box(side*edge,0,0,4,5,full,arena.wall);m.box(0,0,side*edge,full,5,4,arena.wall);for(let i=-R+6;i<R;i+=15){m.box(side*edge,5,i,4,.5,5,'#eadfb9');m.box(i,5,side*edge,5,.5,4,'#eadfb9');}}

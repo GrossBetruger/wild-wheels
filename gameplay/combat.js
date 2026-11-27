@@ -40,54 +40,49 @@ export function wrapTorus(arena, x, z) {
   const s = arena.size, span = s * 2;
   return [(((x + s) % span) + span) % span - s, (((z + s) % span) + span) % span - s];
 }
-const HILL_HEIGHT = 22, HILL_TOP_R = 38, HILL_CLIFF_FOOT_R = 46, HILL_ROAD_END_R = 108, HILL_ROAD_HALF_W = 7.5, HILL_ROAD_SHOULDER = 5, MAX_CLIMB_SLOPE = .85;
-export function hillRoadDist(x, z) {
-  const r = Math.hypot(x, z);
-  if (r <= HILL_TOP_R) return 0;
-  const theta = Math.atan2(z, x), t = clamp((r - HILL_TOP_R) / (HILL_ROAD_END_R - HILL_TOP_R), 0, 1);
-  const roads = [-Math.PI / 2 + 1.25 * t, Math.PI / 2 + 1.25 * t, -1.25 * t, Math.PI - 1.25 * t];
-  let best = Infinity;
-  for (const rt of roads) {
-    const d = Math.abs(Math.atan2(Math.sin(theta - rt), Math.cos(theta - rt)));
-    if (r * d < best) best = r * d;
-  }
-  return best;
-}
+const HILL_HEIGHT = 22, HILL_TOP_R = 42, HILL_CLIFF_FOOT_R = 60, HILL_ROAD_END_R = 112, HILL_ROAD_HALF_W = 14, HILL_ROAD_SHOULDER = 8, MAX_CLIMB_SLOPE = .55, CLIFF_SLIDE_SPEED = 48;
 export function groundHeight(arena, x, z) {
   if (arena?.shape !== 'hill') return 0;
   const r = Math.hypot(x, z);
   if (r <= HILL_TOP_R) return HILL_HEIGHT;
   if (r >= HILL_ROAD_END_R) return 0;
   const cliffH = r >= HILL_CLIFF_FOOT_R ? 0 : HILL_HEIGHT * (1 - (r - HILL_TOP_R) / (HILL_CLIFF_FOOT_R - HILL_TOP_R));
-  const t = (r - HILL_TOP_R) / (HILL_ROAD_END_R - HILL_TOP_R);
-  const roadH = HILL_HEIGHT * .5 * (1 + Math.cos(Math.PI * t));
-  const dRoad = hillRoadDist(x, z);
+  const roadH = HILL_HEIGHT * (1 - (r - HILL_TOP_R) / (HILL_ROAD_END_R - HILL_TOP_R));
+  const dRoad = Math.min(Math.abs(x), Math.abs(z));
   if (dRoad <= HILL_ROAD_HALF_W) return roadH;
   if (dRoad >= HILL_ROAD_HALF_W + HILL_ROAD_SHOULDER) return cliffH;
   const w = 1 - (dRoad - HILL_ROAD_HALF_W) / HILL_ROAD_SHOULDER;
   return cliffH + (roadH - cliffH) * w;
 }
+function hillGradient(arena, x, z) {
+  const gx = (groundHeight(arena, x + 1, z) - groundHeight(arena, x - 1, z)) * .5;
+  const gz = (groundHeight(arena, x, z + 1) - groundHeight(arena, x, z - 1)) * .5;
+  return [gx, gz, Math.hypot(gx, gz)];
+}
 export function cliffStepBlocked(arena, x0, z0, x1, z1) {
   if (arena?.shape !== 'hill') return false;
   const d = Math.hypot(x1 - x0, z1 - z0);
-  if (d <= 1e-6) return false;
+  if (d <= 1e-9) return false;
   const steps = Math.max(1, Math.ceil(d / 2));
   let px = x0, pz = z0, ph = groundHeight(arena, px, pz);
   for (let i = 1; i <= steps; i++) {
     const u = i / steps, nx = x0 + (x1 - x0) * u, nz = z0 + (z1 - z0) * u, nh = groundHeight(arena, nx, nz);
-    const seg = Math.max(.25, Math.hypot(nx - px, nz - pz));
-    if (Math.abs(nh - ph) / seg > MAX_CLIMB_SLOPE) return true;
+    if (nh > ph + 1e-4) {
+      if (hillGradient(arena, nx, nz)[2] > MAX_CLIMB_SLOPE || hillGradient(arena, (px + nx) * .5, (pz + nz) * .5)[2] > MAX_CLIMB_SLOPE) return true;
+    }
     px = nx; pz = nz; ph = nh;
   }
   return false;
 }
+function hillSlideDelta(arena, x, z, dt) {
+  if (arena?.shape !== 'hill') return [0, 0];
+  const [gx, gz, slope] = hillGradient(arena, x, z);
+  if (slope <= MAX_CLIMB_SLOPE) return [0, 0];
+  const step = CLIFF_SLIDE_SPEED * dt;
+  return [-gx / slope * step, -gz / slope * step];
+}
 export function isOnCliff(arena, x, z) {
-  if (arena?.shape !== 'hill') return false;
-  const h = groundHeight(arena, x, z);
-  for (const [dx, dz] of [[2, 0], [-2, 0], [0, 2], [0, -2]]) {
-    if (Math.abs(groundHeight(arena, x + dx, z + dz) - h) / 2 > MAX_CLIMB_SLOPE) return true;
-  }
-  return false;
+  return arena?.shape === 'hill' && hillGradient(arena, x, z)[2] > MAX_CLIMB_SLOPE;
 }
 export function inArenaBounds(arena, x, z, padding = 0) {
   const limit = arena.size - padding;
@@ -444,9 +439,14 @@ function moveActor(r, actor, steer, gas, brake, dt, handbrake = false) {
   const travel = drifting || actor === r || actor.human ? actor.motionHeading : actor.heading;
   const arena = arenas[r.arena];
   const [nx, nz] = wrapTorus(arena, actor.wx + Math.sin(travel) * actor.speed * .085 * dt, actor.wz + Math.cos(travel) * actor.speed * .085 * dt);
-  if (!blocked(arena, nx, nz) && !cliffStepBlocked(arena, actor.wx, actor.wz, nx, nz)) { actor.wx = nx; actor.wz = nz; if (drifting) emitDriftTrail(r, actor, dt); return; }
+  if (!blocked(arena, nx, nz) && !cliffStepBlocked(arena, actor.wx, actor.wz, nx, nz)) {
+    actor.wx = nx; actor.wz = nz;
+    if (arena.shape === 'hill') { const [sx, sz] = hillSlideDelta(arena, actor.wx, actor.wz, dt); if ((sx || sz) && !blocked(arena, actor.wx + sx, actor.wz + sz)) { actor.wx += sx; actor.wz += sz; } }
+    if (drifting) emitDriftTrail(r, actor, dt); return;
+  }
   if (!blocked(arena, nx, actor.wz) && !cliffStepBlocked(arena, actor.wx, actor.wz, nx, actor.wz)) actor.wx = nx;
   if (!blocked(arena, actor.wx, nz) && !cliffStepBlocked(arena, actor.wx, actor.wz, actor.wx, nz)) actor.wz = nz;
+  if (arena.shape === 'hill') { const [sx, sz] = hillSlideDelta(arena, actor.wx, actor.wz, dt); if ((sx || sz) && !blocked(arena, actor.wx + sx, actor.wz + sz)) { actor.wx += sx; actor.wz += sz; } }
   if (actor.boost > 0 && drifting) {
     if (!r.prediction) { damageBattle(r, actor, -1, MAX_HEALTH, 'wall'); return; }
     actor.predictedCrash = true; actor.speed = 0; actor.boost = 0; actor.drift = 0; actor.wasDrifting = false; actor.somersault = 0; actor.dizzy = 0; return;

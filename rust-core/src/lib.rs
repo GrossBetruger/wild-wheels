@@ -132,5 +132,12 @@ pub extern "C" fn step(slot: usize, arena_index: usize, steer: f64, dt: f64, fla
         speed*=0.3;drift=0.0;was_drifting=0.0;motion=heading;events|=CLEAR;
         if local && wall<=0.0 { events|=CRASH; }
     }
+    if arena.hill {
+        let (sx, sz) = arena::hill_slide_delta(x, z, dt);
+        if (sx != 0.0 || sz != 0.0) && !blocked(arena, x + sx, z + sz) {
+            x += sx;
+            z += sz;
+        }
+    }
     kart.data=[x,z,heading,motion,camera,speed,drift,boost,flip,cooldown,dizzy,camera_start,yaw,was_drifting,wall,reserved];events
 }
