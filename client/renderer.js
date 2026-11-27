@@ -559,16 +559,16 @@ export class Renderer {
     m.box(0,-.04*size,-.65*size,1.4*size,.08*size,.7*size,'#d34d40');m.box(0,-.6*size,-.65*size,.08*size,1.2*size,.7*size,'#d34d40');m.ball(0,0,-1.02*size,.2*size,.2*size,.15*size,'#384654',8,4);
   }
   explosion(m,fx){
-    const p=fx.wx!==undefined?{x:fx.wx,z:fx.wz}:sampleTrack(fx.s/LENGTH,fx.x,fx.route),t=fx.age,g=this.glow;
-    if(t<.65){const radius=.6+Math.sin(t/.65*Math.PI)*5;g.at(p.x,2,p.z);g.ball(0,0,0,radius,radius*.8,radius,[.3*(1-t),.09*(1-t),.015],12,7);g.ball(0,0,0,radius*.5,radius*.5,radius*.5,[.6,.45,.2],10,5);g.particle(0,0,0,radius*5,[.9,.25,.025]);}
-    if(t<1){g.at(p.x,.2,p.z);for(let i=0;i<40;i++){const a=i/40*Math.PI*2,rad=t*15;g.ball(Math.cos(a)*rad,0,Math.sin(a)*rad,.4,.08,.4,[.35*(1-t),.18*(1-t),.03],5,3);}}
+    const p=fx.wx!==undefined?{x:fx.wx,z:fx.wz}:sampleTrack(fx.s/LENGTH,fx.x,fx.route),t=fx.age,g=this.glow,gy=fx.wx!==undefined&&this.activeArena!==undefined?groundHeight(arenas[this.activeArena],p.x,p.z):0;
+    if(t<.65){const radius=.6+Math.sin(t/.65*Math.PI)*5;g.at(p.x,gy+2,p.z);g.ball(0,0,0,radius,radius*.8,radius,[.3*(1-t),.09*(1-t),.015],12,7);g.ball(0,0,0,radius*.5,radius*.5,radius*.5,[.6,.45,.2],10,5);g.particle(0,0,0,radius*5,[.9,.25,.025]);}
+    if(t<1){g.at(p.x,gy+.2,p.z);for(let i=0;i<40;i++){const a=i/40*Math.PI*2,rad=t*15;g.ball(Math.cos(a)*rad,0,Math.sin(a)*rad,.4,.08,.4,[.35*(1-t),.18*(1-t),.03],5,3);}}
     for(let i=0;i<24;i++){
-      const a=i*2.399,speed=4+i%6*2,d=t*speed,y=Math.max(.15,1+(7+i%5)*t-7*t*t);
+      const a=i*2.399,speed=4+i%6*2,d=t*speed,y=gy+Math.max(.15,1+(7+i%5)*t-7*t*t);
       m.at(p.x+Math.cos(a)*d,y,p.z+Math.sin(a)*d,t*(i%3+2));
       if(i<8){m.box(0,0,0,.35,.25,.65,['#252e3c','#b9c5c9','#e29458'][i%3]);continue;}
       g.at(p.x+Math.cos(a)*d,y,p.z+Math.sin(a)*d);g.ball(0,0,0,.09,.09,.25,[.6*(1-t/fx.life),.18,.01],5,3);
     }
-    for(let i=0;i<10;i++){const a=i*2.399,d=t*(1+i%3),size=(.6+t*1.4)*(1-t/fx.life);m.at(p.x+Math.cos(a)*d,1+t*3+(i%3)*.5,p.z+Math.sin(a)*d);m.ball(0,0,0,size,size,size,t<.25?'#dd8443':i%2?'#555967':'#777b83',7,4);}
+    for(let i=0;i<10;i++){const a=i*2.399,d=t*(1+i%3),size=(.6+t*1.4)*(1-t/fx.life);m.at(p.x+Math.cos(a)*d,gy+1+t*3+(i%3)*.5,p.z+Math.sin(a)*d);m.ball(0,0,0,size,size,size,t<.25?'#dd8443':i%2?'#555967':'#777b83',7,4);}
   }
   hedgehog(m,x,y,z,size,angle=0){if(!this.buildingModel){this.model(`hedgehog:${size}`,x,y,z,angle,mesh=>this.hedgehog(mesh,0,0,0,size));return;}m.at(x,y,z,angle);m.ball(0,0,0,size,size*.8,size,'#79513b',8,5);for(let i=0;i<9;i++){const a=i/9*Math.PI*2;m.cone(Math.cos(a)*size*.6,size*.2,Math.sin(a)*size*.6,size*.25,size*.85,'#dab67f',4);}m.ball(0,-size*.1,size*.85,size*.5,size*.4,size*.4,'#eed1a1',7,4);m.ball(0,0,size*1.2,size*.15,size*.15,size*.15,'#242a34',6,3);}
   cricket(m,x,y,z,angle,clock){const phase=Math.floor(clock*20)%4;this.model(`cricket:${phase}`,x,y,z,angle,mesh=>drawCricketProjectile(mesh,phase));}
@@ -895,8 +895,9 @@ export class Renderer {
     const yaw = victim.heading+Math.atan2(Math.sin(turn),Math.cos(turn))*Math.min(1,effect.age*3);
     const s = Math.sin(yaw), c = Math.cos(yaw);
     const remaining = wormholeSample(effect.age,0), width = wormholeSample(effect.age,2);
+    const cx = x-dx*remaining, cz = z-dz*remaining, cgy = groundHeight(arenas[world.arena], cx, cz);
     const transform = [c*width,0,-s*width,0, 0,width,0,0, s*length,0,c*length,0,
-      x-dx*remaining,2.6*(1-remaining),z-dz*remaining,1];
+      cx,cgy+2.6*(1-remaining),cz,1];
     const projected = multiply(view,transform);
     const mesh = new Mesh();
     this.glow = new Mesh(); this.smoke = new Mesh();
@@ -943,11 +944,12 @@ export class Renderer {
     for(const skid of r.skids){
       const dx=skid.bx-skid.ax,dz=skid.bz-skid.az,length=Math.hypot(dx,dz);if(length<.01)continue;
       const nx=-dz/length*.24,nz=dx/length*.24,fade=Math.min(1,(r.elapsed-skid.time)/6),ground=rgb(arenas[r.arena].ground),color=ground.map(c=>c*(.28+fade*.65));
-      m.quad([skid.ax+nx,.025,skid.az+nz],[skid.bx+nx,.025,skid.bz+nz],[skid.bx-nx,.025,skid.bz-nz],[skid.ax-nx,.025,skid.az-nz],color);
+      const ya=groundHeight(arenas[r.arena],skid.ax,skid.az)+.025,yb=groundHeight(arenas[r.arena],skid.bx,skid.bz)+.025;
+      m.quad([skid.ax+nx,ya,skid.az+nz],[skid.bx+nx,yb,skid.bz+nz],[skid.bx-nx,yb,skid.bz-nz],[skid.ax-nx,ya,skid.az-nz],color);
     }
     if(r.timeStop>0){
       const caster=[r,...r.bots].find(a=>a.id===r.timeOwner)??r,phase=(2.5-r.timeStop)*3;
-      this.glow.at(caster.wx,0,caster.wz);
+      this.glow.at(caster.wx,groundHeight(arenas[r.arena],caster.wx,caster.wz),caster.wz);
       for(let ring=0;ring<7;ring++)for(let i=0;i<96;i++){const a=i*Math.PI/48+phase*(ring%2?1:-1),radius=4+((phase*6+ring*7)%48),b=a+Math.PI/48,y=2+Math.sin(a*3+phase)*1.5+ring*.5;this.glow.quad([Math.cos(a)*radius,y,Math.sin(a)*radius],[Math.cos(b)*radius,y,Math.sin(b)*radius],[Math.cos(b)*(radius+.16),y+.15,Math.sin(b)*(radius+.16)],[Math.cos(a)*(radius+.16),y+.15,Math.sin(a)*(radius+.16)],ring%2?[.08,.45,.7]:[.4,.08,.65]);}
       for(let i=0;i<80;i++){const a=i*2.399+phase*.3,rad=6+(i%20)*2;this.glow.particle(Math.cos(a)*rad,1+(i%9)*1.4,Math.sin(a)*rad,.28,[.18,.6,.8]);}
     }
@@ -956,10 +958,10 @@ export class Renderer {
     if(r.specialAbilities!==false){
       for(const a of [r,...r.bots]){
         if(a.driver!==8||!(a.nightmareActive>0)||a.destroyed>0||a.inactive||a.afk||a.bomber)continue;
-        const wx=a.wx+Math.sin(a.heading)*14,wz=a.wz+Math.cos(a.heading)*14,s=Math.min(1,(8-a.nightmareActive)/.25,a.nightmareActive/.45);
-        this.activeWormholes.push({x:wx,z:wz,ownerX:a.wx,ownerZ:a.wz,radius:20*s});
-        m.at(wx,2.6,wz);m.ball(0,0,0,2.2*s,2.2*s,2.2*s,'#04020c',12,8);
-        this.glow.at(wx,2.6,wz);
+        const wx=a.wx+Math.sin(a.heading)*14,wz=a.wz+Math.cos(a.heading)*14,wgy=groundHeight(arenas[r.arena],wx,wz),s=Math.min(1,(8-a.nightmareActive)/.25,a.nightmareActive/.45);
+        this.activeWormholes.push({x:wx,y:wgy+2.6,z:wz,ownerX:a.wx,ownerZ:a.wz,radius:20*s});
+        m.at(wx,wgy+2.6,wz);m.ball(0,0,0,2.2*s,2.2*s,2.2*s,'#04020c',12,8);
+        this.glow.at(wx,wgy+2.6,wz);
         for(let arm=0;arm<5;arm++)for(let i=0;i<24;i++){const t=i/24,u=(i+1)/24,rr=(2.4+t*9.5)*s,r2=(2.4+u*9.5)*s,ang=arm*Math.PI*2/5+t*6.5-time*4.5,b=arm*Math.PI*2/5+u*6.5-time*4.5,w=(.18+t*.32)*s;this.glow.quad([Math.cos(ang)*rr,0,Math.sin(ang)*rr],[Math.cos(b)*r2,0,Math.sin(b)*r2],[Math.cos(b)*(r2+w),.08,Math.sin(b)*(r2+w)],[Math.cos(ang)*(rr+w),.08,Math.sin(ang)*(rr+w)],arm%2?[.22,.88,1]:[.68,.2,1]);}
         for(let i=0;i<28;i++){const f=(1-((time*1.4+i/28)%1)),rr=(2.2+f*17.5)*s,ang=i*2.399-time*5-f*4;this.glow.particle(Math.cos(ang)*rr,(Math.sin(i*1.7)*.8)*f,Math.sin(ang)*rr,(.18+f*.22)*s,i%3?[.24,.86,1]:[.95,.75,.3]);}
       }
@@ -967,7 +969,7 @@ export class Renderer {
     for(const actor of [r,...r.bots]){
       if(actor.destroyed||actor.bomber||actor.inactive||actor.afk)this.batSummons.delete(actor.id);
       if(actor.bomber||actor.inactive||actor.afk)continue;
-      const pose={...combatPose(actor),id:actor.id,vulcan:actor.vulcan,specialActive:actor.specialActive,nightmareActive:r.specialAbilities===false?0:actor.nightmareActive,bikeRoll:this.yudaDrift.roll(actor.id)};if(actor.destroyed){
+      const pose={...combatPose(actor),id:actor.id,vulcan:actor.vulcan,specialActive:actor.specialActive,nightmareActive:r.specialAbilities===false?0:actor.nightmareActive,bikeRoll:this.yudaDrift.roll(actor.id)},gy=groundHeight(arenas[r.arena],pose.x,pose.z);if(actor.destroyed){
         if (captures.some(effect => effect.owner === actor.id)) continue;
         const ash=r.effects.find(f=>f.type==='ash'&&Math.hypot(f.wx-pose.x,f.wz-pose.z)<.1),key=`${pose.x}:${pose.z}`;
         if(ash&&(!this.ashBodies.has(key)||ash.age<this.ashBodies.get(key).age)){
@@ -978,10 +980,10 @@ export class Renderer {
           }
           this.ashBodies.set(key,{age:ash.age,points:this.bodyRubble(this.lastBodies.get(actor.id))});
         }
-        m.at(pose.x,.1,pose.z);m.disc(0,0,0,2,3,'#343344');continue;
+        m.at(pose.x,gy+.1,pose.z);m.disc(0,0,0,2,3,'#343344');continue;
       }
-      if(overview){m.at(pose.x,.08,pose.z);m.disc(0,0,0,3.6,3.6,actor.color??drivers[actor.driver].color);}
-      const baseJump=somersaultPose(actor),gy=groundHeight(arenas[r.arena],pose.x,pose.z);
+      if(overview){m.at(pose.x,gy+.08,pose.z);m.disc(0,0,0,3.6,3.6,actor.color??drivers[actor.driver].color);}
+      const baseJump=somersaultPose(actor);
       const jump=baseJump||gy>0?{height:gy+(baseJump?.height??0),pitch:baseJump?.pitch??0}:null;
       const bodyStart=this.instances.length,dataStart=m.data.length;
       const arrival=actor.driver===5&&actor.id!==r.id?r.effects.find(e=>e.type==='teleportIn'&&e.owner===actor.id&&e.age<.52):null;
@@ -993,41 +995,41 @@ export class Renderer {
       if(this.report){const lost=[pose.x,pose.z,actor.heading,pose.bikeRoll,jump?.height??0,jump?.pitch??0].some(value=>!Number.isFinite(value));if(lost||(!arrival&&!parts.length&&m.data.length===dataStart))this.report(`racer:${actor.id}`,'error','racer-not-drawn',{reason:lost?'a position or angle is not a number':'its model drew nothing',viewer:r.id,racer:actor.id,driver:actor.driver,color:actor.color,wx:actor.wx,wz:actor.wz,heading:actor.heading,roll:pose.bikeRoll,boost:actor.boost,somersault:actor.somersault,shield:actor.shield,hedgeShield:actor.hedgeShield,vulcan:actor.vulcan,distance:Math.hypot(actor.wx-r.wx,actor.wz-r.wz)});}
       if(r.specialAbilities!==false&&actor.reverseControls>0)drawCricketPuppet(m,this.glow,pose,time,actor.reverseControls,actor.heading,actor.driver===11?11:8);
       if(r.specialAbilities!==false&&[r,...r.bots].some(a=>a.id!==actor.id&&a.driver===13&&a.specialActive>0)){
-        const facing=actor.cameraHeading??actor.heading,phase=Math.floor(time*8)%8;
-        this.model('xylophone:'+phase,pose.x+Math.sin(facing)*5,0,pose.z+Math.cos(facing)*5,facing,mesh=>drawXylophone(mesh,phase));
+        const facing=actor.cameraHeading??actor.heading,phase=Math.floor(time*8)%8,xx=pose.x+Math.sin(facing)*5,xz=pose.z+Math.cos(facing)*5;
+        this.model('xylophone:'+phase,xx,groundHeight(arenas[r.arena],xx,xz),xz,facing,mesh=>drawXylophone(mesh,phase));
       }
       if(actor.driver===7)this.houstonHelmet(pose,actor,time,jump);
       if(actor.hedgeShield>0)this.hedgeguard(m,pose,actor,time,jump);
       if(r.specialAbilities!==false&&actor.driver===7&&actor.specialActive>0){
-        m.at(pose.x,.06,pose.z);m.disc(0,0,0,8,8,'#140e28',64);m.disc(0,.02,0,2.1,2.1,'#03040d',48);
-        this.glow.at(pose.x,.1,pose.z);
+        m.at(pose.x,gy+.06,pose.z);m.disc(0,0,0,8,8,'#140e28',64);m.disc(0,.02,0,2.1,2.1,'#03040d',48);
+        this.glow.at(pose.x,gy+.1,pose.z);
         for(let arm=0;arm<5;arm++)for(let i=0;i<80;i++){const t=i/80,u=(i+1)/80,r=1.8+t*6.2,rr=1.8+u*6.2,a=arm*Math.PI*2/5+t*7-time*2.4,b=arm*Math.PI*2/5+u*7-time*2.4,y=t*t*1.7,yy=u*u*1.7,w=.12+t*.22;this.glow.quad([Math.cos(a)*r,y,Math.sin(a)*r],[Math.cos(b)*rr,yy,Math.sin(b)*rr],[Math.cos(b)*(rr+w),yy+.06,Math.sin(b)*(rr+w)],[Math.cos(a)*(r+w),y+.06,Math.sin(a)*(r+w)],arm%2?[.12,.32,.8]:[.5,.13,.7]);}
         for(let i=0;i<60;i++){const t=(i/60-time*.24)%1+1,f=t%1,r=2+f*6,a=i*2.399-time*3-f*4;this.glow.particle(Math.cos(a)*r,f*f*1.8,Math.sin(a)*r,.12+f*.15,[.25,.45,.85]);}
         for(let i=0;i<64;i++){const a=i*Math.PI/32,b=(i+1)*Math.PI/32;this.glow.quad([Math.cos(a)*2,.04,Math.sin(a)*2],[Math.cos(b)*2,.04,Math.sin(b)*2],[Math.cos(b)*2.12,.1,Math.sin(b)*2.12],[Math.cos(a)*2.12,.1,Math.sin(a)*2.12],[.35,.55,.9]);}
-        for(const s of r.supplies){if(s.cooldown>0||Math.hypot(s.wx-pose.x,s.wz-pose.z)>80)continue;this.glow.at(s.wx,1.8,s.wz);for(let i=0;i<8;i++){const t=(time*.7+i/8)%1,a=t*10+time*3;this.glow.particle((pose.x-s.wx)*t+Math.cos(a)*.4,Math.sin(t*Math.PI)*2,(pose.z-s.wz)*t+Math.sin(a)*.4,.13,[.12,.35,.7]);}}
+        for(const s of r.supplies){if(s.cooldown>0||Math.hypot(s.wx-pose.x,s.wz-pose.z)>80)continue;const sgy=groundHeight(arenas[r.arena],s.wx,s.wz);this.glow.at(s.wx,sgy+1.8,s.wz);for(let i=0;i<8;i++){const t=(time*.7+i/8)%1,a=t*10+time*3;this.glow.particle((pose.x-s.wx)*t+Math.cos(a)*.4,(gy-sgy)*t+Math.sin(t*Math.PI)*2,(pose.z-s.wz)*t+Math.sin(a)*.4,.13,[.12,.35,.7]);}}
       }
       if(r.specialAbilities!==false&&actor.driver===11&&actor.specialActive>0)this.holyArchangels(pose,actor,time,jump);
       if(r.specialAbilities!==false&&actor.driver===15&&actor.specialActive>0)drawKarmaAura(m,this.glow,pose,time,jump);
 
       if(actor.tehilim>0)this.tehilimAura(pose,time,actor.tehilim,jump);
-      if(actor.dizzy>0)for(let i=0;i<6;i++){const angle=time*(actor.boost>0?9:5)+i*Math.PI/3;m.at(pose.x+Math.sin(angle)*3.2,6.8+Math.sin(angle*2)*.5,pose.z+Math.cos(angle)*3.2,angle);m.box(0,0,0,1.2,.22,.3,'#fff08b');m.box(0,0,0,.3,.22,1.2,'#fff08b');this.glow.at(m.origin[0],m.origin[1],m.origin[2]);this.glow.particle(0,0,0,.8,[.7,.6,.05]);}
+      if(actor.dizzy>0)for(let i=0;i<6;i++){const angle=time*(actor.boost>0?9:5)+i*Math.PI/3;m.at(pose.x+Math.sin(angle)*3.2,gy+6.8+Math.sin(angle*2)*.5,pose.z+Math.cos(angle)*3.2,angle);m.box(0,0,0,1.2,.22,.3,'#fff08b');m.box(0,0,0,.3,.22,1.2,'#fff08b');this.glow.at(m.origin[0],m.origin[1],m.origin[2]);this.glow.particle(0,0,0,.8,[.7,.6,.05]);}
       if(actor.vulcan>0&&actor.driver===10)this.laserMount(m,pose,actor,time,jump);
       if(actor.vulcan>0&&actor.driver!==10&&actor.driver!==14){
-        const pulse=.8+.2*Math.sin(time*4);this.glow.at(pose.x,.15,pose.z);
+        const pulse=.8+.2*Math.sin(time*4);this.glow.at(pose.x,gy+.15,pose.z);
         for(let i=0;i<32;i++){const a=i/32*Math.PI*2,b=(i+1)/32*Math.PI*2;this.glow.quad([Math.cos(a)*3.3,0,Math.sin(a)*3.3],[Math.cos(b)*3.3,0,Math.sin(b)*3.3],[Math.cos(b)*3.65,0,Math.sin(b)*3.65],[Math.cos(a)*3.65,0,Math.sin(a)*3.65],[.55*pulse,.23*pulse,.02]);}
         for(let i=0;i<8;i++){const a=time*1.5+i*Math.PI/4;this.glow.particle(Math.cos(a)*3.5,.3+Math.sin(a*2)*.12,Math.sin(a)*3.5,.8,[.8*pulse,.35*pulse,.03]);}
         if(actor.driver===11)this.chopperVulcan(pose,actor,time,jump);
         if(actor.driver!==11){
-          m.at(pose.x,.85,pose.z,actor.heading);for(const side of [-1,1])m.box(side*1.72,0,0,.12,.24,3.7,'#ffd066');
-          m.at(pose.x,1.6,pose.z,actor.heading);m.box(0,0,1.4,1,.55,1.2,actor.driver===9?'#ffd2df':'#3e4251');
+          m.at(pose.x,gy+.85,pose.z,actor.heading);for(const side of [-1,1])m.box(side*1.72,0,0,.12,.24,3.7,'#ffd066');
+          m.at(pose.x,gy+1.6,pose.z,actor.heading);m.box(0,0,1.4,1,.55,1.2,actor.driver===9?'#ffd2df':'#3e4251');
           for(let i=0;i<3;i++){const a=time*35+i*Math.PI*2/3;m.box(Math.sin(a)*.25,.28+Math.cos(a)*.25,2.3,.18,.18,1.4,actor.driver===9?'#e9bc65':'#b3b9c6');}
-          if(actor.item==='hedgehog'&&actor.fireCooldown>.035){this.glow.at(pose.x,1.9,pose.z,actor.heading);this.glow.particle(0,0,3.2,1.4,[1,.55,.08]);this.glow.particle(0,0,3.7,.65,[1,.85,.4]);}
+          if(actor.item==='hedgehog'&&actor.fireCooldown>.035){this.glow.at(pose.x,gy+1.9,pose.z,actor.heading);this.glow.particle(0,0,3.2,1.4,[1,.55,.08]);this.glow.particle(0,0,3.7,.65,[1,.85,.4]);}
         }
       }
-      m.at(pose.x,6,pose.z,r.heading);for(let i=0;i<actor.health;i++)m.box((i-(actor.health-1)/2)*.6,0,0,.5,.25,.15,i>=3?'#ffe095':'#b8ef8e');
+      m.at(pose.x,gy+6,pose.z,r.heading);for(let i=0;i<actor.health;i++)m.box((i-(actor.health-1)/2)*.6,0,0,.5,.25,.15,i>=3?'#ffe095':'#b8ef8e');
       if(actor.shield>0&&actor.driver===9)this.fairyProtection(m,pose,time,Math.min(1,actor.shield),jump);
       if(actor.shield>0&&actor.driver===10)this.bikerAura(m,pose,actor.heading,time,jump,Math.min(1,actor.shield));
-      if(actor.shield>0&&actor.driver!==9&&actor.driver!==10){this.glow.at(pose.x,.12,pose.z);for(let i=0;i<18;i++){const a=i/18*Math.PI*2+time;this.glow.particle(Math.cos(a)*3,1,Math.sin(a)*3,.4,[.05,.25,.4]);}}
+      if(actor.shield>0&&actor.driver!==9&&actor.driver!==10){this.glow.at(pose.x,gy+.12,pose.z);for(let i=0;i<18;i++){const a=i/18*Math.PI*2+time;this.glow.particle(Math.cos(a)*3,1,Math.sin(a)*3,.4,[.05,.25,.4]);}}
     }
     for(const supply of r.supplies){if(supply.cooldown>0)continue;if(supply.kind==='bicycle'){if(!this.drawnBicycles.has(supply.id))this.bicycleDrop(supply,time);continue;}const pose={x:supply.wx,z:supply.wz,tx:0,tz:1},gy=groundHeight(arenas[r.arena],pose.x,pose.z),bob=Math.sin(time*2)*.3;m.at(pose.x,gy+.1,pose.z);m.disc(0,0,0,3,3,{missile:'#c65d51',hedgehog:'#bb9c68',boost:'#d4bc55',health:'#78b88c',hedgeproof:'#52c9bc',tehilim:'#6388cf'}[supply.kind]);switch(supply.kind){case 'tehilim':this.tehilimBook(pose.x,gy+2+bob,pose.z,time);this.glow.at(pose.x,gy+2,pose.z);this.glow.particle(0,0,0,2.5,[.08,.15,.4]);break;case 'hedgeproof':this.hedgeguardIcon(pose.x,gy+2+bob,pose.z,time);this.glow.at(pose.x,gy+1.8+bob,pose.z);this.glow.particle(0,0,0,2.8,[.08,.45,.38]);break;case 'missile':this.missile(m,pose,gy+2+bob,time,1.5);break;case 'hedgehog':this.hedgehog(m,pose.x,gy+1.5+bob,pose.z,1.1,time);break;case 'boost':m.at(pose.x,gy+1+bob,pose.z,time);m.box(0,0,0,1.2,2,.8,'#f1cc62');break;case 'health':m.at(pose.x,gy+1+bob,pose.z,time);m.box(0,.7,0,2.4,.7,.5,'#d6f4c6');m.box(0,0,0,.7,2.4,.5,'#d6f4c6');break;}}
     for(const shot of r.projectiles){
@@ -1045,8 +1047,8 @@ export class Renderer {
     }
     drawLocusts(this,m,r,time);
     for(const bomb of r.bombs??[]){
-      const progress=Math.min(1,bomb.age/BOMB_FALL_TIME),height=65*(1-progress*progress),stink=bomb.kind==='stink',radius=stink?STINK_RADIUS:BOMB_OUTER_RADIUS;
-      m.at(bomb.wx,.15,bomb.wz);for(let i=0;i<40;i++){const a=i/40*Math.PI*2,b=(i+.65)/40*Math.PI*2,inner=radius-.7,outer=radius;m.quad([Math.sin(a)*inner,0,Math.cos(a)*inner],[Math.sin(a)*outer,0,Math.cos(a)*outer],[Math.sin(b)*outer,0,Math.cos(b)*outer],[Math.sin(b)*inner,0,Math.cos(b)*inner],stink?'#a8db63':'#ff6848');}
+      const progress=Math.min(1,bomb.age/BOMB_FALL_TIME),bgy=groundHeight(arenas[r.arena],bomb.wx,bomb.wz),height=bgy+65*(1-progress*progress),stink=bomb.kind==='stink',radius=stink?STINK_RADIUS:BOMB_OUTER_RADIUS;
+      m.at(bomb.wx,bgy+.15,bomb.wz);for(let i=0;i<40;i++){const a=i/40*Math.PI*2,b=(i+.65)/40*Math.PI*2,inner=radius-.7,outer=radius;m.quad([Math.sin(a)*inner,0,Math.cos(a)*inner],[Math.sin(a)*outer,0,Math.cos(a)*outer],[Math.sin(b)*outer,0,Math.cos(b)*outer],[Math.sin(b)*inner,0,Math.cos(b)*inner],stink?'#a8db63':'#ff6848');}
       if(!stink)for(let i=0;i<40;i++){const a=i*Math.PI/20,b=(i+.7)*Math.PI/20;m.quad([Math.sin(a)*(BOMB_RADIUS-.5),.02,Math.cos(a)*(BOMB_RADIUS-.5)],[Math.sin(a)*BOMB_RADIUS,.02,Math.cos(a)*BOMB_RADIUS],[Math.sin(b)*BOMB_RADIUS,.02,Math.cos(b)*BOMB_RADIUS],[Math.sin(b)*(BOMB_RADIUS-.5),.02,Math.cos(b)*(BOMB_RADIUS-.5)],'#ff453b');}
       m.box(0,0,0,4,.15,.5,'#fff0b3');m.box(0,0,0,.5,.15,4,'#fff0b3');
       const scale=overview?.halfHeight?1+(1-progress)*.8:1;
@@ -1055,34 +1057,34 @@ export class Renderer {
       this.glow.at(bomb.wx,height+3,bomb.wz);this.glow.particle(0,0,0,3,[.8,.35,.03]);
     }
     for(const effect of r.effects){if(effect.type==='wormholeCapture')continue;if(effect.type==='reverseShockwave'){drawReverseShockwave(this.glow,this.smoke,effect);continue;}if(effect.type==='locustSpawn'||effect.type==='locustBurst')continue;if(effect.type==='teleportOut'||effect.type==='teleportIn'){
-      if(effect.type==='teleportOut'){const pose=departurePose(effect.age);this.teleportKart({x:effect.wx,z:effect.wz},effect.color??drivers[5].color,effect.heading??0,pose.scale,pose.height,pose.pitch);}
+      if(effect.type==='teleportOut'){const pose=departurePose(effect.age),tgy=groundHeight(arenas[r.arena],effect.wx,effect.wz);this.teleportKart({x:effect.wx,z:effect.wz},effect.color??drivers[5].color,effect.heading??0,pose.scale,tgy+pose.height,pose.pitch);}
       drawTeleportHaze(this,effect,time);continue;
-    }if(effect.type==='eulerGhost'){this.eulerGhost(m,effect,time);continue;}if(effect.type==='karmaRaccoon'){drawKarmaRaccoon(m,this.glow,effect,r.cameraHeading);continue;}if(effect.type==='taxAudit'){drawTaxAudit(m,effect,r.cameraHeading);continue;}if(effect.type==='heartbeat'){const actor=[r,...r.bots].find(a=>a.id===effect.owner),x=actor?.wx??effect.wx,z=actor?.wz??effect.wz,t=effect.age,fade=1-t/effect.life,size=(1+.35*Math.exp(-t*18)+.3*Math.exp(-(((t-.18)*20)**2)))*fade;m.at(x,7+t*.6,z,r.cameraHeading);m.ball(-.28*size,.18*size,0,.38*size,.38*size,.24*size,'#ff779d',10,6);m.ball(.28*size,.18*size,0,.38*size,.38*size,.24*size,'#ff779d',10,6);m.cone(0,.1*size,0,.6*size,-.85*size,'#e94c7f',12);this.glow.at(x,7,z);this.glow.particle(0,0,0,size*1.4,[.5*fade,.08*fade,.17*fade]);continue;}if(effect.type==='fashionSnap'){this.fashionSnap(m,effect,time);continue;}if(effect.type==='fireRingOut'){drawFireRingOut(m,this.glow,this.smoke,effect,time);continue;}if(effect.type==='fireRing'){drawFireRing(m,this.glow,this.smoke,effect,time);continue;}if(effect.type==='yudaSmoke')continue;if(effect.type==='radiation'){this.radiationZone(m,effect,time);continue;}if(effect.type==='ash'){this.ashRemains(m,effect);continue;}if(effect.type==='abomb'){this.atomicExplosion(m,effect);continue;}if(effect.type==='explosion'){this.explosion(m,effect);continue;}for(let i=0;i<10;i++){const a=i*2.4,t=effect.age;m.at(effect.wx+Math.cos(a)*t*8,1+t*4,effect.wz+Math.sin(a)*t*8);m.ball(0,0,0,.12,.12,.12,'#f4dc8b',5,3);}}
-    for(const cloud of r.stinkClouds??[]){const fade=Math.min(1,(cloud.life-cloud.age)/.7);for(let i=0;i<15;i++){const angle=i*2.399+cloud.age*.2,radius=2+(i%5)*2.6,x=cloud.wx+Math.sin(angle)*radius,z=cloud.wz+Math.cos(angle)*radius,y=1+(i%3)+Math.sin(cloud.age*2+i)*.7;this.smoke.at(x,y,z);this.smoke.particle(0,0,0,(7+cloud.age*2)*Math.sqrt(fade),[.5,.7,.23]);this.glow.at(x,y+.4,z);this.glow.particle(0,0,0,.25*fade,[.15,.3,.04]);}}
+    }if(effect.type==='eulerGhost'){this.eulerGhost(m,effect,time);continue;}if(effect.type==='karmaRaccoon'){drawKarmaRaccoon(m,this.glow,effect,r.cameraHeading);continue;}if(effect.type==='taxAudit'){drawTaxAudit(m,effect,r.cameraHeading);continue;}if(effect.type==='heartbeat'){const actor=[r,...r.bots].find(a=>a.id===effect.owner),x=actor?.wx??effect.wx,z=actor?.wz??effect.wz,hgy=groundHeight(arenas[r.arena],x,z),t=effect.age,fade=1-t/effect.life,size=(1+.35*Math.exp(-t*18)+.3*Math.exp(-(((t-.18)*20)**2)))*fade;m.at(x,hgy+7+t*.6,z,r.cameraHeading);m.ball(-.28*size,.18*size,0,.38*size,.38*size,.24*size,'#ff779d',10,6);m.ball(.28*size,.18*size,0,.38*size,.38*size,.24*size,'#ff779d',10,6);m.cone(0,.1*size,0,.6*size,-.85*size,'#e94c7f',12);this.glow.at(x,hgy+7,z);this.glow.particle(0,0,0,size*1.4,[.5*fade,.08*fade,.17*fade]);continue;}if(effect.type==='fashionSnap'){this.fashionSnap(m,effect,time);continue;}if(effect.type==='fireRingOut'){drawFireRingOut(m,this.glow,this.smoke,effect,time);continue;}if(effect.type==='fireRing'){drawFireRing(m,this.glow,this.smoke,effect,time);continue;}if(effect.type==='yudaSmoke')continue;if(effect.type==='radiation'){this.radiationZone(m,effect,time);continue;}if(effect.type==='ash'){this.ashRemains(m,effect);continue;}if(effect.type==='abomb'){this.atomicExplosion(m,effect);continue;}if(effect.type==='explosion'){this.explosion(m,effect);continue;}const egy=groundHeight(arenas[r.arena],effect.wx,effect.wz);for(let i=0;i<10;i++){const a=i*2.4,t=effect.age;m.at(effect.wx+Math.cos(a)*t*8,egy+1+t*4,effect.wz+Math.sin(a)*t*8);m.ball(0,0,0,.12,.12,.12,'#f4dc8b',5,3);}}
+    for(const cloud of r.stinkClouds??[]){const fade=Math.min(1,(cloud.life-cloud.age)/.7);for(let i=0;i<15;i++){const angle=i*2.399+cloud.age*.2,radius=2+(i%5)*2.6,x=cloud.wx+Math.sin(angle)*radius,z=cloud.wz+Math.cos(angle)*radius,y=groundHeight(arenas[r.arena],x,z)+1+(i%3)+Math.sin(cloud.age*2+i)*.7;this.smoke.at(x,y,z);this.smoke.particle(0,0,0,(7+cloud.age*2)*Math.sqrt(fade),[.5,.7,.23]);this.glow.at(x,y+.4,z);this.glow.particle(0,0,0,.25*fade,[.15,.3,.04]);}}
     for(const cloud of r.chaffClouds){
-      const t=cloud.age,fade=Math.min(1,(cloud.life-t)/1.4),expansion=1-Math.exp(-t*2.5);
+      const t=cloud.age,fade=Math.min(1,(cloud.life-t)/1.4),expansion=1-Math.exp(-t*2.5),cgy=groundHeight(arenas[r.arena],cloud.wx,cloud.wz);
       const fairy=[r,...r.bots].some(actor=>actor.id===cloud.owner&&actor.driver===9);
       const tint=rgb(cloud.color??'#a8cde1'),flake=tint.map(c=>.15+c*.85),highlight=tint.map(c=>.65+c*.35),smoke=tint.map(c=>.45+c*.45);
       for(let i=0;i<24;i++){
-        const a=i*2.399,spread=(2+expansion*3.5)*(1+i%5*.16),x=cloud.wx+Math.cos(a)*spread+Math.sin(t*.7+i)*.4,z=cloud.wz+Math.sin(a)*spread+Math.cos(t*.6+i)*.4,y=2.5+(i%7)*.55+Math.sin(t*1.8+i)*.7-(1-fade);
+        const a=i*2.399,spread=(2+expansion*3.5)*(1+i%5*.16),x=cloud.wx+Math.cos(a)*spread+Math.sin(t*.7+i)*.4,z=cloud.wz+Math.sin(a)*spread+Math.cos(t*.6+i)*.4,y=cgy+2.5+(i%7)*.55+Math.sin(t*1.8+i)*.7-(1-fade);
         m.at(x,y,z,a+t*4);
         if(fairy&&i%8===0)this.model('fairy-star',x,y,z,a+t,drawFairyStar);
         if(!fairy)m.box(0,0,0,.22+fade*.2,.04,.6,i%3?flake:highlight);
         this.glow.at(x,y,z);const sparkle=(.55+.45*Math.sin(i*3+t*12)**2)*fade;this.glow.particle(0,0,0,(i%3===0?1.8:.8)*fade,(fairy&&i%2?[.95,.62,.22]:flake).map(c=>c*sparkle));
       }
-      this.smoke.at(cloud.wx,3+Math.sin(t)*.3,cloud.wz);this.smoke.particle(0,0,0,(fairy?5:10+expansion*8)*Math.sqrt(fade),fairy?[.98,.65,.81]:smoke);
-      if(t<.45){this.glow.at(cloud.wx,2.5,cloud.wz);this.glow.particle(0,0,0,9*(1-t/.45),flake);for(let i=0;i<4;i++){const f=i/3;this.glow.at(cloud.originX+(cloud.wx-cloud.originX)*f,1.5+Math.sin(f*Math.PI)*2,cloud.originZ+(cloud.wz-cloud.originZ)*f);this.glow.particle(0,0,0,1.2*(1-t/.45),flake);}}
+      this.smoke.at(cloud.wx,cgy+3+Math.sin(t)*.3,cloud.wz);this.smoke.particle(0,0,0,(fairy?5:10+expansion*8)*Math.sqrt(fade),fairy?[.98,.65,.81]:smoke);
+      if(t<.45){this.glow.at(cloud.wx,cgy+2.5,cloud.wz);this.glow.particle(0,0,0,9*(1-t/.45),flake);for(let i=0;i<4;i++){const f=i/3,ox=cloud.originX+(cloud.wx-cloud.originX)*f,oz=cloud.originZ+(cloud.wz-cloud.originZ)*f;this.glow.at(ox,groundHeight(arenas[r.arena],ox,oz)+1.5+Math.sin(f*Math.PI)*2,oz);this.glow.particle(0,0,0,1.2*(1-t/.45),flake);}}
     }
     const bikers=new Set([r,...r.bots].filter(actor=>actor.driver===10).map(actor=>actor.id));
     for(const particle of r.driftParticles){
       if(bikers.has(particle.owner))continue;
-      const fade=1-particle.age/particle.life;
-      if(particle.kind==='smoke'){const size=(1.5+particle.age*6)*Math.sqrt(fade);this.smoke.at(particle.wx,particle.height,particle.wz);this.smoke.particle(0,0,0,size,[.74,.77,.8]);continue;}
+      const fade=1-particle.age/particle.life,pgy=groundHeight(arenas[r.arena],particle.wx,particle.wz);
+      if(particle.kind==='smoke'){const size=(1.5+particle.age*6)*Math.sqrt(fade);this.smoke.at(particle.wx,pgy+particle.height,particle.wz);this.smoke.particle(0,0,0,size,[.74,.77,.8]);continue;}
       const tint=[[.9,.35,.04],[.05,.55,1],[.65,.15,1]][particle.level].map(c=>c*fade);
-      this.glow.at(particle.wx,particle.height,particle.wz);this.glow.particle(0,0,0,.42*fade,tint);this.glow.particle(-particle.vx*.025,-particle.vy*.025,-particle.vz*.025,.2*fade,tint);
+      this.glow.at(particle.wx,pgy+particle.height,particle.wz);this.glow.particle(0,0,0,.42*fade,tint);this.glow.particle(-particle.vx*.025,-particle.vy*.025,-particle.vz*.025,.2*fade,tint);
     }
     this.bikerSparks();this.yudaExhaust.draw(this.smoke,time);
-    if(r.wasDrifting&&r.driver!==10){this.glow.at(p.x,.25,p.z,r.heading);const color=r.drift>=.85?[.5,.08,.9]:r.drift>=.45?[0,.4,.9]:[.6,.2,.02];for(const side of [-1,1])this.glow.particle(side*1.65,0,-1.4,1,color);}
+    if(r.wasDrifting&&r.driver!==10){this.glow.at(p.x,pGround+.25,p.z,r.heading);const color=r.drift>=.85?[.5,.08,.9]:r.drift>=.45?[0,.4,.9]:[.6,.2,.02];for(const side of [-1,1])this.glow.particle(side*1.65,0,-1.4,1,color);}
     this.owlFlight.trail(m);this.flush(m,view,overview?.halfHeight?height/(2*overview.halfHeight):height);
     this.darkState=dark;
     if(dark.strength>0){
@@ -1101,10 +1103,10 @@ export class Renderer {
         const signals=new Mesh();
         for(const shot of r.projectiles){
           if(shot.life<=0)continue;const color=shot.owner===r.id?'#a4ffb6':'#ff709d',length=shot.kind==='missile'?1.6:.55,width=shot.kind==='missile'?.38:.2;
-          signals.at(shot.wx,shot.height,shot.wz,shot.heading);signals.tri([-width,0,-length],[width,0,-length],[0,0,length],color);signals.tri([0,-width,-length],[0,width,-length],[0,0,length],color);signals.ball(0,0,0,width,width,width,color,7,4);
-          for(let i=0;i<shot.trail.length;i+=3){const trail=shot.trail[i];signals.at(trail.wx,trail.height,trail.wz);signals.ball(0,0,0,.075,.075,.075,color,5,3);}
+          signals.at(shot.wx,shot.height+groundHeight(arenas[r.arena],shot.wx,shot.wz),shot.wz,shot.heading);signals.tri([-width,0,-length],[width,0,-length],[0,0,length],color);signals.tri([0,-width,-length],[0,width,-length],[0,0,length],color);signals.ball(0,0,0,width,width,width,color,7,4);
+          for(let i=0;i<shot.trail.length;i+=3){const trail=shot.trail[i];signals.at(trail.wx,trail.height+groundHeight(arenas[r.arena],trail.wx,trail.wz),trail.wz);signals.ball(0,0,0,.075,.075,.075,color,5,3);}
         }
-        for(const bomb of r.bombs??[]){const progress=Math.min(1,bomb.age/BOMB_FALL_TIME),color=bomb.owner===r.id?'#a4ffb6':'#ff709d';signals.at(bomb.wx,65*(1-progress*progress),bomb.wz);signals.ball(0,0,0,1.6,2.4,1.6,color,10,6);}
+        for(const bomb of r.bombs??[]){const progress=Math.min(1,bomb.age/BOMB_FALL_TIME),color=bomb.owner===r.id?'#a4ffb6':'#ff709d';signals.at(bomb.wx,groundHeight(arenas[r.arena],bomb.wx,bomb.wz)+65*(1-progress*progress),bomb.wz);signals.ball(0,0,0,1.6,2.4,1.6,color,10,6);}
         gl.bindBuffer(gl.ARRAY_BUFFER,this.dynamicBuffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(signals.data),gl.DYNAMIC_DRAW);this.drawBuffer(this.dynamicBuffer,signals.data.length/9);
         gl.uniform1f(this.xray,0);gl.uniform1f(this.emission,0);gl.uniform1f(this.fogScale,overview?.fogScale??1);gl.uniform3f(this.originUniform,0,0,0);gl.uniform2f(this.rotationUniform,1,0);gl.uniform2f(this.pitchUniform,1,0);gl.uniform2f(this.rollUniform,1,0);gl.enable(gl.DEPTH_TEST);
       }
@@ -1120,7 +1122,8 @@ export class Renderer {
   }
   eulerGhost(m,effect,time){
     const t=effect.age??time,phase=t*Math.PI,bob=Math.sin(phase*2)*.55,sway=Math.sin(phase)*.16,angle=effect.heading??0;
-    const rise=Math.min(1,t/.8),yBase=1.7+bob-(1-rise)*4.2;
+    const gy=this.activeArena!==undefined?groundHeight(arenas[this.activeArena],effect.wx,effect.wz):0;
+    const rise=Math.min(1,t/.8),yBase=gy+1.7+bob-(1-rise)*4.2;
     // Classic cartoonish ghost sheet with scalloped rippling hem and wagging spectral tail.
     m.at(effect.wx,yBase,effect.wz,angle+sway);
     m.cone(0,.6,0,2.75,4.9,'#bdf9f2',12);
@@ -1222,25 +1225,25 @@ export class Renderer {
     m.at(0,0,0);
   }
   atomicExplosion(m,effect){
-    const t=effect.age,fade=Math.max(0,1-t/3),radius=Math.min(BOMB_OUTER_RADIUS,t*48);
-    this.glow.at(effect.wx,.3,effect.wz);
+    const t=effect.age,fade=Math.max(0,1-t/3),radius=Math.min(BOMB_OUTER_RADIUS,t*48),gy=this.activeArena!==undefined?groundHeight(arenas[this.activeArena],effect.wx,effect.wz):0;
+    this.glow.at(effect.wx,gy+.3,effect.wz);
     for(let i=0;i<48;i++){const a=i/48*Math.PI*2,b=(i+1)/48*Math.PI*2;this.glow.quad([Math.sin(a)*radius,0,Math.cos(a)*radius],[Math.sin(b)*radius,0,Math.cos(b)*radius],[Math.sin(b)*(radius+1.2),0,Math.cos(b)*(radius+1.2)],[Math.sin(a)*(radius+1.2),0,Math.cos(a)*(radius+1.2)],[fade,.4*fade,.04*fade]);}
     for(let i=0;i<12;i++){
-      const a=i*2.399,r=5+t*3,y=6+t*14;
+      const a=i*2.399,r=5+t*3,y=gy+6+t*14;
       m.at(effect.wx+Math.sin(a)*r,y+(i%3)*2,effect.wz+Math.cos(a)*r);m.ball(0,0,0,(5+t*2)*fade,(3+t)*fade,(5+t*2)*fade,t<.45?'#fff0a0':t<1.2?'#ff9b48':'#817783',8,5);
     }
     // The translucent lower plume leaves the incinerated character visible.
-    for(let i=0;i<5;i++){this.smoke.at(effect.wx,1+i*(2+t*1.7),effect.wz);this.smoke.particle(0,0,0,(4+t*2)*Math.sqrt(fade),t<.5?[.92,.77,.5]:[.61,.57,.56]);}
-    this.glow.at(effect.wx,2,effect.wz);this.glow.particle(0,0,0,Math.max(0,24-t*68),[fade,.55*fade,.12*fade]);
+    for(let i=0;i<5;i++){this.smoke.at(effect.wx,gy+1+i*(2+t*1.7),effect.wz);this.smoke.particle(0,0,0,(4+t*2)*Math.sqrt(fade),t<.5?[.92,.77,.5]:[.61,.57,.56]);}
+    this.glow.at(effect.wx,gy+2,effect.wz);this.glow.particle(0,0,0,Math.max(0,24-t*68),[fade,.55*fade,.12*fade]);
   }
   radiationZone(m,zone,time){
-    const fade=Math.max(0,Math.min(1,zone.life-zone.age)),pulse=.65+.2*Math.sin(time*5),radius=BOMB_OUTER_RADIUS;
-    this.glow.at(zone.wx,.055,zone.wz);
+    const fade=Math.max(0,Math.min(1,zone.life-zone.age)),pulse=.65+.2*Math.sin(time*5),radius=BOMB_OUTER_RADIUS,gy=this.activeArena!==undefined?groundHeight(arenas[this.activeArena],zone.wx,zone.wz):0;
+    this.glow.at(zone.wx,gy+.055,zone.wz);
     for(let i=0;i<72;i++){
       const a=i*Math.PI/36,b=(i+.8)*Math.PI/36;
       this.glow.quad([Math.sin(a)*(radius-.45),0,Math.cos(a)*(radius-.45)],[Math.sin(a)*radius,0,Math.cos(a)*radius],[Math.sin(b)*radius,0,Math.cos(b)*radius],[Math.sin(b)*(radius-.45),0,Math.cos(b)*(radius-.45)],[.26*pulse*fade,.65*pulse*fade,.035*fade]);
     }
-    const icon=(x,z)=>this.model('radiation:trefoil',x,.07,z,0,mesh=>{
+    const icon=(x,z)=>this.model('radiation:trefoil',x,(this.activeArena!==undefined?groundHeight(arenas[this.activeArena],x,z):0)+.07,z,0,mesh=>{
       mesh.disc(0,0,0,2.8,2.8,'#d8e861',24);mesh.disc(0,.015,0,.42,.42,'#263727',14);
       for(let arm=0;arm<3;arm++)for(let i=0;i<7;i++){
         const a=arm*Math.PI*2/3+i*Math.PI/21,b=a+Math.PI/21;
@@ -1248,7 +1251,7 @@ export class Renderer {
       }
     });
     if(fade>.25||Math.sin(time*14)>0){icon(zone.wx,zone.wz);for(let i=0;i<3;i++){const a=i*Math.PI*2/3;icon(zone.wx+Math.sin(a)*18,zone.wz+Math.cos(a)*18);}}
-    this.smoke.at(zone.wx,.3,zone.wz);this.glow.at(zone.wx,.15,zone.wz);
+    this.smoke.at(zone.wx,gy+.3,zone.wz);this.glow.at(zone.wx,gy+.15,zone.wz);
     for(let i=0;i<18;i++){
       const a=i*2.399,r=4+(i%5)*4,t=(time*.35+i*.17)%1;
       this.glow.particle(Math.sin(a)*r,.25+t*.5,Math.cos(a)*r,.35*fade,[.14*fade,.42*fade,.025]);
@@ -1256,7 +1259,7 @@ export class Renderer {
     }
   }
   ashRemains(m,effect){
-    const t=effect.age,key=`${effect.wx}:${effect.wz}`,fade=Math.max(0,Math.min(1,(effect.life-t)/.6));
+    const t=effect.age,key=`${effect.wx}:${effect.wz}`,fade=Math.max(0,Math.min(1,(effect.life-t)/.6)),gy=this.activeArena!==undefined?groundHeight(arenas[this.activeArena],effect.wx,effect.wz):0;
     let body=this.ashBodies.get(key);
     if(!body||t<body.age){
       const source=[...this.lastBodies.values()].find(b=>Math.hypot(b.x-effect.wx,b.z-effect.wz)<3);
@@ -1266,17 +1269,17 @@ export class Renderer {
     for(const [i,point]of body.points.entries()){
       const age=Math.max(0,t-.18-(i%7)*.045),p=Math.min(1,age/(.65+i%5*.04)),fall=p*p*(3-2*p),a=i*2.399,radius=.25+(i%17)/17*1.9;
       const x=point[0]*(1-fall)+Math.sin(a)*radius*fall,z=point[2]*(1-fall)+Math.cos(a)*radius*fall;
-      const ground=.08+Math.max(0,1-radius/2.3)*.65,bounce=Math.sin(p*Math.PI)*.12;
+      const ground=gy+.08+Math.max(0,1-radius/2.3)*.65,bounce=Math.sin(p*Math.PI)*.12;
       const y=point[1]*(1-fall)+ground*fall+bounce;
       m.at(effect.wx+x,y,effect.wz+z,a*fall);m.pitch=Math.sin(a)*fall*2;
       const size=(.2+i%3*.035)*Math.cbrt(fade);m.box(0,0,0,size,size*.8,size,i%5===0?'#b4b1a8':i%2?'#777b80':'#50565d');
     }
-    this.smoke.at(effect.wx,.4,effect.wz);
+    this.smoke.at(effect.wx,gy+.4,effect.wz);
     const simmer=Math.max(0,t-1.3);
     for(let i=0;i<16;i++){
       const age=(simmer*.55+i/16)%1,a=i*2.399+simmer*.35;
       this.smoke.particle(Math.sin(a)*(.4+age),age*2.6,Math.cos(a)*(.4+age),(.5+age*1.4)*Math.sqrt(fade),[.39,.41,.44]);
-      if(t>1.3&&i%4===0){this.glow.at(effect.wx+Math.sin(a)*1.1,.2,effect.wz+Math.cos(a)*1.1);this.glow.particle(0,0,0,.18*fade,[.22*fade,.055*fade,.008]);}
+      if(t>1.3&&i%4===0){this.glow.at(effect.wx+Math.sin(a)*1.1,gy+.2,effect.wz+Math.cos(a)*1.1);this.glow.particle(0,0,0,.18*fade,[.22*fade,.055*fade,.008]);}
     }
   }
   rubbleSamples(data){
@@ -1316,7 +1319,7 @@ export class Renderer {
     const drawInstance=instance=>{
       let wh=null;
       for(const h of holes){if(Math.hypot(instance.x-h.ownerX,instance.z-h.ownerZ)>4.5&&Math.hypot(instance.x-h.x,instance.z-h.z)<h.radius){wh=h;break;}}
-      if(wh)gl.uniform4f(this.wormholeUniform,wh.x,2.6,wh.z,wh.radius);else gl.uniform4f(this.wormholeUniform,0,0,0,0);
+      if(wh)gl.uniform4f(this.wormholeUniform,wh.x,wh.y??2.6,wh.z,wh.radius);else gl.uniform4f(this.wormholeUniform,0,0,0,0);
       gl.uniform1f(this.opacityUniform,instance.opacity??1);gl.uniform3f(this.originUniform,instance.x,instance.y,instance.z);gl.uniform2f(this.rotationUniform,Math.cos(instance.angle),Math.sin(instance.angle));gl.uniform2f(this.pitchUniform,Math.cos(instance.pitch),Math.sin(instance.pitch));gl.uniform2f(this.rollUniform,Math.cos(instance.roll),Math.sin(instance.roll));gl.uniform4f(this.plumageUniform,instance.plumage===null?0:1,instance.plumage?.clock??0,instance.plumage?.fold??0,instance.plumage?.angle??0);this.drawBuffer(instance.buffer,instance.count);
     };
     const faded=this.instances.filter(instance=>(instance.opacity??1)<1);

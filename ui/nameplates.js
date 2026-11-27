@@ -1,4 +1,4 @@
-import { arenas, inArenaBounds, somersaultPose } from '../gameplay/combat.js';
+import { arenas, groundHeight, inArenaBounds, somersaultPose } from '../gameplay/combat.js';
 import { drivers } from '../gameplay/engine.js';
 import { darkHumorState } from '../characters/knowitowl/dark-humor.js';
 
@@ -16,9 +16,10 @@ export function kartNameplates(world,matrix,eye){
   const labels=[];
   for(const actor of world.bots){
     if(actor.bomber||actor.destroyed||actor.inactive||actor.afk||!world.bomber&&Math.hypot(actor.wx-world.wx,actor.wz-world.wz)<28)continue;
+    const gy=groundHeight(arenas[world.arena],actor.wx,actor.wz);
     const jump=somersaultPose(actor)?.height??0;
-    if(!visibleBody(arenas[world.arena],eye,actor,2+jump))continue;
-    const point=[actor.wx,7.2+jump,actor.wz,1],clip=[0,1,2,3].map(row=>point.reduce((sum,value,column)=>sum+matrix[column*4+row]*value,0));
+    if(!visibleBody(arenas[world.arena],eye,actor,gy+2+jump))continue;
+    const point=[actor.wx,gy+7.2+jump,actor.wz,1],clip=[0,1,2,3].map(row=>point.reduce((sum,value,column)=>sum+matrix[column*4+row]*value,0));
     if(clip[3]<=0||Math.abs(clip[0])>clip[3]||Math.abs(clip[1])>clip[3]||Math.abs(clip[2])>clip[3])continue;
     labels.push({id:actor.id,name:actor.name??drivers[actor.driver].name,color:actor.color??drivers[actor.driver].color,x:(clip[0]/clip[3]+1)*50,y:(1-clip[1]/clip[3])*50});
   }

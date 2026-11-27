@@ -246,11 +246,10 @@ fn sync_wormholes(
         let strength = open * close;
 
         let heading = a.heading as f32;
-        let pos = Vec3::new(
-            a.wx as f32 + heading.sin() * WORMHOLE_OFFSET,
-            WORMHOLE_HEIGHT,
-            a.wz as f32 + heading.cos() * WORMHOLE_OFFSET,
-        );
+        let wx = a.wx + (heading as f64).sin() * WORMHOLE_OFFSET as f64;
+        let wz = a.wz + (heading as f64).cos() * WORMHOLE_OFFSET as f64;
+        let gy = view.arena_def.ground_height(wx, wz) as f32;
+        let pos = Vec3::new(wx as f32, gy + WORMHOLE_HEIGHT, wz as f32);
         active.holes.push((a.id, pos, strength));
         seen.push(a.id);
 
@@ -398,7 +397,9 @@ fn sync_wormholes(
                 for k in 0..count {
                     let ang = t * 7.3 + k as f32 * 3.14 + hole_pos.x * 0.13;
                     let radius = 14.0 + ((t * 17.0 + k as f32).sin() * 0.5 + 0.5) * 6.0;
-                    let height = 0.4 + ((t * 13.0 + k as f32).cos() * 0.5 + 0.5) * 4.5;
+                    let height = (hole_pos.y - WORMHOLE_HEIGHT)
+                        + 0.4
+                        + ((t * 13.0 + k as f32).cos() * 0.5 + 0.5) * 4.5;
                     let start = Vec3::new(
                         hole_pos.x + ang.cos() * radius,
                         height,
@@ -429,7 +430,8 @@ fn sync_wormholes(
                 if weight < 0.05 {
                     continue;
                 }
-                let start = Vec3::new(vx, 1.6, vz);
+                let v_gy = view.arena_def.ground_height(vx as f64, vz as f64) as f32;
+                let start = Vec3::new(vx, v_gy + 1.6, vz);
                 let to_hole = hole_pos - start;
                 let ang = to_hole.z.atan2(to_hole.x) + std::f32::consts::PI;
                 commands.spawn((
@@ -443,7 +445,7 @@ fn sync_wormholes(
                         target: hole_pos,
                         angle: ang,
                         radius: to_hole.xz().length(),
-                        height: 1.6,
+                        height: v_gy + 1.6,
                         age: 0.0,
                         life: 0.28,
                     },

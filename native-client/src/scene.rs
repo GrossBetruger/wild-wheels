@@ -635,7 +635,7 @@ fn racers(stage: &mut Stage, view: &ClientView, bats: &Bats, dt: f32, now: f32, 
             Role::Health,
             a.id,
             pips,
-            at(a.wx, 0.0, a.wz, view.player.heading),
+            at(a.wx, view.arena_def.ground_height(a.wx, a.wz), a.wz, view.player.heading),
         );
         let active = [
             a.shield,
@@ -705,7 +705,7 @@ fn racers(stage: &mut Stage, view: &ClientView, bats: &Bats, dt: f32, now: f32, 
                 Role::Xylophone,
                 a.id,
                 xylophone,
-                at(a.wx, 0.0, a.wz, facing),
+                at(a.wx, view.arena_def.ground_height(a.wx, a.wz), a.wz, facing),
             );
         }
     }
@@ -718,7 +718,8 @@ fn effects(stage: &mut Stage, view: &ClientView, xray: bool, elapsed: f32) {
         false => crate::xray::RIVAL,
     };
     for (index, fx) in view.effects.iter().enumerate() {
-        let mut transform = at(fx.wx, 0.0, fx.wz, 0.0);
+        let fx_gy = view.arena_def.ground_height(fx.wx, fx.wz);
+        let mut transform = at(fx.wx, fx_gy, fx.wz, 0.0);
         let play = match fx.kind.as_str() {
             "wormholeCapture" => continue,
             // The browser draws Master-Yuda's exhaust from his own position instead.
@@ -744,7 +745,7 @@ fn effects(stage: &mut Stage, view: &ClientView, xray: bool, elapsed: f32) {
                 let out = fx.kind == "fireRingOut";
                 for rider in 0..FIRE_RING_RIDERS {
                     let (mut place, ahead) = fire_ring_rider(rider, radius, spin, elapsed);
-                    place.translation += Vec3::new(fx.wx as f32, 0.0, fx.wz as f32);
+                    place.translation += Vec3::new(fx.wx as f32, fx_gy as f32, fx.wz as f32);
                     let play = match out {
                         true => stage.aged(&format!("effect:fireRingOut:rider:{color}"), fx.age),
                         false => Play {
@@ -767,13 +768,13 @@ fn effects(stage: &mut Stage, view: &ClientView, xray: bool, elapsed: f32) {
                         ("heartbeat", Some(a)) => (a.wx, a.wz),
                         _ => (fx.wx, fx.wz),
                     };
-                    transform = at(wx, 0.0, wz, view.player.camera_heading);
+                    transform = at(wx, view.arena_def.ground_height(wx, wz), wz, view.player.camera_heading);
                 }
                 if let Some(heading) = fx
                     .heading
                     .filter(|_| matches!(kind, "teleportOut" | "eulerGhost"))
                 {
-                    transform = at(fx.wx, 0.0, fx.wz, heading);
+                    transform = at(fx.wx, fx_gy, fx.wz, heading);
                 }
                 let name = format!("effect:{kind}");
                 match stage.graphics.clip(&name) {
@@ -799,6 +800,7 @@ fn effects(stage: &mut Stage, view: &ClientView, xray: bool, elapsed: f32) {
             _ => "bomb:bomb",
         };
         let play = stage.aged(name, bomb.age);
+        let b_gy = view.arena_def.ground_height(bomb.wx, bomb.wz);
         if xray {
             let ghost = Play {
                 ghost: true,
@@ -809,10 +811,10 @@ fn effects(stage: &mut Stage, view: &ClientView, xray: bool, elapsed: f32) {
                 Role::GhostBomb,
                 index,
                 ghost,
-                at(bomb.wx, 0.0, bomb.wz, 0.0),
+                at(bomb.wx, b_gy, bomb.wz, 0.0),
             );
         }
-        stage.show(Role::Bomb, index, play, at(bomb.wx, 0.0, bomb.wz, 0.0));
+        stage.show(Role::Bomb, index, play, at(bomb.wx, b_gy, bomb.wz, 0.0));
     }
     for (index, cloud) in view.chaff_clouds.iter().enumerate() {
         let fairy = view.actors.get(cloud.owner).is_some_and(|a| a.driver == 9);
@@ -820,11 +822,21 @@ fn effects(stage: &mut Stage, view: &ClientView, xray: bool, elapsed: f32) {
             true => stage.aged("cloud:chaff:fairy", cloud.age),
             false => stage.aged("cloud:chaff", cloud.age),
         };
-        stage.show(Role::Chaff, index, play, at(cloud.wx, 0.0, cloud.wz, 0.0));
+        stage.show(
+            Role::Chaff,
+            index,
+            play,
+            at(cloud.wx, view.arena_def.ground_height(cloud.wx, cloud.wz), cloud.wz, 0.0),
+        );
     }
     for (index, cloud) in view.stink_clouds.iter().enumerate() {
         let play = stage.aged("cloud:stink", cloud.age);
-        stage.show(Role::Stink, index, play, at(cloud.wx, 0.0, cloud.wz, 0.0));
+        stage.show(
+            Role::Stink,
+            index,
+            play,
+            at(cloud.wx, view.arena_def.ground_height(cloud.wx, cloud.wz), cloud.wz, 0.0),
+        );
     }
     for (index, particle) in view.drift_particles.iter().enumerate() {
         // Master-Yuda's motorcycle throws its own sparks in the browser.
@@ -845,7 +857,12 @@ fn effects(stage: &mut Stage, view: &ClientView, xray: bool, elapsed: f32) {
             Role::Particle,
             index,
             play,
-            at(particle.wx, particle.height, particle.wz, 0.0),
+            at(
+                particle.wx,
+                particle.height + view.arena_def.ground_height(particle.wx, particle.wz),
+                particle.wz,
+                0.0,
+            ),
         );
     }
     for (index, bug) in view.locusts.iter().enumerate() {
@@ -858,7 +875,12 @@ fn effects(stage: &mut Stage, view: &ClientView, xray: bool, elapsed: f32) {
             Role::Locust,
             index,
             play,
-            at(bug.wx, buried, bug.wz, bug.heading),
+            at(
+                bug.wx,
+                buried + view.arena_def.ground_height(bug.wx, bug.wz),
+                bug.wz,
+                bug.heading,
+            ),
         );
     }
     if view.time_stop > 0.0 {
@@ -867,7 +889,17 @@ fn effects(stage: &mut Stage, view: &ClientView, xray: bool, elapsed: f32) {
             .and_then(|id| view.actors.get(id))
             .unwrap_or(view.player);
         let play = stage.aged("timestop", 2.5 - view.time_stop);
-        stage.show(Role::TimeStop, 0, play, at(caster.wx, 0.0, caster.wz, 0.0));
+        stage.show(
+            Role::TimeStop,
+            0,
+            play,
+            at(
+                caster.wx,
+                view.arena_def.ground_height(caster.wx, caster.wz),
+                caster.wz,
+                0.0,
+            ),
+        );
     }
 }
 
@@ -1005,14 +1037,14 @@ pub fn sync(
                 Role::GhostShot,
                 p.id as usize,
                 ghost,
-                at(p.wx, p.height, p.wz, p.heading),
+                at(p.wx, p.height + view.arena_def.ground_height(p.wx, p.wz), p.wz, p.heading),
             );
         }
         stage.show(
             Role::Shot,
             p.id as usize,
             play,
-            at(p.wx, p.height, p.wz, p.heading),
+            at(p.wx, p.height + view.arena_def.ground_height(p.wx, p.wz), p.wz, p.heading),
         );
     }
     for p in view.projectiles {
@@ -1049,10 +1081,11 @@ pub fn sync(
         }
         let skid_arena = view.arena.min(graphics.arenas().len().saturating_sub(1));
         let play = stage.aged(&format!("skid:{skid_arena}"), view.elapsed - skid.time);
+        let (mx, mz) = ((skid.ax + skid.bx) / 2.0, (skid.az + skid.bz) / 2.0);
         let mark = at(
-            (skid.ax + skid.bx) / 2.0,
-            0.0,
-            (skid.az + skid.bz) / 2.0,
+            mx,
+            view.arena_def.ground_height(mx, mz),
+            mz,
             dx.atan2(dz),
         )
         .with_scale(Vec3::new(1.0, 1.0, length as f32));

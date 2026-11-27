@@ -2083,11 +2083,12 @@ pub fn update(
             if dark || absent || near || !matches!(view.phase, "racing" | "paused") {
                 continue;
             }
+            let gy = view.arena_def.ground_height(a.wx, a.wz) as f32;
             let jump = crate::scene::somersault(a.driver, a.somersault).0;
-            if hidden(&view, eye, a.wx, a.wz, 2.0 + jump) {
+            if hidden(&view, eye, a.wx, a.wz, gy + 2.0 + jump) {
                 continue;
             }
-            let above = Vec3::new(a.wx as f32, 7.2 + jump, a.wz as f32);
+            let above = Vec3::new(a.wx as f32, gy + 7.2 + jump, a.wz as f32);
             if let Ok(at) = camera.world_to_viewport(lens, above) {
                 let racer = graphics.racers().get(a.driver);
                 let name = a.name.as_deref().or(racer.map(|r| r.name.as_str()));

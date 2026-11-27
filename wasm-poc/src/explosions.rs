@@ -325,7 +325,8 @@ fn detect_explosions(
         return;
     };
     let view = client.view();
-    let player_pos = Vec3::new(view.player.wx as f32, 0.0, view.player.wz as f32);
+    let player_gy = view.arena_def.ground_height(view.player.wx, view.player.wz) as f32;
+    let player_pos = Vec3::new(view.player.wx as f32, player_gy, view.player.wz as f32);
     let mut current = HashSet::new();
     for fx in view.effects {
         if fx.kind != "explosion" && fx.kind != "abomb" {
@@ -335,7 +336,8 @@ fn detect_explosions(
         current.insert(key);
         if fx.age < 0.25 && !seen.active.contains(&key) {
             let scale = if fx.kind == "abomb" { 1.85 } else { 1.0 };
-            let origin = Vec3::new(fx.wx as f32, 0.9, fx.wz as f32);
+            let gy = view.arena_def.ground_height(fx.wx, fx.wz) as f32;
+            let origin = Vec3::new(fx.wx as f32, gy + 0.9, fx.wz as f32);
             let dist = origin.distance(player_pos);
             let prox = (1.0 - dist / 75.0).clamp(0.0, 1.0);
             shake.trauma = (shake.trauma + prox * 0.68 * scale).min(1.0);
@@ -396,10 +398,11 @@ fn spawn_blast(
     ));
 
     // 3. Expanding ground shockwave ring
+    let ground_y = origin.y - 0.9;
     commands.spawn((
         Mesh3d(assets.ring_mesh.clone()),
         MeshMaterial3d(assets.ring_mat.clone()),
-        Transform::from_translation(Vec3::new(origin.x, 0.24, origin.z))
+        Transform::from_translation(Vec3::new(origin.x, ground_y + 0.24, origin.z))
             .with_scale(Vec3::new(0.8, 0.18, 0.8)),
         BlastRing {
             age: 0.0,
@@ -423,7 +426,7 @@ fn spawn_blast(
         commands.spawn((
             Mesh3d(assets.decal_mesh.clone()),
             MeshMaterial3d(decal_mat.clone()),
-            Transform::from_translation(Vec3::new(origin.x, y_jitter, origin.z))
+            Transform::from_translation(Vec3::new(origin.x, ground_y + y_jitter, origin.z))
                 .with_rotation(Quat::from_rotation_y(next_rand(seed) * std::f32::consts::TAU))
                 .with_scale(Vec3::new(decal_size, 1.0, decal_size)),
             ScorchDecal {
@@ -839,9 +842,12 @@ fn tick_explosions(
             Without<FlipbookBurst>,
         ),
     >,
+    session: Res<GameSession>,
 ) {
     let dt = time.delta_secs().min(0.05);
     let t = time.elapsed_secs();
+    let arena_def = session.client.as_ref().map(|c| c.view().arena_def.clone());
+    let floor_at = |x: f32, z: f32| arena_def.as_ref().map_or(0.0, |d| d.ground_height(f64::from(x), f64::from(z)) as f32);
     shake.time = t;
     shake.trauma = (shake.trauma - dt * 1.9).max(0.0);
     let cam_pos = cameras.iter().next().map_or(Vec3::new(0.0, 15.0, 20.0), |g| g.translation());
@@ -952,8 +958,9 @@ fn tick_explosions(
         sp.vel.y -= 38.0 * dt;
         tf.translation += sp.vel * dt;
         // Real floor bounce with restitution, friction & bounce sparks!
-        if tf.translation.y <= 0.14 {
-            tf.translation.y = 0.14;
+        let floor_y = floor_at(tf.translation.x, tf.translation.z) + 0.14;
+        if tf.translation.y <= floor_y {
+            tf.translation.y = floor_y;
             if sp.vel.y < -3.0 {
                 sp.vel.y = -sp.vel.y * 0.42;
                 sp.vel.x *= 0.68;
@@ -1037,8 +1044,9 @@ fn tick_explosions(
         sk.vel.y -= 32.0 * dt;
         sk.vel *= (1.0 - 1.2 * dt).max(0.2);
         tf.translation += sk.vel * dt;
-        if tf.translation.y <= 0.08 {
-            tf.translation.y = 0.08;
+        let floor_y = floor_at(tf.translation.x, tf.translation.z) + 0.08;
+        if tf.translation.y <= floor_y {
+            tf.translation.y = floor_y;
             sk.vel.y = sk.vel.y.abs() * 0.45;
             sk.vel.x *= 0.75;
             sk.vel.z *= 0.75;

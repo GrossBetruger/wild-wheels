@@ -363,9 +363,11 @@ fn spawn_boost_apples(
 fn tick_falling_apples(
     mut commands: Commands,
     time: Res<Time>,
+    session: Res<GameSession>,
     mut apples: Query<(Entity, &mut Transform, &mut FallingApple)>,
 ) {
     let dt = time.delta_secs().min(0.05);
+    let arena_def = session.client.as_ref().map(|c| c.view().arena_def.clone());
     for (ent, mut tf, mut apple) in &mut apples {
         apple.age += dt;
         if apple.age >= apple.life {
@@ -374,8 +376,12 @@ fn tick_falling_apples(
         }
         apple.vel.y -= APPLE_GRAVITY * dt;
         tf.translation += apple.vel * dt;
-        if tf.translation.y < APPLE_RADIUS {
-            tf.translation.y = APPLE_RADIUS;
+        let floor_y = arena_def
+            .as_ref()
+            .map_or(0.0, |d| d.ground_height(f64::from(tf.translation.x), f64::from(tf.translation.z)) as f32)
+            + APPLE_RADIUS;
+        if tf.translation.y < floor_y {
+            tf.translation.y = floor_y;
             if apple.vel.y < -1.2 {
                 apple.vel.y = -apple.vel.y * 0.48;
                 apple.vel.x *= 0.84;

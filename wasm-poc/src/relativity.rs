@@ -373,7 +373,8 @@ fn sync_relativity(
         .and_then(|id| view.actors.get(id))
         .unwrap_or(view.player);
     let is_caster = if view.time_owner == Some(view.player.id) { 1.0 } else { 0.0 };
-    let caster_pos = Vec3::new(caster.wx as f32, 0.24, caster.wz as f32);
+    let caster_gy = view.arena_def.ground_height(caster.wx, caster.wz) as f32;
+    let caster_pos = Vec3::new(caster.wx as f32, caster_gy + 0.24, caster.wz as f32);
 
     // 1. Warped Einstein spacetime grid on arena floor
     let wave_radius = (age * 68.0).min(72.0);
@@ -396,7 +397,7 @@ fn sync_relativity(
     let rim_boost = (1.0 - dome_p) * 1.4 + if remaining < 0.35 && active { 0.9 } else { 0.0 };
     if let Ok((mut tf, mut vis)) = transforms.get_mut(rig.dome_ent) {
         if rig.strength > 0.005 {
-            tf.translation = Vec3::new(caster.wx as f32, 1.4, caster.wz as f32);
+            tf.translation = Vec3::new(caster.wx as f32, caster_gy + 1.4, caster.wz as f32);
             tf.scale = Vec3::new(dome_radius, dome_radius * 0.52, dome_radius);
             *vis = Visibility::Visible;
         } else {
@@ -418,7 +419,7 @@ fn sync_relativity(
         light.intensity = rig.strength * 2_400_000.0 * pulse;
     }
     if let Ok((mut ltf, _)) = transforms.get_mut(rig.light_ent) {
-        ltf.translation = Vec3::new(caster.wx as f32, 8.5, caster.wz as f32);
+        ltf.translation = Vec3::new(caster.wx as f32, caster_gy + 8.5, caster.wz as f32);
     }
 
     // 5. Snappy camera FOV punch on cast + tight relativistic focus during freeze

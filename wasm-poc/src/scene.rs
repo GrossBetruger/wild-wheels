@@ -628,7 +628,7 @@ fn racers(stage: &mut Stage, view: &ClientView, bats: &Bats, dt: f32, now: f32, 
                 Role::Health,
                 a.id,
                 pips,
-                at(a.wx, 0.0, a.wz, view.player.heading),
+                at(a.wx, view.arena_def.ground_height(a.wx, a.wz), a.wz, view.player.heading),
             );
         }
         let active = [
@@ -705,7 +705,7 @@ fn racers(stage: &mut Stage, view: &ClientView, bats: &Bats, dt: f32, now: f32, 
                 Role::Xylophone,
                 a.id,
                 xylophone,
-                at(a.wx, 0.0, a.wz, facing),
+                at(a.wx, view.arena_def.ground_height(a.wx, a.wz), a.wz, facing),
             );
         }
     }
@@ -718,7 +718,7 @@ fn effects(stage: &mut Stage, view: &ClientView, xray: bool, elapsed: f32, drift
         false => crate::xray::RIVAL,
     };
     for (index, fx) in view.effects.iter().enumerate() {
-        let mut transform = at(fx.wx, 0.0, fx.wz, 0.0);
+        let mut transform = at(fx.wx, view.arena_def.ground_height(fx.wx, fx.wz), fx.wz, 0.0);
         let play = match fx.kind.as_str() {
             "wormholeCapture" => continue,
             // The browser draws Master-Yuda's exhaust from his own position instead.
@@ -744,7 +744,9 @@ fn effects(stage: &mut Stage, view: &ClientView, xray: bool, elapsed: f32, drift
                 let out = fx.kind == "fireRingOut";
                 for rider in 0..FIRE_RING_RIDERS {
                     let (mut place, ahead) = fire_ring_rider(rider, radius, spin, elapsed);
-                    place.translation += Vec3::new(fx.wx as f32, 0.0, fx.wz as f32);
+                    let rx = fx.wx + f64::from(place.translation.x);
+                    let rz = fx.wz + f64::from(place.translation.z);
+                    place.translation += Vec3::new(fx.wx as f32, view.arena_def.ground_height(rx, rz) as f32, fx.wz as f32);
                     let play = match out {
                         true => stage.aged(&format!("effect:fireRingOut:rider:{color}"), fx.age),
                         false => Play {
@@ -767,13 +769,13 @@ fn effects(stage: &mut Stage, view: &ClientView, xray: bool, elapsed: f32, drift
                         ("heartbeat", Some(a)) => (a.wx, a.wz),
                         _ => (fx.wx, fx.wz),
                     };
-                    transform = at(wx, 0.0, wz, view.player.camera_heading);
+                    transform = at(wx, view.arena_def.ground_height(wx, wz), wz, view.player.camera_heading);
                 }
                 if let Some(heading) = fx
                     .heading
                     .filter(|_| matches!(kind, "teleportOut" | "eulerGhost"))
                 {
-                    transform = at(fx.wx, 0.0, fx.wz, heading);
+                    transform = at(fx.wx, view.arena_def.ground_height(fx.wx, fx.wz), fx.wz, heading);
                 }
                 let name = format!("effect:{kind}");
                 match stage.graphics.clip(&name) {
@@ -805,14 +807,15 @@ fn effects(stage: &mut Stage, view: &ClientView, xray: bool, elapsed: f32, drift
                 tint: side(bomb.owner),
                 ..play
             };
+            let by = view.arena_def.ground_height(bomb.wx, bomb.wz);
             stage.show(
                 Role::GhostBomb,
                 index,
                 ghost,
-                at(bomb.wx, 0.0, bomb.wz, 0.0),
+                at(bomb.wx, by, bomb.wz, 0.0),
             );
         }
-        stage.show(Role::Bomb, index, play, at(bomb.wx, 0.0, bomb.wz, 0.0));
+        stage.show(Role::Bomb, index, play, at(bomb.wx, view.arena_def.ground_height(bomb.wx, bomb.wz), bomb.wz, 0.0));
     }
     for (index, cloud) in view.chaff_clouds.iter().enumerate() {
         let fairy = view.actors.get(cloud.owner).is_some_and(|a| a.driver == 9);
@@ -820,11 +823,11 @@ fn effects(stage: &mut Stage, view: &ClientView, xray: bool, elapsed: f32, drift
             true => stage.aged("cloud:chaff:fairy", cloud.age),
             false => stage.aged("cloud:chaff", cloud.age),
         };
-        stage.show(Role::Chaff, index, play, at(cloud.wx, 0.0, cloud.wz, 0.0));
+        stage.show(Role::Chaff, index, play, at(cloud.wx, view.arena_def.ground_height(cloud.wx, cloud.wz), cloud.wz, 0.0));
     }
     for (index, cloud) in view.stink_clouds.iter().enumerate() {
         let play = stage.aged("cloud:stink", cloud.age);
-        stage.show(Role::Stink, index, play, at(cloud.wx, 0.0, cloud.wz, 0.0));
+        stage.show(Role::Stink, index, play, at(cloud.wx, view.arena_def.ground_height(cloud.wx, cloud.wz), cloud.wz, 0.0));
     }
     let recent_drift = view.drift_particles.len().saturating_sub(drift_limit);
     for (index, particle) in view.drift_particles.iter().enumerate().skip(recent_drift) {
@@ -846,7 +849,7 @@ fn effects(stage: &mut Stage, view: &ClientView, xray: bool, elapsed: f32, drift
             Role::Particle,
             index,
             play,
-            at(particle.wx, particle.height, particle.wz, 0.0),
+            at(particle.wx, particle.height + view.arena_def.ground_height(particle.wx, particle.wz), particle.wz, 0.0),
         );
     }
     for (index, bug) in view.locusts.iter().enumerate() {
@@ -859,7 +862,7 @@ fn effects(stage: &mut Stage, view: &ClientView, xray: bool, elapsed: f32, drift
             Role::Locust,
             index,
             play,
-            at(bug.wx, buried, bug.wz, bug.heading),
+            at(bug.wx, buried + view.arena_def.ground_height(bug.wx, bug.wz), bug.wz, bug.heading),
         );
     }
     // Special Relativity (time_stop) visuals are rendered by `relativity::RelativityPlugin`.
@@ -1066,10 +1069,11 @@ pub fn sync(
         }
         let skid_arena = view.arena.min(graphics.arenas().len().saturating_sub(1));
         let play = stage.aged(&format!("skid:{skid_arena}"), view.elapsed - skid.time);
+        let (mx, mz) = ((skid.ax + skid.bx) / 2.0, (skid.az + skid.bz) / 2.0);
         let mark = at(
-            (skid.ax + skid.bx) / 2.0,
-            0.0,
-            (skid.az + skid.bz) / 2.0,
+            mx,
+            view.arena_def.ground_height(mx, mz),
+            mz,
             dx.atan2(dz),
         )
         .with_scale(Vec3::new(1.0, 1.0, length as f32));

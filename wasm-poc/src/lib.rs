@@ -769,7 +769,8 @@ fn sync_blender_models(
         // Animated multi-part Blender Houston: Starship + rotating/waving sloth + 6 Raptor afterburners + RCS jets!
         if a.driver == 7 {
             alive_houston.insert(a.id);
-            let hover = if a.somersault > 0.0 {
+            let gy = view.arena_def.ground_height(a.wx, a.wz) as f32;
+            let hover = gy + if a.somersault > 0.0 {
                 somersault_h
             } else {
                 (t * 5.0 + a.id as f32).sin() * 0.04
