@@ -65,7 +65,7 @@ fn main() {
         (
             "port-graphics.mjs",
             "graphics.wwgp",
-            None,
+            Some("--web"),
             &[
                 "client",
                 "characters",
@@ -104,7 +104,10 @@ fn main() {
     for &(script, pack, extra, inputs) in packs {
         let pack_path = out.join(pack);
         let stamp_path = out.join(format!("{pack}.hash"));
-        let digest = inputs_hash(&root, inputs);
+        let mut digest = inputs_hash(&root, inputs);
+        if let Some(flag) = extra {
+            digest.push_str(flag);
+        }
         let unchanged = pack_path.exists()
             && fs::read_to_string(&stamp_path).ok().as_deref() == Some(digest.as_str());
         if unchanged {
