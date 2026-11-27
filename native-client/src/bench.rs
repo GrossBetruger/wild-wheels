@@ -2,7 +2,7 @@
 //! with vertical sync off, then prints where each frame's time went.
 use bevy::{app::AppExit, prelude::*};
 use std::{
-    sync::atomic::{AtomicU64, Ordering},
+    sync::atomic::Ordering,
     time::Instant,
 };
 
@@ -21,14 +21,9 @@ pub const STAGES: [&str; 9] = [
 /// Frames before this many seconds are warm-up and are not counted.
 const WARMUP: f64 = 5.0;
 /// Meshes built from the graphics pack, and the time that took, since launch.
-pub static MESHES_BUILT: AtomicU64 = AtomicU64::new(0);
-pub static MESH_BUILD_NANOS: AtomicU64 = AtomicU64::new(0);
-pub static SPRITE_MESHES: AtomicU64 = AtomicU64::new(0);
-/// What the scene showed last frame, for explaining slow frames.
-pub static PROJECTILES: AtomicU64 = AtomicU64::new(0);
-pub static EFFECTS: AtomicU64 = AtomicU64::new(0);
-pub static SPAWNED: AtomicU64 = AtomicU64::new(0);
-pub static DESPAWNED: AtomicU64 = AtomicU64::new(0);
+pub use wild_wheels_render::bench::{
+    DESPAWNED, EFFECTS, MESHES_BUILT, MESH_BUILD_NANOS, PROJECTILES, SPAWNED, SPRITE_MESHES,
+};
 
 /// One measured frame: its time, the logic stages' share, and what happened in it.
 #[derive(Clone, Copy, Default)]

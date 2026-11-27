@@ -339,7 +339,9 @@ pub fn run(config: Config, name: &str) -> Result<(), Box<dyn Error>> {
             ..default()
         })),
     };
+    crate::init_render();
     app.insert_resource(Offscreen(config.offscreen))
+        .init_resource::<wild_wheels_render::MobileGraphics>()
         .insert_resource(Show {
             scene,
             capture: config.capture.map(PathBuf::from),

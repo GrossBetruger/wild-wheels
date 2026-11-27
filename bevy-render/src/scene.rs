@@ -18,9 +18,42 @@ pub struct ArenaPresentationPlugin;
 impl Plugin for ArenaPresentationPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<SceneCache>()
+            .init_resource::<Capture>()
             .add_systems(Last, audit_xray)
             .add_systems(Startup, setup);
+        #[cfg(not(target_arch = "wasm32"))]
+        app.add_systems(Update, capture);
     }
+}
+#[derive(Resource, Default)]
+pub struct Capture(pub Option<String>);
+#[cfg(not(target_arch = "wasm32"))]
+fn capture(
+    mut commands: Commands,
+    capture: Res<Capture>,
+    time: Res<Time>,
+    mut last: Local<f32>,
+    windows: Query<&Window>,
+) {
+    let Some(path) = capture.0.as_ref() else {
+        return;
+    };
+    if !windows
+        .iter()
+        .any(|window| window.focused && window.visible)
+    {
+        return;
+    }
+    if time.elapsed_secs() < 5.0 {
+        return;
+    }
+    if time.elapsed_secs() - *last < 10.0 {
+        return;
+    }
+    *last = time.elapsed_secs();
+    commands
+        .spawn(bevy::render::view::screenshot::Screenshot::primary_window())
+        .observe(bevy::render::view::screenshot::save_to_disk(path.clone()));
 }
 /// What a ported clip stands for; with a number it names one entity on screen.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -96,6 +129,37 @@ pub struct SceneCache {
     tails: HashMap<usize, Tail>,
     /// Smoothly frame Houston's full exhaust weapon, matching the browser camera.
     nightmare_zoom: f32,
+    /// Spring-arm occlusion pull-in fraction (1.0 = full chase distance, <1.0 = pulled in).
+    camera_arm: f32,
+}
+
+/// Computes the unobstructed spring-arm fraction in `[0.28, 1.0]` along the ray
+/// from `anchor` (just above the kart) to `desired` (the chase camera position),
+/// preventing the camera from clipping into cliffs, cover blocks, or perimeter
+/// walls/houses (such as Königsberg's waterfront buildings).
+pub(crate) fn spring_arm_fraction(
+    arena: &wild_wheels_core::ArenaDef,
+    anchor: Vec3,
+    desired: Vec3,
+) -> f32 {
+    const STEPS: usize = 24;
+    const MIN_ARM: f32 = 0.28;
+    for i in 2..=STEPS {
+        let t = i as f32 / STEPS as f32;
+        let sample = anchor.lerp(desired, t);
+        let (sx, sz) = (f64::from(sample.x), f64::from(sample.z));
+        let gy = arena.ground_height(sx, sz) as f32;
+        let hit_perimeter = !arena.is_torus() && !arena.in_bounds(sx, sz, 1.8);
+        let hit_block = sample.y < gy + 6.8
+            && arena.blocks.iter().any(|b| {
+                (sx - b[0]).abs() < b[2] * 0.5 + 1.4 && (sz - b[1]).abs() < b[3] * 0.5 + 1.4
+            });
+        let hit_terrain = gy + 2.6 > sample.y;
+        if hit_perimeter || hit_block || hit_terrain {
+            return (t - 1.0 / STEPS as f32).clamp(MIN_ARM, 1.0);
+        }
+    }
+    1.0
 }
 /// Developer check, on with WILD_WHEELS_XRAY_AUDIT: reports every frame in which
 /// a racer's X-ray silhouette exists but none of it is drawn, and why.
@@ -1136,11 +1200,21 @@ pub fn sync(
     } else {
         Vec3::ZERO
     };
+    let anchor = center + Vec3::Y * 2.5;
+    let desired_eye = center - facing * distance + Vec3::Y * height;
+    let target_arm = spring_arm_fraction(view.arena_def, anchor, desired_eye);
+    if cache.camera_arm <= 0.01 {
+        cache.camera_arm = target_arm;
+    } else {
+        let rate = if target_arm < cache.camera_arm { 22.0 } else { 6.5 };
+        cache.camera_arm += (target_arm - cache.camera_arm) * (1.0 - (-time.delta_secs().min(0.1) * rate).exp());
+    }
+    let mut eye = anchor.lerp(desired_eye, cache.camera_arm);
+    eye.y += (1.0 - cache.camera_arm) * 3.5;
+    let eye_gy = view.arena_def.ground_height(f64::from(eye.x), f64::from(eye.z)) as f32;
+    eye.y = eye.y.max(eye_gy + 3.0);
     for (mut camera, mut projection) in &mut cameras {
-        *camera = Transform::from_translation(
-            center - facing * distance + Vec3::Y * height + shake_offset,
-        )
-        .looking_at(
+        *camera = Transform::from_translation(eye + shake_offset).looking_at(
             center + facing * ahead + Vec3::Y * 1.5 + shake_offset * 0.45,
             Vec3::Y,
         );
@@ -1208,11 +1282,27 @@ mod tests {
     }
 
     #[test]
-    fn sync_and_hud_update_have_no_query_conflicts() {
+    fn sync_has_no_query_conflicts() {
         let mut world = World::new();
         let mut sync_sys = IntoSystem::into_system(sync);
         sync_sys.initialize(&mut world);
-        let mut hud_sys = IntoSystem::into_system(crate::hud::update);
-        hud_sys.initialize(&mut world);
+    }
+
+    #[test]
+    fn spring_arm_pulls_camera_clear_of_cliffs_and_perimeter_houses() {
+        let mut hill = wild_wheels_core::default_arenas()[0].clone();
+        hill.shape = "hill".into();
+        hill.size = 168.0;
+        hill.blocks.clear();
+        let anchor = Vec3::new(56.0, hill.ground_height(56.0, 20.0) as f32 + 2.5, 20.0);
+        let desired = Vec3::new(39.0, anchor.y + 7.5, 20.0);
+        let arm = spring_arm_fraction(&hill, anchor, desired);
+        assert!(arm < 0.9, "camera arm should pull in to avoid clipping into the cliff: {arm}");
+
+        let mut flat = wild_wheels_core::default_arenas()[0].clone();
+        flat.size = 96.0;
+        flat.blocks.clear();
+        let edge_arm = spring_arm_fraction(&flat, Vec3::new(92.0, 2.5, 0.0), Vec3::new(109.0, 10.0, 0.0));
+        assert!(edge_arm < 0.5, "camera arm should stop inside the perimeter wall: {edge_arm}");
     }
 }

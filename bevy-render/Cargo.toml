@@ -1,0 +1,32 @@
+[package]
+name = "wild-wheels-render"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97.1"
+publish = false
+
+[dependencies]
+wild-wheels-core = { path = "../rust-core" }
+bevy = { version = "=0.20.1", default-features = false, features = [
+    "std",
+    "default_app",
+    "3d_bevy_render",
+    "bevy_winit",
+    "bevy_ui",
+    "bevy_ui_render",
+    "bevy_audio",
+    "wav",
+    "bevy_gltf",
+    "gltf_animation",
+    "morph",
+    "bevy_scene",
+    "keyboard",
+    "mouse",
+] }
+crossbeam-channel = "0.5"
+miniz_oxide = "=0.8.9"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.145"
+
+[lints.rust]
+unsafe_code = "forbid"

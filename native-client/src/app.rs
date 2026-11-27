@@ -337,13 +337,24 @@ pub fn run(mut config: Config) -> Result<(), Box<dyn Error>> {
     let paced = std::env::var_os("WILD_WHEELS_BENCH_VSYNC").is_some();
     // Only a benchmark runs offscreen: the match is otherwise played on screen.
     let offscreen = config.offscreen && benchmark.is_some();
+    crate::init_render();
     use crate::bench::mark;
     let mut session = GameSession::new();
     if config.join {
         session.join(config.clone());
     }
+    let asset_path = ["wasm-poc/assets", "../wasm-poc/assets"]
+        .into_iter()
+        .find(|p| std::path::Path::new(p).is_dir())
+        .unwrap_or("assets")
+        .to_owned();
     let mut app = App::new();
     let plugins = DefaultPlugins
+        .set(AssetPlugin {
+            file_path: asset_path,
+            meta_check: bevy::asset::AssetMetaCheck::Never,
+            ..default()
+        })
         .set(bevy::app::TaskPoolPlugin {
             task_pool_options: bevy::app::TaskPoolOptions::with_num_threads(
                 std::env::var("WILD_WHEELS_THREADS")
@@ -387,6 +398,7 @@ pub fn run(mut config: Config) -> Result<(), Box<dyn Error>> {
     // Sound and on-screen work still run offscreen, so the frame cost is the game's.
     app.insert_resource(crate::scene::Capture(screenshot))
         .insert_resource(session)
+        .insert_resource(wild_wheels_render::app::GameSession::default())
         .insert_resource(crate::gui::Menu::new(
             config,
             crate::prefs::Preferences::load(),
@@ -394,8 +406,7 @@ pub fn run(mut config: Config) -> Result<(), Box<dyn Error>> {
         .insert_resource(ClearColor(Color::srgb(0.71, 0.83, 0.85)))
         .insert_resource(crate::bench::Bench::new(benchmark))
         .add_plugins((
-            crate::ported::PortedGraphicsPlugin,
-            crate::scene::ArenaPresentationPlugin,
+            wild_wheels_render::WildWheelsRenderPlugin,
             crate::sound::GameAudioPlugin,
             crate::feedback::FeedbackPlugin,
         ))
@@ -415,16 +426,17 @@ pub fn run(mut config: Config) -> Result<(), Box<dyn Error>> {
                     mark(0),
                     drive,
                     mark(1),
-                    crate::scene::sync,
-                    mark(2),
-                    crate::gui::preview,
-                    mark(3),
-                    crate::ported::animate,
-                    mark(4),
+                    sync_to_render,
                 )
-                    .chain(),
+                    .chain()
+                    .before(wild_wheels_render::Presentation),
                 (
+                    mark(2),
                     crate::sound::play,
+                    sync_from_render,
+                    mark(3),
+                    crate::gui::preview,
+                    mark(4),
                     mark(5),
                     crate::feedback::sync_match,
                     mark(6),
@@ -437,12 +449,28 @@ pub fn run(mut config: Config) -> Result<(), Box<dyn Error>> {
                     mark(8),
                     crate::bench::finish,
                 )
-                    .chain(),
-            )
-                .chain(),
+                    .chain()
+                    .after(wild_wheels_render::Presentation),
+            ),
         )
         .run();
     Ok(())
+}
+fn sync_to_render(
+    mut native: ResMut<GameSession>,
+    mut render: ResMut<wild_wheels_render::app::GameSession>,
+) {
+    std::mem::swap(&mut native.client, &mut render.client);
+    std::mem::swap(&mut native.sounds, &mut render.sounds);
+    std::mem::swap(&mut native.voices, &mut render.voices);
+}
+fn sync_from_render(
+    mut native: ResMut<GameSession>,
+    mut render: ResMut<wild_wheels_render::app::GameSession>,
+) {
+    std::mem::swap(&mut native.client, &mut render.client);
+    std::mem::swap(&mut native.sounds, &mut render.sounds);
+    std::mem::swap(&mut native.voices, &mut render.voices);
 }
 pub(crate) fn drive(
     mut session: ResMut<GameSession>,

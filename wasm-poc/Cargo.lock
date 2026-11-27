@@ -5428,17 +5428,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "wild-wheels-render"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "crossbeam-channel",
+ "miniz_oxide 0.8.9",
+ "serde",
+ "serde_json",
+ "wild-wheels-core",
+]
+
+[[package]]
 name = "wild-wheels-wasm-poc"
 version = "0.1.0"
 dependencies = [
  "bevy",
  "console_error_panic_hook",
- "crossbeam-channel",
- "miniz_oxide 0.8.9",
  "serde",
  "serde_json",
  "wasm-bindgen",
  "wild-wheels-core",
+ "wild-wheels-render",
 ]
 
 [[package]]

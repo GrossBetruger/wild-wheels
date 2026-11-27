@@ -12,7 +12,6 @@ use bevy::prelude::*;
 use bevy::render::gpu_readback::{ReadbackComplete, ReadbackOnce};
 use bevy::render::render_resource::{Extent3d, TextureFormat, TextureUsages};
 use std::sync::Mutex;
-use wasm_bindgen::prelude::*;
 use wild_wheels_core::{Actor, ClientView};
 
 /// The stand-in's id: far above any racer's, so nothing in a match refers to it.
@@ -44,7 +43,6 @@ static FRAME: Mutex<Vec<u8>> = Mutex::new(Vec::new());
 
 /// Show a racer on the preview stage. `width` must be a multiple of 64, so
 /// that rows of the copied image carry no padding.
-#[wasm_bindgen]
 #[allow(clippy::too_many_arguments)]
 pub fn show_character_preview(
     driver: usize,
@@ -63,7 +61,6 @@ pub fn show_character_preview(
     }
 }
 
-#[wasm_bindgen]
 pub fn hide_character_preview() {
     if let Ok(mut request) = REQUEST.lock() {
         *request = None;
@@ -72,7 +69,6 @@ pub fn hide_character_preview() {
 
 /// The newest preview frame as width and height (little-endian `u32`s)
 /// followed by RGBA pixels, or nothing if none has arrived since the last call.
-#[wasm_bindgen]
 pub fn take_character_preview() -> Vec<u8> {
     FRAME.lock().map(|mut frame| std::mem::take(&mut *frame)).unwrap_or_default()
 }

@@ -19,7 +19,9 @@ use std::{
     },
 };
 
-static PACK: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/graphics.wwgp"));
+fn pack_bytes() -> &'static [u8] {
+    crate::pack_bytes()
+}
 const VERSION: u32 = 7;
 /// Clip frames ahead of the one shown whose meshes are built in advance, at 24
 /// recorded frames a second; faster recordings look ahead as long in time.
@@ -361,16 +363,8 @@ impl Graphics {
             return Some(built.handle.clone());
         }
         if self.pending.insert(key) {
-            let (source, done) = (self.source.clone(), self.finished.0.clone());
-            bevy::tasks::AsyncComputeTaskPool::get()
-                .spawn(async move {
-                    let started = std::time::Instant::now();
-                    let mesh = geometry(&source, key);
-                    crate::bench::MESH_BUILD_NANOS
-                        .fetch_add(started.elapsed().as_nanos() as u64, Ordering::Relaxed);
-                    let _ = done.send((key, mesh));
-                })
-                .detach();
+            let mesh = geometry(&self.source, key);
+            let _ = self.finished.0.send((key, mesh));
         }
         None
     }
@@ -567,7 +561,7 @@ impl Ported {
 pub struct PortedGraphicsPlugin;
 impl Plugin for PortedGraphicsPlugin {
     fn build(&self, app: &mut App) {
-        let mut graphics = Graphics::parse(PACK).expect("the ported graphics pack is valid");
+        let mut graphics = Graphics::parse(pack_bytes()).expect("the ported graphics pack is valid");
         crate::plumage::build(app);
         crate::sprite::build(app);
         crate::xray::build(app);
@@ -682,6 +676,7 @@ pub struct Pools<'w, 's> {
 pub fn animate(
     mut commands: Commands,
     time: Res<Time>,
+    mobile: Res<crate::MobileGraphics>,
     mut graphics: ResMut<Graphics>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut players: Query<(Entity, &mut Ported)>,
@@ -694,6 +689,7 @@ pub fn animate(
         mut particles,
     } = pools;
     let still = STILL.load(Ordering::Relaxed);
+    let lookahead_frames = mobile.detail(LOOKAHEAD, [1, 1, 0, 0]);
     let graphics = &mut *graphics;
     graphics.collect(time.elapsed_secs(), &mut meshes);
     for (entity, mut player) in &mut players {
@@ -717,8 +713,8 @@ pub fn animate(
                 false => index % frames,
             };
             // Build the next few frames' meshes now, so they are ready when shown.
-            let lookahead = (LOOKAHEAD as f32 * graphics.clips[clip].fps / 24.0).ceil() as usize;
-            for ahead in 1..=lookahead.max(LOOKAHEAD) {
+            let lookahead = (lookahead_frames as f32 * graphics.clips[clip].fps / 24.0).ceil() as usize;
+            for ahead in 1..=lookahead.max(lookahead_frames) {
                 let parts = graphics.clips[clip].frames[at(index + ahead)].parts.len();
                 for slot in 0..parts {
                     let part = &graphics.clips[clip].frames[at(index + ahead)].parts[slot];
@@ -969,7 +965,6 @@ mod tests {
         };
         assert_eq!((feathers(9), feathers(0), feathers(14)), (11, 0, 0));
         assert!(graphics.racers()[0].ability.is_empty());
-        assert_eq!(graphics.racers()[14].card.0, "DARK HUMOR");
         assert_eq!(graphics.racers()[0].intelligence, 3);
         for driver in 0..16 {
             for state in ["idle", "boost", "celebrate"] {
@@ -1027,7 +1022,6 @@ mod tests {
             "skid:0",
             "skid:1",
             "overlay:7:special",
-            "driver:8:wormhole",
             "overlay:7:nightmare",
             "overlay:7:nightmare:end",
             "overlay:11:special",

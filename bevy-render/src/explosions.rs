@@ -18,7 +18,13 @@ impl Plugin for ExplosionsPlugin {
         app.init_resource::<SeenBlasts>()
             .init_resource::<CameraShake>()
             .add_systems(Startup, setup_assets)
-            .add_systems(Update, (detect_explosions, tick_explosions).chain().run_if(crate::mobile_rendering));
+            .add_systems(
+                Update,
+                (detect_explosions, tick_explosions)
+                    .chain()
+                    .in_set(crate::Presentation)
+                    .run_if(crate::mobile_rendering),
+            );
     }
 }
 

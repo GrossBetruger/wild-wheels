@@ -7,7 +7,8 @@ publish = false
 
 [dependencies]
 wild-wheels-core = { path = "../rust-core" }
-bevy = { version = "=0.20.1", default-features = false, features = ["std", "default_app", "3d_bevy_render", "bevy_winit", "bevy_ui", "bevy_ui_render", "default_font", "multi_threaded", "bevy_audio", "wav", "keyboard", "mouse"] }
+wild-wheels-render = { path = "../bevy-render" }
+bevy = { version = "=0.20.1", default-features = false, features = ["std", "default_app", "3d_bevy_render", "bevy_winit", "bevy_ui", "bevy_ui_render", "default_font", "multi_threaded", "bevy_audio", "wav", "bevy_gltf", "gltf_animation", "morph", "bevy_scene", "keyboard", "mouse"] }
 crossbeam-channel = "0.5"
 cpal = "0.17.3"
 # Inflates the compressed graphics pack; already used by Bevy's image loading.

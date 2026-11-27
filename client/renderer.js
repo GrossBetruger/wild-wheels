@@ -13,7 +13,7 @@ import {DarkFog,darkHumorState,drawXrayArena} from '../characters/knowitowl/dark
 import {drawCalculator,drawAnt,drawTaxAudit,ReceiptRolls,drawXylophone} from '../characters/fourmidable/fourmidable.js';
 import { sampleTrack, branches } from '../gameplay/track.js';
 import { LENGTH, drivers, pickupType } from '../gameplay/engine.js';
-import { arenas, combatPose, somersaultPose, groundHeight, BOMB_FALL_TIME, BOMB_RADIUS, BOMB_OUTER_RADIUS, STINK_RADIUS, DIZZY_DURATION, VULCAN_DURATION } from '../gameplay/combat.js';
+import { arenas, combatPose, somersaultPose, groundHeight, inArenaBounds, BOMB_FALL_TIME, BOMB_RADIUS, BOMB_OUTER_RADIUS, STINK_RADIUS, DIZZY_DURATION, VULCAN_DURATION } from '../gameplay/combat.js';
 import { kartNameplates } from '../ui/nameplates.js';
 import { bomberCamera } from '../ui/mobile.js';
 import {drawAmbulance,drawNurseButterfly,drawButterflyWings} from '../characters/catheterpillar/catheterpillar.js';
@@ -927,7 +927,24 @@ export class Renderer {
     const nightmare=!r.bomber&&r.driver===7&&r.boost>0&&!r.destroyed?r.nightmareActive:0;
     this.nightmareZoom=nightmareCameraZoom(nightmare??0,this.nightmareZoom??0,cameraDt);
     const zoom=this.nightmareZoom,distance=17+25*zoom,cameraHeight=10+16*zoom+(r.destroyed?5:0),ahead=18-32*zoom;
-    const p=combatPose(r),pGround=groundHeight(arenas[r.arena],p.x,p.z),cx=Math.sin(r.cameraHeading+wobble),cz=Math.cos(r.cameraHeading+wobble),overview=r.bomber?bomberCamera(width,height,arenas[r.arena].size,this.bomberView??'3d',this.bomberFocus,this.bomberZoom??1):null,eye=overview?.eye??[p.x-cx*distance,cameraHeight+pGround,p.z-cz*distance],view=overview?.matrix??cameraMatrix(eye,[p.x+cx*ahead,1.5+pGround,p.z+cz*ahead],width/height,r.boost>0?1.2:r.wasDrifting?1.13:1.07);
+    const p=combatPose(r),arena=arenas[r.arena],pGround=groundHeight(arena,p.x,p.z),cx=Math.sin(r.cameraHeading+wobble),cz=Math.cos(r.cameraHeading+wobble),overview=r.bomber?bomberCamera(width,height,arena.size,this.bomberView??'3d',this.bomberFocus,this.bomberZoom??1):null;
+    let eye=overview?.eye;
+    if(!eye){
+      const anchor=[p.x,pGround+2.5,p.z],desired=[p.x-cx*distance,cameraHeight+pGround,p.z-cz*distance];
+      let targetArm=1;
+      for(let i=2;i<=24;i++){
+        const t=i/24,sx=anchor[0]+(desired[0]-anchor[0])*t,sy=anchor[1]+(desired[1]-anchor[1])*t,sz=anchor[2]+(desired[2]-anchor[2])*t,sgy=groundHeight(arena,sx,sz);
+        const hitPerimeter=arena.shape!=='torus'&&!inArenaBounds(arena,sx,sz,1.8);
+        const hitBlock=sy<sgy+6.8&&arena.blocks.some(([bx,bz,bw,bd])=>Math.abs(sx-bx)<bw/2+1.4&&Math.abs(sz-bz)<bd/2+1.4);
+        if(hitPerimeter||hitBlock||sgy+2.6>sy){targetArm=Math.max(.28,t-1/24);break;}
+      }
+      if(this.cameraArm==null)this.cameraArm=targetArm;
+      else{const rate=targetArm<this.cameraArm?22:6.5;this.cameraArm+=(targetArm-this.cameraArm)*(1-Math.exp(-cameraDt*rate));}
+      const ex=anchor[0]+(desired[0]-anchor[0])*this.cameraArm,ez=anchor[2]+(desired[2]-anchor[2])*this.cameraArm;
+      const ey=Math.max(groundHeight(arena,ex,ez)+3,anchor[1]+(desired[1]-anchor[1])*this.cameraArm+(1-this.cameraArm)*3.5);
+      eye=[ex,ey,ez];
+    }
+    const view=overview?.matrix??cameraMatrix(eye,[p.x+cx*ahead,1.5+pGround,p.z+cz*ahead],width/height,r.boost>0?1.2:r.wasDrifting?1.13:1.07);
     this.bicycleDrops=new Map();this.drawnBicycles=new Set();for(const s of r.supplies)if(s.kind==='bicycle'&&s.cooldown<=0&&s.age<2)this.bicycleDrops.set(s.owner,s);
     this.bomberMatrix=overview?.matrix??null;
     gl.uniform1f(this.fogScale,overview?.fogScale??1);const dark=darkHumorState(r),bombLights=darkBombLights(r,dark.strength);gl.uniform1f(this.darknessUniform,dark.strength);gl.uniform4fv(this.bombLightsUniform,lightUniforms(bombLights));
