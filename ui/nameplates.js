@@ -1,5 +1,6 @@
 import { arenas, inArenaBounds, somersaultPose } from '../gameplay/combat.js';
 import { drivers } from '../gameplay/engine.js';
+import { darkHumorState } from '../characters/knowitowl/dark-humor.js';
 
 function visibleBody(arena,eye,actor,height){
   const distance=Math.hypot(actor.wx-eye[0],actor.wz-eye[2]);
@@ -11,7 +12,7 @@ function visibleBody(arena,eye,actor,height){
   return true;
 }
 export function kartNameplates(world,matrix,eye){
-  if(world.mode!=='combat'||!['racing','paused'].includes(world.phase))return [];
+  if(world.mode!=='combat'||!['racing','paused'].includes(world.phase)||darkHumorState(world).strength>0)return [];
   const labels=[];
   for(const actor of world.bots){
     if(actor.bomber||actor.destroyed||actor.inactive||actor.afk||!world.bomber&&Math.hypot(actor.wx-world.wx,actor.wz-world.wz)<28)continue;
