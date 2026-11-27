@@ -12,6 +12,9 @@ import {
   drawKarmaRaccoon,
   drawTycoonBoost,
   drawTycoonExhaust,
+  drawRedApple,
+  appleBounceHeight,
+  TycoonApples,
 } from './tycoon.js';
 
 function recorder() {
@@ -90,6 +93,57 @@ test('Tycoon pickup truck, raccoon animation, aura, boost, and Karmic Raccooning
   for (const pt of [...early.m.points, ...mid.m.points, ...late.m.points]) {
     assert.ok(pt.every(Number.isFinite));
   }
+});
+
+test('Südtirol red apples spill from the back of Tai-Coon’s truck when boosting and bounce cleanly to rest', () => {
+  const single = recorder();
+  drawRedApple(single.m, 0, 2, 0, 1, 0);
+  assert.ok(single.m.balls >= 6 && single.m.boxes >= 1);
+
+  // Analytic bounce stays above the ground radius and settles smoothly.
+  for (let i = 0; i <= 30; i++) {
+    const y = appleBounceHeight(i / 24, 2.08, 3.0);
+    assert.ok(Number.isFinite(y) && y >= 0.27);
+  }
+  assert.equal(appleBounceHeight(2.0, 2.08, 3.0), 0.27);
+
+  const apples = new TycoonApples();
+  const captured = [];
+  const fakeRenderer = {
+    model(key, x, y, z, angle, build, pitch) {
+      const rec = recorder();
+      build(rec.m);
+      captured.push({ key, x, y, z, angle, pitch, balls: rec.m.balls });
+    },
+  };
+  const p = { id: 15, x: 0, z: 0 };
+
+  // Idle driving spawns no falling apples.
+  apples.draw(fakeRenderer, p, 0, 0, null, false);
+  apples.draw(fakeRenderer, p, 0, 0.2, null, false);
+  assert.equal(captured.length, 0);
+
+  // Starting boost spills an apple immediately over the tailgate (-Z behind the truck).
+  apples.draw(fakeRenderer, p, 0, 0.25, null, true);
+  assert.equal(captured.length, 1);
+  assert.match(captured[0].key, /^tycoon:apple:[01]$/);
+  assert.ok(captured[0].z < -2.4, 'apple spawns behind the tailgate');
+  assert.ok(captured[0].balls >= 6);
+
+  // Sustained boost streams multiple tumbling apples behind the truck.
+  for (let step = 1; step <= 24; step++) {
+    captured.length = 0;
+    apples.draw(fakeRenderer, p, 0, 0.25 + step / 24, null, true);
+  }
+  assert.ok(captured.length >= 6, `expected steady stream of apples, got ${captured.length}`);
+  assert.ok(captured.every(a => a.z < -2.4 && Number.isFinite(a.x + a.y + a.z + a.pitch)));
+
+  // Stopping boost stops spawning new apples and lets existing ones clear out.
+  for (let step = 1; step <= 35; step++) {
+    captured.length = 0;
+    apples.draw(fakeRenderer, p, 0, 1.25 + step / 24, null, false);
+  }
+  assert.equal(captured.length, 0);
 });
 
 for (const engine of ['JavaScript', 'Rust']) {

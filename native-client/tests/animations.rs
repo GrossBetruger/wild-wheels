@@ -216,4 +216,5 @@ animations! {
     t20_plain_boost: 20, "boost:0", false;
     t21_plain_rapid_fire: 21, "rapid-fire:0", false;
     t22_plain_shield_ends: 22, "fade:shield:0", false;
+    t23_tycoon_apples_spill: 23, "boost:15", true;
 }

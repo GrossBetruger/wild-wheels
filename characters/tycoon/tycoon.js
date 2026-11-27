@@ -112,6 +112,13 @@ export function drawPickupTruck(m, color) {
   m.ball(0, 1.52, -1.52, .38, .22, .38, '#dfb458', 10, 6);
   m.ball(0, 1.66, -1.52, .31, .08, .31, '#fff1b8', 8, 4);
   lotus(m, 0, 1.68, -1.52, .28, '#f7b6cf', '#fff6d6');
+  // 4. Südtirol red apple harvest crate tucked against the tailgate, brimming with glossy apples!
+  m.box(.18, 1.36, -2.18, 1.38, .44, .48, wood);
+  m.box(.18, 1.36, -2.18, 1.42, .08, .52, darkWood);
+  for (const [ax, ay, az, v] of [
+    [-.28, 1.94, -2.16, 0], [.14, 1.96, -2.2, 1], [.56, 1.94, -2.16, 0],
+    [-.08, 2.16, -2.18, 1], [.36, 2.15, -2.18, 0],
+  ]) drawRedApple(m, ax, ay, az, .82, v);
 
   // Cute friendly front bumper, smiling grille, round headlights & blush cheeks!
   m.box(0, .54, 2.48, 2.84, .22, .24, chrome);
@@ -271,6 +278,115 @@ export function drawTycoonExhaust(glow, smoke, p, angle, clock, jump, boosting) 
       const a = stroke + k*Math.PI*2/3;
       glow.particle(x+Math.cos(a)*age*power,y+Math.sin(a)*age*power,z-age,
                     .28*power*flash,[1,.55,.09]);
+    }
+  }
+}
+
+export function drawRedApple(m, x, y, z, scale = 1, variant = 0) {
+  const r = .27 * scale;
+  const body = variant % 2 ? '#c61b28' : '#d9232e';
+  const blush = variant % 2 ? '#e94b35' : '#f2643d';
+  const highlight = variant % 2 ? '#ffc4c8' : '#ffccd0';
+  // Plump Südtirol red apple body with fuller upper shoulders and sun-kissed blush cheek.
+  m.ball(x, y, z, r, r * .92, r, body, 9, 5);
+  m.ball(x, y + r * .16, z, r * .96, r * .72, r * .96, body, 8, 4);
+  m.ball(x + r * .34, y + r * .12, z + r * .34, r * .56, r * .52, r * .56, blush, 7, 4);
+  m.ball(x + r * .44, y + r * .42, z + r * .44, r * .22, r * .16, r * .22, highlight, 6, 4);
+  // Crown dimple, woody brown stem, and crisp alpine-green leaf.
+  m.ball(x, y + r * .84, z, r * .26, r * .1, r * .26, '#7a251d', 6, 3);
+  m.box(x, y + r * .82, z, r * .14, r * .48, r * .14, '#5e3a1e');
+  m.ball(x + r * .38, y + r * 1.06, z + r * .12, r * .42, r * .12, r * .24, '#4eb043', 7, 4);
+  m.ball(x + r * .54, y + r * 1.1, z + r * .16, r * .22, r * .08, r * .14, '#76cc58', 6, 3);
+}
+
+const APPLE_INTERVAL = 1 / 6;
+const APPLE_LIFE = 1.25;
+const APPLE_GRAVITY = 22;
+const APPLE_RADIUS = .27;
+// Eight deterministic launch profiles so 48 spawns over an 8-second boost loop wrap seamlessly.
+const APPLE_PROFILES = [
+  { x0: -.56, vx: -.95, vy0: 2.9, vz: -8.6, spin: -11.5, yaw: .35, variant: 0 },
+  { x0: .48, vx: .85, vy0: 3.3, vz: -9.4, spin: -10.2, yaw: -.5, variant: 1 },
+  { x0: -.12, vx: -.35, vy0: 2.5, vz: -7.9, spin: -12.8, yaw: 1.1, variant: 0 },
+  { x0: .72, vx: 1.2, vy0: 3.1, vz: -9.9, spin: -9.8, yaw: -.95, variant: 1 },
+  { x0: -.74, vx: -1.25, vy0: 3.4, vz: -9.1, spin: -11.0, yaw: .8, variant: 1 },
+  { x0: .22, vx: .45, vy0: 2.6, vz: -8.3, spin: -12.1, yaw: -.25, variant: 0 },
+  { x0: -.36, vx: -.65, vy0: 3.2, vz: -9.6, spin: -10.6, yaw: 1.45, variant: 0 },
+  { x0: .6, vx: 1.0, vy0: 2.75, vz: -8.8, spin: -11.9, yaw: -1.3, variant: 1 },
+];
+
+export function appleBounceHeight(age, y0, vy0, r = APPLE_RADIUS) {
+  const t1 = (vy0 + Math.sqrt(vy0 * vy0 + 2 * APPLE_GRAVITY * Math.max(0, y0 - r))) / APPLE_GRAVITY;
+  if (age <= t1) return Math.max(r, y0 + vy0 * age - .5 * APPLE_GRAVITY * age * age);
+  const vy1 = (APPLE_GRAVITY * t1 - vy0) * .48;
+  const t2 = t1 + 2 * vy1 / APPLE_GRAVITY;
+  if (age <= t2) {
+    const u = age - t1;
+    return Math.max(r, r + vy1 * u - .5 * APPLE_GRAVITY * u * u);
+  }
+  const vy2 = vy1 * .42;
+  const t3 = t2 + 2 * vy2 / APPLE_GRAVITY;
+  if (age <= t3) {
+    const u = age - t2;
+    return Math.max(r, r + vy2 * u - .5 * APPLE_GRAVITY * u * u);
+  }
+  return r;
+}
+
+export class TycoonApples {
+  riders = new Map();
+  draw(renderer, p, angle, clock, jump, boost) {
+    const key = p.id ?? 'preview';
+    let state = this.riders.get(key);
+    if (!state || clock < state.time || clock - state.time > 1) {
+      state = { time: clock, boosting: false, spawnTimer: 0, spawnCount: 0, apples: [] };
+      this.riders.set(key, state);
+    }
+    const dt = Math.min(.05, Math.max(0, clock - state.time));
+    state.time = clock;
+    const height = jump?.height ?? 0;
+    for (let i = state.apples.length - 1; i >= 0; i--) {
+      state.apples[i].age += dt;
+      if (state.apples[i].age >= APPLE_LIFE) state.apples.splice(i, 1);
+    }
+    const spawn = age => {
+      const profile = APPLE_PROFILES[state.spawnCount % APPLE_PROFILES.length];
+      state.spawnCount++;
+      state.apples.push({ profile, age, y0: height + 2.08 });
+    };
+    if (boost) {
+      if (!state.boosting) {
+        spawn(.02);
+        state.spawnTimer = APPLE_INTERVAL;
+      } else {
+        state.spawnTimer -= dt;
+        while (state.spawnTimer <= 1e-6) {
+          spawn(Math.max(0, -state.spawnTimer));
+          state.spawnTimer += APPLE_INTERVAL;
+        }
+      }
+    }
+    state.boosting = Boolean(boost);
+    if (!state.apples.length) return;
+    const cos = Math.cos(angle), sin = Math.sin(angle);
+    for (const apple of state.apples) {
+      const { profile, age, y0 } = apple;
+      const lx = profile.x0 + profile.vx * age;
+      const lz = -2.42 + profile.vz * age;
+      const wy = appleBounceHeight(age, y0, profile.vy0);
+      const wx = p.x + lx * cos + lz * sin;
+      const wz = p.z - lx * sin + lz * cos;
+      const tumble = profile.spin * age;
+      // Model pitch pivots around y = 2 in the vertex shader, so center the apple mesh at y = 2.
+      renderer.model(
+        `tycoon:apple:${profile.variant}`,
+        wx,
+        wy - 2,
+        wz,
+        angle + profile.yaw,
+        mesh => drawRedApple(mesh, 0, 2, 0, 1, profile.variant),
+        tumble,
+      );
     }
   }
 }
