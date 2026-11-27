@@ -29,7 +29,7 @@ Use `PORT=5174 ./run_server.sh` to choose another port. The launcher bundles the
 
 The update command pulls `main` with fast-forward only, builds the server and Bevy bundle, then restarts the managed server. The running version keeps serving while the build runs and stays online if the pull or build fails. Pass custom environment settings such as `PORT=5174` to terminal updates as well. These commands manage servers started by the launcher; stop a previously foreground server with Ctrl+C once before switching.
 
-The shared-room panel includes **Check for updates**. Connected players can check GitHub; when a newer server commit exists, **Update server** runs the same update script between matches. The checkout must be clean and on `main`. The requesting browser waits for the new build and reloads automatically, restoring its saved session. Update output is in `.wild-wheels/update.log` (or the configured launcher state directory). Install this version once using `./update_server.sh` over SSH to make the buttons available on an existing server.
+The shared-room panel includes **Check for updates**. Connected players can check GitHub; when a newer server commit exists, **Update server** runs the same update script (even mid-match—the build runs while the current server stays up until the brief restart). The checkout must be clean and on `main`. The requesting browser waits for the new build and reloads automatically, restoring its saved session. Update output is in `.wild-wheels/update.log` (or the configured launcher state directory). Install this version once using `./update_server.sh` over SSH to make the buttons available on an existing server.
 
 To build manually with Rust 1.90 or newer, first run `source "$HOME/.cargo/env"`, then:
 

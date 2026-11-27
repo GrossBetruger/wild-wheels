@@ -179,8 +179,8 @@ async fn http(
             {
                 let room = app.room.lock().unwrap();
                 let Some(id) = room.find(session(&h)) else {return error((401, "Join the room before managing updates."));};
-                if path.ends_with("/install") && (room.members[id].as_ref().unwrap().afk || !matches!(room.core.phase(), "ready" | "finished")) {
-                    return error((409, "Update the server between matches, while you are active."));
+                if path.ends_with("/install") && room.members[id].as_ref().unwrap().afk {
+                    return error((409, "Return from AFK before updating the server."));
                 }
             }
             let bucket = match path {"/api/updates/check" => "update-check", _ => "update-install"};

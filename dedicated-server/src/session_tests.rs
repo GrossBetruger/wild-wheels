@@ -35,6 +35,25 @@ async fn checking_updates_does_not_consume_the_install_rate_limit() {
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn active_players_can_start_an_update_mid_match_while_afk_players_cannot() {
+    let directory = std::env::temp_dir().join(format!("wild-wheels-update-midmatch-{}", room::token()));
+    let app = server(directory.join("sessions.json"));
+    let (_, cookie, _) = post(&app, "/api/join", "", json!({"code":"00","name":"Updater","driver":0})).await;
+    assert_eq!(post(&app, "/api/control", &cookie, json!({"action":"start"})).await.0, StatusCode::OK);
+    // Mid-match install reaches the update manager (which asks to check first) rather than blocking on match phase.
+    let (status, _, body) = post(&app, "/api/updates/install", &cookie, json!({})).await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(body["error"], "Check for updates before updating the server.");
+    // AFK players still cannot trigger a server update.
+    let (status, afk_cookie, _) = post(&app, "/api/afk", &cookie, json!({"afk":true})).await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, _, body) = post(&app, "/api/updates/install", &afk_cookie, json!({})).await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(body["error"], "Return from AFK before updating the server.");
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn returning_gives_a_session_two_more_months_however_little_it_had_left() {
     let directory = std::env::temp_dir().join(format!("wild-wheels-session-life-{}", room::token()));
     let app = server(directory.join("sessions.json"));
