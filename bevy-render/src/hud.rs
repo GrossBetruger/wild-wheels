@@ -1157,6 +1157,7 @@ pub struct MenloFaces {
     pub source: bevy::text::FontSource,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 const SYSTEM_FONT_PATHS: &[&str] = &[
     "/System/Library/Fonts/Menlo.ttc",
     "/System/Library/Fonts/SFHebrew.ttf",

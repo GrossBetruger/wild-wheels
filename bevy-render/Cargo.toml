@@ -14,6 +14,7 @@ bevy = { version = "=0.20.1", default-features = false, features = [
     "bevy_winit",
     "bevy_ui",
     "bevy_ui_render",
+    "default_font",
     "bevy_audio",
     "wav",
     "bevy_gltf",

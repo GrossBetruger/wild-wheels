@@ -356,7 +356,7 @@ h1 em {
 }
 .bevy-active .bevy-surface { opacity: 1; }
 .bevy-active #game { opacity: 0; }
-.bevy-hud-active :is(.hud, .bottom-hud, .toast, .chaff-button, .special-button, .somersault-button, .drift-meter, .reward-notice, .ability-announcement, .incoming-warning, .kart-nameplates) {
+.bevy-hud-active :is(.hud, .bottom-hud, .toast, .chaff-button, .special-button, .somersault-button, .drift-meter, .reward-notice, .ability-announcement, .incoming-warning, .kart-nameplates, .kill-celebration, .special-status, .dizzy-notice, .averted-notice) {
   display: none !important;
 }
 
