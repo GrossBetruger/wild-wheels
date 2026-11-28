@@ -476,7 +476,7 @@ export class Renderer {
     for(const side of [-1,1]){m.box(side*.57,1.65,1.45,.25,.23,1.5,'#273a43');m.ball(side*.57,1.77,2.22,.12,.12,.04,'#8dfff0',8,4);if(actor.item==='hedgehog'&&actor.fireCooldown>.035)this.glow.particle(side*.57,1.77,2.4,.9,[.15,.8,.65]);}
   }
   starshipEngines(p,angle,clock,jump=null,boost=false){
-    if(p.driver===7&&p.nightmareActive>0){drawNightmareFuel(this.glow,this.smoke,p,angle,clock,jump);return;}
+    if(p.nightmareActive>0){drawNightmareFuel(this.glow,this.smoke,p,angle,clock,jump);return;}
     drawStarshipThrust(this.glow,this.smoke,p,angle,clock,jump,boost);
   }
   houstonHelmet(p,actor,time,jump){

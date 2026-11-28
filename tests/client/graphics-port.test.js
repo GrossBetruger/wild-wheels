@@ -9,11 +9,16 @@ function read(pack){
   const palette=u32();
   const paper=Array.from({length:palette},(_,i)=>pack.readUIntBE(at+i*3,3)).indexOf(0xfff5d8);
   at+=palette*3;
-  const meshes=[];for(let i=u32();i>0;i--){const scale=pack.readFloatLE(at);at+=4;const triangles=u32(),size=u32(),raw=inflateSync(pack.subarray(at,at+size));assert.equal(raw.length,triangles*20);let tinted=0;for(let t=0;t<triangles;t++)tinted+=raw.readUInt16LE(t*20+18)===0;let paperReach=0;
-    for(let t=0;t<triangles;t++)if(raw.readUInt16LE(t*20+18)===paper){
-      for(const z of [4,10,16])paperReach=Math.max(paperReach,-raw.readInt16LE(t*20+z)*scale);
+  const meshes=[];for(let i=u32();i>0;i--){const scale=pack.readFloatLE(at);at+=4;const triangles=u32(),size=u32(),raw=inflateSync(pack.subarray(at,at+size));assert.equal(raw.length,triangles*20);let tinted=0;for(let t=0;t<triangles;t++)tinted+=raw.readUInt16LE(t*20+18)===0;let paperReach=0,reach=0;
+    for(let t=0;t<triangles;t++){
+      const isPaper=raw.readUInt16LE(t*20+18)===paper;
+      for(const z of [4,10,16]){
+        const back=-raw.readInt16LE(t*20+z)*scale;
+        reach=Math.max(reach,back);
+        if(isPaper)paperReach=Math.max(paperReach,back);
+      }
     }
-    meshes.push({triangles,tinted,paperReach});at+=size;}
+    meshes.push({triangles,tinted,paperReach,reach});at+=size;}
   // Clips are one compressed block.
   const rawSize=u32(),packedSize=u32(),block=inflateSync(pack.subarray(at,at+packedSize));at+=packedSize;assert.equal(block.length,rawSize);
   let c=0;const word=()=>{const value=block.readUInt32LE(c);c+=4;return value;};
@@ -50,14 +55,17 @@ test('the browser renderer ports to a native graphics pack',()=>{
 });
 
 test('Houston has a native full-burn loop and a one-second flame ending',()=>{
-  const {names}=read(buildGraphicsPack({only:[7]}));
+  const {names,meshes}=read(buildGraphicsPack({only:[7]}));
   const burning=names.get('overlay:7:nightmare');
   const ending=names.get('overlay:7:nightmare:end');
+  const reach=frame=>Math.max(0,...frame.parts.map(part=>meshes[part.mesh].reach));
   assert.ok(burning.frames[0].sprites[0]>0);
+  assert.ok(reach(burning.frames[0])>30,'full-burn Nightmare Fuel plume reaches ~32.5 units behind Houston');
   assert.equal(burning.once,false);
   assert.equal(ending.once,true);
   assert.equal(ending.frames.length,61);
   assert.ok(ending.frames[0].sprites[0]>0);
+  assert.ok(reach(ending.frames[0])>reach(ending.frames.at(-1)),'wind-down shrinks the Nightmare Fuel plume');
 });
 
 test('Avita’s native Wormhole clip animates the plane without baking the world vortex into it', () => {
