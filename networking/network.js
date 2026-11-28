@@ -64,9 +64,12 @@ export class NetworkGame {
     this.animalChoice=document.createElement('select');this.animalChoice.className='hidden';this.animalChoice.setAttribute('aria-label','Your multiplayer character');for(const [index,animal] of drivers.entries()){const option=document.createElement('option');option.value=String(index);option.textContent=`${animal.emoji} ${animal.name}`;this.animalChoice.append(option);}this.animalChoice.onchange=()=>this.chooseDriver(Number(this.animalChoice.value));
     this.hostButton=this.button(this.dedicated?'JOIN SERVER':'HOST ARENA',()=>this.connect(this.dedicated?'/api/join':'/api/rooms'));
     this.leaveButton=this.button('AFK',()=>this.setAway(!this.afk));this.leaveButton.classList.add('hidden');
-    this.micButton=this.button('🎙 HOLD V TO TALK',()=>{});this.micButton.className='mic-button hidden';this.micButton.setAttribute('aria-label','Hold to talk on microphone');
-    this.micButton.addEventListener('pointerdown',event=>{event.preventDefault();this.micButton.setPointerCapture?.(event.pointerId);this.setTalking(true);});
-    for(const name of ['pointerup','pointercancel','lostpointercapture'])this.micButton.addEventListener(name,()=>this.setTalking(false));
+    this.micMode=(()=>{try{return localStorage.getItem('wild-wheels-mic-mode')==='always'?'always':'ptt';}catch{return 'ptt';}})();
+    this.micMuted=false;
+    this.micButton=this.button('🎙 HOLD V TO TALK',()=>{});this.micButton.className='mic-button hidden';this.micButton.setAttribute('aria-label','Microphone push-to-talk or mute toggle');
+    this.micButton.addEventListener('pointerdown',event=>{event.preventDefault();if(this.micMode==='always'){this.toggleAlwaysOnMute();return;}this.micButton.setPointerCapture?.(event.pointerId);this.setTalking(true);});
+    for(const name of ['pointerup','pointercancel','lostpointercapture'])this.micButton.addEventListener(name,()=>{if(this.micMode==='ptt')this.setTalking(false);});
+    this.micModeButton=this.button('MIC: HOLD V',()=>this.setMicMode(this.micMode==='always'?'ptt':'always'));this.micModeButton.className='mic-mode-button hidden';this.micModeButton.setAttribute('aria-label','Toggle always-on microphone mode');
     this.voiceBanner=document.createElement('div');this.voiceBanner.className='voice-indicator hidden';this.voiceBanner.setAttribute('role','status');
     document.querySelector('.viewport')?.append(this.voiceBanner);
     this.status=document.createElement('p');this.status.setAttribute('role','status');this.status.textContent=this.dedicated?'Joining the shared arena…':'Host an arena and share the link. Opening it joins the game automatically.';
@@ -78,7 +81,7 @@ export class NetworkGame {
     this.updateServerButton=this.button('UPDATE SERVER',()=>this.updateServer());this.updateServerButton.classList.add('hidden');
     this.updateStatus=document.createElement('span');this.updateStatus.setAttribute('role','status');
     const updates=document.createElement('div');updates.className=this.dedicated?'network-controls':'network-controls hidden';updates.append(this.checkUpdatesButton,this.updateServerButton,this.updateStatus);
-    const row=document.createElement('div');row.className='network-controls';row.append(this.abilities,this.nameFeedback,this.animalChoice,this.botCount,this.hostButton,this.leaveButton,this.micButton);
+    const row=document.createElement('div');row.className='network-controls';row.append(this.abilities,this.nameFeedback,this.animalChoice,this.botCount,this.hostButton,this.leaveButton,this.micButton,this.micModeButton);
     const invite=document.createElement('div');invite.className='network-invite';invite.append(this.share,this.internetButton,this.copyButton);
     this.help=document.createElement('p');this.help.className='network-help hidden';
     this.panel.append(title,row,this.status,this.players,invite,this.help,updates);anchor.before(this.panel);
@@ -235,6 +238,30 @@ export class NetworkGame {
     this.token=reply.token;this.socket?.close();this.nameDirty=false;this.namePending=false;this.namePromise=null;this.sequence=0;this.pending=null;this.failures=0;this.shareEdited=false;this.actions=[];this.keys.clear();this.paused=Boolean(reply.players.find(player=>player.id===reply.you)?.afk);this.client=new ArenaClient();this.onBootstrap?.();this.accept(bootstrapPacket(reply));
     if(draft!==null){this.name.value=draft;this.nameDirty=draft.trim()!==reply.world.name;}
     this.rememberName();this.stream();this.voice.connect(reply.token);
+    if(this.micMode==='always'&&!this.micMuted)this.setTalking(true);
+  }
+  setMicMode(mode){
+    this.micMode=mode==='always'?'always':'ptt';
+    this.micMuted=false;
+    try{localStorage.setItem('wild-wheels-mic-mode',this.micMode);}catch{}
+    this.updateVoiceUi();
+    return this.setTalking(this.micMode==='always');
+  }
+  toggleAlwaysOnMute(){
+    if(this.micMode!=='always')return;
+    this.micMuted=!this.micMuted;
+    return this.setTalking(!this.micMuted);
+  }
+  pressVoiceKey(down,repeat=false){
+    if(!this.active)return;
+    if(this.micMode==='always'){
+      if(down&&!repeat)this.toggleAlwaysOnMute();
+      return;
+    }
+    this.setTalking(down);
+  }
+  releasePushToTalk(){
+    if(this.micMode==='ptt')this.setTalking(false);
   }
   setTalking(active){
     if(active)this.unlock?.().catch(()=>{});
@@ -242,14 +269,22 @@ export class NetworkGame {
   }
   updateVoiceUi(){
     if(!this.micButton)return;
-    const talking=this.voice.talking;
+    const talking=this.voice.talking,always=this.micMode==='always';
     this.micButton.classList.toggle('talking',talking);
-    this.micButton.textContent=talking?'🎙 TALKING…':'🎙 HOLD V TO TALK';
-    this.micButton.title=this.voice.error||'Hold V (or hold this button) to talk';
+    this.micButton.textContent=always
+      ?(talking?'🎙 MIC LIVE · V MUTES':'🎙 MUTED · V TO TALK')
+      :(talking?'🎙 TALKING…':'🎙 HOLD V TO TALK');
+    this.micButton.title=this.voice.error||(always?'Always-on mic: press V (or click) to mute/unmute':'Hold V (or hold this button) to talk');
+    if(this.micModeButton){
+      this.micModeButton.classList.toggle('always-on',always);
+      this.micModeButton.setAttribute('aria-pressed',String(always));
+      this.micModeButton.textContent=always?'MIC: ALWAYS ON':'MIC: HOLD V';
+      this.micModeButton.title=always?'Switch back to push-to-talk (Hold V)':'Switch to always-on open microphone';
+    }
     const names=new Map((this.state?.players??[]).map(player=>[player.id,player.name]));
     const activeNames=this.voice.activeSpeakers().map(id=>names.get(id)).filter(Boolean);
     const parts=[];
-    if(talking)parts.push('🎙 MIC LIVE');
+    if(talking)parts.push(always?'🎙 MIC ALWAYS ON':'🎙 MIC LIVE');
     if(activeNames.length)parts.push(`🔊 ${activeNames.join(', ')}${this.voice.playbackBlocked?' · CLICK TO HEAR':''}`);
     if(!parts.length&&this.voice.error&&this.active)parts.push(`🎙 ${this.voice.error}`);
     const text=parts.join(' · ');
@@ -361,7 +396,7 @@ export class NetworkGame {
     if(state.world.arenaDef&&Number.isInteger(state.world.arena)&&state.world.arena>=0&&state.world.arena<32){arenas[state.world.arena]=state.world.arenaDef;this.onArenas();}
     if(this.joinTracker.sample(state)){this.unlock?.().catch(()=>{});this.sound('playerJoin');}
     const rosterKey=JSON.stringify([state.host,state.you,state.players]);
-    this.state=state;if(this.dedicated)this.paused=this.afk;else if(this.afk)this.paused=true;this.leaveButton.classList.remove('hidden');this.micButton.classList.remove('hidden');this.share.classList.remove('hidden');this.copyButton.classList.remove('hidden');this.animalChoice.classList.toggle('hidden',this.dedicated||!this.isHost);
+    this.state=state;if(this.dedicated)this.paused=this.afk;else if(this.afk)this.paused=true;this.leaveButton.classList.remove('hidden');this.micButton.classList.remove('hidden');this.micModeButton.classList.remove('hidden');this.share.classList.remove('hidden');this.copyButton.classList.remove('hidden');this.animalChoice.classList.toggle('hidden',this.dedicated||!this.isHost);
     for(const node of [this.hostButton,this.botCount,this.share.parentElement,this.help])node.classList.toggle('hidden',!this.isHost&&!this.dedicated);
     if(this.dedicated)this.hostButton.classList.add('hidden');
     this.leaveButton.textContent=this.afk?'BACK TO ARENA':'AFK';this.hostButton.disabled=this.connecting||!this.isHost;
@@ -471,7 +506,7 @@ export class NetworkGame {
     this.nameFeedback.textContent='';this.nameDirty=false;this.namePending=false;this.namePromise=null;
     this.restoreOnVisible=false;this.voice.disconnect();
     if(notify)this.request('/api/leave',{}).catch(()=>{});this.token=null;this.chatColor=null;this.socket?.close();this.rustSocketActive=false;this.disconnectRustSocket?.();this.state=null;this.pending=null;this.actions=[];this.keys.clear();this.client=null;this.rtt=0;this.lastPing=-Infinity;this.onSessionReset?.();
-    this.internetError=false;this.hostButton.disabled=false;this.name.disabled=false;this.botCount.disabled=false;for(const option of this.botCount.options)option.disabled=false;this.leaveButton.classList.add('hidden');this.micButton.classList.add('hidden');this.voiceBanner?.classList.add('hidden');this.copyButton.classList.add('hidden');this.internetButton.classList.add('hidden');this.animalChoice.classList.add('hidden');this.share.classList.add('hidden');this.help.classList.add('hidden');this.players.replaceChildren();this.status.textContent=message;this.onLeave();
+    this.internetError=false;this.hostButton.disabled=false;this.name.disabled=false;this.botCount.disabled=false;for(const option of this.botCount.options)option.disabled=false;this.leaveButton.classList.add('hidden');this.micButton.classList.add('hidden');this.micModeButton.classList.add('hidden');this.voiceBanner?.classList.add('hidden');this.copyButton.classList.add('hidden');this.internetButton.classList.add('hidden');this.animalChoice.classList.add('hidden');this.share.classList.add('hidden');this.help.classList.add('hidden');this.players.replaceChildren();this.status.textContent=message;this.onLeave();
     if(this.dedicated){document.body.classList.remove('arena-connected');this.connectionStatus(message);}
   }
 }

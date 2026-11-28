@@ -174,3 +174,42 @@ test('VoiceChat flags playbackBlocked when AudioContext is suspended and clears 
   chat.handleIncoming(packet.buffer);
   assert.equal(started.length, 1);
 });
+
+test('always-on mic mode stays live on V keyup and toggles mute on V keydown', async () => {
+  const { NetworkGame } = await import('../../networking/network.js');
+  const calls = [];
+  const fake = Object.create(NetworkGame.prototype);
+  fake.token = 'tok';
+  fake.state = {};
+  fake.micMode = 'ptt';
+  fake.micMuted = false;
+  fake.voice = { talking: false, setTalking: v => { fake.voice.talking = v; calls.push(v); return Promise.resolve(); } };
+  fake.updateVoiceUi = () => {};
+  fake.unlock = () => Promise.resolve();
+
+  // Switch to always-on: starts transmitting immediately.
+  await fake.setMicMode('always');
+  assert.equal(fake.micMode, 'always');
+  assert.equal(fake.voice.talking, true);
+
+  // Keyup on V does not stop always-on mic; releasePushToTalk does not stop it either.
+  fake.pressVoiceKey(false);
+  fake.releasePushToTalk();
+  assert.equal(fake.voice.talking, true);
+
+  // Keydown on V mutes; key repeat is ignored; second keydown unmutes.
+  fake.pressVoiceKey(true, false);
+  assert.equal(fake.voice.talking, false);
+  fake.pressVoiceKey(true, true);
+  assert.equal(fake.voice.talking, false);
+  fake.pressVoiceKey(true, false);
+  assert.equal(fake.voice.talking, true);
+
+  // Switching back to push-to-talk stops transmitting and restores hold-to-talk.
+  await fake.setMicMode('ptt');
+  assert.equal(fake.voice.talking, false);
+  fake.pressVoiceKey(true);
+  assert.equal(fake.voice.talking, true);
+  fake.pressVoiceKey(false);
+  assert.equal(fake.voice.talking, false);
+});

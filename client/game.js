@@ -718,10 +718,10 @@ window.addEventListener('keydown', e => {
   if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'shift'].includes(key)) e.preventDefault();
   keys.add(key); if (e.repeat) return;
   if (network.active && !bevy?.directNet) network.input();
-  switch (key) { case 'enter': start(); break; case 'escape': case 'p': pause(); break; case ' ': useWeapon(); break; case 'q': switchWeapon(); break; case 'x': if (!e.ctrlKey && !e.metaKey && !e.altKey) turbo(); break; case 'f': if (!e.ctrlKey && !e.metaKey && !e.altKey) special(); break; case 'z': if (!e.ctrlKey && !e.metaKey && !e.altKey) somersault(); break; case 'c': if (!e.ctrlKey && !e.metaKey && !e.altKey) chaff(); break; case 'v': if (!e.ctrlKey && !e.metaKey && !e.altKey && network.active) network.setTalking(true); break; }
+  switch (key) { case 'enter': start(); break; case 'escape': case 'p': pause(); break; case ' ': useWeapon(); break; case 'q': switchWeapon(); break; case 'x': if (!e.ctrlKey && !e.metaKey && !e.altKey) turbo(); break; case 'f': if (!e.ctrlKey && !e.metaKey && !e.altKey) special(); break; case 'z': if (!e.ctrlKey && !e.metaKey && !e.altKey) somersault(); break; case 'c': if (!e.ctrlKey && !e.metaKey && !e.altKey) chaff(); break; case 'v': if (!e.ctrlKey && !e.metaKey && !e.altKey && network.active) network.pressVoiceKey(true, e.repeat); break; }
 });
-window.addEventListener('keyup', e => { const key = gameKey(e); keys.delete(key); if (key === 'v') network.setTalking(false); if (network.active) network.input(); });
-const stepAway = () => { network.setTalking(false); if (!['racing', 'countdown'].includes(race.phase)) return; if (network.active && network.dedicated) { if (!network.afk) network.setAway(true); return; } pause(); };
+window.addEventListener('keyup', e => { const key = gameKey(e); keys.delete(key); if (key === 'v') network.pressVoiceKey(false); if (network.active) network.input(); });
+const stepAway = () => { network.releasePushToTalk(); if (!['racing', 'countdown'].includes(race.phase)) return; if (network.active && network.dedicated) { if (!network.afk) network.setAway(true); return; } pause(); };
 window.addEventListener('blur', () => { keys.clear(); stepAway(); }); document.addEventListener('visibilitychange', () => { if (document.hidden) stepAway(); });
 const unlockAudio = () => {
   bevy?.unlockAudio();

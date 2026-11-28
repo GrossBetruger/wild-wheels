@@ -1518,6 +1518,16 @@ footer>span:last-child {
   box-shadow: 0 0 0 2px rgba(126, 232, 169, .45)
 }
 
+.network-panel button.mic-mode-button {
+  background: #3d485c;
+  border-color: #7484a3
+}
+
+.network-panel button.mic-mode-button.always-on {
+  background: #1f7a5c;
+  border-color: #7ee8c4
+}
+
 .network-panel button.voice-mute {
   min-height: 24px;
   padding: 2px 6px;
