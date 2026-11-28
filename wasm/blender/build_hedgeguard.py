@@ -32,6 +32,7 @@ sys.dont_write_bytecode = True
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOGO_PATH = os.path.join(ROOT, "..", "characters", "r-yeah", "r-yeah-logo.js")
+TECHNION_SVG_PATH = os.path.join(ROOT, "blender", "technion_logo.svg")
 
 argv = sys.argv
 OUT_DIR = argv[argv.index("--") + 1] if "--" in argv else os.path.join(ROOT, "assets", "models")
@@ -344,22 +345,65 @@ def emblem_houston(sign):
 
 
 def emblem_avita(sign):
-    """Driver 8 (Avita-Jas): Relativity 3-orbit electron atom + singularity core."""
-    m_gold = mat("GoldCrest", "#f2cb63", roughness=0.20, metallic=0.92, emission=0.28, emission_color="#f7d678")
-    m_cyan = mat("RelativityCyan", "#4deeff", roughness=0.16, metallic=0.3, emission=1.25, emission_color="#4deeff")
-    m_void = mat("Singularity", "#120624", roughness=0.1, metallic=0.8)
-    z = sign * EMBLEM_Z
+    """Driver 8 (Avita-Jas): Official Technion emblem imported from technion_logo.svg."""
+    m_tech_navy = mat("TechnionNavy", "#002d62", roughness=0.40, metallic=0.14, coat=0.2)
+    m_tech_white = mat("TechnionWhite", "#f5f8ff", roughness=0.22, metallic=0.15, emission=0.24, emission_color="#f5f8ff")
+    before = set(bpy.data.objects)
+    bpy.ops.import_curve.svg(filepath=TECHNION_SVG_PATH)
+    svg_objs = list(set(bpy.data.objects) - before)
+
+    min_x = min(v.x for o in svg_objs for sp in o.data.splines for p in sp.bezier_points for v in (o.matrix_world @ p.co,))
+    max_x = max(v.x for o in svg_objs for sp in o.data.splines for p in sp.bezier_points for v in (o.matrix_world @ p.co,))
+    min_y = min(v.y for o in svg_objs for sp in o.data.splines for p in sp.bezier_points for v in (o.matrix_world @ p.co,))
+    max_y = max(v.y for o in svg_objs for sp in o.data.splines for p in sp.bezier_points for v in (o.matrix_world @ p.co,))
+    cx, cy = (min_x + max_x) * 0.5, (min_y + max_y) * 0.5
+    svg_scale = 1.06 / max(1e-5, max_y - min_y)
+
     parts = []
-    for i in range(3):
-        ang = i * math.pi / 3.0
-        parts.append(torus_ring(0.0, EMBLEM_Y, z + sign * 0.025, 0.42, 0.026, m_gold, rot=(0.0, ang, 0.0), scale=(1.0, 0.44, 0.4)))
-        # Glowing electron pearl on each orbital
-        ex = math.cos(ang + 0.6) * 0.38
-        ey = EMBLEM_Y + math.sin(ang + 0.6) * 0.30
-        parts.append(sphere(ex, ey, z + sign * 0.04, 0.055, 0.055, 0.04, m_cyan, segs=10, rings=8))
-    # Wormhole singularity core + bright cyan halo ring
-    parts.append(torus_ring(0.0, EMBLEM_Y, z + sign * 0.035, 0.145, 0.024, m_cyan, major_segs=20, minor_segs=8))
-    parts.append(sphere(0.0, EMBLEM_Y, z + sign * 0.04, 0.12, 0.12, 0.05, m_void, segs=14, rings=10))
+    for o in svg_objs:
+        o.data.dimensions = "2D"
+        o.data.fill_mode = "BOTH"
+        o.data.resolution_u = 4
+        is_outer = "path4271" in o.name
+        is_border = "rect4251" in o.name
+        if is_outer:
+            o.data.extrude = 0.014 / svg_scale
+            z_off = 0.012
+            m_use = m_tech_navy
+        elif is_border:
+            o.data.fill_mode = "NONE"
+            o.data.bevel_depth = 0.00075
+            o.data.extrude = 0.008 / svg_scale
+            z_off = 0.024
+            m_use = m_tech_white
+        else:
+            o.data.extrude = 0.010 / svg_scale
+            z_off = 0.030
+            m_use = m_tech_white
+
+        bpy.ops.object.select_all(action="DESELECT")
+        o.select_set(True)
+        bpy.context.view_layer.objects.active = o
+        bpy.ops.object.convert(target="MESH")
+        m_obj = bpy.context.active_object
+        # Map SVG (x right, y up, z extrude) -> Bevy (sign*x right, y up, sign*z forward)
+        # so the emblem reads upright and un-mirrored on both front (+Z) and back (-Z).
+        for v in m_obj.data.vertices:
+            wp = m_obj.matrix_world @ v.co
+            gx = sign * (wp.x - cx) * svg_scale
+            gy = EMBLEM_Y - 0.04 + (wp.y - cy) * svg_scale
+            gz = sign * (EMBLEM_Z + z_off + wp.z * svg_scale)
+            v.co = Vector(loc(gx, gy, gz))
+        m_obj.matrix_world = Matrix.Identity(4)
+        m_obj.data.materials.clear()
+        m_obj.data.materials.append(m_use)
+        bm = bmesh.new()
+        bm.from_mesh(m_obj.data)
+        bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+        bm.to_mesh(m_obj.data)
+        bm.free()
+        smooth(m_obj)
+        parts.append(m_obj)
     return parts
 
 
