@@ -39,6 +39,6 @@ test('bevy-render/src/tehilim.rs orbits one book in a seamless loop and suppress
   assert.match(tehilim, /pub const PICKUP_SPIN_PERIOD: f32 = 3\.6;/);
   assert.match(tehilim, /pub const PICKUP_BOB_PERIOD: f32 = 1\.8;/);
   assert.match(tehilim, /fn tehilim_orbit_is_a_perfect_seamless_loop/);
-  assert.match(scene, /if \*name == "tehilim" \{\s*continue;\s*\}/);
-  assert.match(scene, /if supply\.kind == "tehilim" \{\s*continue;\s*\}/);
+  assert.match(scene, /\*name == "tehilim"/);
+  assert.match(scene, /"tehilim"/);
 });

@@ -1148,7 +1148,10 @@ pub fn sync(
         stage.show(Role::Skid, index, play, mark);
     }
     for supply in view.supplies.iter().filter(|s| s.cooldown <= 0.0) {
-        if supply.kind == "tehilim" || supply.kind == "hedgeproof" {
+        if matches!(
+            supply.kind.as_str(),
+            "tehilim" | "hedgeproof" | "missile" | "hedgehog" | "boost" | "health"
+        ) {
             continue;
         }
         let play = stage.clip(&format!("pickup:{}", supply.kind));

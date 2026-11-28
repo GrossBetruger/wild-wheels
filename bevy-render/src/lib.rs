@@ -11,6 +11,7 @@ pub mod knowitowl;
 pub mod pearococo;
 pub mod plumage;
 pub mod ported;
+pub mod powerups;
 pub mod preview;
 pub mod relativity;
 pub mod ryeah;
@@ -155,6 +156,7 @@ impl Plugin for WildWheelsRenderPlugin {
             hedgeguard::HedgeguardPlugin,
             knowitowl::KnowItOwlPlugin,
             pearococo::PearococoPlugin,
+            powerups::PowerupsPlugin,
             preview::PreviewPlugin,
             relativity::RelativityPlugin,
             ryeah::RYeahPlugin,

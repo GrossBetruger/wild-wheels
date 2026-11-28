@@ -41,5 +41,5 @@ test('bevy-render/src/hedgeguard.rs orbits one shield in a seamless loop and wir
   assert.match(src, /pub const SPECIAL_EMBLEM_DRIVERS: \[usize; 10\] = \[5, 7, 8, 9, 10, 11, 12, 13, 14, 15\];/);
   assert.match(src, /fn hedgeguard_orbit_is_a_perfect_seamless_loop/);
   assert.match(scene, /\*name == "tehilim" \|\| \*name == "hedge"/);
-  assert.match(scene, /supply\.kind == "tehilim" \|\| supply\.kind == "hedgeproof"/);
+  assert.match(scene, /"tehilim" \| "hedgeproof"/);
 });
