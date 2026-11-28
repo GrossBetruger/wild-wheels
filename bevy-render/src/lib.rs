@@ -17,6 +17,7 @@ pub mod scene;
 pub mod sound;
 pub mod specialist;
 pub mod sprite;
+pub mod tehilim;
 pub mod tycoon;
 pub mod ui_port;
 pub mod wormhole;
@@ -155,6 +156,7 @@ impl Plugin for WildWheelsRenderPlugin {
             preview::PreviewPlugin,
             relativity::RelativityPlugin,
             ryeah::RYeahPlugin,
+            tehilim::TehilimPlugin,
             tycoon::TycoonPlugin,
             wormhole::WormholePlugin,
             yuda::YudaPlugin,

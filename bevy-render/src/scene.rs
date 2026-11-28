@@ -710,6 +710,10 @@ fn racers(stage: &mut Stage, view: &ClientView, bats: &Bats, dt: f32, now: f32, 
             if *name == "vulcan" && a.driver == crate::ryeah::DRIVER {
                 continue;
             }
+            // Uplifted single-book PBR Sefer Tehilim is rendered by tehilim.rs.
+            if *name == "tehilim" {
+                continue;
+            }
             let value = active[index];
             let clip = |part: &str| format!("overlay:{}:{name}{part}", a.driver);
             let start = SPECIAL_STARTS
@@ -1144,6 +1148,9 @@ pub fn sync(
         stage.show(Role::Skid, index, play, mark);
     }
     for supply in view.supplies.iter().filter(|s| s.cooldown <= 0.0) {
+        if supply.kind == "tehilim" {
+            continue;
+        }
         let play = stage.clip(&format!("pickup:{}", supply.kind));
         stage.show(
             Role::Supply,
