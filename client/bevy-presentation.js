@@ -4,6 +4,21 @@ import { arenas } from '../gameplay/combat.js';
 
 const prefix = '/experimental/';
 let assetFetchVersioned = false;
+// Capture every AudioContext created by Bevy/cpal (wild_wheels_wasm.js caches
+// `AudioContext` into a module-level `const lAudioContext` at import time, so
+// the wrapper must be installed BEFORE `import(wild_wheels_wasm.js)`).
+const capturedAudioContexts = [];
+if (typeof globalThis.AudioContext === 'function' && !globalThis.AudioContext.__wwWrapped) {
+  const OrigAC = globalThis.AudioContext;
+  class WrappedAC extends OrigAC {
+    constructor(...args) {
+      super(...args);
+      capturedAudioContexts.push(this);
+    }
+  }
+  WrappedAC.__wwWrapped = true;
+  globalThis.AudioContext = WrappedAC;
+}
 // Appends `?v=<build>` to Bevy's unversioned `assets/...` fetches so browsers
 // and Cloud CDN cache `.glb` models as immutable per build without stale hits.
 export function versionAssetUrl(url, build) {
@@ -97,7 +112,7 @@ export class BevyPresentation {
     this.hasAudio = false;
     this.directNet = false;
     this.muted = false;
-    this.audioContexts = [];
+    this.audioContexts = capturedAudioContexts;
     this.progress = { stage: 'downloading', percent: 0, loadedBytes: 0, totalBytes: 0 };
     this.progressListeners = new Set();
     this.canvas.addEventListener('webglcontextlost', () => this.fail('graphics-lost'));
@@ -245,18 +260,6 @@ export class BevyPresentation {
       }
       const soundBytes = soundPack && soundPack.byteLength > 0 ? new Uint8Array(soundPack) : new Uint8Array(0);
       this.hasAudio = soundBytes.byteLength > 0 && typeof bindings.start_client === 'function';
-      const OrigAC = globalThis.AudioContext;
-      if (this.hasAudio && typeof OrigAC === 'function' && !OrigAC.__wwWrapped) {
-        const contexts = this.audioContexts;
-        class WrappedAC extends OrigAC {
-          constructor(...args) {
-            super(...args);
-            contexts.push(this);
-          }
-        }
-        WrappedAC.__wwWrapped = true;
-        globalThis.AudioContext = WrappedAC;
-      }
       if (this.hasAudio && typeof window !== 'undefined') {
         const resumeOnGesture = () => {
           this.unlockAudio();
