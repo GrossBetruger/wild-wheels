@@ -298,7 +298,15 @@ impl Notices {
                     (true, _) => Some([0x31, 0x59, 0x50]),
                     _ => None,
                 },
-                card_key: None,
+                card_key: Some(
+                    match (kill.assist, kill.radiation) {
+                        (true, _) => "whack:co",
+                        (false, true) => "whack:cherno",
+                        (false, false) if kill.kind == "wormhole" => "whack:wormhole",
+                        _ => "whack:solo",
+                    }
+                    .into(),
+                ),
                 score_swap: None,
                 started: now,
                 until: 0.0,
@@ -908,7 +916,7 @@ fn readings(
     if let Some(reward) = &notices.reward {
         card(Id::Reward, reward);
     }
-    if let Some((blue, _)) = notices.ring {
+    if let Some((blue, until)) = notices.ring {
         out.insert(
             Id::Ring,
             Reading {
@@ -920,6 +928,7 @@ fn readings(
                 ..default()
             },
         );
+        let _ = until;
     }
     let euler_mask = notices.euler_mask(view);
     if view.phase == "racing"
@@ -1626,32 +1635,36 @@ pub fn setup(
         (boxed(pad(9.0, 4.0), 1.0, 8.0), hex(0x163047ec), hex(0x9fd8f5ff)),
         Style::new(12.0, white),
     );
-    for id in [Id::Ability, Id::Reward] {
-        ui.banner(
-            root,
-            id,
-            percent(23),
-            (
-                boxed(
-                    Node {
-                        max_width: percent(90),
-                        ..pad(16.0, 8.0)
-                    },
-                    1.0,
-                    9.0,
+    for id in [Id::Ability, Id::Reward, Id::Whack, Id::Ring] {
+        if matches!(id, Id::Ability | Id::Reward) {
+            ui.banner(
+                root,
+                id,
+                percent(23),
+                (
+                    boxed(
+                        Node {
+                            max_width: percent(90),
+                            ..pad(16.0, 8.0)
+                        },
+                        1.0,
+                        9.0,
+                    ),
+                    hex(0x232955e6),
+                    hex(0xffffff40),
                 ),
-                hex(0x232955e6),
-                hex(0xffffff40),
-            ),
-            Style::new(18.0, white),
-        );
+                Style::new(18.0, white),
+            );
+        }
         // Ported HTML/CSS announcement card (shown instead of the flat banner when WWUP textures are present).
         let row = ui.node(
             root,
             fixed(Node {
                 display: Display::None,
                 top: percent(match id {
+                    Id::Whack => 4,
                     Id::Ability => 13,
+                    Id::Ring => 15,
                     _ => 18,
                 }),
                 left: px(0),
@@ -1662,7 +1675,9 @@ pub fn setup(
             none,
             none,
         );
-        ui.commands.entity(row).insert(Part::HtmlCard(id));
+        ui.commands
+            .entity(row)
+            .insert((Part::HtmlCard(id), UiTransform::default()));
         let card = ui.node(
             row,
             Node {
@@ -1685,16 +1700,19 @@ pub fn setup(
             none,
             none,
         );
-        ui.words(
-            detail,
-            "",
-            Style {
+        let detail_style = match id {
+            Id::Whack => Style {
+                bold: true,
+                shadow: true,
+                ..Style::new(18.0, hex(0x42266cff))
+            },
+            _ => Style {
                 bold: true,
                 shadow: true,
                 ..Style::new(12.5, hex(0xf4eaffff))
             },
-            Some(Label::CardDetail(id)),
-        );
+        };
+        ui.words(detail, "", detail_style, Some(Label::CardDetail(id)));
         if id == Id::Ability {
             for side in 0..2 {
                 let chip = ui.node(card, fixed(Node {
@@ -2156,8 +2174,13 @@ fn notice_for(notices: &Notices, id: Id) -> Option<&Notice> {
     match id {
         Id::Ability => notices.ability.as_ref(),
         Id::Reward => notices.reward.as_ref(),
+        Id::Whack => notices.whack.as_ref(),
         _ => None,
     }
+}
+
+fn ring_card_key(notices: &Notices) -> Option<&'static str> {
+    notices.ring.map(|(blue, _)| if blue { "ring:blue" } else { "ring:orange" })
 }
 
 /// Replay the nine ported silhouettes forward and backward before the card fades.
@@ -2269,10 +2292,14 @@ pub fn update(
         match *part {
             Part::Root => show(&mut node, true),
             Part::Panel(id) => {
-                let uses_html = notice_for(&notices, id)
-                    .and_then(|n| n.card_key.as_deref())
-                    .and_then(|k| ui_cards.get(k))
-                    .is_some();
+                let uses_html = if id == Id::Ring {
+                    ring_card_key(&notices).and_then(|k| ui_cards.get(k)).is_some()
+                } else {
+                    notice_for(&notices, id)
+                        .and_then(|n| n.card_key.as_deref())
+                        .and_then(|k| ui_cards.get(k))
+                        .is_some()
+                };
                 let visible = !uses_html && readings.get(&id).is_some_and(|r| !r.text.is_empty());
                 show(&mut node, visible);
                 if id == Id::Whack
@@ -2312,16 +2339,44 @@ pub fn update(
                 }
             }
             Part::HtmlCard(id) => {
-                let active_card = notice_for(&notices, id).and_then(|n| {
-                    n.card_key
-                        .as_deref()
-                        .and_then(|k| ui_cards.get(k))
-                        .map(|c| (n, c))
-                });
-                show(&mut node, active_card.is_some());
-                if let Some((notice, _)) = active_card {
-                    let (dy, _) = card_motion(notice, now);
-                    node.margin = UiRect::top(px(dy * K));
+                if id == Id::Ring {
+                    let active = ring_card_key(&notices).and_then(|k| ui_cards.get(k)).is_some();
+                    show(&mut node, active);
+                    if let Some(mut tf) = ui_tf {
+                        if active && let Some((_, until)) = notices.ring {
+                            let elapsed = (now - (until - 2.3)).max(0.0) as f32;
+                            let arrive = (elapsed / 0.35).clamp(0.0, 1.0);
+                            let s = 0.75 + 0.25 * arrive;
+                            tf.translation = Val2::px(0.0, 12.0 * (1.0 - arrive) * K);
+                            tf.scale = Vec2::splat(s);
+                        } else {
+                            *tf = UiTransform::default();
+                        }
+                    }
+                } else {
+                    let active_card = notice_for(&notices, id).and_then(|n| {
+                        n.card_key
+                            .as_deref()
+                            .and_then(|k| ui_cards.get(k))
+                            .map(|c| (n, c))
+                    });
+                    show(&mut node, active_card.is_some());
+                    if let Some((notice, _)) = active_card {
+                        if id == Id::Whack {
+                            node.margin = UiRect::ZERO;
+                            if let Some(mut tf) = ui_tf {
+                                let elapsed = (now - notice.started).max(0.0) as f32;
+                                let wave = 0.5 - 0.5 * ((elapsed / 0.65) * std::f32::consts::TAU).cos();
+                                tf.translation = Val2::px(0.0, -13.0 * K * wave);
+                                tf.rotation = Rot2::radians((-2.0 + 4.0 * wave).to_radians());
+                            }
+                        } else {
+                            let (dy, _) = card_motion(notice, now);
+                            node.margin = UiRect::top(px(dy * K));
+                        }
+                    } else if let Some(mut tf) = ui_tf {
+                        *tf = UiTransform::default();
+                    }
                 }
             }
             Part::KarmaScore(side) => {
@@ -2467,17 +2522,31 @@ pub fn update(
                 notices.ability.as_ref().and_then(|n| n.score_swap.as_ref())
                     .map_or("", |scores| scores[side].as_str()), None,
             ),
-            Label::CardDetail(id) => match notice_for(&notices, id) {
-                // The fixed two-line Karma card includes its large caption in the HTML artwork.
-                Some(notice) if notice.card_key.as_deref() == Some("ability:15") => ("", None),
-                Some(notice) => {
-                    let (_, alpha) = card_motion(notice, now);
-                    (
-                        notice.detail.as_str(),
-                        Some(Color::srgba(0.957, 0.918, 1.0, alpha)),
-                    )
-                }
-                None => ("", None),
+            Label::CardDetail(id) => match id {
+                Id::Ring => ("", None),
+                Id::Whack => match notices.whack.as_ref() {
+                    Some(notice) => {
+                        let ink = if notice.card_key.as_deref() == Some("whack:cherno") {
+                            hex(0xfff0bdff)
+                        } else {
+                            hex(0x42266cff)
+                        };
+                        (notice.detail.as_str(), Some(ink))
+                    }
+                    None => ("", None),
+                },
+                _ => match notice_for(&notices, id) {
+                    // The fixed two-line Karma card includes its large caption in the HTML artwork.
+                    Some(notice) if notice.card_key.as_deref() == Some("ability:15") => ("", None),
+                    Some(notice) => {
+                        let (_, alpha) = card_motion(notice, now);
+                        (
+                            notice.detail.as_str(),
+                            Some(Color::srgba(0.957, 0.918, 1.0, alpha)),
+                        )
+                    }
+                    None => ("", None),
+                },
             },
         };
         if text.0 != value {
@@ -2489,6 +2558,17 @@ pub fn update(
         }
     }
     for (art, mut image, mut node, children) in &mut html_art {
+        if art.0 == Id::Ring {
+            if let Some(ported) = ring_card_key(&notices).and_then(|k| ui_cards.get(k)) {
+                let scale = K * 0.9;
+                if image.image != ported.image {
+                    image.image = ported.image.clone();
+                }
+                image.color = Color::WHITE;
+                (node.width, node.height) = (px(ported.logical_w * scale), px(ported.logical_h * scale));
+            }
+            continue;
+        }
         let active_card = notice_for(&notices, art.0).and_then(|n| {
             let key = n.card_key.as_deref()?;
             if key == "ability:8:wormhole" {
@@ -2500,8 +2580,8 @@ pub fn update(
             ui_cards.get(key).map(|c| (n, c))
         });
         if let Some((notice, ported)) = active_card {
-            let scale = K * 0.82;
-            let (_, alpha) = card_motion(notice, now);
+            let scale = if art.0 == Id::Whack { K } else { K * 0.82 };
+            let alpha = if art.0 == Id::Whack { 1.0 } else { card_motion(notice, now).1 };
             if image.image != ported.image {
                 image.image = ported.image.clone();
             }
