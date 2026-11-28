@@ -280,6 +280,11 @@ network.takeRustPacket = () => bevy?.takeLatestPacket() ?? null;
 network.pollOutbound = () => (bevy?.directNet ? bevy.pollNetOutbound() : null);
 network.onSessionReset = () => { bevy?.disconnectSocket(); bevy?.resetSession(); bevy?.setDirectNet(false); };
 const startRow = document.createElement('div'); startRow.className = 'start-row'; $('start').before(startRow); startRow.append(network.createNameField(), $('start'));
+const afkPicker = document.createElement('div'); afkPicker.className = 'afk-driver-picker hidden';
+const afkPickerLabel = document.createElement('div'); afkPickerLabel.className = 'afk-driver-label';
+const afkPickerGrid = document.createElement('div'); afkPickerGrid.className = 'afk-driver-grid';
+afkPicker.append(afkPickerLabel, afkPickerGrid);
+startRow.before(afkPicker);
 const photography = new BomberPhotography({ canvas, viewport: document.querySelector('.viewport'), network, sound: type => audio.event(type), unlock: () => audio.unlock() });
 const gameColumn = document.createElement('div'); gameColumn.className = 'game-column'; racePanel.before(gameColumn); gameColumn.append(racePanel);
 const chat = new GameChat({ network, keys, anchor: racePanel });
@@ -660,6 +665,13 @@ function hud() {
   $('message').classList.toggle('hidden',race.phase==='racing');
   const button=$('start'),message=$('message');button.classList.toggle('hidden',race.phase==='countdown');startRow.classList.toggle('hidden',race.phase==='countdown');
   $('pause').textContent=dedicated?(network.afk?'BACK':'AFK'):race.phase==='paused'?'▶':'Ⅱ';$('pause').setAttribute('aria-label',dedicated?(network.afk?'Return to the arena':'Go AFK'):'Pause race');
+  const showAfkPicker=race.phase==='paused'&&network.active&&!race.bomber;
+  afkPicker.classList.toggle('hidden',!showAfkPicker);
+  if(showAfkPicker){
+    const current=network.nextDriver??selected;
+    afkPickerLabel.textContent=`CHARACTER · ${drivers[current].name} (switching resets score)`;
+    [...afkPickerGrid.children].forEach((b,i)=>{b.classList.toggle('selected',i===current);b.setAttribute('aria-pressed',String(i===current));});
+  }
   switch(race.phase){
     case 'ready':message.querySelector('.pill').textContent=race.bomber?'YOU HAVE AIR SUPPORT':mode==='combat'?'EVERY KART FOR ITSELF':'THE GRID IS WAITING';message.querySelector('h2').textContent=race.bomber?'Trouble from above.':mode==='combat'?'Small karts. Big trouble.':'Born to be wild.';message.querySelector('p').textContent=race.bomber?'Start with 2 of each bomb · Stink every 5s · A-bomb every 10s':mode==='combat'?`First to ${race.targetScore} kills · ${race.duration / 60} min · Hold Space to fire`:'Six racers. Three laps. Two alternate routes.';message.querySelector('small').textContent=`${mode==='combat'?arenas[track].name:tracks[track].name} · ${race.bomber?'Tap to bomb · Drag to explore':'Press Enter to start'}`;button.textContent=race.bomber?'LET’S BOMB ↗':mode==='combat'?'LET’S BATTLE ↗':'LET’S RACE ↗';$('status').textContent='READY WHEN YOU ARE';break;
     case 'countdown':message.querySelector('.pill').textContent='ON YOUR MARKS';message.querySelector('p').textContent=race.bomber?'Pick your target. Tap when the battle starts.':'Hold ↑ or W to accelerate';message.querySelector('small').textContent='';$('status').textContent='LIGHTS OUT IN 3…';break;
@@ -668,7 +680,7 @@ function hud() {
     case 'finished':keys.clear();message.querySelector('.pill').textContent=mode==='combat'?(battleTieNotice(race)||'BATTLE COMPLETE'):'RACE COMPLETE';message.querySelector('h2').textContent=`${race.finishRank}${ordinal(race.finishRank)} PLACE`;message.querySelector('p').textContent=mode==='combat'?`${race.kills} kills · ${race.deaths} deaths · ${timeLabel(race.finishTime)}`:`Finished ${race.finishRank}${ordinal(race.finishRank).toLowerCase()} of 6 · ${timeLabel(race.finishTime)}`;message.querySelector('small').textContent='';button.textContent='PLAY AGAIN ↗';$('status').textContent='MATCH COMPLETE';break;
   }
 }
-function showDriver(index) { selected = index;[...$('drivers').children].forEach((b, i) => { b.classList.toggle('selected', i === index); b.setAttribute('aria-pressed', String(i === index)); }); const d = drivers[index]; $('driver-name').textContent = d.name; $('driver-desc').textContent = d.desc; $('intelligence-stat').parentElement.title = 'Carrying limits: ' + itemCapacity(index, 'hedgehog') + ' hedgehogs, ' + itemCapacity(index, 'missile') + ' missiles, ' + itemCapacity(index, 'boost') + ' turbos, ' + itemCapacity(index, 'abomb') + ' of each bomb.'; $('cuteness-stat').parentElement.title = 'Arena: recovers one heart every ' + recoveryInterval(index) + ' seconds without taking damage, up to 3 hearts. Replenishes one hedgehog every ' + hedgehogRecoveryInterval(index) + ' seconds.'; $('fuel-stat').parentElement.title = 'Each turbo lasts ' + boostDuration(index) + ' seconds.'; $('driver-number').textContent = String(index + 1).padStart(2, '0'); for (const [id, value] of [['fuel-stat', d.fuel], ['speed-stat', d.speed], ['handling-stat', d.handling], ['accel-stat', d.accel], ['cuteness-stat', d.cuteness], ['intelligence-stat', d.intelligence]]) { $(id).replaceChildren(...Array.from({ length: 5 }, (_, i) => Object.assign(document.createElement('i'), { className: i < value ? 'on' : '' }))); } }
+function showDriver(index) { selected = index;[...$('drivers').children].forEach((b, i) => { b.classList.toggle('selected', i === index); b.setAttribute('aria-pressed', String(i === index)); }); [...afkPickerGrid.children].forEach((b, i) => { b.classList.toggle('selected', i === index); b.setAttribute('aria-pressed', String(i === index)); }); if (!afkPicker.classList.contains('hidden')) afkPickerLabel.textContent = `CHARACTER · ${drivers[index].name} (switching resets score)`; const d = drivers[index]; $('driver-name').textContent = d.name; $('driver-desc').textContent = d.desc; $('intelligence-stat').parentElement.title = 'Carrying limits: ' + itemCapacity(index, 'hedgehog') + ' hedgehogs, ' + itemCapacity(index, 'missile') + ' missiles, ' + itemCapacity(index, 'boost') + ' turbos, ' + itemCapacity(index, 'abomb') + ' of each bomb.'; $('cuteness-stat').parentElement.title = 'Arena: recovers one heart every ' + recoveryInterval(index) + ' seconds without taking damage, up to 3 hearts. Replenishes one hedgehog every ' + hedgehogRecoveryInterval(index) + ' seconds.'; $('fuel-stat').parentElement.title = 'Each turbo lasts ' + boostDuration(index) + ' seconds.'; $('driver-number').textContent = String(index + 1).padStart(2, '0'); for (const [id, value] of [['fuel-stat', d.fuel], ['speed-stat', d.speed], ['handling-stat', d.handling], ['accel-stat', d.accel], ['cuteness-stat', d.cuteness], ['intelligence-stat', d.intelligence]]) { $(id).replaceChildren(...Array.from({ length: 5 }, (_, i) => Object.assign(document.createElement('i'), { className: i < value ? 'on' : '' }))); } }
 function selectDriver(index) {
   if (network.active) {
     network.chooseDriver(index).then(next => {
@@ -688,7 +700,10 @@ function selectDriver(index) {
   }
   race = newGame(); lastPhase = '';
 }
-drivers.forEach((d, i) => { const b = document.createElement('button'); b.className = 'driver'; b.textContent = d.emoji; b.title = d.name; b.setAttribute('aria-label', d.name); b.onclick = () => selectDriver(i); $('drivers').append(b); });
+drivers.forEach((d, i) => {
+  const b = document.createElement('button'); b.className = 'driver'; b.textContent = d.emoji; b.title = d.name; b.setAttribute('aria-label', d.name); b.onclick = () => selectDriver(i); $('drivers').append(b);
+  const ab = document.createElement('button'); ab.className = 'afk-driver'; ab.type = 'button'; ab.textContent = d.emoji; ab.title = d.name; ab.setAttribute('aria-label', `Switch to ${d.name}`); ab.onclick = () => selectDriver(i); afkPickerGrid.append(ab);
+});
 async function start() { bevy?.unlockAudio(); if (!network.hasName) { network.focusName(); return; } if (mode === 'combat') await ensureBevyReady(); if (!network.active && network.invitation) { await network.connect('/api/join'); if (!network.active) return; } if (dedicated && !network.active) return; if (race.bomber && mobile) enterMobileFullscreen(); audio.unlock().catch(() => { $('sound').textContent = 'CLICK FOR SOUND'; }); if (network.active) { if (network.paused) { network.pause(); return; } if (network.canControl) { network.control('start'); return; } network.requestPlay(); return; } if (race.phase === 'paused') { race.phase = race.resumePhase || 'racing'; return; } if (race.phase === 'racing' || race.phase === 'countdown') return; race = newGame(); race.name = network.name.value.trim(); network.rememberName(); race.phase = 'countdown'; lastCount = -1; tone(400); }
 function pause() { if (network.active) { network.pause(); return; } if (race.phase === 'paused') { race.phase = race.resumePhase; return; } if (!['racing', 'countdown'].includes(race.phase)) return; race.resumePhase = race.phase; race.phase = 'paused'; keys.clear(); }
 $('start').onclick = start; $('pause').onclick = pause; $('restart').onclick = () => { if (dedicated) return; if (network.active) { network.control('reset'); return; } race = newGame(); lastPhase = ''; keys.clear(); };

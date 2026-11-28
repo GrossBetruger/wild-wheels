@@ -4362,6 +4362,53 @@ body.mobile-playing {
   transform: none
 }
 
+.afk-driver-picker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0 8px;
+  max-width: 340px
+}
+
+.afk-driver-label {
+  font: bold 11px monospace;
+  letter-spacing: .5px;
+  color: #f6e7c1;
+  text-transform: uppercase
+}
+
+.afk-driver-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 5px
+}
+
+.afk-driver {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 10px;
+  border: 2px solid rgba(255, 255, 255, .24);
+  background: rgba(24, 26, 40, .72);
+  font-size: 19px;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform .12s ease, border-color .12s ease, background .12s ease
+}
+
+.afk-driver:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 224, 140, .8);
+  background: rgba(45, 48, 72, .9)
+}
+
+.afk-driver.selected {
+  border-color: #ffd666;
+  background: rgba(255, 214, 102, .26);
+  box-shadow: 0 0 0 2px rgba(255, 214, 102, .45)
+}
+
 .arena-connection .start-name {
   margin: 0 auto
 }

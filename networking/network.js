@@ -396,7 +396,7 @@ export class NetworkGame {
     if(state.world.arenaDef&&Number.isInteger(state.world.arena)&&state.world.arena>=0&&state.world.arena<32){arenas[state.world.arena]=state.world.arenaDef;this.onArenas();}
     if(this.joinTracker.sample(state)){this.unlock?.().catch(()=>{});this.sound('playerJoin');}
     const rosterKey=JSON.stringify([state.host,state.you,state.players]);
-    this.state=state;if(this.dedicated)this.paused=this.afk;else if(this.afk)this.paused=true;this.leaveButton.classList.remove('hidden');this.micButton.classList.remove('hidden');this.micModeButton.classList.remove('hidden');this.share.classList.remove('hidden');this.copyButton.classList.remove('hidden');this.animalChoice.classList.toggle('hidden',this.dedicated||!this.isHost);
+    this.state=state;if(this.dedicated)this.paused=this.afk;else if(this.afk)this.paused=true;this.leaveButton.classList.remove('hidden');this.micButton.classList.remove('hidden');this.micModeButton.classList.remove('hidden');this.share.classList.remove('hidden');this.copyButton.classList.remove('hidden');this.animalChoice.classList.toggle('hidden',!this.afk&&(this.dedicated||!this.isHost));
     for(const node of [this.hostButton,this.botCount,this.share.parentElement,this.help])node.classList.toggle('hidden',!this.isHost&&!this.dedicated);
     if(this.dedicated)this.hostButton.classList.add('hidden');
     this.leaveButton.textContent=this.afk?'BACK TO ARENA':'AFK';this.hostButton.disabled=this.connecting||!this.isHost;
