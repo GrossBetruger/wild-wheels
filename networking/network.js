@@ -393,6 +393,7 @@ export class NetworkGame {
   view(){if(!this.state)return null;this.client.view.paused=this.paused;return this.client.view.world;}
   render(dt,keys=this.keys){
     if(!this.client||!this.state)return null;
+    if(this.rustSocketActive)return this.client.view.world;
     this.client.view.paused=this.paused;this.client.frame(this.afk?0:dt,this.paused?0:keys,performance.now()/1000);
     return this.client.present();
   }

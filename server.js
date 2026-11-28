@@ -6,7 +6,7 @@ import { Multiplayer } from './server/multiplayer.js';
 import { createTunnelControl } from './server/tunnel-control.js';
 import { createTextEndpoint } from './server/text.js';
 const mime=name=>({'html':'text/html','css':'text/css','svg':'image/svg+xml','wasm':'application/wasm','ogg':'audio/ogg','flac':'audio/flac','png':'image/png','glb':'model/gltf-binary','ttf':'font/ttf','wwgp':'application/octet-stream','wwsp':'application/octet-stream','wwup':'application/octet-stream'})[name.split('.').at(-1)]??'text/javascript';
-const compressedBetaAssets=new Set(['/experimental/graphics.wwgp','/experimental/ui.wwup','/experimental/pkg/wild_wheels_wasm.js','/experimental/pkg/wild_wheels_wasm_bg.wasm']);
+const compressedBetaAssets=new Set(['/experimental/graphics.wwgp','/experimental/sounds.wwsp','/experimental/ui.wwup','/experimental/pkg/wild_wheels_wasm.js','/experimental/pkg/wild_wheels_wasm_bg.wasm']);
 function acceptsGzip(header=''){
   let wildcard=false;
   for(const value of header.split(',')){

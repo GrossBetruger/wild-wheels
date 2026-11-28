@@ -100,8 +100,8 @@ fn main() {
         for name in ["graphics.wwgp", "sounds.wwsp", "pkg/wild_wheels_wasm.js", "pkg/wild_wheels_wasm_bg.wasm"] {
             let route = format!("/experimental/{name}");
             experimental_asset(&mut code, &mut hash, &route, &generated.join(name));
-            if name != "sounds.wwsp" {
-                let gzip = generated.join(format!("{name}.gz"));
+            let gzip = generated.join(format!("{name}.gz"));
+            if gzip.is_file() {
                 println!("cargo:rerun-if-changed={}", gzip.display());
                 compressed.push_str(&format!("({route:?},include_bytes!({gzip:?})),\n"));
             }

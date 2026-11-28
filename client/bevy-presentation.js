@@ -107,6 +107,7 @@ export class BevyPresentation {
   }
 
   get active() { return this.viewport.classList.contains('bevy-active'); }
+  get hudActive() { return this.viewport.classList.contains('bevy-hud-active'); }
   get audioActive() { return this.active && this.hasAudio; }
   get fps() { return Math.round(this.quality?.fps ?? 0); }
   get status() {

@@ -52,7 +52,8 @@ if cache_hit "$output/.graphics.sha256" "$graphics_hash" \
 fi
 
 if cache_hit "$output/.sounds.sha256" "$sounds_hash" \
-  "$output/sounds.wwsp"; then
+  "$output/sounds.wwsp" \
+  "$output/sounds.wwsp.gz"; then
   need_sounds=0
 fi
 
@@ -136,7 +137,8 @@ if (( need_sounds )); then
   printf 'Building sound pack (sounds.wwsp)…\n'
   stage_started=$SECONDS
   node scripts/build/port-sounds.mjs "$staging/sounds.wwsp"
-  mv -f -- "$staging/sounds.wwsp" "$output/"
+  gzip -n -c -- "$staging/sounds.wwsp" > "$staging/sounds.wwsp.gz"
+  mv -f -- "$staging/sounds.wwsp" "$staging/sounds.wwsp.gz" "$output/"
   printf '%s\n' "$sounds_hash" > "$output/.sounds.sha256"
   printf 'Sound pack took %ss.\n' "$((SECONDS-stage_started))"
 else

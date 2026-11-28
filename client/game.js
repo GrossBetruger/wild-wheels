@@ -439,15 +439,18 @@ function draw(refreshUi) {
     }
   }
   if (!drawnByBevy) renderer.draw(race, race.elapsed);
-  if (refreshUi) drawMap();
-  const visible = new Set();
-  for (const plate of drawnByBevy ? bevy.nameplates(race) : renderer.nameplates ?? []) {
-    visible.add(plate.id); let label = nameplateNodes.get(plate.id);
-    if (!label) { label = document.createElement('span'); label.className = 'kart-nameplate'; nameplateNodes.set(plate.id, label); nameplateLayer.append(label); }
-    if (label.textContent !== plate.name) label.textContent = plate.name;
-    label.style.left = `${plate.x}%`; label.style.top = `${plate.y}%`; label.style.borderColor = plate.color;
+  const bevyHud = Boolean(drawnByBevy && bevy?.hudActive);
+  if (refreshUi && !bevyHud) drawMap();
+  if (!bevyHud) {
+    const visible = new Set();
+    for (const plate of drawnByBevy ? bevy.nameplates(race) : renderer.nameplates ?? []) {
+      visible.add(plate.id); let label = nameplateNodes.get(plate.id);
+      if (!label) { label = document.createElement('span'); label.className = 'kart-nameplate'; nameplateNodes.set(plate.id, label); nameplateLayer.append(label); }
+      if (label.textContent !== plate.name) label.textContent = plate.name;
+      label.style.left = `${plate.x}%`; label.style.top = `${plate.y}%`; label.style.borderColor = plate.color;
+    }
+    for (const [id, label] of nameplateNodes) if (!visible.has(id)) { label.remove(); nameplateNodes.delete(id); }
   }
-  for (const [id, label] of nameplateNodes) if (!visible.has(id)) { label.remove(); nameplateNodes.delete(id); }
 }
 function mapPoint(t, route = 0) { const p = sampleTrack(t / (Math.PI * 2), 0, route); return [140 + p.x * .29, 64 + p.z * .16]; }
 function drawMap() {
@@ -492,12 +495,15 @@ function hud() {
     mobilePanel.classList.toggle('hidden', !race.bomber);
     cameraSwitch.classList.toggle('hidden', !race.bomber);
   }
-  if (race.elapsed + .5 < rewardElapsed) rewardRound++; rewardElapsed = race.elapsed;
-  const epoch = [mode, race.soundEpoch, race.arena, race.id, race.driver, rewardRound].join(':');
-  if (epoch !== rewardEpoch) { rewardEpoch = epoch; rewardNotice.reset(); }
-  const gain = permanentGains.observe('intelligence', epoch, race.intelligenceBonus ?? 0, actorIntelligence(race));
-  if (gain && mode === 'combat') rewardNotice.show({ ...gain, title: 'INTELLIGENCE UP!', icon: '🧠', color: '#c6adff', detail: 'BICYCLE COLLECTED · CARRY MORE ITEMS' });
-  rewardNotice.render(performance.now() / 1000);
+  const bevyHud = Boolean(bevy?.hudActive);
+  if (!bevyHud) {
+    if (race.elapsed + .5 < rewardElapsed) rewardRound++; rewardElapsed = race.elapsed;
+    const epoch = [mode, race.soundEpoch, race.arena, race.id, race.driver, rewardRound].join(':');
+    if (epoch !== rewardEpoch) { rewardEpoch = epoch; rewardNotice.reset(); }
+    const gain = permanentGains.observe('intelligence', epoch, race.intelligenceBonus ?? 0, actorIntelligence(race));
+    if (gain && mode === 'combat') rewardNotice.show({ ...gain, title: 'INTELLIGENCE UP!', icon: '🧠', color: '#c6adff', detail: 'BICYCLE COLLECTED · CARRY MORE ITEMS' });
+    rewardNotice.render(performance.now() / 1000);
+  }
   matchLayout.update(race.phase, mode);
   document.body.classList.toggle('match-active', matchLayout.active);
   photography.update(race);
@@ -510,11 +516,12 @@ function hud() {
     bombChoice.setAttribute('aria-pressed', String(bomberWeapon === 'abomb')); stinkChoice.setAttribute('aria-pressed', String(bomberWeapon === 'stink')); bombChoice.classList.toggle('empty', race.bombAmmo < 1); stinkChoice.classList.toggle('empty', race.stinkAmmo < 1);
     if (race[bomberWeapon === 'stink' ? 'stinkAmmo' : 'bombAmmo'] > 0 && mobileHint.textContent.startsWith('Rearming')) mobileHint.textContent = 'Ready! Tap the arena to drop your selected bomb.';
   }
+  showResults();
+  if (!bevyHud) {
   const dizzy=!race.bomber&&race.phase==='racing'&&race.destroyed<=0&&race.dizzy>0;
   dizzyNotice.classList.toggle('hidden',!dizzy);document.querySelector('.viewport').classList.toggle('dizzy-active',dizzy);if(dizzy)put('dizzy-notice',`✦ DIZZY · ${race.dizzy.toFixed(1)}s`);
   const reversed=race.specialAbilities!==false&&!race.bomber&&race.phase==='racing'&&!race.destroyed&&(race.reverseControls??0)>0;
   if(reversed){dizzyNotice.classList.remove('hidden');put('dizzy-notice',`⇄ CONTROLS REVERSED · ${race.reverseControls.toFixed(1)}s`);}
-  showResults();
   const ignition = ringNotice.sample(race, performance.now() / 1000); ringBanner.classList.toggle('hidden', !ignition); ringBanner.classList.toggle('blue-fire', Boolean(ignition?.blue));
   const whack = killCelebration.sample(race, performance.now() / 1000); whackBanner.classList.toggle('hidden', !whack);
   if (!whack) whackKey = null;
@@ -541,6 +548,7 @@ function hud() {
     const help = race.chaff > 0 && race.chaffCooldown <= 0 ? 'C / CHAFF TO BREAK THE LOCK' : 'EVADE THE MISSILE';
     if (incomingTitle.textContent !== title) incomingTitle.textContent = title;
     if (incomingHelp.textContent !== help) incomingHelp.textContent = help;
+  }
   }
   for (const button of modeSwitch.children) button.disabled = network.active;
   limitsRow.hidden = mode !== 'combat';
@@ -571,11 +579,18 @@ function hud() {
     $('lap').replaceChildren(document.createTextNode(String(Math.min(3, Math.floor(race.s / LENGTH) + 1)).padStart(2, '0') + ' '), Object.assign(document.createElement('span'), { textContent: '/ 03' }));
     put('timer', timeLabel(race.finishTime ?? race.elapsed));
   }
+  if (!bevyHud) {
   const speedNode=$('speed').querySelector('b'),speedText=String(Math.round(race.speed*.24));if(speedNode.textContent!==speedText)speedNode.textContent=speedText;put('toast',uiNotice&&performance.now()<uiNotice.until?uiNotice.text:race.finishRank===null&&race.noticeTime>0?race.notice:'');
   document.querySelector('.position small').textContent=mode==='combat'?'KILLS':'POSITION';document.querySelector('.lap small').textContent=mode==='combat'?'HEALTH':'LAP';document.querySelector('.timer small').textContent=mode==='combat'?'TIME LEFT':'RACE TIME';
+  }
   leaderboard.classList.toggle('hidden',mode!=='combat');
   // The all-time board changes only when a match finishes; it is fetched then and on arriving.
   if(dedicated&&race.phase!==allTimePhase){const arriving=allTimePhase===null;allTimePhase=race.phase;if(arriving||race.phase==='finished')refreshAllTime();}
+  if(mode==='combat'){
+    const order=standings(race),version=JSON.stringify(order.map(actor=>[actor.id,actor.name,actor.driver,actor.kills,actor.deaths,actor===race]));
+    if(version!==scoreboardKey){scoreboardKey=version;const title=document.createElement('strong');title.textContent='LEADERBOARD · KILLS / DEATHS';leaderboard.replaceChildren(title,...order.map(actor=>{const line=document.createElement('div');line.textContent=`${actor===race?'YOU':actor.name??drivers[actor.driver].name.split(' ')[0]}  ${actor.kills} / ${actor.deaths}`;line.classList.toggle('you',actor===race);return line;}));}
+  }
+  if (!bevyHud) {
   document.querySelector('.viewport').classList.toggle('time-stopped',mode==='combat'&&race.timeStop>0);
   const karmaActiveTarget=race.driver===15?karmaTarget(race,race):null;
   specialButton.classList.toggle('hidden',mode!=='combat'||![5,7,8,9,11,12,13,14,15].includes(race.driver)||race.bomber||race.specialAbilities===false);specialButton.textContent=(race.specialCooldown??0)>0?`F · RECHARGE ${race.specialCooldown.toFixed(1)}s`:race.driver===15&&!karmaActiveTarget?`F · ${abilityNames[15]} (${race.lastKiller==null?'NEEDS KO':'RESPAWNING'})`:`F · ${race.driver===13&&!auditTarget(race,race)?'XYLOPHONE-ATTACK':abilityNames[race.driver]??'SPECIAL'}`;specialButton.disabled=!battleActive(race)||race.destroyed>0||race.specialCooldown>0||race.driver===12&&race.health>=6||race.driver===15&&!karmaActiveTarget||frozen(race,race.id);
@@ -607,8 +622,6 @@ function hud() {
   driftMeter.classList.toggle('hidden',!showDrift);driftCharge.value=race.drift;driftLabel.textContent=race.drift>=.85?'RING OF FIRE':'RING CHARGING';driftMeter.classList.toggle('charged',race.drift>=.45);driftMeter.classList.toggle('super',race.drift>=.85);
   if(mode==='combat'){
     put('position',`${race.kills} / ${race.targetScore}`);put('lap','♥'.repeat(race.health));$('lap').setAttribute('aria-label',`${race.health} of ${MAX_HEALTH} hearts`);put('timer',timeLabel(Math.max(0,race.duration-(race.finishTime??race.elapsed))));
-    const order=standings(race),version=JSON.stringify(order.map(actor=>[actor.id,actor.name,actor.driver,actor.kills,actor.deaths,actor===race]));
-    if(version!==scoreboardKey){scoreboardKey=version;const title=document.createElement('strong');title.textContent='LEADERBOARD · KILLS / DEATHS';leaderboard.replaceChildren(title,...order.map(actor=>{const line=document.createElement('div');line.textContent=`${actor===race?'YOU':actor.name??drivers[actor.driver].name.split(' ')[0]}  ${actor.kills} / ${actor.deaths}`;line.classList.toggle('you',actor===race);return line;}));}
     if(race.destroyed>0)routeHint.textContent=`WRECKED · RESPAWN IN ${Math.ceil(race.destroyed)}`;
     if(!race.bomber&&race.shield>0&&!race.destroyed)routeHint.textContent='SPAWN SHIELD';
     const latest=race.killFeed[0];if(latest&&race.elapsed-latest.time<3&&!(race.vulcan>0&&race.noticeTime>0&&race.notice.startsWith('2-KILL')))$('toast').textContent=latest.text;
@@ -620,6 +633,8 @@ function hud() {
   }
   if(mode==='race')$('lap').removeAttribute('aria-label');
   if(race.finishRank!==null&&race.phase==='racing'){finishDetail.textContent=finishText();$('status').textContent=`FINISHED ${race.finishRank}${ordinal(race.finishRank)}`;}
+  } else if(race.finishRank!==null&&race.phase==='racing'){finishDetail.textContent=finishText();$('status').textContent=`FINISHED ${race.finishRank}${ordinal(race.finishRank)}`;}
+  if (!bevyHud) {
   $('item').textContent=({boost:'ϟ',hedgehog:'🦔',missile:'🚀'})[race.item]||'–';$('item-name').textContent=({boost:'AFTERBURNER READY',hedgehog:`HEDGEHOG × ${race.ammo}`,missile:`MISSILE × ${race.missiles} · HOMING`})[race.item]||'EMPTY · COLLECT AMMO';
   const vulcan=mode==='combat'&&race.vulcan>0;
   const vulcanVisible=vulcan&&battleActive(race);
@@ -630,6 +645,7 @@ function hud() {
   vulcanStatus.classList.toggle('hidden',!vulcan||race.phase!=='racing');vulcanTitle.textContent=`${vulcanAnimal} ${vulcanWeapon} · ${(race.vulcan??0).toFixed(1)}s`;vulcanTime.setAttribute('aria-label',`${vulcanAnimal.toLowerCase()} ${vulcanWeapon.toLowerCase()} seconds remaining`);vulcanTime.value=race.vulcan??0;
   if(vulcan&&race.item==='hedgehog'){$('item-name').textContent=race.driver===14?'BAT COMPANION · AUTO UZI':'VULCAN · HOLD SPACE TO SPRAY';const icon=race.driver===14?'🦇':({5:'🦗',6:'💵',8:'⚛',9:'🩰'})[race.driver];if(icon)$('item').textContent=icon;}
   for(const [type,card] of ammoCards){const count={hedgehog:race.ammo,missile:race.missiles,boost:race.turbos}[type],powered=vulcan&&type==='hedgehog',boost=type==='boost';card.count.textContent=powered?'∞':count;card.button.title=count+' / '+itemCapacity(race,type)+' held';const nightmare=boost&&(race.driver===7||race.driver===8)&&race.specialAbilities!==false,nightmareReady=nightmare&&(race.nightmareCooldown??0)<=0,isWormhole=race.driver===8;card.name.textContent=nightmare?(race.nightmareActive>0?`${isWormhole?'WORMHOLE':'NIGHTMARE'} ${race.nightmareActive.toFixed(1)}s`:race.nightmareCooldown>0?`X · TURBO / ${isWormhole?'WH':'NF'} ${race.nightmareCooldown.toFixed(0)}s`:isWormhole?'XX · WORMHOLE':'XX · NIGHTMARE'):powered?vulcanWeapon:boost?'X · TURBO':card.label;card.button.disabled=(!powered&&count===0&&!nightmareReady)||race.phase==='finished'||boost&&(race.phase!=='racing'||race.destroyed>0||mode!=='combat'&&race.finishCountdown!==null||race.boost>0&&!nightmareReady);card.button.classList.toggle('selected',!boost&&race.item===type);card.button.classList.toggle('vulcan',powered);card.button.setAttribute('aria-pressed',String(!boost&&race.item===type));card.button.setAttribute('aria-label',boost?`Use turbo, ${count} charges remaining. Keyboard X.`:`${powered?`Unlimited ${vulcanWeapon.toLowerCase()} hedgehogs`:`${count} ${card.label.toLowerCase()}`}${race.item===type?', selected':''}`);}
+  }
   if(race.phase==='countdown'){const n=Math.ceil(race.countdown);if(n!==lastCount){tone(300+n*100);lastCount=n;}$('message').querySelector('h2').textContent=n;}
   if(lastPhase===race.phase)return;lastPhase=race.phase;
   const battle=mode==='combat',controls=document.querySelectorAll('.control');brakeButton.classList.toggle('hidden',!battle);
