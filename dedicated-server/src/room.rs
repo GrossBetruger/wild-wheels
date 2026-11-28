@@ -376,6 +376,11 @@ impl Room {
         p.clear(m, a);
         p.seen = Instant::now();
         p.afk = afk;
+        if !afk {
+            if let Some(next) = p.next_driver.take() {
+                p.driver = next;
+            }
+        }
         self.broadcast();
         self.reply(id)
     }
@@ -448,14 +453,15 @@ impl Room {
                 let chosen = driver(&b["driver"])?;
                 let between = matches!(self.core.phase(), "ready" | "finished");
                 let member = self.members[id].as_mut().unwrap();
-                if between {
+                let immediate = between || member.afk;
+                if immediate {
                     member.driver = chosen;
                     member.next_driver = None;
                 } else {
                     member.next_driver = Some(chosen);
                 }
                 let reply = json!({"ok":true,"driver":member.driver,"nextDriver":member.next_driver});
-                if between {
+                if immediate {
                     self.broadcast();
                 }
                 return Ok(reply);

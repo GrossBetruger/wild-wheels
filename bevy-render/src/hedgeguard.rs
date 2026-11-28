@@ -52,10 +52,6 @@ struct HedgeguardAssets {
     spark_mesh: Handle<Mesh>,
     spark_teal_mat: Handle<StandardMaterial>,
     spark_gold_mat: Handle<StandardMaterial>,
-    pad_mesh: Handle<Mesh>,
-    pad_mat: Handle<StandardMaterial>,
-    pad_ring_mesh: Handle<Mesh>,
-    pad_ring_mat: Handle<StandardMaterial>,
 }
 
 impl HedgeguardAssets {
@@ -82,7 +78,6 @@ struct HedgeguardAuraRig {
 struct HedgeguardPickupRig {
     supply_id: u32,
     shield: Entity,
-    ring: Entity,
 }
 
 #[derive(Component)]
@@ -176,28 +171,6 @@ fn setup(
         alpha_mode: AlphaMode::Add,
         ..default()
     });
-    let pad_mesh = meshes.add(Cylinder::new(2.6, 0.05));
-    let pad_mat = materials.add(StandardMaterial {
-        base_color: Color::srgba(0.18, 0.78, 0.72, 0.48),
-        emissive: LinearRgba::new(0.14, 0.85, 0.76, 1.0),
-        unlit: true,
-        alpha_mode: AlphaMode::Blend,
-        ..default()
-    });
-    let pad_ring_mesh = meshes.add(
-        Torus::new(2.60, 2.78)
-            .mesh()
-            .major_resolution(36)
-            .minor_resolution(6),
-    );
-    let pad_ring_mat = materials.add(StandardMaterial {
-        base_color: Color::srgba(0.45, 0.98, 0.90, 0.72),
-        emissive: LinearRgba::new(0.42, 1.85, 1.65, 1.0),
-        unlit: true,
-        alpha_mode: AlphaMode::Add,
-        ..default()
-    });
-
     commands.insert_resource(HedgeguardAssets {
         shield,
         default_emblem,
@@ -207,10 +180,6 @@ fn setup(
         spark_mesh,
         spark_teal_mat,
         spark_gold_mat,
-        pad_mesh,
-        pad_mat,
-        pad_ring_mesh,
-        pad_ring_mat,
     });
 }
 
@@ -415,7 +384,6 @@ fn sync_hedgeguard(
         let gy = view.arena_def.ground_height(supply.wx, supply.wz) as f32;
         let root_tf = Transform::from_xyz(supply.wx as f32, gy, supply.wz as f32);
         let (shield_pos, shield_rot) = pickup_pose(t + supply.id as f32 * 0.41);
-        let pulse = 1.0 + 0.04 * ((t / PICKUP_BOB_PERIOD).rem_euclid(1.0) * TAU).sin();
 
         if let Some((rig, mut tf, mut vis)) =
             pickups.iter_mut().find(|(r, _, _)| r.supply_id == supply.id)
@@ -426,10 +394,6 @@ fn sync_hedgeguard(
                 *svis = Visibility::Inherited;
                 stf.translation = shield_pos;
                 stf.rotation = shield_rot;
-            }
-            if let Ok((mut rtf, mut rvis)) = parts.get_mut(rig.ring) {
-                *rvis = Visibility::Inherited;
-                rtf.scale = Vec3::new(pulse, 1.0, pulse);
             }
         } else {
             let emblem = commands
@@ -449,36 +413,17 @@ fn sync_hedgeguard(
                 ))
                 .id();
             commands.entity(shield).add_child(emblem);
-            let pad = commands
-                .spawn((
-                    Mesh3d(assets.pad_mesh.clone()),
-                    MeshMaterial3d(assets.pad_mat.clone()),
-                    Transform::from_xyz(0.0, 0.08, 0.0),
-                    Visibility::Inherited,
-                    HedgeguardPart,
-                ))
-                .id();
-            let ring = commands
-                .spawn((
-                    Mesh3d(assets.pad_ring_mesh.clone()),
-                    MeshMaterial3d(assets.pad_ring_mat.clone()),
-                    Transform::from_xyz(0.0, 0.14, 0.0),
-                    Visibility::Inherited,
-                    HedgeguardPart,
-                ))
-                .id();
             let root = commands
                 .spawn((
                     HedgeguardPickupRig {
                         supply_id: supply.id,
                         shield,
-                        ring,
                     },
                     root_tf,
                     Visibility::Visible,
                 ))
                 .id();
-            commands.entity(root).add_children(&[shield, pad, ring]);
+            commands.entity(root).add_child(shield);
         }
     }
     for (rig, _, mut vis) in &mut pickups {

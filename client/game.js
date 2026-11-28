@@ -664,7 +664,7 @@ function hud() {
     case 'ready':message.querySelector('.pill').textContent=race.bomber?'YOU HAVE AIR SUPPORT':mode==='combat'?'EVERY KART FOR ITSELF':'THE GRID IS WAITING';message.querySelector('h2').textContent=race.bomber?'Trouble from above.':mode==='combat'?'Small karts. Big trouble.':'Born to be wild.';message.querySelector('p').textContent=race.bomber?'Start with 2 of each bomb · Stink every 5s · A-bomb every 10s':mode==='combat'?`First to ${race.targetScore} kills · ${race.duration / 60} min · Hold Space to fire`:'Six racers. Three laps. Two alternate routes.';message.querySelector('small').textContent=`${mode==='combat'?arenas[track].name:tracks[track].name} · ${race.bomber?'Tap to bomb · Drag to explore':'Press Enter to start'}`;button.textContent=race.bomber?'LET’S BOMB ↗':mode==='combat'?'LET’S BATTLE ↗':'LET’S RACE ↗';$('status').textContent='READY WHEN YOU ARE';break;
     case 'countdown':message.querySelector('.pill').textContent='ON YOUR MARKS';message.querySelector('p').textContent=race.bomber?'Pick your target. Tap when the battle starts.':'Hold ↑ or W to accelerate';message.querySelector('small').textContent='';$('status').textContent='LIGHTS OUT IN 3…';break;
     case 'racing':tone(850,.3);$('status').textContent='MAKE SOME PIXEL DUST';if(bevy?.directNet&&!(document.activeElement instanceof HTMLInputElement||document.activeElement instanceof HTMLTextAreaElement))bevy.canvas.focus({preventScroll:true});break;
-    case 'paused':message.querySelector('.pill').textContent='PIT STOP';message.querySelector('h2').textContent='Catch your breath.';message.querySelector('p').textContent=network.active?'The match continues while you are away.':'Your rivals can wait.';button.textContent='BACK TO THE RACE ↗';$('status').textContent=dedicated?'AFK · MATCH CONTINUES':'RACE PAUSED';if(dedicated){message.querySelector('.pill').textContent='AFK';message.querySelector('small').textContent='Your place and score are saved.';button.textContent='BACK TO ARENA ↗';}break;
+    case 'paused':message.querySelector('.pill').textContent='PIT STOP';message.querySelector('h2').textContent='Catch your breath.';message.querySelector('p').textContent=network.active?'The match continues while you are away.':'Your rivals can wait.';button.textContent='BACK TO THE RACE ↗';$('status').textContent=dedicated?'AFK · MATCH CONTINUES':'RACE PAUSED';if(dedicated){message.querySelector('.pill').textContent='AFK';message.querySelector('small').textContent='Your place and score are saved. Pick another character to switch (resets score).';button.textContent='BACK TO ARENA ↗';}break;
     case 'finished':keys.clear();message.querySelector('.pill').textContent=mode==='combat'?(battleTieNotice(race)||'BATTLE COMPLETE'):'RACE COMPLETE';message.querySelector('h2').textContent=`${race.finishRank}${ordinal(race.finishRank)} PLACE`;message.querySelector('p').textContent=mode==='combat'?`${race.kills} kills · ${race.deaths} deaths · ${timeLabel(race.finishTime)}`:`Finished ${race.finishRank}${ordinal(race.finishRank).toLowerCase()} of 6 · ${timeLabel(race.finishTime)}`;message.querySelector('small').textContent='';button.textContent='PLAY AGAIN ↗';$('status').textContent='MATCH COMPLETE';break;
   }
 }
@@ -672,7 +672,12 @@ function showDriver(index) { selected = index;[...$('drivers').children].forEach
 function selectDriver(index) {
   if (network.active) {
     network.chooseDriver(index).then(next => {
-      if (Number.isInteger(next)) { showDriver(next); uiNotice = { text: `Next match: ${drivers[next].name}`, until: performance.now() + 2500 }; }
+      showDriver(Number.isInteger(next) ? next : index);
+      if (Number.isInteger(next)) {
+        uiNotice = { text: `Next match (or after AFK): ${drivers[next].name}`, until: performance.now() + 2500 };
+      } else if (network.afk && ['countdown', 'racing', 'paused'].includes(race.phase)) {
+        uiNotice = { text: `Switched to ${drivers[index].name} · score reset`, until: performance.now() + 2500 };
+      }
     });
     return;
   }

@@ -58,8 +58,6 @@ impl Plugin for PowerupsPlugin {
 
 struct KindVisuals {
     model: Handle<WorldAsset>,
-    pad_mat: Handle<StandardMaterial>,
-    ring_mat: Handle<StandardMaterial>,
     mote_mat: Handle<StandardMaterial>,
 }
 
@@ -69,8 +67,6 @@ struct PowerupAssets {
     hedgehog: KindVisuals,
     boost: KindVisuals,
     health: KindVisuals,
-    pad_mesh: Handle<Mesh>,
-    ring_mesh: Handle<Mesh>,
     mote_mesh: Handle<Mesh>,
 }
 
@@ -90,8 +86,6 @@ struct PowerupRig {
     supply_id: u32,
     kind: PowerupKind,
     model: Entity,
-    pad: Entity,
-    ring: Entity,
     motes: Vec<Entity>,
 }
 
@@ -123,35 +117,10 @@ fn make_kind(
     assets: &AssetServer,
     materials: &mut Assets<StandardMaterial>,
     path: &'static str,
-    pad_rgb: [f32; 3],
     emissive_rgb: [f32; 3],
 ) -> KindVisuals {
     KindVisuals {
         model: assets.load(GltfAssetLabel::Scene(0).from_asset(path)),
-        pad_mat: materials.add(StandardMaterial {
-            base_color: Color::srgba(pad_rgb[0], pad_rgb[1], pad_rgb[2], 0.48),
-            emissive: LinearRgba::new(
-                emissive_rgb[0] * 0.45,
-                emissive_rgb[1] * 0.45,
-                emissive_rgb[2] * 0.45,
-                1.0,
-            ),
-            unlit: true,
-            alpha_mode: AlphaMode::Blend,
-            ..default()
-        }),
-        ring_mat: materials.add(StandardMaterial {
-            base_color: Color::srgba(emissive_rgb[0], emissive_rgb[1], emissive_rgb[2], 0.72),
-            emissive: LinearRgba::new(
-                emissive_rgb[0] * 1.5,
-                emissive_rgb[1] * 1.5,
-                emissive_rgb[2] * 1.5,
-                1.0,
-            ),
-            unlit: true,
-            alpha_mode: AlphaMode::Add,
-            ..default()
-        }),
         mote_mat: materials.add(StandardMaterial {
             base_color: Color::srgba(emissive_rgb[0], emissive_rgb[1], emissive_rgb[2], 0.9),
             emissive: LinearRgba::new(
@@ -177,36 +146,25 @@ fn setup(
         &assets,
         &mut materials,
         "models/pickup_missile.glb",
-        [0.82, 0.28, 0.24],
         [1.0, 0.36, 0.28],
     );
     let hedgehog = make_kind(
         &assets,
         &mut materials,
         "models/pickup_hedgehog.glb",
-        [0.76, 0.60, 0.36],
         [0.98, 0.78, 0.42],
     );
     let boost = make_kind(
         &assets,
         &mut materials,
         "models/pickup_boost.glb",
-        [0.88, 0.72, 0.22],
         [1.0, 0.84, 0.28],
     );
     let health = make_kind(
         &assets,
         &mut materials,
         "models/pickup_health.glb",
-        [0.32, 0.78, 0.52],
         [0.32, 0.98, 0.62],
-    );
-    let pad_mesh = meshes.add(Cylinder::new(2.55, 0.05));
-    let ring_mesh = meshes.add(
-        Torus::new(2.55, 2.73)
-            .mesh()
-            .major_resolution(36)
-            .minor_resolution(6),
     );
     let mote_mesh = meshes.add(Sphere::new(0.14).mesh().ico(1).unwrap());
 
@@ -215,8 +173,6 @@ fn setup(
         hedgehog,
         boost,
         health,
-        pad_mesh,
-        ring_mesh,
         mote_mesh,
     });
 }
@@ -251,7 +207,6 @@ fn sync_powerups(
         let root_tf = Transform::from_xyz(supply.wx as f32, gy, supply.wz as f32);
         let local_t = t + supply.id as f32 * 0.37;
         let (pos, rot) = pickup_pose(kind, local_t);
-        let pulse = 1.0 + 0.045 * ((local_t / BOB_PERIOD).rem_euclid(1.0) * TAU).sin();
         let vis_set = assets.visuals(kind);
 
         if let Some((mut rig, mut tf, mut vis)) =
@@ -264,12 +219,6 @@ fn sync_powerups(
                 commands
                     .entity(rig.model)
                     .insert(WorldAssetRoot(vis_set.model.clone()));
-                commands
-                    .entity(rig.pad)
-                    .insert(MeshMaterial3d(vis_set.pad_mat.clone()));
-                commands
-                    .entity(rig.ring)
-                    .insert(MeshMaterial3d(vis_set.ring_mat.clone()));
                 for &mote in &rig.motes {
                     commands
                         .entity(mote)
@@ -280,10 +229,6 @@ fn sync_powerups(
                 *mvis = Visibility::Inherited;
                 mtf.translation = pos;
                 mtf.rotation = rot;
-            }
-            if let Ok((mut rtf, mut rvis)) = parts.get_mut(rig.ring) {
-                *rvis = Visibility::Inherited;
-                rtf.scale = Vec3::new(pulse, 1.0, pulse);
             }
             for (idx, &mote) in rig.motes.iter().enumerate() {
                 if let Ok((mut stf, mut svis)) = parts.get_mut(mote) {
@@ -302,24 +247,6 @@ fn sync_powerups(
                 .spawn((
                     WorldAssetRoot(vis_set.model.clone()),
                     Transform::from_translation(pos).with_rotation(rot),
-                    Visibility::Inherited,
-                    PowerupPart,
-                ))
-                .id();
-            let pad = commands
-                .spawn((
-                    Mesh3d(assets.pad_mesh.clone()),
-                    MeshMaterial3d(vis_set.pad_mat.clone()),
-                    Transform::from_xyz(0.0, 0.08, 0.0),
-                    Visibility::Inherited,
-                    PowerupPart,
-                ))
-                .id();
-            let ring = commands
-                .spawn((
-                    Mesh3d(assets.ring_mesh.clone()),
-                    MeshMaterial3d(vis_set.ring_mat.clone()),
-                    Transform::from_xyz(0.0, 0.14, 0.0),
                     Visibility::Inherited,
                     PowerupPart,
                 ))
@@ -348,15 +275,13 @@ fn sync_powerups(
                         supply_id: supply.id,
                         kind,
                         model,
-                        pad,
-                        ring,
                         motes: motes.clone(),
                     },
                     root_tf,
                     Visibility::Visible,
                 ))
                 .id();
-            commands.entity(root).add_children(&[model, pad, ring]);
+            commands.entity(root).add_child(model);
             commands.entity(root).add_children(&motes);
         }
     }

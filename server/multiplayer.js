@@ -188,6 +188,7 @@ export class Multiplayer {
     // while discarding commands belonging to the replaced connection.
     const socket = member.socket; member.socket = null; member.stream?.end(); member.stream = null;
     this.members.delete(member.token); member.token = randomBytes(32).toString('hex'); this.members.set(member.token, member); socket?.close(4001, 'Session resumed elsewhere');
+    if (!afk && Number.isInteger(member.nextDriver)) { member.driver = member.nextDriver; member.nextDriver = null; }
     member.room.core.resume(member.id); this.assign(member.room, member); member.lastSeen = Date.now(); this.setAfk(member, afk);
     const state = this.snapshot(member.room, member); member.acceptedMove = member.lastMove = state.movementSequence; member.acceptedAction = member.actionAck = state.actionSequence;
     return { token: member.token, ...state };
@@ -400,8 +401,8 @@ export class Multiplayer {
         }
         case '/api/driver': {
           if (!Number.isInteger(body.driver) || body.driver < 0 || body.driver >= drivers.length) throw problem(400, 'Choose a character.');
-          const between = ['ready', 'finished'].includes(room.core.status.phase);
-          if (between) {
+          const immediate = ['ready', 'finished'].includes(room.core.status.phase) || member.afk;
+          if (immediate) {
             member.driver = body.driver; member.nextDriver = null;
             this.syncRoom(room);
             this.broadcast(room);

@@ -402,3 +402,31 @@ async fn fixed_chat_colors_survive_vehicle_changes_afk_refresh_and_server_restar
     assert_eq!(status,StatusCode::OK);assert_eq!(reply["chatColor"],fixed);assert_eq!(reply["world"]["color"],vehicle);
     std::fs::remove_dir_all(directory).unwrap();
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn leaving_and_returning_with_another_character_mid_match_zeros_score() {
+    let directory = std::env::temp_dir().join(format!("wild-wheels-switch-driver-{}", room::token()));
+    let path = directory.join("sessions.json");
+    let app = server(path);
+    let (status, cookie, _) = post(&app, "/api/join", "", json!({"code":"00","name":"Switcher","driver":0})).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(post(&app, "/api/control", &cookie, json!({"action":"start"})).await.0, StatusCode::OK);
+
+    let (status, cookie, _) = post(&app, "/api/afk", &cookie, json!({"afk":true})).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Switching character while AFK applies immediately and resets score.
+    let (status, _, switched) = post(&app, "/api/driver", &cookie, json!({"driver":7})).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(switched["driver"], 7);
+    assert!(switched["nextDriver"].is_null());
+
+    // Returning from AFK puts the player back in the live match as Houston (7) with zero score.
+    let (status, _, returned) = post(&app, "/api/afk", &cookie, json!({"afk":false})).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(returned["world"]["driver"], 7);
+    assert_eq!(returned["world"]["kills"].as_f64(), Some(0.0));
+    assert_eq!(returned["world"]["deaths"], 0);
+    assert_eq!(returned["world"]["afk"], false);
+    std::fs::remove_dir_all(directory).unwrap();
+}

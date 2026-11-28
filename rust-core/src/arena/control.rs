@@ -130,9 +130,28 @@ impl Game {
             if !active{actor.destroyed=1e9;actor.speed=0.0;}
             match person {
                 Some(p)=>{
+                    let switched_driver = was_human
+                        && actor.driver != p.driver
+                        && !matches!(self.global.phase.as_str(), "ready" | "finished");
+                    if switched_driver {
+                        // Leaving and returning with another character mid-match resets score and fresh-spawns the new racer.
+                        let keep_color = colors[id].clone();
+                        let keep_skill = actor.skill;
+                        *actor = initial_actor(id, keep_skill, room.max_players, self.global.arena);
+                        actor.color = keep_color;
+                        actor.joined_after_kill = self.global.kill_sequence;
+                        actor.human = true;
+                        actor.inactive = false;
+                        actor.afk = p.afk;
+                        self.pending[id].clear();
+                        if self.global.time_owner == Some(id) {
+                            self.global.time_stop = 0.0;
+                            self.global.time_owner = None;
+                        }
+                    }
                     actor.name=Some(p.name.trim().into());actor.driver=p.driver;actor.bomber=p.role=="bomber";
                     actor.ammo=actor.ammo.min(actor.item_capacity("hedgehog"));actor.missiles=actor.missiles.min(actor.item_capacity("missile"));actor.turbos=actor.turbos.min(actor.item_capacity("boost"));actor.bomb_ammo=actor.bomb_ammo.min(actor.item_capacity("abomb"));actor.stink_ammo=actor.stink_ammo.min(actor.item_capacity("stink"));
-                    if !was_human{actor.notice.clear();actor.notice_time=0.0;}
+                    if !was_human || switched_driver {actor.notice.clear();actor.notice_time=0.0;}
                     if actor.bomber&&(!was_human||!was_bomber){actor.bomb_ammo=2;actor.stink_ammo=2;actor.bomb_reload=0.0;actor.speed=0.0;actor.shield=0.0;actor.destroyed=0.0;actor.dizzy=0.0;}
                 },
                 None=>{actor.name=None;actor.bomber=false;if was_human{self.pending[id].clear();}}
@@ -141,6 +160,44 @@ impl Game {
         self.room.clear();
         if room.dedicated{self.room.insert("dedicated".into(),json!(true));}
         for (key,value) in [("maxPlayers",json!(room.max_players)),("code",json!(room.code)),("host",json!(room.host)),("arena",json!(room.arena)),("bots",json!(room.bots)),("specialAbilities",json!(room.special_abilities)),("startRequest",json!(room.start_request)),("players",json!(room.players.iter().map(|p|json!({"id":p.id,"name":p.name.trim(),"driver":p.driver,"color":self.actors[p.id].color,"role":p.role,"afk":p.afk,"wantsToPlay":p.wants_to_play,"playRequestRefused":p.play_request_refused})).collect::<Vec<_>>()))]{self.room.insert(key.into(),value);}
+    }
+}
+
+#[cfg(test)]
+mod switch_driver_tests {
+    use super::*;
+
+    #[test]
+    fn switching_character_mid_match_zeros_score_while_same_character_keeps_it() {
+        let mut room: Room = serde_json::from_value(json!({
+            "maxPlayers": 6, "code": "00", "arena": 0, "bots": 1, "epoch": 1, "seed": 7,
+            "specialAbilities": true, "targetScore": 15, "matchMinutes": 5,
+            "players": [{"id": 0, "name": "Alice", "driver": 0, "role": "racer", "afk": false}]
+        })).unwrap();
+        let mut game = Game::create_room(&room).unwrap();
+        game.global.phase = "racing".into();
+        game.actors[0].kills = 4.0;
+        game.actors[0].deaths = 2;
+
+        // Go AFK and return with the SAME character: score is preserved.
+        room.players[0].afk = true;
+        game.configure_room(&room);
+        room.players[0].afk = false;
+        game.configure_room(&room);
+        assert_eq!(game.actors[0].driver, 0);
+        assert_eq!(game.actors[0].kills, 4.0);
+        assert_eq!(game.actors[0].deaths, 2);
+
+        // Go AFK, switch to Houston (7), and return: score is zeroed.
+        room.players[0].afk = true;
+        game.configure_room(&room);
+        room.players[0].driver = 7;
+        game.configure_room(&room);
+        room.players[0].afk = false;
+        game.configure_room(&room);
+        assert_eq!(game.actors[0].driver, 7);
+        assert_eq!(game.actors[0].kills, 0.0);
+        assert_eq!(game.actors[0].deaths, 0);
     }
 }
 #[no_mangle]pub extern "C" fn game_create(len:usize)->u32 {

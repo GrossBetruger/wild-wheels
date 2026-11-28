@@ -46,10 +46,6 @@ struct TehilimAssets {
     spark_mesh: Handle<Mesh>,
     spark_gold_mat: Handle<StandardMaterial>,
     spark_blue_mat: Handle<StandardMaterial>,
-    pad_mesh: Handle<Mesh>,
-    pad_mat: Handle<StandardMaterial>,
-    pad_ring_mesh: Handle<Mesh>,
-    pad_ring_mat: Handle<StandardMaterial>,
 }
 
 #[derive(Component)]
@@ -65,7 +61,6 @@ struct TehilimAuraRig {
 struct TehilimPickupRig {
     supply_id: u32,
     book: Entity,
-    ring: Entity,
 }
 
 #[derive(Component)]
@@ -146,28 +141,6 @@ fn setup(
         alpha_mode: AlphaMode::Add,
         ..default()
     });
-    let pad_mesh = meshes.add(Cylinder::new(2.6, 0.05));
-    let pad_mat = materials.add(StandardMaterial {
-        base_color: Color::srgba(0.22, 0.42, 0.82, 0.48),
-        emissive: LinearRgba::new(0.18, 0.35, 0.95, 1.0),
-        unlit: true,
-        alpha_mode: AlphaMode::Blend,
-        ..default()
-    });
-    let pad_ring_mesh = meshes.add(
-        Torus::new(2.60, 2.78)
-            .mesh()
-            .major_resolution(36)
-            .minor_resolution(6),
-    );
-    let pad_ring_mat = materials.add(StandardMaterial {
-        base_color: Color::srgba(0.95, 0.80, 0.38, 0.72),
-        emissive: LinearRgba::new(1.5, 1.15, 0.38, 1.0),
-        unlit: true,
-        alpha_mode: AlphaMode::Add,
-        ..default()
-    });
-
     commands.insert_resource(TehilimAssets {
         book,
         ring_mesh,
@@ -175,10 +148,6 @@ fn setup(
         spark_mesh,
         spark_gold_mat,
         spark_blue_mat,
-        pad_mesh,
-        pad_mat,
-        pad_ring_mesh,
-        pad_ring_mat,
     });
 }
 
@@ -362,7 +331,6 @@ fn sync_tehilim(
         let gy = view.arena_def.ground_height(supply.wx, supply.wz) as f32;
         let root_tf = Transform::from_xyz(supply.wx as f32, gy, supply.wz as f32);
         let (book_pos, book_rot) = pickup_pose(t + supply.id as f32 * 0.41);
-        let pulse = 1.0 + 0.04 * ((t / PICKUP_BOB_PERIOD).rem_euclid(1.0) * TAU).sin();
 
         if let Some((rig, mut tf, mut vis)) =
             pickups.iter_mut().find(|(r, _, _)| r.supply_id == supply.id)
@@ -374,10 +342,6 @@ fn sync_tehilim(
                 btf.translation = book_pos;
                 btf.rotation = book_rot;
             }
-            if let Ok((mut rtf, mut rvis)) = parts.get_mut(rig.ring) {
-                *rvis = Visibility::Inherited;
-                rtf.scale = Vec3::new(pulse, 1.0, pulse);
-            }
         } else {
             let book = commands
                 .spawn((
@@ -387,36 +351,17 @@ fn sync_tehilim(
                     TehilimPart,
                 ))
                 .id();
-            let pad = commands
-                .spawn((
-                    Mesh3d(assets.pad_mesh.clone()),
-                    MeshMaterial3d(assets.pad_mat.clone()),
-                    Transform::from_xyz(0.0, 0.08, 0.0),
-                    Visibility::Inherited,
-                    TehilimPart,
-                ))
-                .id();
-            let ring = commands
-                .spawn((
-                    Mesh3d(assets.pad_ring_mesh.clone()),
-                    MeshMaterial3d(assets.pad_ring_mat.clone()),
-                    Transform::from_xyz(0.0, 0.14, 0.0),
-                    Visibility::Inherited,
-                    TehilimPart,
-                ))
-                .id();
             let root = commands
                 .spawn((
                     TehilimPickupRig {
                         supply_id: supply.id,
                         book,
-                        ring,
                     },
                     root_tf,
                     Visibility::Visible,
                 ))
                 .id();
-            commands.entity(root).add_children(&[book, pad, ring]);
+            commands.entity(root).add_child(book);
         }
     }
     for (rig, _, mut vis) in &mut pickups {
