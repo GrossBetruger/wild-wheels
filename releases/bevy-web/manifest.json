@@ -1,8 +1,8 @@
 {
-  "source": "9610166deae1079dc442ddfba0eed71c945f2e8c458997800dc19a0826e0bd1a",
+  "source": "4325f008a7324b0f02891824061c675576192efa6e76d050fc3f6b102ee82da3",
   "sha256": {
-    "wild_wheels_wasm.js": "86e383c8af14dcc320001c900ba2f8871a78ea739901c4c4c6e7513e2bba878b",
-    "wild_wheels_wasm_bg.wasm": "1f1ed5ce2cc8eb42f9ce0d7784b523172c04d46cd093b43c9a19e3322dfe87dc",
+    "wild_wheels_wasm.js": "fb750a66b09fdadef697d7f3030e5dad2959c1f218851e071a34e6ed6a79e064",
+    "wild_wheels_wasm_bg.wasm": "1a1988d1f8ebeb3d93430ccb613233469f30d84848baa55889e42e2243abca19",
     "ui.wwup": "8e0a2d36b7b9b827788ad6aab97847b6f75ce70862713bdc3f7ff039e36ecf3c"
   }
 }

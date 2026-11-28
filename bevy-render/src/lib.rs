@@ -5,6 +5,7 @@ pub mod avita;
 pub mod bench;
 pub mod blender;
 pub mod explosions;
+pub mod hedgeguard;
 pub mod hud;
 pub mod knowitowl;
 pub mod pearococo;
@@ -151,6 +152,7 @@ impl Plugin for WildWheelsRenderPlugin {
             scene::ArenaPresentationPlugin,
             avita::AvitaPlugin,
             explosions::ExplosionsPlugin,
+            hedgeguard::HedgeguardPlugin,
             knowitowl::KnowItOwlPlugin,
             pearococo::PearococoPlugin,
             preview::PreviewPlugin,

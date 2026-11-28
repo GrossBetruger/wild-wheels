@@ -710,8 +710,8 @@ fn racers(stage: &mut Stage, view: &ClientView, bats: &Bats, dt: f32, now: f32, 
             if *name == "vulcan" && a.driver == crate::ryeah::DRIVER {
                 continue;
             }
-            // Uplifted single-book PBR Sefer Tehilim is rendered by tehilim.rs.
-            if *name == "tehilim" {
+            // Uplifted single-book PBR Sefer Tehilim & Hedgeguard shield are rendered by tehilim.rs / hedgeguard.rs.
+            if *name == "tehilim" || *name == "hedge" {
                 continue;
             }
             let value = active[index];
@@ -1148,7 +1148,7 @@ pub fn sync(
         stage.show(Role::Skid, index, play, mark);
     }
     for supply in view.supplies.iter().filter(|s| s.cooldown <= 0.0) {
-        if supply.kind == "tehilim" {
+        if supply.kind == "tehilim" || supply.kind == "hedgeproof" {
             continue;
         }
         let play = stage.clip(&format!("pickup:{}", supply.kind));
