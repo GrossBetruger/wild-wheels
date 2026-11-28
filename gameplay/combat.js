@@ -41,6 +41,7 @@ export function wrapTorus(arena, x, z) {
   return [(((x + s) % span) + span) % span - s, (((z + s) % span) + span) % span - s];
 }
 const HILL_HEIGHT = 22, HILL_TOP_R = 42, HILL_CLIFF_FOOT_R = 60, HILL_ROAD_END_R = 112, HILL_ROAD_HALF_W = 14, HILL_ROAD_SHOULDER = 8, MAX_CLIMB_SLOPE = .55, CLIFF_SLIDE_SPEED = 48;
+const MAX_WALL_SCRAPE_SLOPE = 1 / 3;
 export function groundHeight(arena, x, z) {
   if (arena?.shape !== 'hill') return 0;
   const r = Math.hypot(x, z);
@@ -444,8 +445,23 @@ function moveActor(r, actor, steer, gas, brake, dt, handbrake = false) {
   if (!(actor.somersault > 0)) actor.cameraHeading += angleDelta(actor.heading, actor.cameraHeading) * (1 - Math.exp(-(drifting ? 5 : 9) * dt));
   const travel = drifting || actor === r || actor.human ? actor.motionHeading : actor.heading;
   const arena = arenas[r.arena];
-  const [nx, nz] = wrapTorus(arena, actor.wx + Math.sin(travel) * actor.speed * .085 * dt, actor.wz + Math.cos(travel) * actor.speed * .085 * dt);
-  if (!blocked(arena, nx, nz) && !cliffStepBlocked(arena, actor.wx, actor.wz, nx, nz)) {
+  const dx = Math.sin(travel) * actor.speed * .085 * dt;
+  const dz = Math.cos(travel) * actor.speed * .085 * dt;
+  let [nx, nz] = wrapTorus(arena, actor.wx + dx, actor.wz + dz);
+  const cliffHit = cliffStepBlocked(arena, actor.wx, actor.wz, nx, nz);
+  let collided = cliffHit || blocked(arena, nx, nz);
+  if (collided && !cliffHit) {
+    const ax = Math.abs(dx), az = Math.abs(dz);
+    if (az > 0 && ax <= az * MAX_WALL_SCRAPE_SLOPE && !blocked(arena, actor.wx, nz) && !cliffStepBlocked(arena, actor.wx, actor.wz, actor.wx, nz)) {
+      nx = actor.wx;
+      collided = false;
+    }
+    if (ax > 0 && az <= ax * MAX_WALL_SCRAPE_SLOPE && !blocked(arena, nx, actor.wz) && !cliffStepBlocked(arena, actor.wx, actor.wz, nx, actor.wz)) {
+      nz = actor.wz;
+      collided = false;
+    }
+  }
+  if (!collided) {
     actor.wx = nx; actor.wz = nz;
     if (arena.shape === 'hill') { const [sx, sz] = hillSlideDelta(arena, actor.wx, actor.wz, dt); if ((sx || sz) && !blocked(arena, actor.wx + sx, actor.wz + sz)) { actor.wx += sx; actor.wz += sz; } }
     if (drifting) emitDriftTrail(r, actor, dt); return;

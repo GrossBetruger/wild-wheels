@@ -20,6 +20,9 @@ const TRAIL: u32 = 16;
 const CRASH: u32 = 32;
 const WALL: u32 = 64;
 const DRIFT_WALL: u32 = 128;
+// Arena wall contacts use the same circular footprint for every racer, including R-Yeah.
+const KART_RADIUS: f64 = 2.0;
+const MAX_WALL_SCRAPE_SLOPE: f64 = 1.0 / 3.0;
 pub(crate) const NIGHTMARE_DRIVE: u32 = 256;
 pub(crate) const DRIFT_CHARGE: u32 = 512;
 #[derive(Clone, Copy)]
@@ -79,10 +82,10 @@ fn blocked(arena: &Arena, x: f64, z: f64) -> bool {
         true => (wrap_coord(x, arena.size), wrap_coord(z, arena.size)),
         false => (x, z),
     };
-    let limit = arena.size - 2.0;
+    let limit = arena.size - KART_RADIUS;
     if !arena.torus && (x.abs() > limit || z.abs() > limit || (arena.octagon && (x.abs() + z.abs()) * core::f64::consts::FRAC_1_SQRT_2 > limit)) { return true; }
-    arena.blocks[..arena.solid_count].iter().any(|b| block_overlaps(b, x, z, 2.0))
-        || arena.blocks[arena.solid_count..arena.count].iter().any(|b| (x-b[0]).abs()<b[2]/2.0+2.0 && (z-b[1]).abs()<b[3]/2.0+2.0)
+    arena.blocks[..arena.solid_count].iter().any(|b| block_overlaps(b, x, z, KART_RADIUS))
+        || arena.blocks[arena.solid_count..arena.count].iter().any(|b| (x-b[0]).abs()<b[2]/2.0+KART_RADIUS && (z-b[1]).abs()<b[3]/2.0+KART_RADIUS)
 }
 fn angle(a: f64, b: f64) -> f64 { (a-b).sin().atan2((a-b).cos()) }
 #[no_mangle]
@@ -128,10 +131,29 @@ pub extern "C" fn step(slot: usize, arena_index: usize, steer: f64, dt: f64, fla
     }
     if flip<=0.0 { camera+=angle(heading,camera)*(1.0-(-match drifting { true=>5.0,false=>9.0 }*dt).exp()); }
     let travel=match drifting||use_motion { true=>motion,false=>heading };
-    let mut nx=x+travel.sin()*speed*0.085*dt;let mut nz=z+travel.cos()*speed*0.085*dt;
+    let dx=travel.sin()*speed*0.085*dt;let dz=travel.cos()*speed*0.085*dt;
+    let mut nx=x+dx;let mut nz=z+dz;
     if arena.torus { nx=wrap_coord(nx,arena.size); nz=wrap_coord(nz,arena.size); }
     let mut was_drifting=match drifting { true=>1.0,false=>0.0 };
-    let collided=blocked(arena,nx,nz) || (arena.hill && arena::hill_step_blocked(x,z,nx,nz));
+    let cliff_blocks = |ax, az, bx, bz| arena.hill && arena::hill_step_blocked(ax, az, bx, bz);
+    let cliff_hit = cliff_blocks(x, z, nx, nz);
+    let mut collided = cliff_hit || blocked(arena, nx, nz);
+    if collided && !cliff_hit {
+        // Keep the clear component of a shallow scrape without braking or ending a drift.
+        match (dx.abs(), dz.abs()) {
+            (ax, az) if az > 0.0 && ax <= az * MAX_WALL_SCRAPE_SLOPE
+                && !blocked(arena, x, nz) && !cliff_blocks(x, z, x, nz) => {
+                nx = x;
+                collided = false;
+            }
+            (ax, az) if ax > 0.0 && az <= ax * MAX_WALL_SCRAPE_SLOPE
+                && !blocked(arena, nx, z) && !cliff_blocks(x, z, nx, z) => {
+                nz = z;
+                collided = false;
+            }
+            _ => {}
+        }
+    }
     if !collided {
         x=nx;z=nz;if drifting { events|=TRAIL; }
     }

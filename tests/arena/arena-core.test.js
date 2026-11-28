@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {ArenaClient,ArenaCore} from '../../gameplay/arena-core.js';
-import {createBattle,tickBattle} from '../../gameplay/combat.js';
+import {arenas,createBattle,tickBattle} from '../../gameplay/combat.js';
 import {decodeBinarySnapshot} from '../../networking/binary-wire.js';
 
 test('a renderer receives the predicted movement shown by the arena client',()=>{
@@ -36,6 +36,48 @@ test('karts clear the corner of the Scrapyard container and slow down on actual 
       assert.ok(Math.abs(kart.wx - 8.363333333333333) < 1e-9, 'the kart reaches the clear side of the corner');
       assert.equal(kart.speed, expectedSpeed, 'the kart slows only when it reaches the obstacle');
     }
+  }
+});
+
+test('R-Yeah and Pip keep driving past shallow scrapes at Pac-Man corners', () => {
+  const arenaDef = {
+    name: 'Pac-Man', desc: 'Inner L-wall and outer block by the cyan ghost', size: 96, shape: 'torus',
+    blocks: [[44, 44, 22, 6], [52, 32, 6, 18], [-68, 68, 22, 10]],
+  };
+  const keys = new Set(['arrowup']);
+  const arena = arenas.push(arenaDef) - 1;
+  try {
+    for (const { wx, wz, heading, expectedX, expectedZ } of [
+      { wx: -81.05, wz: 63.5, heading: Math.atan2(1, -6), expectedX: -81.05, expectedZ: 62.773 },
+      { wx: -78.5, wz: 60.95, heading: Math.atan2(-6, 1), expectedX: -79.227, expectedZ: 60.95 },
+      { wx: -54.95, wz: 63.5, heading: Math.atan2(-1, -6), expectedX: -54.95, expectedZ: 62.773 },
+      { wx: -81.05, wz: 72.5, heading: Math.atan2(1, 6), expectedX: -81.05, expectedZ: 73.227 },
+      { wx: -78.5, wz: 75.05, heading: Math.atan2(-6, -1), expectedX: -79.227, expectedZ: 75.05 },
+      { wx: 57.05, wz: 23.5, heading: Math.atan2(-1, -6), expectedX: 57.05, expectedZ: 22.773 },
+    ]) {
+      for (const driver of [11, 0]) {
+        const world = createBattle(driver, arena);
+        Object.assign(world, {
+          arenaDef, phase: 'racing', wx, wz, speed: 520,
+          heading, motionHeading: heading, cameraHeading: heading, supplies: [],
+        });
+        for (const bot of world.bots) Object.assign(bot, { inactive: true, destroyed: 1e9 });
+        const core = new ArenaCore(world);
+        const client = new ArenaClient();
+        client.accept(core.packet(), 0);
+
+        core.step(1 / 60, [{ actor: 0, keys }]);
+        client.frame(1 / 60, keys, 1 / 60);
+        tickBattle(world, keys, 1 / 60);
+        for (const kart of [core.snapshot(), client.present(), world]) {
+          assert.ok(Math.abs(kart.wx - expectedX) < .001 && Math.abs(kart.wz - expectedZ) < .001, 'the racer slides past the tip without entering the wall clearance');
+          assert.equal(kart.speed, 520, 'a shallow scrape keeps the speed along the clear lane');
+          assert.equal(kart.wallCooldown, 0, 'a shallow scrape does not trigger a crash');
+        }
+      }
+    }
+  } finally {
+    arenas.pop();
   }
 });
 
