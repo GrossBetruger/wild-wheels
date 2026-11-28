@@ -26,9 +26,9 @@ pub(crate) const DRIFT_CHARGE: u32 = 512;
 #[repr(C)]
 struct Kart { data: [f64; FIELDS] }
 #[derive(Clone, Copy)]
-struct Arena { size: f64, octagon: bool, torus: bool, hill: bool, count: usize, blocks: [[f64; 4]; 32] }
+struct Arena { size: f64, octagon: bool, torus: bool, hill: bool, count: usize, solid_count: usize, blocks: [[f64; 4]; 32] }
 static mut KARTS: [Kart; SLOTS] = [Kart { data: [0.0; FIELDS] }; SLOTS];
-static mut ARENAS: [Arena; 32] = [Arena { size: 0.0, octagon: false, torus: false, hill: false, count: 0, blocks: [[0.0; 4]; 32] }; 32];
+static mut ARENAS: [Arena; 32] = [Arena { size: 0.0, octagon: false, torus: false, hill: false, count: 0, solid_count: 0, blocks: [[0.0; 4]; 32] }; 32];
 static mut CONFIG: [f64; 128] = [0.0; 128];
 #[no_mangle]
 pub extern "C" fn abi_version() -> u32 { 1 }
@@ -50,28 +50,39 @@ pub extern "C" fn set_arena(index: usize, size: f64, count: usize) -> u32 {
         if !block.iter().all(|n| n.is_finite()) || block[2] <= 0.0 || block[3] <= 0.0 { return 0; }
         arena.blocks[i] = block;
     }
-    arena.size = size;arena.octagon = false;arena.torus = false;arena.hill = false;arena.count = count;1
+    arena.size = size;arena.octagon = false;arena.torus = false;arena.hill = false;arena.count = count;arena.solid_count = count;1
 }
-pub(crate) fn set_arena_shape(index: usize, octagon: bool, torus: bool, hill: bool) {
+pub(crate) fn set_arena_shape(index: usize, octagon: bool, torus: bool, hill: bool, solid_count: usize) {
     if index < 32 {
         let arena = unsafe { &mut *core::ptr::addr_of_mut!(ARENAS).cast::<Arena>().add(index) };
         arena.octagon = octagon;
         arena.torus = torus;
         arena.hill = hill;
+        arena.solid_count = solid_count;
     }
 }
 fn wrap_coord(v: f64, size: f64) -> f64 {
     let span = size * 2.0;
     ((v + size).rem_euclid(span)) - size
 }
-fn blocked(arena: &Arena, x: f64, z: f64) -> bool {
-    if arena.torus {
-        let (x, z) = (wrap_coord(x, arena.size), wrap_coord(z, arena.size));
-        return arena.blocks[..arena.count].iter().any(|b| (x-b[0]).abs()<b[2]/2.0+2.0 && (z-b[1]).abs()<b[3]/2.0+2.0);
+fn block_overlaps(block: &[f64; 4], x: f64, z: f64, padding: f64) -> bool {
+    let dx = (x - block[0]).abs() - block[2] / 2.0;
+    let dz = (z - block[1]).abs() - block[3] / 2.0;
+    if !(dx < padding && dz < padding) {
+        return false;
     }
+    // Along a face the clearance is unchanged. At a corner use radial distance.
+    dx <= 0.0 || dz <= 0.0 || dx * dx + dz * dz < padding * padding
+}
+fn blocked(arena: &Arena, x: f64, z: f64) -> bool {
+    let (x, z) = match arena.torus {
+        true => (wrap_coord(x, arena.size), wrap_coord(z, arena.size)),
+        false => (x, z),
+    };
     let limit = arena.size - 2.0;
-    if x.abs() > limit || z.abs() > limit || (arena.octagon && (x.abs() + z.abs()) * core::f64::consts::FRAC_1_SQRT_2 > limit) { return true; }
-    arena.blocks[..arena.count].iter().any(|b| (x-b[0]).abs()<b[2]/2.0+2.0 && (z-b[1]).abs()<b[3]/2.0+2.0)
+    if !arena.torus && (x.abs() > limit || z.abs() > limit || (arena.octagon && (x.abs() + z.abs()) * core::f64::consts::FRAC_1_SQRT_2 > limit)) { return true; }
+    arena.blocks[..arena.solid_count].iter().any(|b| block_overlaps(b, x, z, 2.0))
+        || arena.blocks[arena.solid_count..arena.count].iter().any(|b| (x-b[0]).abs()<b[2]/2.0+2.0 && (z-b[1]).abs()<b[3]/2.0+2.0)
 }
 fn angle(a: f64, b: f64) -> f64 { (a-b).sin().atan2((a-b).cos()) }
 #[no_mangle]

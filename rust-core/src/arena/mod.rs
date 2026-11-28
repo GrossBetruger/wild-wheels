@@ -59,7 +59,7 @@ fn load_kernel_arena(index: usize, def: &ArenaDef) -> Result<(), ()> {
     if crate::set_arena(index, def.size, count) != 1 {
         return Err(());
     }
-    crate::set_arena_shape(index, def.is_octagon(), def.is_torus(), def.is_hill());
+    crate::set_arena_shape(index, def.is_octagon(), def.is_torus(), def.is_hill(), def.blocks.len());
     Ok(())
 }
 pub fn distance(ax:f64,az:f64,bx:f64,bz:f64)->f64 { (ax-bx).hypot(az-bz) }

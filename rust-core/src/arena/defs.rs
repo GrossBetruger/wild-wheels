@@ -224,14 +224,10 @@ impl ArenaDef {
     pub fn wall_blocked(&self, x: f64, z: f64, padding: f64) -> bool {
         if self.is_torus() {
             let (wx, wz) = self.wrap(x, z);
-            return self.blocks.iter().any(|b| {
-                (wx - b[0]).abs() < b[2] / 2.0 + padding && (wz - b[1]).abs() < b[3] / 2.0 + padding
-            });
+            return self.blocks.iter().any(|b| crate::block_overlaps(b, wx, wz, padding));
         }
         !self.in_bounds(x, z, padding)
-            || self.blocks.iter().any(|b| {
-                (x - b[0]).abs() < b[2] / 2.0 + padding && (z - b[1]).abs() < b[3] / 2.0 + padding
-            })
+            || self.blocks.iter().any(|b| crate::block_overlaps(b, x, z, padding))
     }
     pub fn blocked(&self, x: f64, z: f64, padding: f64) -> bool {
         self.wall_blocked(x, z, padding)

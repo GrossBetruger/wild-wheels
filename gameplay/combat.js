@@ -89,13 +89,19 @@ export function inArenaBounds(arena, x, z, padding = 0) {
   if (Math.abs(x) > limit || Math.abs(z) > limit) return false;
   return arena.shape !== 'octagon' || (Math.abs(x) + Math.abs(z)) * Math.SQRT1_2 <= limit;
 }
+function blockOverlaps([bx, bz, w, d], x, z, padding) {
+  const dx = Math.abs(x - bx) - w / 2;
+  const dz = Math.abs(z - bz) - d / 2;
+  if (!(dx < padding && dz < padding)) return false;
+  return dx <= 0 || dz <= 0 || dx * dx + dz * dz < padding * padding;
+}
 export function blocked(arena, x, z, padding = 2) {
   if (arena.shape === 'torus') {
     const [wx, wz] = wrapTorus(arena, x, z);
-    return arena.blocks.some(([bx, bz, w, d]) => Math.abs(wx - bx) < w / 2 + padding && Math.abs(wz - bz) < d / 2 + padding);
+    return arena.blocks.some(block => blockOverlaps(block, wx, wz, padding));
   }
   return !inArenaBounds(arena, x, z, padding)
-    || arena.blocks.some(([bx, bz, w, d]) => Math.abs(x - bx) < w / 2 + padding && Math.abs(z - bz) < d / 2 + padding)
+    || arena.blocks.some(block => blockOverlaps(block, x, z, padding))
     || (arena.water ?? []).some(([bx, bz, w, d]) => Math.abs(x - bx) < w / 2 + padding && Math.abs(z - bz) < d / 2 + padding);
 }
 function clearShot(arena, a, b) {

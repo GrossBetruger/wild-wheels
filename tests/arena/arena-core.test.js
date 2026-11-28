@@ -15,6 +15,30 @@ test('a renderer receives the predicted movement shown by the arena client',()=>
   assert.deepEqual([rendered.wx,rendered.wz,rendered.speed],[shown.wx,shown.wz,shown.speed]);
 });
 
+test('karts clear the corner of the Scrapyard container and slow down on actual contact', () => {
+  const world = createBattle();
+  const heading = -Math.PI / 2;
+  Object.assign(world, {
+    phase: 'racing', wx: 9.1, wz: 8.65, speed: 520,
+    heading, motionHeading: heading, cameraHeading: heading, supplies: [],
+  });
+  for (const bot of world.bots) Object.assign(bot, { inactive: true, destroyed: 1e9 });
+  const core = new ArenaCore(world);
+  const client = new ArenaClient();
+  client.accept(core.packet(), 0);
+  const keys = new Set(['arrowup']);
+
+  for (const [time, expectedSpeed] of [[1 / 60, 520], [2 / 60, 156]]) {
+    core.step(1 / 60, [{ actor: 0, keys }]);
+    client.frame(1 / 60, keys, time);
+    tickBattle(world, keys, 1 / 60);
+    for (const kart of [core.snapshot(), client.present(), world]) {
+      assert.ok(Math.abs(kart.wx - 8.363333333333333) < 1e-9, 'the kart reaches the clear side of the corner');
+      assert.equal(kart.speed, expectedSpeed, 'the kart slows only when it reaches the obstacle');
+    }
+  }
+});
+
 test('a Rust-owned arena advances driving, AI, collisions and pickups through frame commands',()=>{
   const seed=createBattle();Object.assign(seed,{phase:'racing',supplies:[]});
   const core=new ArenaCore(seed);const reference=seed;
